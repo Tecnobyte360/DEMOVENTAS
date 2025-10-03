@@ -12,7 +12,11 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pedidos', function (Blueprint $table) {
-            $table->string('estado')->default('activo')->after('tipo_pago');
+            if (!Schema::hasColumn('pedidos', 'estado')) {
+                $table->string('estado')
+                      ->default('activo')
+                      ->after('tipo_pago');
+            }
         });
     }
 
@@ -22,7 +26,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('pedidos', function (Blueprint $table) {
-            $table->dropColumn('estado');
+            if (Schema::hasColumn('pedidos', 'estado')) {
+                $table->dropColumn('estado');
+            }
         });
     }
 };

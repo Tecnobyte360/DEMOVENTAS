@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+@import './additional-styles/flatpickr.css';
+@import './additional-styles/utility-patterns.css' layer(components);
+
+@plugin "@tailwindcss/forms" { strategy: base; }
+@custom-variant dark (&:is(.dark *));
+@custom-variant sidebar-expanded (&:is(.sidebar-expanded *));
+
+/* ====== COMPACT GLOBAL ====== */
+@layer base {
+  /* Fuente base más pequeña en todo el sitio */
+  html { font-size: 14px; }              /* (16px → 14px ~ -12.5%) */
+  @media (min-width: 1536px) {
+    html { font-size: 13px; }            /* aún más denso en pantallas muy grandes */
+  }
+}
+
+@layer utilities {
+  /* Inputs, selects, textareas, TomSelect, etc. */
+  .ui-compact :is(input, select, textarea, [role="combobox"], .ts-control) {
+    @apply h-9 text-sm;
+  }
+
+  /* Botones generales */
+  .ui-compact :is(button,.btn,[type="button"],[type="submit"]) {
+    @apply h-9 px-3 text-sm;
+  }
+
+  /* Tablas más densas */
+  .ui-compact table :is(th, td) {
+    @apply py-2 px-2 text-sm;
+  }
+
+  /* Cards / secciones con menos padding (sobrescribe p-6/p-8 comunes) */
+  .ui-compact .p-6, 
+  .ui-compact .p-8,
+  .ui-compact .py-6, 
+  .ui-compact .py-8,
+  .ui-compact .px-6, 
+  .ui-compact .px-8 {
+    @apply p-4;
+  }
+
+  /* Encabezados/hero más comprimidos */
+  .ui-compact .hero,
+  .ui-compact [data-hero] {
+    @apply py-5;
+  }
+
+  /* Grids con menos espacios */
+  .ui-compact .gap-6 { @apply gap-3; }
+  .ui-compact .gap-4 { @apply gap-2; }
+
+  /* Contenedores con bordes/paddings clásicos (útil para tus cards) */
+  .ui-compact .card {
+    @apply rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow;
+  }
+}

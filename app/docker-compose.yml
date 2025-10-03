@@ -1,0 +1,146 @@
+version: "3.8"
+
+networks:
+  laravel_net:
+
+volumes:
+  app_code:
+  mysql_data:
+  redis_data:
+  composer_cache:
+
+services:
+  # --- Clona/actualiza el código del repo en un volumen compartido ---
+  git:
+    image: alpine/git:latest
+    container_name: laravel_git
+    environment:
+      - GIT_REPO=${GIT_REPO}
+      - GIT_BRANCH=${GIT_BRANCH:-main}
+    volumes:
+      - app_code:/code
+    entrypoint: ["/bin/sh","-lc"]
+    command: >
+      'set -e;
+       if [ ! -d /code/.git ]; then
+         git clone --depth=1 -b "$${GIT_BRANCH}" "$${GIT_REPO}" /code;
+       else
+         cd /code && git fetch --all && git reset --hard origin/"$${GIT_BRANCH}";
+       fi;
+       # actualiza cada hora (simple)
+       while true; do sleep 3600; cd /code && git pull || true; done'
+    networks:
+      - laravel_net
+    restart: unless-stopped
+
+  # --- App web (Apache + PHP 8.3) ---
+  app:
+    image: webdevops/php-apache:8.3
+    container_name: laravel_app
+    environment:
+      - WEB_DOCUMENT_ROOT=/var/www/html/public
+      - PHP_MEMORY_LIMIT=512M
+      - PHP_MAX_EXECUTION_TIME=120
+      - PHP_POST_MAX_SIZE=64M
+      - PHP_UPLOAD_MAX_FILESIZE=64M
+    ports:
+      - "${APP_HTTP_PORT:-8080}:80"
+    volumes:
+      - app_code:/var/www/html
+    depends_on:
+      - git
+      - mysql
+      - redis
+    networks:
+      - laravel_net
+    restart: unless-stopped
+
+  # --- Composer (se ejecuta una vez tras el clon) ---
+  composer:
+    image: composer:2
+    container_name: laravel_composer
+    working_dir: /app
+    volumes:
+      - app_code:/app
+      - composer_cache:/tmp/composer
+    depends_on:
+      - git
+    entrypoint: ["/bin/sh","-lc"]
+    command: >
+      'if [ -f composer.json ]; then
+         composer install --no-interaction --prefer-dist;
+       fi'
+    networks:
+      - laravel_net
+    restart: "no"
+
+  # --- Queue worker ---
+  queue:
+    image: webdevops/php-apache:8.3
+    container_name: laravel_queue
+    working_dir: /var/www/html
+    command: bash -lc "php artisan queue:work --sleep=3 --tries=3 --timeout=120"
+    volumes:
+      - app_code:/var/www/html
+    depends_on:
+      - app
+      - redis
+      - mysql
+    networks:
+      - laravel_net
+    restart: unless-stopped
+
+  # --- Scheduler (cada minuto) ---
+  scheduler:
+    image: webdevops/php-apache:8.3
+    container_name: laravel_scheduler
+    working_dir: /var/www/html
+    command: bash -lc "while true; do php artisan schedule:run --no-interaction -q; sleep 60; done"
+    volumes:
+      - app_code:/var/www/html
+    depends_on:
+      - app
+    networks:
+      - laravel_net
+    restart: unless-stopped
+
+  # --- MySQL 8 ---
+  mysql:
+    image: mysql:8.0
+    container_name: laravel_mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      - MYSQL_DATABASE=${DB_DATABASE:-laravel}
+      - MYSQL_USER=${DB_USERNAME:-laravel}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-laravel}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-rootpass}
+    ports:
+      - "${DB_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - laravel_net
+    restart: unless-stopped
+
+  # --- Redis ---
+  redis:
+    image: redis:7-alpine
+    container_name: laravel_redis
+    command: ["redis-server","--appendonly","yes"]
+    ports:
+      - "${REDIS_HOST_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - laravel_net
+    restart: unless-stopped
+
+  # --- Mailhog (para pruebas de correo) ---
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: laravel_mailhog
+    ports:
+      - "${MAILHOG_WEB_PORT:-8025}:8025"
+    networks:
+      - laravel_net
+    restart: unless-stopped

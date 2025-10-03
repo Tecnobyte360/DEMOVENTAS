@@ -8,6 +8,7 @@ use Masmerise\Toaster\Http\Livewire\Toaster;
 use Masmerise\Toaster\Toaster as ToasterToaster;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\URL;
 use App\Models\ConfiguracionEmpresas\Empresa;
 
 class AppServiceProvider extends ServiceProvider
@@ -29,7 +30,12 @@ class AppServiceProvider extends ServiceProvider
 
         Livewire::component('toaster', ToasterToaster::class);
 
-     
+        // Forzar https en producción (detrás de Caddy/Nginx con SSL)
+        if ($this->app->environment('production')) {
+            URL::forceScheme('https');
+        }
+
+        // Compartir empresa activa en todas las vistas
         View::composer('*', function ($view) {
             $empresa = cache()->remember('empresa_activa', now()->addMinutes(10), function () {
                 return Empresa::where('is_activa', true)->latest('id')->first();

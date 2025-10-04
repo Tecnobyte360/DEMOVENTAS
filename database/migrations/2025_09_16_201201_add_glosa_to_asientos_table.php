@@ -8,7 +8,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('asientos', function (Blueprint $table) {
-            $table->text('glosa')->nullable()->after('columna_existente'); 
+            $table->text('glosa')->nullable();
             // cambia "columna_existente" por la columna después de la cual quieres que aparezca
         });
     }

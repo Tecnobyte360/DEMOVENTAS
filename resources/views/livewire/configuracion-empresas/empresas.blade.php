@@ -1,16 +1,14 @@
-
-
-
+{{-- resources/views/livewire/configuracion-empresas/empresas.blade.php --}}
 <div class="relative p-8 md:p-10 rounded-3xl shadow-2xl
             bg-gradient-to-br from-violet-50 via-white to-indigo-50
             dark:from-gray-900 dark:via-gray-900 dark:to-gray-800
             border border-violet-100/50 dark:border-gray-700">
 
-  <!-- Fondos decorativos -->
+  {{-- Fondos decorativos --}}
   <div aria-hidden="true" class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-indigo-400/20 blur-3xl"></div>
   <div aria-hidden="true" class="pointer-events-none absolute -bottom-20 -left-20 w-96 h-96 rounded-full bg-violet-400/20 blur-3xl"></div>
 
-  <!-- Header -->
+  {{-- Header --}}
   <div class="relative z-10 mb-8">
     <div class="flex items-start justify-between gap-4">
       <div>
@@ -22,12 +20,10 @@
         </h2>
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Gestiona nombre, logos y datos básicos. Personaliza colores y estado.</p>
       </div>
-
-      
     </div>
   </div>
 
-  <!-- Alertas -->
+  {{-- Alertas de éxito --}}
   @if (session('ok'))
     <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
                 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
@@ -35,19 +31,18 @@
         <span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
           <i class="fa-solid fa-check"></i>
         </span>
-        <div>
-          {{ session('ok') }}
-        </div>
+        <div>{{ session('ok') }}</div>
       </div>
     </div>
   @endif
 
-  <!-- Formulario principal -->
+  {{-- Formulario principal --}}
   <form wire:submit.prevent="save" class="relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Columna 1: Datos generales -->
- <div class="lg:col-span-2 space-y-7 max-w-6xl mx-auto w-full">
 
-      <!-- Card: Datos generales -->
+    {{-- Columna 1 (datos) --}}
+    <div class="lg:col-span-2 space-y-7 max-w-6xl mx-auto w-full">
+
+      {{-- Datos generales --}}
       <div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
         <div class="mb-4 flex items-center gap-2">
           <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
@@ -107,71 +102,50 @@
         </div>
       </div>
 
-    
-      
-    </div>
-<div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl 
-            border border-gray-200 dark:border-gray-700 p-8">
+      {{-- Marca & Estado --}}
+      <div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl 
+                  border border-gray-200 dark:border-gray-700 p-8">
+        <div class="mb-6 flex items-center gap-3">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl 
+                       bg-violet-600/10 text-violet-600 dark:text-violet-400">
+            <i class="fa-solid fa-palette"></i>
+          </span>
+          <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Marca & Estado</h3>
+        </div>
 
-  <!-- Título -->
-  <div class="mb-6 flex items-center gap-3">
-    <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl 
-                 bg-violet-600/10 text-violet-600 dark:text-violet-400">
-      <i class="fa-solid fa-palette"></i>
-    </span>
-    <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
-      Marca & Estado
-    </h3>
-  </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Color primario</label>
+            <input type="text" wire:model.defer="color_primario"
+                   class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                   placeholder="#4f46e5">
+            @error('color_primario') <p class="text-xs text-red-600 mt-2">{{ $message }}</p> @enderror
+          </div>
 
-  <!-- Contenido más espacioso -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Color secundario</label>
+            <input type="text" wire:model.defer="color_secundario"
+                   class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                   placeholder="#22d3ee">
+            @error('color_secundario') <p class="text-xs text-red-600 mt-2">{{ $message }}</p> @enderror
+          </div>
 
-    <!-- Color primario -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-        Color primario
-      </label>
-      <input type="text" wire:model.defer="color_primario"
-             class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 
-                    focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-             placeholder="#4f46e5">
-      @error('color_primario') 
-        <p class="text-xs text-red-600 mt-2">{{ $message }}</p> 
-      @enderror
-    </div>
-
-    <!-- Color secundario -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-        Color secundario
-      </label>
-      <input type="text" wire:model.defer="color_secundario"
-             class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 
-                    focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-             placeholder="#22d3ee">
-      @error('color_secundario') 
-        <p class="text-xs text-red-600 mt-2">{{ $message }}</p> 
-      @enderror
+          <div class="md:col-span-2 flex items-center justify-start mt-4">
+            <label class="inline-flex items-center gap-3 text-sm font-medium 
+                         text-gray-700 dark:text-gray-200 select-none">
+              <input type="checkbox" wire:model.defer="is_activa"
+                     class="rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 
+                            dark:border-gray-700 dark:bg-gray-900">
+              Empresa activa
+            </label>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Checkbox Activa ocupa toda la fila -->
-    <div class="md:col-span-2 flex items-center justify-start mt-4">
-      <label class="inline-flex items-center gap-3 text-sm font-medium 
-                   text-gray-700 dark:text-gray-200 select-none">
-        <input type="checkbox" wire:model.defer="is_activa"
-               class="rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 
-                      dark:border-gray-700 dark:bg-gray-900">
-        Empresa activa
-      </label>
-    </div>
-  </div>
-</div>
-
-
-
-    <!-- Columna 2: Logos/Favicon -->
+    {{-- Columna 2 (archivos + diagnóstico) --}}
     <div class="space-y-6">
+
       <div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700 p-6 space-y-5">
         <div class="mb-1 flex items-center gap-2">
           <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
@@ -180,10 +154,11 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Identidad visual</h3>
         </div>
 
-        <!-- Logo claro -->
+        {{-- Logo claro --}}
         <div class="group">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
-          <input type="file" wire:model="logo" accept="image/*" class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
+          <input type="file" wire:model="logo" accept="image/*"
+                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
           @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
           <div class="mt-3 flex items-center gap-3">
             @if ($logo)
@@ -197,10 +172,11 @@
           </div>
         </div>
 
-        <!-- Logo oscuro -->
+        {{-- Logo oscuro --}}
         <div class="group">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (oscuro)</label>
-          <input type="file" wire:model="logo_dark" accept="image/*" class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
+          <input type="file" wire:model="logo_dark" accept="image/*"
+                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
           @error('logo_dark') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
           <div class="mt-3 flex items-center gap-3">
             @if ($logo_dark)
@@ -214,10 +190,11 @@
           </div>
         </div>
 
-        <!-- Favicon -->
+        {{-- Favicon --}}
         <div class="group">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Favicon</label>
-          <input type="file" wire:model="favicon" accept="image/*,.ico" class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
+          <input type="file" wire:model="favicon" accept="image/*,.ico"
+                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
           @error('favicon') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
           <div class="mt-3 flex items-center gap-3">
             @if ($favicon)
@@ -230,9 +207,49 @@
             <i class="fa-solid fa-spinner animate-spin"></i> Subiendo favicon...
           </div>
         </div>
+
+        {{-- DIAGNÓSTICO DE SUBIDAS --}}
+        @if(!empty($uploadDiagnostics))
+          <div class="mt-4 rounded-xl border p-4 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
+            <div class="font-semibold mb-2">Diagnóstico de subidas</div>
+
+            @if(!empty($uploadDiagnostics['errors']))
+              <div class="mb-2 text-red-700 dark:text-red-300">
+                <strong>Errores:</strong>
+                <ul class="list-disc ml-5">
+                  @foreach($uploadDiagnostics['errors'] as $e)
+                    <li>{{ $e }}</li>
+                  @endforeach
+                </ul>
+              </div>
+            @endif
+
+            @if(!empty($uploadDiagnostics['warnings']))
+              <div class="mb-2 text-yellow-700 dark:text-yellow-300">
+                <strong>Advertencias:</strong>
+                <ul class="list-disc ml-5">
+                  @foreach($uploadDiagnostics['warnings'] as $w)
+                    <li>{{ $w }}</li>
+                  @endforeach
+                </ul>
+              </div>
+            @endif
+
+            @if(!empty($uploadDiagnostics['info']))
+              <div class="text-gray-800 dark:text-gray-200">
+                <strong>Info:</strong>
+                <ul class="list-disc ml-5">
+                  @foreach($uploadDiagnostics['info'] as $k => $v)
+                    <li><code>{{ $k }}</code>: {{ is_string($v) ? $v : json_encode($v) }}</li>
+                  @endforeach
+                </ul>
+              </div>
+            @endif
+          </div>
+        @endif
       </div>
 
-      <!-- Barra de acciones -->
+      {{-- Barra de acciones --}}
       <div class="flex items-center justify-end gap-3">
         <button type="button" wire:click="cancel"
                 class="px-5 py-3 rounded-2xl bg-white text-gray-700 border border-gray-200 shadow-sm hover:shadow transition dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700">
@@ -253,7 +270,7 @@
     </div>
   </form>
 
-  <!-- Listado de empresas -->
+  {{-- Listado --}}
   <div class="relative z-10 mt-10 bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
@@ -261,13 +278,10 @@
         Empresas registradas
       </h3>
 
-     
-     
-        <button type="button" wire:click="createNew"
-                class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold shadow hover:bg-indigo-700">
-          Nueva empresa
-        </button>
-      </div>
+      <button type="button" wire:click="createNew"
+              class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-semibold shadow hover:bg-indigo-700">
+        Nueva empresa
+      </button>
     </div>
 
     <div class="mt-4 overflow-x-auto">
@@ -320,7 +334,6 @@
                     <i class="fa-solid fa-pen"></i>
                     Editar
                   </button>
-        
                 </div>
               </td>
             </tr>

@@ -3,6 +3,7 @@
 namespace App\Livewire\ConfiguracionEmpresas;
 
 use App\Models\ConfiguracionEmpresas\Empresa;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -26,16 +27,18 @@ class Empresas extends Component
 
     public ?string $color_primario = null;
     public ?string $color_secundario = null;
-    public bool $usar_gradiente = false;     // <— NUEVO
-    public ?int $grad_angle = 135;           // <— NUEVO (0–360)
+    public bool $usar_gradiente = false;
+    public ?int $grad_angle = 135;
     public bool $is_activa = true;
 
-    // Archivos (subidas temporales)
+    // Uploads
     public $logo;
     public $logo_dark;
     public $favicon;
 
-    // Listado
+    // Diagnóstico (para mostrar en la vista)
+    public array $uploadDiagnostics = [];
+
     public string $q = '';
     public int $perPage = 10;
 
@@ -49,36 +52,45 @@ class Empresas extends Component
             'sitio_web'        => ['nullable','url','max:255'],
             'direccion'        => ['nullable','string','max:255'],
 
-            // hex #RRGGBB (con o sin #)
             'color_primario'   => ['nullable','regex:/^#?[0-9A-Fa-f]{6}$/'],
             'color_secundario' => ['nullable','regex:/^#?[0-9A-Fa-f]{6}$/'],
 
-            // gradiente
             'usar_gradiente'   => ['boolean'],
             'grad_angle'       => ['nullable','integer','min:0','max:360'],
 
             'is_activa'        => ['boolean'],
 
+            // 2 MB (ajusta si necesitas)
             'logo'             => ['nullable','image','mimes:png,jpg,jpeg,webp','max:2048'],
             'logo_dark'        => ['nullable','image','mimes:png,jpg,jpeg,webp','max:2048'],
             'favicon'          => ['nullable','mimes:png,jpg,jpeg,webp,ico','max:1024'],
         ];
     }
 
-    public function updatingQ() { $this->resetPage(); }
-    public function updatingPerPage() { $this->resetPage(); }
-
-    public function mount(): void
+    protected function messages(): array
     {
-        // Si quieres precargar una empresa:
-        // $this->empresa = Empresa::first();
-        // if ($this->empresa) $this->fillFromModel($this->empresa);
+        return [
+            'logo.image' => 'El logo debe ser una imagen válida.',
+            'logo.mimes' => 'Formatos permitidos: png, jpg, jpeg, webp.',
+            'logo.max'   => 'El logo supera el tamaño máximo permitido (2 MB).',
+
+            'logo_dark.image' => 'El logo oscuro debe ser una imagen válida.',
+            'logo_dark.mimes' => 'Formatos permitidos: png, jpg, jpeg, webp.',
+            'logo_dark.max'   => 'El logo oscuro supera el tamaño máximo permitido (2 MB).',
+
+            'favicon.mimes' => 'El favicon debe ser png, jpg, jpeg, webp o ico.',
+            'favicon.max'   => 'El favicon supera el tamaño máximo permitido (1 MB).',
+        ];
     }
+
+    public function updatingQ(){ $this->resetPage(); }
+    public function updatingPerPage(){ $this->resetPage(); }
 
     public function createNew(): void
     {
         $this->resetForm();
         $this->empresa = null;
+        $this->uploadDiagnostics = [];
     }
 
     public function edit(int $id): void
@@ -86,6 +98,7 @@ class Empresas extends Component
         $model = Empresa::findOrFail($id);
         $this->empresa = $model;
         $this->fillFromModel($model);
+        $this->uploadDiagnostics = [];
     }
 
     public function cancel(): void
@@ -95,6 +108,17 @@ class Empresas extends Component
 
     public function save(): void
     {
+        // 1) Diagnóstico previo a cualquier guardado
+        $this->uploadDiagnostics = $this->diagnoseUploads();
+
+        if (!empty($this->uploadDiagnostics['errors'])) {
+            // Muestra un error arriba y no continúa
+            $this->addError('logo', 'Falló la subida: revisa el diagnóstico.');
+            session()->flash('ok', null);
+            return;
+        }
+
+        // 2) Validación de datos
         $this->validate();
 
         // Si van a usar gradiente, exige ambos colores
@@ -104,6 +128,7 @@ class Empresas extends Component
             return;
         }
 
+        // 3) Guardado
         $empresa = $this->empresa ?? new Empresa();
 
         $empresa->fill([
@@ -113,26 +138,32 @@ class Empresas extends Component
             'telefono'         => $this->telefono,
             'sitio_web'        => $this->sitio_web,
             'direccion'        => $this->direccion,
-
-            // Colores normalizados a #rrggbb
             'color_primario'   => $this->normalizeHex($this->color_primario),
             'color_secundario' => $this->normalizeHex($this->color_secundario),
-
-            // Gradiente
             'usar_gradiente'   => $this->usar_gradiente,
             'grad_angle'       => $this->grad_angle ?? 135,
-
             'is_activa'        => $this->is_activa,
         ]);
 
-        if ($this->logo) {
-            $this->replaceFile($empresa, 'logo_path', $this->logo, 'empresas/logos');
-        }
-        if ($this->logo_dark) {
-            $this->replaceFile($empresa, 'logo_dark_path', $this->logo_dark, 'empresas/logos');
-        }
-        if ($this->favicon) {
-            $this->replaceFile($empresa, 'favicon_path', $this->favicon, 'empresas/favicons');
+        // 4) Reemplazo de archivos con manejo de errores
+        try {
+            if ($this->logo) {
+                $this->replaceFile($empresa, 'logo_path', $this->logo, 'empresas/logos');
+            }
+            if ($this->logo_dark) {
+                $this->replaceFile($empresa, 'logo_dark_path', $this->logo_dark, 'empresas/logos');
+            }
+            if ($this->favicon) {
+                $this->replaceFile($empresa, 'favicon_path', $this->favicon, 'empresas/favicons');
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error subiendo archivos de empresa', [
+                'empresa_id' => $this->empresa->id ?? null,
+                'error'      => $e->getMessage(),
+                'trace'      => $e->getTraceAsString(),
+            ]);
+            $this->addError('logo', 'Error al guardar archivos: '.$e->getMessage());
+            return;
         }
 
         $empresa->save();
@@ -161,13 +192,85 @@ class Empresas extends Component
         $this->resetPage();
     }
 
+    /** Guardado con try/catch y verificación previa del disco */
     private function replaceFile(Empresa $empresa, string $attr, $uploadedFile, string $dir): void
     {
+        // Asegura que el disco public está disponible
+        if (! Storage::disk('public')) {
+            throw new \RuntimeException('Disco "public" no disponible.');
+        }
+
+        // Borra anterior si existe
         if ($empresa->$attr && Storage::disk('public')->exists($empresa->$attr)) {
             Storage::disk('public')->delete($empresa->$attr);
         }
+
+        // Guarda
         $path = $uploadedFile->store($dir, 'public');
+        if (! $path) {
+            throw new \RuntimeException('No se pudo guardar el archivo en el disco public.');
+        }
+
         $empresa->$attr = $path;
+    }
+
+    /** Diagnóstico de entorno de subidas */
+    private function diagnoseUploads(): array
+    {
+        $errors = [];
+        $warnings = [];
+        $info = [];
+
+        // 1) php.ini limits
+        $uploadMax = ini_get('upload_max_filesize');
+        $postMax   = ini_get('post_max_size');
+        $memory    = ini_get('memory_limit');
+
+        $info['php_limits'] = compact('uploadMax','postMax','memory');
+
+        // 2) carpeta tmp de Livewire
+        $tmp = storage_path('app/livewire-tmp');
+        if (! is_dir($tmp)) {
+            $errors[] = "No existe la carpeta temporal de Livewire: {$tmp}";
+        } elseif (! is_writable($tmp)) {
+            $errors[] = "La carpeta temporal de Livewire no tiene permisos de escritura: {$tmp}";
+        } else {
+            $info['tmp_ok'] = $tmp;
+        }
+
+        // 3) permisos de storage y cache
+        $storage = storage_path();
+        $cache   = storage_path('bootstrap/cache');
+        if (! is_writable(storage_path('app'))) {
+            $errors[] = 'El directorio storage/app no es escribible.';
+        }
+        if (is_dir($cache) && ! is_writable($cache)) {
+            $warnings[] = 'bootstrap/cache no es escribible (recomendado ug+rwx).';
+        }
+
+        // 4) disco public
+        try {
+            $visibility = Storage::disk('public')->getVisibility('/') ?? 'desconocido';
+            $info['disk_public'] = "OK (visibilidad: {$visibility})";
+        } catch (\Throwable $e) {
+            $errors[] = 'Disco "public" inaccesible: '.$e->getMessage();
+        }
+
+        // 5) tamaños de archivos seleccionados
+        foreach (['logo','logo_dark','favicon'] as $field) {
+            if ($this->$field) {
+                try {
+                    $sizeKb = round($this->$field->getSize() / 1024);
+                    $mime   = $this->$field->getMimeType();
+                    $info["{$field}_size_kb"] = $sizeKb.' KB';
+                    $info["{$field}_mime"]    = $mime;
+                } catch (\Throwable $e) {
+                    $warnings[] = "No se pudo leer metadata de {$field}: ".$e->getMessage();
+                }
+            }
+        }
+
+        return compact('errors','warnings','info');
     }
 
     private function normalizeHex(?string $hex): ?string
@@ -177,25 +280,24 @@ class Empresas extends Component
         return '#'.strtolower($hex);
     }
 
-  private function fillFromModel(Empresa $m): void
-{
-    $this->fill([
-        'nombre'           => $m->nombre,
-        'nit'              => $m->nit,
-        'email'            => $m->email,
-        'telefono'         => $m->telefono,
-        'sitio_web'        => $m->sitio_web,
-        'direccion'        => $m->direccion,
-        'color_primario'   => $m->color_primario,
-        'color_secundario' => $m->color_secundario,
-        'usar_gradiente'   => (bool) ($m->usar_gradiente ?? false),
-        'grad_angle'       => (int)  ($m->grad_angle ?? 135),
-        'is_activa'        => (bool) ($m->is_activa ?? true),
-    ]);
+    private function fillFromModel(Empresa $m): void
+    {
+        $this->fill([
+            'nombre'           => $m->nombre,
+            'nit'              => $m->nit,
+            'email'            => $m->email,
+            'telefono'         => $m->telefono,
+            'sitio_web'        => $m->sitio_web,
+            'direccion'        => $m->direccion,
+            'color_primario'   => $m->color_primario,
+            'color_secundario' => $m->color_secundario,
+            'usar_gradiente'   => (bool) ($m->usar_gradiente ?? false),
+            'grad_angle'       => (int)  ($m->grad_angle ?? 135),
+            'is_activa'        => (bool) ($m->is_activa ?? true),
+        ]);
 
-    $this->resetUploads();
-}
-
+        $this->resetUploads();
+    }
 
     private function resetForm(): void
     {

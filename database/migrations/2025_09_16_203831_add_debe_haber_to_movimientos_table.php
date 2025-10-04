@@ -2,21 +2,24 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
-    // (opcional) fuerza esta migración a usar MySQL
-    // protected $connection = 'mysql';
-
     private function indexExists(string $indexName, string $table): bool
     {
-        return DB::table('information_schema.STATISTICS')
-            ->whereRaw('TABLE_SCHEMA = DATABASE()')
-            ->where('TABLE_NAME', $table)
-            ->where('INDEX_NAME', $indexName)
-            ->exists();
+        // Verifica índice en MySQL usando information_schema
+        $res = DB::select(
+            "SELECT 1 
+             FROM information_schema.STATISTICS 
+             WHERE table_schema = DATABASE() 
+             AND table_name = ? 
+             AND index_name = ? 
+             LIMIT 1",
+            [$table, $indexName]
+        );
+        return !empty($res);
     }
 
     public function up(): void
@@ -34,17 +37,18 @@ return new class extends Migration
             }
         });
 
-        // === índices (idempotentes) ===
-        // nombres por convención de Laravel si usas $table->index('asiento_id'):
-        //   movimientos_asiento_id_index / movimientos_cuenta_id_index
-        if (!$this->indexExists('movimientos_asiento_id_index', 'movimientos') && Schema::hasColumn('movimientos', 'asiento_id')) {
+        // === índices ===
+        if (!$this->indexExists('movimientos_asiento_id_index', 'movimientos') &&
+            Schema::hasColumn('movimientos', 'asiento_id')) {
             Schema::table('movimientos', function (Blueprint $table) {
-                $table->index('asiento_id');
+                $table->index('asiento_id', 'movimientos_asiento_id_index');
             });
         }
-        if (!$this->indexExists('movimientos_cuenta_id_index', 'movimientos') && Schema::hasColumn('movimientos', 'cuenta_id')) {
+
+        if (!$this->indexExists('movimientos_cuenta_id_index', 'movimientos') &&
+            Schema::hasColumn('movimientos', 'cuenta_id')) {
             Schema::table('movimientos', function (Blueprint $table) {
-                $table->index('cuenta_id');
+                $table->index('cuenta_id', 'movimientos_cuenta_id_index');
             });
         }
     }
@@ -57,6 +61,7 @@ return new class extends Migration
                 $table->dropIndex('movimientos_cuenta_id_index');
             });
         }
+
         if ($this->indexExists('movimientos_asiento_id_index', 'movimientos')) {
             Schema::table('movimientos', function (Blueprint $table) {
                 $table->dropIndex('movimientos_asiento_id_index');

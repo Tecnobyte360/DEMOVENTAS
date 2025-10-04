@@ -19,7 +19,7 @@ return new class extends Migration
         $table->timestamps();
 
         $table->foreign('nota_credito_id')->references('id')->on('nota_creditos')->cascadeOnDelete();
-        $table->foreign('pago_factura_id')->references('id')->on('pagos_facturas')->cascadeOnDelete();
+        $table->foreign('pago_factura_id')->references('id')->on('factura_pagos')->cascadeOnDelete();
     });
     }
 

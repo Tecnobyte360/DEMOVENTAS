@@ -2,45 +2,50 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    // (opcional) fuerza esta migración a usar MySQL
+    // protected $connection = 'mysql';
+
     private function indexExists(string $indexName, string $table): bool
     {
-        $res = DB::connection('sqlsrv')->select(
-            'SELECT 1 FROM sys.indexes WHERE name = ? AND object_id = OBJECT_ID(?)',
-            [$indexName, $table]
-        );
-        return !empty($res);
+        return DB::table('information_schema.STATISTICS')
+            ->whereRaw('TABLE_SCHEMA = DATABASE()')
+            ->where('TABLE_NAME', $table)
+            ->where('INDEX_NAME', $indexName)
+            ->exists();
     }
 
     public function up(): void
     {
         // === columnas ===
-        Schema::connection('sqlsrv')->table('movimientos', function (Blueprint $table) {
-            if (!Schema::connection('sqlsrv')->hasColumn('movimientos', 'debe')) {
+        Schema::table('movimientos', function (Blueprint $table) {
+            if (!Schema::hasColumn('movimientos', 'debe')) {
                 $table->decimal('debe', 18, 2)->default(0);
             }
-            if (!Schema::connection('sqlsrv')->hasColumn('movimientos', 'haber')) {
+            if (!Schema::hasColumn('movimientos', 'haber')) {
                 $table->decimal('haber', 18, 2)->default(0);
             }
-            if (!Schema::connection('sqlsrv')->hasColumn('movimientos', 'detalle')) {
+            if (!Schema::hasColumn('movimientos', 'detalle')) {
                 $table->string('detalle', 255)->nullable();
             }
         });
 
         // === índices (idempotentes) ===
-        if (!$this->indexExists('movimientos_asiento_id_index', 'movimientos')) {
-            DB::connection('sqlsrv')->statement(
-                'CREATE INDEX movimientos_asiento_id_index ON movimientos (asiento_id)'
-            );
+        // nombres por convención de Laravel si usas $table->index('asiento_id'):
+        //   movimientos_asiento_id_index / movimientos_cuenta_id_index
+        if (!$this->indexExists('movimientos_asiento_id_index', 'movimientos') && Schema::hasColumn('movimientos', 'asiento_id')) {
+            Schema::table('movimientos', function (Blueprint $table) {
+                $table->index('asiento_id');
+            });
         }
-        if (!$this->indexExists('movimientos_cuenta_id_index', 'movimientos')) {
-            DB::connection('sqlsrv')->statement(
-                'CREATE INDEX movimientos_cuenta_id_index ON movimientos (cuenta_id)'
-            );
+        if (!$this->indexExists('movimientos_cuenta_id_index', 'movimientos') && Schema::hasColumn('movimientos', 'cuenta_id')) {
+            Schema::table('movimientos', function (Blueprint $table) {
+                $table->index('cuenta_id');
+            });
         }
     }
 
@@ -48,21 +53,25 @@ return new class extends Migration
     {
         // elimina índices si existen
         if ($this->indexExists('movimientos_cuenta_id_index', 'movimientos')) {
-            DB::connection('sqlsrv')->statement('DROP INDEX movimientos_cuenta_id_index ON movimientos');
+            Schema::table('movimientos', function (Blueprint $table) {
+                $table->dropIndex('movimientos_cuenta_id_index');
+            });
         }
         if ($this->indexExists('movimientos_asiento_id_index', 'movimientos')) {
-            DB::connection('sqlsrv')->statement('DROP INDEX movimientos_asiento_id_index ON movimientos');
+            Schema::table('movimientos', function (Blueprint $table) {
+                $table->dropIndex('movimientos_asiento_id_index');
+            });
         }
 
         // elimina columnas si existen
-        Schema::connection('sqlsrv')->table('movimientos', function (Blueprint $table) {
-            if (Schema::connection('sqlsrv')->hasColumn('movimientos', 'detalle')) {
+        Schema::table('movimientos', function (Blueprint $table) {
+            if (Schema::hasColumn('movimientos', 'detalle')) {
                 $table->dropColumn('detalle');
             }
-            if (Schema::connection('sqlsrv')->hasColumn('movimientos', 'haber')) {
+            if (Schema::hasColumn('movimientos', 'haber')) {
                 $table->dropColumn('haber');
             }
-            if (Schema::connection('sqlsrv')->hasColumn('movimientos', 'debe')) {
+            if (Schema::hasColumn('movimientos', 'debe')) {
                 $table->dropColumn('debe');
             }
         });

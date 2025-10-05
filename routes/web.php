@@ -280,4 +280,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
           Route::get('/medios-pagos', MediosPagos::class)
         ->name('Mediospagos');
 
+
+
+
 });

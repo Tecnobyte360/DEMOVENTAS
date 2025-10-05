@@ -757,7 +757,7 @@ public function render()
         }
     }
 
-  public function guardar(): void
+public function guardar(): void
 {
     if ($this->abortIfLocked('guardar')) return;
 
@@ -766,28 +766,19 @@ public function render()
         $this->normalizarPagoAntesDeValidar();
         if (!$this->validarConToast()) return;
 
-        // Prevalida disponibilidad (no descuenta aún); solo informativa
-        $fake = $this->factura ?: new \App\Models\Factura\Factura();
-        $fake->setRelation('detalles', collect($this->lineas)->map(function ($l) {
-            return (object)[
-                'producto_id' => $l['producto_id'] ?? null,
-                'bodega_id'   => $l['bodega_id']   ?? null,
-                'cantidad'    => (float)($l['cantidad'] ?? 0),
-            ];
-        }));
-
+        // Pre-aviso (no bloqueante)
         try {
-            \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
+            InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
         } catch (\Throwable $ex) {
             PendingToast::create()
-                ->warning()->message('Advertencia de stock: ' . $ex->getMessage())
+                ->warning()->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
                 ->duration(9000);
         }
 
-        // Guarda (borrador + totales)
+        // Guarda como borrador
         $this->persistirBorrador();
 
-        // ⛔ Si es contado, primero exige stock suficiente; si falta, no abre pagos
+        // Si es contado, bloquea pagos si no hay stock
         if ($this->tipo_pago === 'contado') {
             if (!$this->verificarStockParaLineas()) {
                 PendingToast::create()
@@ -796,7 +787,6 @@ public function render()
                 return;
             }
 
-            // Luego valida que el pago cubra el total antes de continuar
             $this->factura->refresh();
             $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
             if ($faltante > 0.01) {
@@ -811,14 +801,14 @@ public function render()
         }
 
         PendingToast::create()
-            ->success()->message('Factura guardada (ID: ' . $this->factura->id . ').')
+            ->success()->message('Factura guardada (ID: '.$this->factura->id.').')
             ->duration(5000);
         $this->dispatch('refrescar-lista-facturas');
 
     } catch (\Throwable $e) {
         Log::error('GUARDAR ERROR', ['msg' => $e->getMessage()]);
-        $msg = config('app.debug') ? $e->getMessage() : 'No se pudo guardar.';
-        PendingToast::create()->error()->message($msg)->duration(9000);
+        PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
+            ->duration(9000);
     }
 }
 

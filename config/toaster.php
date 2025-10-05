@@ -4,8 +4,6 @@ return [
 
     /**
      * Add an additional second for every 100th word of the toast messages.
-     *
-     * Supported: true | false
      */
     'accessibility' => true,
 
@@ -18,17 +16,13 @@ return [
 
     /**
      * Allow users to close toast messages prematurely.
-     *
-     * Supported: true | false
      */
     'closeable' => true,
 
     /**
-     * The on-screen duration of each toast.
-     *
-     * Minimum: 3000 (in milliseconds)
+     * The on-screen duration of each toast (in ms).
      */
-    'duration' => 3000,
+    'duration' => 4000,
 
     /**
      * The horizontal position of each toast.
@@ -38,24 +32,27 @@ return [
     'position' => 'right',
 
     /**
-     * New toasts immediately replace similar ones, ensuring only one toast of a kind is visible at any time.
-     * Takes precedence over the "suppress" option.
-     *
-     * Supported: true | false
+     * Replace similar toasts instead of stacking them.
      */
     'replace' => false,
 
     /**
-     * Prevent the display of duplicate toast messages.
-     *
-     * Supported: true | false
+     * Prevent duplicate toasts.
      */
     'suppress' => false,
 
     /**
-     * Whether messages passed as translation keys should be translated automatically.
-     *
-     * Supported: true | false
+     * Translate messages automatically.
      */
     'translate' => true,
+
+    /**
+     * 🎨 Custom visual styles
+     */
+    'style' => [
+        'success' => 'bg-green-600 text-white font-semibold shadow-lg rounded-xl px-4 py-3',
+        'error'   => 'bg-red-600 text-white font-semibold shadow-lg rounded-xl px-4 py-3',
+        'info'    => 'bg-blue-600 text-white font-semibold shadow-lg rounded-xl px-4 py-3',
+        'warning' => 'bg-yellow-500 text-black font-semibold shadow-lg rounded-xl px-4 py-3',
+    ],
 ];

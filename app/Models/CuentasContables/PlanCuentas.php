@@ -45,7 +45,7 @@ class PlanCuentas extends Model
 
     public function hijos(): HasMany
     {
-        // Orden natural por “código padded” (ver scope ordenCodigo)
+        // Orden natural por “código padded”
         return $this->hasMany(self::class, 'padre_id')->ordenCodigo();
     }
 
@@ -76,15 +76,13 @@ class PlanCuentas extends Model
     }
 
     /**
-     * Ordena por código con padding (SQL Server).
+     * ✅ Ordena por código con padding (MySQL).
      * Si tus códigos tienen puntos (p.ej. 1.1.05) también queda bien.
      */
     public function scopeOrdenCodigo($q)
     {
         // 12 dígitos suele alcanzar para la mayoría de PUC; sube si necesitas más.
-        return $q->orderByRaw("
-            RIGHT(REPLICATE('0', 12) + REPLACE(CAST(codigo AS VARCHAR(50)), '.', ''), 12)
-        ");
+        return $q->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')");
     }
 
     public function scopeImputables($q)
@@ -171,45 +169,42 @@ class PlanCuentas extends Model
     protected static function booted()
     {
         static::deleting(function (self $cuenta) {
-            // evita cascadas en SQL Server
             $cuenta->hijos()->update(['padre_id' => null]);
         });
     }
-   
 
-public function scopeNaturalezaArbol($q, ?string $nat)
-{
-    if (!$nat || strtoupper($nat) === 'TODAS') {
-        return $q;
+    /* ===== Naturaleza por prefijo del código (MySQL) ===== */
+    public function scopeNaturalezaArbol($q, ?string $nat)
+    {
+        if (!$nat || strtoupper($nat) === 'TODAS') {
+            return $q;
+        }
+
+        $map = [
+            'ACTIVOS'     => '1',
+            'PASIVOS'     => '2',
+            'PATRIMONIO'  => '3',
+            'INGRESOS'    => '4',
+            'GASTOS'      => '5',
+            'COSTOS'      => '6',
+        ];
+
+        $natU = strtoupper($nat);
+        $pref = $map[$natU] ?? null;
+
+        if ($pref) {
+            // Por árbol: todo lo que cuelga del dígito raíz (quita puntos si tu código tiene 1.1.05)
+            return $q->whereRaw("
+                LEFT(REPLACE(CAST(codigo AS CHAR), '.', ''), 1) = ?
+            ", [$pref]);
+        }
+
+        // Fallback por columna naturaleza, saneando espacios/case
+        return $q->whereRaw("TRIM(UPPER(naturaleza)) = ?", [$natU]);
     }
-
-    $map = [
-        'ACTIVOS'     => '1',
-        'PASIVOS'     => '2',
-        'PATRIMONIO'  => '3',
-        'INGRESOS'    => '4',
-        'GASTOS'      => '5',
-        'COSTOS'      => '6',
-    ];
-
-    $natU = strtoupper($nat);
-    $pref = $map[$natU] ?? null;
-
-    if ($pref) {
-        // Por árbol: todo lo que cuelga del dígito raíz (quita puntos si tu código tiene 1.1.05)
-        return $q->whereRaw("
-            LEFT(REPLACE(CAST(codigo AS VARCHAR(50)), '.', ''), 1) = ?
-        ", [$pref]);
-    }
-
-    // Fallback por columna naturaleza, saneando espacios/case
-    return $q->whereRaw("RTRIM(LTRIM(UPPER(naturaleza))) = ?", [$natU]);
-}
-
 
     public function scopeClase($q, string $clase)
     {
         return $q->where('clase_cuenta', $clase);
     }
-
 }

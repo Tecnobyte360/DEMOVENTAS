@@ -172,7 +172,8 @@ class PlanCuentas extends Component
                 $t = trim($this->q);
                 $q->where(fn($qq) => $qq->where('codigo','like',"%{$t}%")->orWhere('nombre','like',"%{$t}%"));
             })
-            ->ordenCodigo()
+            // ⬇️ Orden compatible con MySQL (equivalente a tu intención original)
+            ->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')")
             ->get()
             ->groupBy('padre_id');
 
@@ -263,19 +264,14 @@ class PlanCuentas extends Component
     {
         $nuevoPadre = $val ? (int)$val : null;
 
-        // Si estamos CREANDO (no editingId), sugerimos y heredamos;
-        // si estamos EDITANDO, permitimos todo, sin bloquear nada.
         if (!$this->editingId) {
             if ($nuevoPadre) {
                 $p = Cuenta::find($nuevoPadre);
                 if ($p) {
-                    // sugerir código hijo y heredar naturaleza/moneda
                     $this->codigo = $this->sugerirCodigoPara($nuevoPadre);
                     $this->naturaleza_form = $p->naturaleza ?: $this->naturaleza_form;
                     $this->moneda = $p->moneda ?: $this->moneda;
                 }
-            } else {
-                // raíz: no forzamos nada, pero no hereda de nadie
             }
         }
     }
@@ -284,28 +280,22 @@ class PlanCuentas extends Component
     protected function sugerirCodigoPara(int $padreId): string
     {
         $padre = Cuenta::find($padreId);
-        if (!$padre) return $this->codigo; // no cambia
+        if (!$padre) return $this->codigo;
 
-        // Trae hijos existentes ordenados por código "padded"
-        $hijos = Cuenta::where('padre_id', $padreId)->ordenCodigo()->pluck('codigo')->all();
+        // hijos ordenados por el mismo criterio MySQL
+        $hijos = Cuenta::where('padre_id', $padreId)
+            ->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')")
+            ->pluck('codigo')->all();
 
-        // Si no hay hijos, sugerimos padre.codigo + "01" (o un sufijo razonable)
-        if (empty($hijos)) {
-            // si el código es "1105" -> "110501"
-            return rtrim($padre->codigo) . '01';
-        }
+        if (empty($hijos)) return rtrim($padre->codigo) . '01';
 
-        // Tomar el último hijo y aumentar correlativo numérico final
         $ultimo = end($hijos);
-        // Detecta bloque numérico al final
         if (preg_match('/^(.*?)(\d+)$/', $ultimo, $m)) {
             $pref = $m[1];
             $num  = $m[2];
             $next = str_pad((string)((int)$num + 1), strlen($num), '0', STR_PAD_LEFT);
             return $pref . $next;
         }
-
-        // Fallback: agregar "01" literal
         return $ultimo . '01';
     }
 
@@ -313,7 +303,6 @@ class PlanCuentas extends Component
     {
         $this->validate();
 
-        // Anti-ciclos si se está editando
         $old = null;
         if ($this->editingId) {
             if ($this->padre_id === $this->editingId) {
@@ -330,7 +319,6 @@ class PlanCuentas extends Component
             $old = Cuenta::findOrFail($this->editingId);
         }
 
-        // Nivel calculado respecto al padre actual elegido
         $nivel = 1;
         if ($this->padre_id) {
             $padre = Cuenta::findOrFail($this->padre_id);
@@ -370,7 +358,6 @@ class PlanCuentas extends Component
                 $padreCambio = $old?->padre_id !== $this->padre_id;
                 $cuenta->update($data);
 
-                // Si cambió el padre, re-nivelar todo el subárbol
                 if ($padreCambio) {
                     $this->relevelSubtree($cuenta->id, $data['nivel']);
                 }
@@ -391,25 +378,21 @@ class PlanCuentas extends Component
         $this->dispatch('toast', title: 'Guardado', message: 'La cuenta se guardó correctamente.');
     }
 
-    /** Recalcula niveles del subárbol a partir de un nivel base (cuando se mueve de padre) */
     protected function relevelSubtree(int $id, int $nivelBase): void
     {
         $hijos = Cuenta::where('padre_id', $id)->get(['id','nivel']);
         foreach ($hijos as $h) {
             $nuevoNivel = $nivelBase + 1;
             Cuenta::whereKey($h->id)->update(['nivel' => $nuevoNivel]);
-            // recursivo
             $this->relevelSubtree($h->id, $nuevoNivel);
         }
     }
 
-    /** Expande la ruta (ancestros) hasta un nodo y lo selecciona */
     protected function expandPathAndSelect(int $id): void
     {
         $ruta = [];
         $n = Cuenta::with('padre')->find($id);
         while ($n) { $ruta[] = $n->id; $n = $n->padre; }
-        // $ruta trae [hijo, padre, abuelo,...] => expandimos ancestros
         $this->expandidos = array_values(array_unique(array_merge($this->expandidos, $ruta)));
         $this->selectedId = $id;
     }
@@ -485,22 +468,18 @@ class PlanCuentas extends Component
     /* ========== Render ========== */
     public function render()
     {
-        // 1) Cargar cuentas movidas por la factura (si aplica)
         $this->cargarCuentasDeFactura();
 
-        // 2) Construir árbol base
         $items = $this->buildFlatTree();
 
-        // 3) Si está activo el filtro, quedarnos solo con esas cuentas
         if ($this->soloCuentasMovidas && !empty($this->idsCuentasMovidas)) {
             $items = $items->whereIn('id', $this->idsCuentasMovidas)->values();
         }
 
-        // 4) Calcular saldo_antes / delta / saldo_despues
         $naturDeudoras = ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'];
         $items = $items->map(function ($row) use ($naturDeudoras) {
             $sum = $this->sumasFacturaPorCuenta[$row->id] ?? ['debe'=>0.0,'haber'=>0.0];
-            $bruto = $sum['debe'] - $sum['haber']; // informativo
+            $bruto = $sum['debe'] - $sum['haber'];
             $nat = strtoupper((string) $row->naturaleza);
             $esDeudora = in_array($nat, $naturDeudoras);
             $delta = $esDeudora ? $bruto : -$bruto;
@@ -511,14 +490,14 @@ class PlanCuentas extends Component
             return $row;
         });
 
-        // Posibles padres (para modal)
+        // Posibles padres (para modal) — orden MySQL consistente
         $posiblesPadres = Cuenta::query()
             ->when($this->editingId, function ($q) {
                 $q->where('id', '!=', $this->editingId);
                 $desc = $this->descendantIdsOf($this->editingId);
                 if (!empty($desc)) $q->whereNotIn('id', $desc);
             })
-            ->orderBy('codigo')
+            ->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')")
             ->get(['id','codigo','nombre']);
 
         $nivelMax = $this->nivelMax;

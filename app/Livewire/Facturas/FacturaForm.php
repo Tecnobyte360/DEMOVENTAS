@@ -226,7 +226,7 @@ public function render()
     {
         if ($this->bloqueada) {
             PendingToast::create()
-                ->warning()->message("La factura está {$this->estado}; no se puede {$accion}.")
+                ->error()->message("La factura está {$this->estado}; no se puede {$accion}.")
                 ->duration(7000);
             return true;
         }
@@ -771,7 +771,7 @@ public function guardar(): void
             InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
         } catch (\Throwable $ex) {
             PendingToast::create()
-                ->warning()->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
+                ->error()->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
                 ->duration(9000);
         }
 
@@ -782,7 +782,7 @@ public function guardar(): void
         if ($this->tipo_pago === 'contado') {
             if (!$this->verificarStockParaLineas()) {
                 PendingToast::create()
-                    ->warning()->message('Hay faltante de stock: no puedes registrar pagos aún.')
+                    ->error()->message('Hay faltante de stock: no puedes registrar pagos aún.')
                     ->duration(8000);
                 return;
             }
@@ -791,7 +791,7 @@ public function guardar(): void
             $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
             if ($faltante > 0.01) {
                 PendingToast::create()
-                    ->warning()->message('Factura de contado: registra el pago por el total antes de continuar.')
+                    ->error()->message('Factura de contado: registra el pago por el total antes de continuar.')
                     ->duration(8000);
 
                 $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
@@ -919,7 +919,7 @@ public function emitir(): void
         // ⛔ Bloqueo por stock antes de abrir el modal
         if (!$this->verificarStockParaLineas()) {
             PendingToast::create()
-                ->warning()->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                ->error()->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
                 ->duration(8000);
             return;
         }

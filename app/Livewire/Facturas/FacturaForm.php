@@ -276,6 +276,8 @@ public function render()
         $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
     }
 
+
+
    public function updated($name, $value): void
 {
     if ($this->bloqueada) return;
@@ -665,72 +667,73 @@ public function render()
         }
     }
 
-    protected function persistirBorrador(): void
-    {
-        if ($this->bloqueada) {
-            throw new \RuntimeException('La factura está bloqueada y no se puede modificar.');
+   protected function persistirBorrador(): void
+{
+    if ($this->bloqueada) {
+        throw new \RuntimeException('La factura está bloqueada y no se puede modificar.');
+    }
+
+    DB::transaction(function () {
+        $this->normalizarPagoAntesDeValidar();
+
+        if (!$this->factura) $this->factura = new Factura();
+
+        $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
+
+        $dataCab = [
+            'serie_id'          => $serieId,
+            'socio_negocio_id'  => $this->socio_negocio_id,
+            'fecha'             => $this->fecha,
+            'vencimiento'       => $this->vencimiento,
+            'moneda'            => $this->moneda,
+            'tipo_pago'         => $this->tipo_pago,
+            'plazo_dias'        => $this->plazo_dias,
+            'terminos_pago'     => $this->terminos_pago,
+            'notas'             => $this->notas,
+            'estado'            => 'borrador',
+            'cuenta_cobro_id'   => $this->cuenta_cobro_id,
+            'condicion_pago_id' => $this->condicion_pago_id,
+        ];
+
+        \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
+            $this->factura->forceFill($dataCab)->save();
+        });
+
+        // Reemplaza detalles
+        $this->factura->detalles()->delete();
+
+        $detallesPayload = [];
+        foreach ($this->lineas as $l) {
+            $detallesPayload[] = [
+                'producto_id'       => $l['producto_id'] ?? null,
+                'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int)$l['cuenta_ingreso_id'] : null,
+                'bodega_id'         => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
+                'descripcion'       => $l['descripcion'] ?? null,
+                'cantidad'          => (float)($l['cantidad'] ?? 1),
+                'precio_unitario'   => (float)($l['precio_unitario'] ?? 0),
+                'descuento_pct'     => (float)($l['descuento_pct'] ?? 0),
+                'impuesto_id'       => $l['impuesto_id'] ?? null,
+                'impuesto_pct'      => (float)($l['impuesto_pct'] ?? 0),
+            ];
         }
 
-        DB::transaction(function () {
-            $this->normalizarPagoAntesDeValidar();
-
-            if (!$this->factura) $this->factura = new Factura();
-
-            $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
-
-            $dataCab = [
-                'serie_id'          => $serieId,
-                'socio_negocio_id'  => $this->socio_negocio_id,
-                'fecha'             => $this->fecha,
-                'vencimiento'       => $this->vencimiento,
-                'moneda'            => $this->moneda,
-                'tipo_pago'         => $this->tipo_pago,
-                'plazo_dias'        => $this->plazo_dias,
-                'terminos_pago'     => $this->terminos_pago,
-                'notas'             => $this->notas,
-                'estado'            => 'borrador',
-                'cuenta_cobro_id'   => $this->cuenta_cobro_id,
-                'condicion_pago_id' => $this->condicion_pago_id, // ⬅️ NUEVO
-            ];
-
-            \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
-                $this->factura->forceFill($dataCab)->save();
+        if (!empty($detallesPayload)) {
+            \Illuminate\Database\Eloquent\Model::unguarded(function () use ($detallesPayload) {
+                $this->factura->detalles()->createMany($detallesPayload);
             });
+        }
 
-            $this->factura->detalles()->delete();
+        $this->factura->load('detalles');
+        $this->factura->recalcularTotales()->save();
 
-            $detallesPayload = [];
-            foreach ($this->lineas as $l) {
-                $detallesPayload[] = [
-                    'producto_id'       => $l['producto_id'] ?? null,
-                    'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int) $l['cuenta_ingreso_id'] : null,
-                    'bodega_id'         => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
-                    'descripcion'       => $l['descripcion'] ?? null,
-                    'cantidad'          => (float) ($l['cantidad'] ?? 1),
-                    'precio_unitario'   => (float) ($l['precio_unitario'] ?? 0),
-                    'descuento_pct'     => (float) ($l['descuento_pct'] ?? 0),
-                    'impuesto_id'       => $l['impuesto_id'] ?? null,
-                    'impuesto_pct'      => (float) ($l['impuesto_pct'] ?? 0),
-                ];
-            }
+        $this->estado = $this->factura->estado;
 
-            if (!empty($detallesPayload)) {
-                \Illuminate\Database\Eloquent\Model::unguarded(function () use ($detallesPayload) {
-                    $this->factura->detalles()->createMany($detallesPayload);
-                });
-            }
-
-            $this->factura->load('detalles');
-            $this->factura->recalcularTotales()->save();
-
-            $this->estado = $this->factura->estado;
-
-            Log::info('Factura guardada (borrador)', [
-                'factura_id' => $this->factura->id,
-                'detalles'   => $this->factura->detalles->count(),
-            ]);
-        }, 3);
-    }
+        Log::info('Factura guardada (borrador)', [
+            'factura_id' => $this->factura->id,
+            'detalles'   => $this->factura->detalles->count(),
+        ]);
+    }, 3);
+}
 
     private function ensureCuentasEnLineas(): void
     {
@@ -754,7 +757,7 @@ public function render()
         }
     }
 
-   public function guardar(): void
+  public function guardar(): void
 {
     if ($this->abortIfLocked('guardar')) return;
 
@@ -763,9 +766,9 @@ public function render()
         $this->normalizarPagoAntesDeValidar();
         if (!$this->validarConToast()) return;
 
-        // Prevalida disponibilidad (no descuenta aún)
+        // Prevalida disponibilidad (no descuenta aún); solo informativa
         $fake = $this->factura ?: new \App\Models\Factura\Factura();
-        $fake->setRelation('detalles', collect($this->lineas)->map(function($l){
+        $fake->setRelation('detalles', collect($this->lineas)->map(function ($l) {
             return (object)[
                 'producto_id' => $l['producto_id'] ?? null,
                 'bodega_id'   => $l['bodega_id']   ?? null,
@@ -776,12 +779,24 @@ public function render()
         try {
             \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
         } catch (\Throwable $ex) {
-            PendingToast::create()->warning()->message('Advertencia de stock: ' . $ex->getMessage())->duration(9000);
+            PendingToast::create()
+                ->warning()->message('Advertencia de stock: ' . $ex->getMessage())
+                ->duration(9000);
         }
 
+        // Guarda (borrador + totales)
         $this->persistirBorrador();
 
+        // ⛔ Si es contado, primero exige stock suficiente; si falta, no abre pagos
         if ($this->tipo_pago === 'contado') {
+            if (!$this->verificarStockParaLineas()) {
+                PendingToast::create()
+                    ->warning()->message('Hay faltante de stock: no puedes registrar pagos aún.')
+                    ->duration(8000);
+                return;
+            }
+
+            // Luego valida que el pago cubra el total antes de continuar
             $this->factura->refresh();
             $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
             if ($faltante > 0.01) {
@@ -906,28 +921,32 @@ public function emitir(): void
     }
 }
 
-    public function abrirPagos(): void
-    {
-        if ($this->abortIfLocked('registrar pagos')) return;
+   public function abrirPagos(): void
+{
+    if ($this->abortIfLocked('registrar pagos')) return;
 
-        try {
-            if (!$this->factura?->id) {
-                $this->guardar();
-                if (!$this->factura?->id) return;
-            }
+    try {
+        // ⛔ No permitir pagos si no hay stock suficiente
+        if (!$this->verificarStockParaLineas()) return;
 
-            $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
-                ->to(\App\Livewire\Facturas\PagosFactura::class);
-
-        } catch (\Throwable $e) {
-            Log::error('abrirPagos() error', [
-                'factura_id' => $this->factura->id ?? null,
-                'msg'        => $e->getMessage(),
-            ]);
-            PendingToast::create()
-                ->error()->message('Error al abrir pagos: ' . $e->getMessage())->duration(9000);
+        if (!$this->factura?->id) {
+            $this->guardar();
+            if (!$this->factura?->id) return;
         }
+
+        $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
+            ->to(\App\Livewire\Facturas\PagosFactura::class);
+
+    } catch (\Throwable $e) {
+        Log::error('abrirPagos() error', [
+            'factura_id' => $this->factura->id ?? null,
+            'msg'        => $e->getMessage(),
+        ]);
+        PendingToast::create()
+            ->error()->message('Error al abrir pagos: ' . $e->getMessage())->duration(9000);
     }
+}
+
 
     public function getProximoPreviewProperty(): ?string
     {
@@ -1088,5 +1107,36 @@ private function refreshStockLinea(int $i): void
     $this->stockVista[$i] = (float) ($stock ?? 0);
     $this->dispatch('$refresh');
 }
+
+/** Factura “fake” solo para validar stock con las líneas actuales. */
+private function buildFakeFacturaFromLines(): \App\Models\Factura\Factura
+{
+    $fake = $this->factura ?: new \App\Models\Factura\Factura();
+    $fake->setRelation('detalles', collect($this->lineas)->map(function ($l) {
+        return (object)[
+            'producto_id' => $l['producto_id'] ?? null,
+            'bodega_id'   => $l['bodega_id']   ?? null,
+            'cantidad'    => (float)($l['cantidad'] ?? 0),
+        ];
+    }));
+    return $fake;
+}
+
+/** True si hay stock suficiente; si no, muestra toast y false. */
+private function verificarStockParaLineas(): bool
+{
+    try {
+        \App\Services\InventarioService::verificarDisponibilidadParaFactura(
+            $this->buildFakeFacturaFromLines()
+        );
+        return true;
+    } catch (\Throwable $e) {
+        \Masmerise\Toaster\PendingToast::create()
+            ->danger()->message('No hay stock suficiente: ' . $e->getMessage())
+            ->duration(9000);
+        return false;
+    }
+}
+
 
 }

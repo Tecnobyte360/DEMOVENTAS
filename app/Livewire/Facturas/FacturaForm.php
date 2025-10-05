@@ -921,13 +921,18 @@ public function emitir(): void
     }
 }
 
-   public function abrirPagos(): void
+  public function abrirPagos(): void
 {
     if ($this->abortIfLocked('registrar pagos')) return;
 
     try {
-        // ⛔ No permitir pagos si no hay stock suficiente
-        if (!$this->verificarStockParaLineas()) return;
+        // ⛔ Bloqueo por stock antes de abrir el modal
+        if (!$this->verificarStockParaLineas()) {
+            PendingToast::create()
+                ->warning()->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                ->duration(8000);
+            return;
+        }
 
         if (!$this->factura?->id) {
             $this->guardar();
@@ -938,14 +943,13 @@ public function emitir(): void
             ->to(\App\Livewire\Facturas\PagosFactura::class);
 
     } catch (\Throwable $e) {
-        Log::error('abrirPagos() error', [
-            'factura_id' => $this->factura->id ?? null,
-            'msg'        => $e->getMessage(),
-        ]);
-        PendingToast::create()
-            ->error()->message('Error al abrir pagos: ' . $e->getMessage())->duration(9000);
+        // ✅ Nunca mandar mensaje vacío al toast
+        $msg = trim((string) $e->getMessage());
+        if ($msg === '') $msg = 'Ocurrió un error inesperado.';
+        PendingToast::create()->error()->message('Error al abrir pagos: ' . $msg)->duration(9000);
     }
 }
+
 
 
     public function getProximoPreviewProperty(): ?string
@@ -1122,19 +1126,24 @@ private function buildFakeFacturaFromLines(): \App\Models\Factura\Factura
     return $fake;
 }
 
-/** True si hay stock suficiente; si no, muestra toast y false. */
+
 private function verificarStockParaLineas(): bool
 {
     try {
-        \App\Services\InventarioService::verificarDisponibilidadParaFactura(
-            $this->buildFakeFacturaFromLines()
-        );
-        return true;
+        // Reutiliza el verificador central de inventario
+        $fake = $this->factura ?: new \App\Models\Factura\Factura();
+        $fake->setRelation('detalles', collect($this->lineas)->map(function ($l) {
+            return (object)[
+                'producto_id' => $l['producto_id'] ?? null,
+                'bodega_id'   => $l['bodega_id']   ?? null,
+                'cantidad'    => (float)($l['cantidad'] ?? 0),
+            ];
+        }));
+
+        \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
+        return true;   // no lanzó excepción → hay stock suficiente
     } catch (\Throwable $e) {
-        \Masmerise\Toaster\PendingToast::create()
-            ->danger()->message('No hay stock suficiente: ' . $e->getMessage())
-            ->duration(9000);
-        return false;
+        return false;  // cualquier excepción → falta stock
     }
 }
 

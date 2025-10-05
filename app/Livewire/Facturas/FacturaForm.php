@@ -11,12 +11,12 @@ use Carbon\Carbon;
 use Throwable;
 
 use App\Models\Serie\Serie;
-use App\Models\Factura\factura as Factura;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 use App\Models\bodegas;
 use App\Models\CondicionPago\CondicionPago;
 use App\Models\CuentasContables\PlanCuentas;
+use App\Models\Factura\Factura;
 use App\Models\Productos\ProductoCuentaTipo;
 use App\Services\ContabilidadService;
 use Masmerise\Toaster\PendingToast;

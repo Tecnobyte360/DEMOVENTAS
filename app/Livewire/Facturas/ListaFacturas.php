@@ -4,7 +4,7 @@
 
 namespace App\Livewire\Facturas;
 
-use App\Models\Factura\factura;
+use App\Models\Factura\Factura;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -53,7 +53,7 @@ class ListaFacturas extends Component
 
     public function render()
     {
-        $q = factura::query()->with('cliente','serie')->latest('id');
+        $q = Factura::query()->with('cliente','serie')->latest('id');
 
         if (trim($this->q) !== '') {
             $s = '%'.trim($this->q).'%';

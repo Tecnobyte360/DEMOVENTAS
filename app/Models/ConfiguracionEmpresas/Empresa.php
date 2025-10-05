@@ -19,27 +19,19 @@ class Empresa extends Model
         'extra'     => 'array',
     ];
 
-    /** Detecta si el valor es base64 o una ruta */
-    protected function asBase64Url(?string $value): ?string
-    {
-        if (!$value) return null;
-        return str_starts_with($value, 'data:image')
-            ? $value
-            : asset('storage/'.$value);
-    }
-
+    // Retorna directamente el Base64
     public function getLogoUrlAttribute(): ?string
     {
-        return $this->asBase64Url($this->logo_path);
+        return $this->logo_path ?: null;
     }
 
     public function getLogoDarkUrlAttribute(): ?string
     {
-        return $this->asBase64Url($this->logo_dark_path);
+        return $this->logo_dark_path ?: null;
     }
 
     public function getFaviconUrlAttribute(): ?string
     {
-        return $this->asBase64Url($this->favicon_path);
+        return $this->favicon_path ?: null;
     }
 }

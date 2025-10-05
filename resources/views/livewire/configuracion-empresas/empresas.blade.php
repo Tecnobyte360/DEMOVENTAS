@@ -208,45 +208,7 @@
           </div>
         </div>
 
-        {{-- DIAGNÓSTICO DE SUBIDAS --}}
-        @if(!empty($uploadDiagnostics))
-          <div class="mt-4 rounded-xl border p-4 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200">
-            <div class="font-semibold mb-2">Diagnóstico de subidas</div>
-
-            @if(!empty($uploadDiagnostics['errors']))
-              <div class="mb-2 text-red-700 dark:text-red-300">
-                <strong>Errores:</strong>
-                <ul class="list-disc ml-5">
-                  @foreach($uploadDiagnostics['errors'] as $e)
-                    <li>{{ $e }}</li>
-                  @endforeach
-                </ul>
-              </div>
-            @endif
-
-            @if(!empty($uploadDiagnostics['warnings']))
-              <div class="mb-2 text-yellow-700 dark:text-yellow-300">
-                <strong>Advertencias:</strong>
-                <ul class="list-disc ml-5">
-                  @foreach($uploadDiagnostics['warnings'] as $w)
-                    <li>{{ $w }}</li>
-                  @endforeach
-                </ul>
-              </div>
-            @endif
-
-            @if(!empty($uploadDiagnostics['info']))
-              <div class="text-gray-800 dark:text-gray-200">
-                <strong>Info:</strong>
-                <ul class="list-disc ml-5">
-                  @foreach($uploadDiagnostics['info'] as $k => $v)
-                    <li><code>{{ $k }}</code>: {{ is_string($v) ? $v : json_encode($v) }}</li>
-                  @endforeach
-                </ul>
-              </div>
-            @endif
-          </div>
-        @endif
+      
       </div>
 
       {{-- Barra de acciones --}}

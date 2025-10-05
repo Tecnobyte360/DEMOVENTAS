@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Serie;
 
+use App\Models\Serie\Serie as SerieSerie;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Illuminate\Validation\Rule;
@@ -9,8 +10,7 @@ use Illuminate\Support\Facades\DB;
 use Masmerise\Toaster\PendingToast;
 use Illuminate\Pagination\LengthAwarePaginator;
 
-// 👇 Alias para no chocar con el nombre del componente
-use App\Models\Serie\Serie as SerieModel;
+
 
 class Serie extends Component
 {
@@ -78,7 +78,7 @@ class Serie extends Component
     public function render()
     {
         try {
-            $items = SerieModel::query()
+            $items = Serie::query()
                 ->when(trim($this->search) !== '', function ($q) {
                     $s = '%' . trim($this->search) . '%';
                     $q->where(fn($w) => $w->where('nombre', 'like', $s)
@@ -121,7 +121,7 @@ class Serie extends Component
     public function edit(int $id): void
     {
         try {
-            $m = SerieModel::findOrFail($id);
+            $m = SerieSerie::findOrFail($id);
 
             $this->fill([
                 'serie_id'     => $m->id,
@@ -161,7 +161,7 @@ class Serie extends Component
             DB::transaction(function () {
                 // Lock si edita, para no tener carreras con 'proximo'
                 $current = $this->serie_id
-                    ? SerieModel::whereKey($this->serie_id)->lockForUpdate()->first()
+                    ? SerieSerie::whereKey($this->serie_id)->lockForUpdate()->first()
                     : null;
 
                 $desde = (int) $this->rango_desde;
@@ -180,12 +180,12 @@ class Serie extends Component
 
                 // Un solo default por documento: desmarca otros si corresponde
                 if ($this->es_default) {
-                    SerieModel::where('documento', $this->documento)
+                    SerieSerie::where('documento', $this->documento)
                         ->when($this->serie_id, fn($q) => $q->where('id', '<>', $this->serie_id))
                         ->update(['es_default' => false]);
                 }
 
-                $serie = SerieModel::updateOrCreate(
+                $serie = SerieSerie::updateOrCreate(
                     ['id' => $this->serie_id],
                     [
                         'documento'     => $this->documento,
@@ -239,7 +239,7 @@ class Serie extends Component
     public function toggleActivo(int $id): void
     {
         try {
-            $m = SerieModel::findOrFail($id);
+            $m = SerieSerie::findOrFail($id);
             $m->activa = ! $m->activa;
             $m->save();
 
@@ -254,7 +254,7 @@ class Serie extends Component
     public function delete(int $id): void
     {
         try {
-            $m = SerieModel::findOrFail($id);
+            $m = SerieSerie::findOrFail($id);
 
             // Protección: no eliminar si tiene facturas asociadas (ajusta a tu modelo real)
             $tieneDocs = \App\Models\Factura\factura::where('serie_id', $id)->exists();
@@ -278,7 +278,7 @@ class Serie extends Component
             $long = (int) ($this->longitud ?: 6);
 
             if ($id) {
-                $s = SerieModel::find($id);
+                $s = SerieSerie::find($id);
                 if (!$s) return '';
                 $n = max((int) $s->proximo, (int) $s->desde);
                 $num = str_pad((string) $n, $long, '0', STR_PAD_LEFT);

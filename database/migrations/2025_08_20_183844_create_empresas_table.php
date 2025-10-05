@@ -13,20 +13,32 @@ return new class extends Migration
     {
         Schema::create('empresas', function (Blueprint $table) {
             $table->id();
-             $table->string('nombre');
+
+            // Información básica
+            $table->string('nombre');
             $table->string('nit')->nullable();
             $table->string('email')->nullable();
             $table->string('telefono')->nullable();
             $table->string('sitio_web')->nullable();
             $table->string('direccion')->nullable();
-            $table->string('logo_path')->nullable();      
-            $table->string('logo_dark_path')->nullable(); 
-            $table->string('favicon_path')->nullable();
-            $table->string('color_primario')->nullable();  
-            $table->string('color_secundario')->nullable(); 
+
+            // Logos e íconos (Base64, por eso longText)
+            $table->longText('logo_path')->nullable();       // data:image/png;base64,...
+            $table->longText('logo_dark_path')->nullable();  // versión oscura
+            $table->longText('favicon_path')->nullable();    // favicon o ícono
+
+            // Colores y estado
+            $table->string('color_primario')->nullable();
+            $table->string('color_secundario')->nullable();
             $table->boolean('is_activa')->default(true);
 
-            $table->json('extra')->nullable(); 
+            // Configuración adicional
+            $table->json('extra')->nullable();
+
+            // Opcionales futuros (si ya los tienes, los dejamos comentados)
+            // $table->boolean('usar_gradiente')->default(false);
+            // $table->smallInteger('grad_angle')->default(135);
+
             $table->timestamps();
         });
     }

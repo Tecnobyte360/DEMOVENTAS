@@ -19,18 +19,19 @@ class Empresa extends Model
         'extra'     => 'array',
     ];
 
+    // Ahora los *_path guardan el data URL base64; los accessors sólo lo devuelven.
     public function getLogoUrlAttribute(): ?string
     {
-        return $this->logo_path ? asset('storage/'.$this->logo_path) : null;
+        return $this->logo_path ?: null;
     }
 
     public function getLogoDarkUrlAttribute(): ?string
     {
-        return $this->logo_dark_path ? asset('storage/'.$this->logo_dark_path) : null;
+        return $this->logo_dark_path ?: null;
     }
 
     public function getFaviconUrlAttribute(): ?string
     {
-        return $this->favicon_path ? asset('storage/'.$this->favicon_path) : null;
+        return $this->favicon_path ?: null;
     }
 }

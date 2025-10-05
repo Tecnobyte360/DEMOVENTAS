@@ -2,7 +2,8 @@
 <div class="relative p-8 md:p-10 rounded-3xl shadow-2xl
             bg-gradient-to-br from-violet-50 via-white to-indigo-50
             dark:from-gray-900 dark:via-gray-900 dark:to-gray-800
-            border border-violet-100/50 dark:border-gray-700">
+            border border-violet-100/50 dark:border-gray-700"
+     x-data="logoUploader()">
 
   {{-- Fondos decorativos --}}
   <div aria-hidden="true" class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-indigo-400/20 blur-3xl"></div>
@@ -154,88 +155,63 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Identidad visual</h3>
         </div>
 
-        {{-- Logo claro --}}
-      <div class="group">
-  <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
+        {{-- Logo claro (sin wire:model: convertimos a Base64 con Alpine y lo mandamos al componente) --}}
+        <div class="group">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
+          <input type="file" accept="image/*"
+                 @change="toBase64($event, 'logoPreview', 'logo_b64')"
+                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
 
-  {{-- Input de archivo --}}
-  <input type="file" wire:model="logo" accept="image/*"
-         class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 
-                file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 
-                hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
+          @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
 
-  {{-- Errores --}}
-  @error('logo')
-    <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-  @enderror
+          <div class="mt-3 flex items-center gap-3">
+            <template x-if="logoPreview">
+              <img :src="logoPreview" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo">
+            </template>
 
-  {{-- Vista previa --}}
-  <div class="mt-3 flex items-center gap-3">
-    @if ($logo)
-      {{-- Previsualización cuando se selecciona un nuevo archivo --}}
-      <img src="{{ $logo->temporaryUrl() }}" 
-           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" 
-           alt="preview logo">
-    @elseif (!empty($empresa?->logo_url))
-      {{-- Carga desde Base64 o desde asset() automáticamente --}}
-      <img src="{{ $empresa->logo_url }}" 
-           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" 
-           alt="logo actual">
-    @else
-      {{-- Placeholder si no hay logo --}}
-      <div class="h-12 w-12 flex items-center justify-center rounded-xl bg-gray-100 
-                  dark:bg-gray-800 text-gray-400 text-xs border border-gray-200 
-                  dark:border-gray-700">
-        <i class="fa-solid fa-image"></i>
-      </div>
-    @endif
-  </div>
-
-  {{-- Indicador de carga --}}
-  <div wire:loading wire:target="logo" 
-       class="mt-2 text-xs text-gray-500 flex items-center gap-2">
-    <i class="fa-solid fa-spinner animate-spin"></i> Subiendo logo...
-  </div>
-</div>
-
+            @if (!empty($empresa?->logo_url))
+              <img src="{{ $empresa->logo_url }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo actual">
+            @endif
+          </div>
+        </div>
 
         {{-- Logo oscuro --}}
         <div class="group">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (oscuro)</label>
-          <input type="file" wire:model="logo_dark" accept="image/*"
+          <input type="file" accept="image/*"
+                 @change="toBase64($event, 'logoDarkPreview', 'logo_dark_b64')"
                  class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
           @error('logo_dark') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+
           <div class="mt-3 flex items-center gap-3">
-            @if ($logo_dark)
-              <img src="{{ $logo_dark->temporaryUrl() }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo dark">
-            @elseif ($empresa?->logo_dark_url)
+            <template x-if="logoDarkPreview">
+              <img :src="logoDarkPreview" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo dark">
+            </template>
+
+            @if (!empty($empresa?->logo_dark_url))
               <img src="{{ $empresa->logo_dark_url }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo oscuro actual">
             @endif
-          </div>
-          <div wire:loading wire:target="logo_dark" class="mt-2 text-xs text-gray-500 flex items-center gap-2">
-            <i class="fa-solid fa-spinner animate-spin"></i> Subiendo logo oscuro...
           </div>
         </div>
 
         {{-- Favicon --}}
         <div class="group">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Favicon</label>
-          <input type="file" wire:model="favicon" accept="image/*,.ico"
+          <input type="file" accept="image/*,.ico"
+                 @change="toBase64($event, 'faviconPreview', 'favicon_b64')"
                  class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
           @error('favicon') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+
           <div class="mt-3 flex items-center gap-3">
-            @if ($favicon)
-              <img src="{{ $favicon->temporaryUrl() }}" class="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700" alt="preview favicon">
-            @elseif ($empresa?->favicon_url)
+            <template x-if="faviconPreview">
+              <img :src="faviconPreview" class="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700" alt="preview favicon">
+            </template>
+
+            @if (!empty($empresa?->favicon_url))
               <img src="{{ $empresa->favicon_url }}" class="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700" alt="favicon actual">
             @endif
           </div>
-          <div wire:loading wire:target="favicon" class="mt-2 text-xs text-gray-500 flex items-center gap-2">
-            <i class="fa-solid fa-spinner animate-spin"></i> Subiendo favicon...
-          </div>
         </div>
-
-      
       </div>
 
       {{-- Barra de acciones --}}
@@ -350,3 +326,32 @@
     <div class="mt-4">{{ $rows->links() }}</div>
   </div>
 </div>
+
+{{-- Alpine helper: lee archivo y envía Base64 al componente Livewire --}}
+<script>
+  function logoUploader() {
+    return {
+      logoPreview: null,
+      logoDarkPreview: null,
+      faviconPreview: null,
+
+      toBase64(event, previewKey, livewireProp) {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = e => {
+          const dataUrl = e.target.result; // data:image/*;base64,....
+          this[previewKey] = dataUrl;
+          // Mandar al componente Livewire como string (evita /livewire/upload-file)
+          if (window.Livewire) {
+            window.Livewire.find(@this.__instance.id).set(livewireProp, dataUrl);
+          } else if (window.livewire) {
+            window.livewire.find(@this.__instance.id).set(livewireProp, dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+  }
+</script>

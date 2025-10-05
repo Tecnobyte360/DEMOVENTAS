@@ -14,6 +14,7 @@ use App\Models\MediosPago\MedioPagos;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ContabilidadService
 {
@@ -56,6 +57,67 @@ class ContabilidadService
 
         return null;
     }
+    /**
+ * Revierte TODOS los asientos contables ligados a una factura (VENTA, COBRO, etc.)
+ * - Resta los deltas aplicados a cada cuenta (invierte lo hecho por postMovimiento)
+ * - Elimina movimientos y asientos
+ * - No toca pagos ni inventario (eso lo manejas en sus servicios)
+ */
+public static function revertirPorFactura(Factura $f): bool
+{
+    return DB::transaction(function () use ($f) {
+        // Bloqueamos asientos de la factura
+        $asientos = Asiento::where('origen', 'factura')
+            ->where('origen_id', $f->id)
+            ->lockForUpdate()
+            ->get();
+
+        if ($asientos->isEmpty()) {
+            // Nada que revertir
+            return true;
+        }
+
+        foreach ($asientos as $asiento) {
+            // Traemos movimientos del asiento
+            $movs = Movimiento::where('asiento_id', $asiento->id)->get();
+
+            foreach ($movs as $mov) {
+                /** @var PlanCuentas $cuenta */
+                $cuenta = PlanCuentas::lockForUpdate()->find($mov->cuenta_id);
+                if (!$cuenta) {
+                    // Si la cuenta ya no existe, eliminamos el movimiento y seguimos
+                    $mov->delete();
+                    continue;
+                }
+
+                // Delta que fue aplicado cuando se posteó el movimiento
+                // (idéntico a postMovimiento, pero aquí lo INVERTIMOS)
+                $esDeudora = self::esDeudora($cuenta);
+                $deltaOriginal = $esDeudora
+                    ? ((float)$mov->debito - (float)$mov->credito)
+                    : ((float)$mov->credito - (float)$mov->debito);
+
+                // Revertimos el saldo
+                $reversa = -1 * $deltaOriginal;
+                PlanCuentas::whereKey($cuenta->id)->update([
+                    'saldo' => DB::raw('saldo + ' . number_format($reversa, 2, '.', '')),
+                ]);
+
+                // Borramos el movimiento
+                $mov->delete();
+            }
+
+            // Borramos el asiento
+            $asiento->delete();
+        }
+
+        // Opcional: puedes limpiar algún campo de la factura si lo llevas (no obligatorio)
+        // $f->update(['monto_aplicado' => 0]); // solo si tu lógica lo necesita
+
+        Log::info('Asientos contables revertidos para factura', ['factura_id' => $f->id]);
+        return true;
+    });
+}
 
     protected static function cuentaInventarioProducto(?Producto $p): ?int
     {

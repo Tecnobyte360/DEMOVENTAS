@@ -3,14 +3,12 @@
 namespace App\Livewire\ConfiguracionEmpresas;
 
 use App\Models\ConfiguracionEmpresas\Empresa;
-use Illuminate\Support\Facades\Log;
 use Livewire\Component;
-use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class Empresas extends Component
 {
-    use WithFileUploads, WithPagination;
+    use WithPagination;
 
     protected $paginationTheme = 'tailwind';
 
@@ -30,12 +28,12 @@ class Empresas extends Component
     public ?int $grad_angle = 135;
     public bool $is_activa = true;
 
-    // Uploads
-    public $logo;
-    public $logo_dark;
-    public $favicon;
+    // 👇 NUEVAS propiedades que recibe el Blade (DataURL Base64)
+    public ?string $logo_b64 = null;
+    public ?string $logo_dark_b64 = null;
+    public ?string $favicon_b64 = null;
 
-    // Diagnóstico para la vista (opcional)
+    // (opcional) diagnóstico
     public array $uploadDiagnostics = [];
 
     public string $q = '';
@@ -58,26 +56,10 @@ class Empresas extends Component
             'grad_angle'       => ['nullable','integer','min:0','max:360'],
             'is_activa'        => ['boolean'],
 
-            // Tamaños generosos por si suben logos grandes
-            'logo'      => ['nullable','image','mimes:png,jpg,jpeg,webp','max:10240'], // 10MB
-            'logo_dark' => ['nullable','image','mimes:png,jpg,jpeg,webp','max:10240'],
-            'favicon'   => ['nullable','mimes:png,jpg,jpeg,webp,ico','max:5120'],      // 5MB
-        ];
-    }
-
-    protected function messages(): array
-    {
-        return [
-            'logo.image' => 'El logo debe ser una imagen válida.',
-            'logo.mimes' => 'Formatos permitidos: png, jpg, jpeg, webp.',
-            'logo.max'   => 'El logo supera el tamaño máximo permitido (10 MB).',
-
-            'logo_dark.image' => 'El logo oscuro debe ser una imagen válida.',
-            'logo_dark.mimes' => 'Formatos permitidos: png, jpg, jpeg, webp.',
-            'logo_dark.max'   => 'El logo oscuro supera el tamaño máximo permitido (10 MB).',
-
-            'favicon.mimes' => 'El favicon debe ser png, jpg, jpeg, webp o ico.',
-            'favicon.max'   => 'El favicon supera el tamaño máximo permitido (5 MB).',
+            // Validación simple de DataURL base64 (opcional; puedes quitar si te estorba)
+            'logo_b64'        => ['nullable','string','starts_with:data:image/'],
+            'logo_dark_b64'   => ['nullable','string','starts_with:data:image/'],
+            'favicon_b64'     => ['nullable','string','starts_with:data:image/'],
         ];
     }
 
@@ -106,15 +88,7 @@ class Empresas extends Component
 
     public function save(): void
     {
-        // (Opcional) Diagnóstico simple
-        $this->uploadDiagnostics = $this->diagnoseUploads();
-        if (!empty($this->uploadDiagnostics['errors'])) {
-            $this->addError('logo', 'Falló la subida: revisa el diagnóstico.');
-            session()->flash('ok', null);
-            return;
-        }
-
-        // Validación
+        // Valida campos
         $this->validate();
 
         if ($this->usar_gradiente && (!$this->color_primario || !$this->color_secundario)) {
@@ -123,7 +97,7 @@ class Empresas extends Component
             return;
         }
 
-        // Guardar datos base
+        // Guarda datos base
         $empresa = $this->empresa ?? new Empresa();
         $empresa->fill([
             'nombre'           => $this->nombre,
@@ -138,26 +112,16 @@ class Empresas extends Component
             'grad_angle'       => $this->grad_angle ?? 135,
             'is_activa'        => $this->is_activa,
         ]);
-        $empresa->save();
 
-        // Convertir a Base64 y guardar en los mismos campos *_path
-        try {
-            if ($this->logo) {
-                $this->putBase64($empresa, 'logo_path', $this->logo);
-            }
-            if ($this->logo_dark) {
-                $this->putBase64($empresa, 'logo_dark_path', $this->logo_dark);
-            }
-            if ($this->favicon) {
-                $this->putBase64($empresa, 'favicon_path', $this->favicon);
-            }
-        } catch (\Throwable $e) {
-            Log::error('Error convirtiendo imágenes a Base64', [
-                'empresa_id' => $this->empresa?->id,
-                'error'      => $e->getMessage(),
-            ]);
-            $this->addError('logo', 'Error al procesar imagen: '.$e->getMessage());
-            return;
+        // Si llegaron nuevas imágenes en base64, se guardan en los mismos campos *_path
+        if ($this->logo_b64) {
+            $empresa->logo_path = $this->logo_b64;
+        }
+        if ($this->logo_dark_b64) {
+            $empresa->logo_dark_path = $this->logo_dark_b64;
+        }
+        if ($this->favicon_b64) {
+            $empresa->favicon_path = $this->favicon_b64;
         }
 
         $empresa->save();
@@ -170,8 +134,6 @@ class Empresas extends Component
     public function delete(int $id): void
     {
         $empresa = Empresa::findOrFail($id);
-
-        // Como ya no hay archivos físicos, solo limpiamos columnas o eliminamos registro.
         $empresa->delete();
 
         if ($this->empresa?->id === $id) {
@@ -180,47 +142,6 @@ class Empresas extends Component
 
         session()->flash('ok', 'Empresa eliminada.');
         $this->resetPage();
-    }
-
-    /** Convierte un UploadedFile a Data URL Base64 y lo guarda en $empresa->$attr */
-    private function putBase64(Empresa $empresa, string $attr, $uploadedFile): void
-    {
-        // Livewire UploadedFile
-        $mimeType = $uploadedFile->getMimeType() ?: 'application/octet-stream';
-        $contents = file_get_contents($uploadedFile->getRealPath());
-        if ($contents === false) {
-            throw new \RuntimeException('No se pudo leer el archivo subido.');
-        }
-        $empresa->$attr = 'data:'.$mimeType.';base64,'.base64_encode($contents);
-    }
-
-    /** Diagnóstico simple (sin tocar filesystem ya que no lo usamos) */
-    private function diagnoseUploads(): array
-    {
-        $errors = [];
-        $info = [];
-
-        $info['php_limits'] = [
-            'uploadMax' => ini_get('upload_max_filesize'),
-            'postMax'   => ini_get('post_max_size'),
-            'memory'    => ini_get('memory_limit'),
-        ];
-
-        $tmp = storage_path('app/livewire-tmp');
-        if (!is_dir($tmp) || !is_writable($tmp)) {
-            $errors[] = "Carpeta temporal no disponible o sin permisos: {$tmp}";
-        } else {
-            $info['tmp_ok'] = $tmp;
-        }
-
-        foreach (['logo','logo_dark','favicon'] as $f) {
-            if ($this->$f) {
-                $info["{$f}_size_kb"] = round($this->$f->getSize() / 1024).' KB';
-                $info["{$f}_mime"]    = $this->$f->getMimeType();
-            }
-        }
-
-        return compact('errors','info');
     }
 
     private function normalizeHex(?string $hex): ?string
@@ -260,7 +181,8 @@ class Empresas extends Component
 
     private function resetUploads(): void
     {
-        $this->reset(['logo','logo_dark','favicon']);
+        // Limpia las 3 cadenas Base64 y cualquier previsualización que aún siga en el estado
+        $this->reset(['logo_b64','logo_dark_b64','favicon_b64']);
     }
 
     public function render()

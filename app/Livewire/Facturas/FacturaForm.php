@@ -756,6 +756,84 @@ public function render()
             return false;
         }
     }
+private function stockDisponible(int $productoId, int $bodegaId): float
+{
+    $stock = \App\Models\Productos\ProductoBodega::query()
+        ->where('producto_id', $productoId)
+        ->where('bodega_id', $bodegaId)
+        ->value('stock');
+
+    return (float)($stock ?? 0);
+}
+private function nombreProducto(int $productoId): string
+{
+    $p = Producto::query()->select('id','nombre','codigo','ItemCode')->find($productoId);
+    if (!$p) return 'Producto #'.$productoId;
+
+    // Muestra código si lo tienes (ItemCode/codigo), luego nombre
+    $codigo = $p->ItemCode ?? $p->codigo ?? null;
+    return $codigo ? ($codigo.' - '.($p->nombre ?? '')) : ($p->nombre ?? ('Producto #'.$productoId));
+}
+private function faltantesDeStock(): array
+{
+    $faltantes = [];
+
+    foreach ($this->lineas as $i => $l) {
+        $pid = (int)($l['producto_id'] ?? 0);
+        $bid = (int)($l['bodega_id'] ?? 0);
+        $qty = (float)($l['cantidad'] ?? 0);
+
+        if ($pid <= 0 || $bid <= 0 || $qty <= 0) {
+            // No se valida si falta producto/bodega/cantidad
+            continue;
+        }
+
+        // Consulta de stock "en vivo"
+        $disponible = $this->stockDisponible($pid, $bid);
+
+        // Actualiza la vista rápida si la usas en UI
+        $this->stockVista[$i] = (float)$disponible;
+
+        if ($disponible + 1e-6 < $qty) {
+            $faltantes[] = [
+                'index'      => $i,
+                'producto_id'=> $pid,
+                'bodega_id'  => $bid,
+                'producto'   => $this->nombreProducto($pid),
+                'bodega'     => $this->nombreBodega($bid),
+                'pedido'     => round($qty, 3),
+                'disponible' => round($disponible, 3),
+                'faltante'   => round(max(0, $qty - $disponible), 3),
+            ];
+        }
+    }
+
+    // Refresca UI si cambió stockVista
+    $this->dispatch('$refresh');
+
+    return $faltantes;
+}
+private function verificarStockParaLineasConDetalle(): array
+{
+    try {
+        // Usa tu verificador central (lanza excepción si falta stock)
+        $fake = $this->buildFakeFacturaFromLines();
+        \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
+
+        // Si no lanzó, igual calculo detalle por seguridad (puede estar alineado o no)
+        return $this->faltantesDeStock(); // debería retornar []
+    } catch (\Throwable $e) {
+        // Cuando hay error, regreso el detalle preciso
+        return $this->faltantesDeStock();
+    }
+}
+private function nombreBodega(int $bodegaId): string
+{
+    $b = bodegas::query()->select('id','nombre','codigo')->find($bodegaId);
+    if (!$b) return 'Bodega #'.$bodegaId;
+
+    return ($b->codigo ? $b->codigo.' - ' : '').($b->nombre ?? 'Bodega #'.$bodegaId);
+}
 
 public function guardar(): void
 {
@@ -766,12 +844,14 @@ public function guardar(): void
         $this->normalizarPagoAntesDeValidar();
         if (!$this->validarConToast()) return;
 
-        // Pre-aviso (no bloqueante)
+        // Pre-aviso (no bloqueante). Si tu servicio ya detalla faltantes, lo mostramos;
+        // si no, abajo hacemos un chequeo fino por línea.
         try {
             InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
         } catch (\Throwable $ex) {
             PendingToast::create()
-                ->error()->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
+                ->error()
+                ->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
                 ->duration(9000);
         }
 
@@ -780,13 +860,83 @@ public function guardar(): void
 
         // Si es contado, bloquea pagos si no hay stock
         if ($this->tipo_pago === 'contado') {
+
+            // Chequeo binario (true/false)
             if (!$this->verificarStockParaLineas()) {
-                PendingToast::create()
-                    ->error()->message('Hay faltante de stock: no puedes registrar pagos aún.')
-                    ->duration(8000);
+                // ====== Chequeo detallado línea por línea ======
+                $detalles = [];
+                foreach ($this->lineas as $idx => $l) {
+                    $pid = (int)($l['producto_id'] ?? 0);
+                    $bid = (int)($l['bodega_id'] ?? 0);
+                    $req = (float)($l['cantidad'] ?? 0);
+
+                    if ($pid <= 0 || $bid <= 0 || $req <= 0) {
+                        continue; // línea incompleta, la obviamos del reporte
+                    }
+
+                    $stock = (float) (\App\Models\Productos\ProductoBodega::query()
+                        ->where('producto_id', $pid)
+                        ->where('bodega_id', $bid)
+                        ->value('stock') ?? 0);
+
+                    if ($stock + 1e-6 < $req) { // faltante
+                        $prod = \App\Models\Productos\Producto::select('codigo', 'nombre')->find($pid);
+                        $bod  = \App\Models\bodegas::select('nombre')->find($bid);
+
+                        $codigo   = $prod?->codigo ? (string)$prod->codigo : 's/código';
+                        $nombre   = $prod?->nombre ? (string)$prod->nombre : 'Producto';
+                        $bodegaNm = $bod?->nombre ? (string)$bod->nombre : 'Bodega';
+
+                        $faltan = max(0, $req - $stock);
+
+                        $detalles[] = sprintf(
+                            'L%s %s (%s) en %s — req: %s, disp: %s, faltan: %s',
+                            $idx + 1,
+                            $codigo,
+                            $nombre,
+                            $bodegaNm,
+                            number_format($req, 2, ',', '.'),
+                            number_format($stock, 2, ',', '.'),
+                            number_format($faltan, 2, ',', '.')
+                        );
+                    }
+                }
+
+                if (empty($detalles)) {
+                    // Si por alguna razón el chequeo detallado no encontró, dejamos el genérico
+                    PendingToast::create()
+                        ->error()->message('Hay faltante de stock: no puedes registrar pagos aún.')
+                        ->duration(8000);
+                } else {
+                    // Limitamos el tamaño del toast si hay demasiados
+                    $maxMostrar = 6;
+                    $lista = $detalles;
+                    $extra = 0;
+                    if (count($detalles) > $maxMostrar) {
+                        $lista = array_slice($detalles, 0, $maxMostrar);
+                        $extra = count($detalles) - $maxMostrar;
+                    }
+
+                    $mensaje = 'Faltante de stock en: ' . implode(' | ', $lista);
+                    if ($extra > 0) {
+                        $mensaje .= " | …y {$extra} línea(s) más.";
+                    }
+
+                    // Log detallado y toast amigable
+                    \Log::warning('Faltantes de stock al guardar factura (contado)', [
+                        'factura_id' => $this->factura?->id,
+                        'faltantes'  => $detalles,
+                    ]);
+
+                    PendingToast::create()
+                        ->error()->message($mensaje)
+                        ->duration(14000);
+                }
+
                 return;
             }
 
+            // Stock OK → exigir pago total en contado
             $this->factura->refresh();
             $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
             if ($faltante > 0.01) {
@@ -1117,25 +1267,7 @@ private function buildFakeFacturaFromLines(): \App\Models\Factura\Factura
 }
 
 
-private function verificarStockParaLineas(): bool
-{
-    try {
-        // Reutiliza el verificador central de inventario
-        $fake = $this->factura ?: new \App\Models\Factura\Factura();
-        $fake->setRelation('detalles', collect($this->lineas)->map(function ($l) {
-            return (object)[
-                'producto_id' => $l['producto_id'] ?? null,
-                'bodega_id'   => $l['bodega_id']   ?? null,
-                'cantidad'    => (float)($l['cantidad'] ?? 0),
-            ];
-        }));
 
-        \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
-        return true;   // no lanzó excepción → hay stock suficiente
-    } catch (\Throwable $e) {
-        return false;  // cualquier excepción → falta stock
-    }
-}
 
 
 }

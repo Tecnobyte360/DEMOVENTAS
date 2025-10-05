@@ -4,6 +4,7 @@ namespace App\Livewire\MediosPagos;
 
 use Livewire\Component;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Masmerise\Toaster\PendingToast;
@@ -42,17 +43,28 @@ class MediosPagos extends Component
     /* ================= Ciclo de vida ================= */
     public function mount(): void
     {
-        // Catálogo de cuentas imputables (ajusta si quieres todas)
-        $this->cuentasPUC = PlanCuentas::imputables()
-            ->orderBy('codigo')
-            ->get(['id','codigo','nombre']);
+        try {
+            // Catálogo de cuentas imputables (ajusta si quieres todas)
+            $this->cuentasPUC = PlanCuentas::imputables()
+                ->orderBy('codigo')
+                ->get(['id','codigo','nombre']);
 
-        $this->items = collect(); // init
+            $this->items = collect(); // init
+        } catch (Throwable $e) {
+            $this->handleException($e, 'No se pudo cargar el catálogo de cuentas.');
+            $this->cuentasPUC = collect();
+            $this->items = collect();
+        }
     }
 
     public function render()
     {
-        $this->items = $this->queryItems();
+        try {
+            $this->items = $this->queryItems();
+        } catch (Throwable $e) {
+            $this->handleException($e, 'No se pudieron cargar los medios de pago.');
+            $this->items = collect();
+        }
 
         return view('livewire.medios-pagos.medios-pagos', [
             'items'      => $this->items,
@@ -63,21 +75,26 @@ class MediosPagos extends Component
     /** Construye la consulta del listado con filtros */
     protected function queryItems()
     {
-        $q = MedioPagos::query()
-            ->with(['cuenta.cuentaPUC']) // carga la relación 1–1
-            ->orderBy('orden')
-            ->orderBy('id');
+        try {
+            $q = MedioPagos::query()
+                ->with(['cuenta.cuentaPUC']) // carga la relación 1–1
+                ->orderBy('orden')
+                ->orderBy('id');
 
-        if ($t = trim($this->filters['q'] ?? '')) {
-            $q->where(fn($w) => $w->where('codigo','like',"%{$t}%")
-                                  ->orWhere('nombre','like',"%{$t}%"));
+            if ($t = trim($this->filters['q'] ?? '')) {
+                $q->where(fn($w) => $w->where('codigo','like',"%{$t}%")
+                                      ->orWhere('nombre','like',"%{$t}%"));
+            }
+
+            if ($this->filters['activo'] !== '') {
+                $q->where('activo', (bool) $this->filters['activo']);
+            }
+
+            return $q->get();
+        } catch (Throwable $e) {
+            $this->handleException($e, 'Ocurrió un error al listar los medios de pago.');
+            return collect();
         }
-
-        if ($this->filters['activo'] !== '') {
-            $q->where('activo', (bool) $this->filters['activo']);
-        }
-
-        return $q->get();
     }
 
     /* ================= Reglas ================= */
@@ -102,25 +119,29 @@ class MediosPagos extends Component
 
     public function abrirEditar(int $id): void
     {
-        $this->resetForm();
+        try {
+            $this->resetForm();
 
-        $row = MedioPagos::with('cuenta')->findOrFail($id);
+            $row = MedioPagos::with('cuenta')->findOrFail($id);
 
-        $this->editingId       = $row->id;
-        $this->codigo          = $row->codigo;
-        $this->nombre          = $row->nombre;
-        $this->activo          = (bool)$row->activo;
-        $this->orden           = (int)$row->orden;
-        $this->plan_cuentas_id = $row->cuenta?->plan_cuentas_id; // trae cuenta asociada
+            $this->editingId       = $row->id;
+            $this->codigo          = $row->codigo;
+            $this->nombre          = $row->nombre;
+            $this->activo          = (bool)$row->activo;
+            $this->orden           = (int)$row->orden;
+            $this->plan_cuentas_id = $row->cuenta?->plan_cuentas_id; // trae cuenta asociada
 
-        $this->showModal = true;
+            $this->showModal = true;
+        } catch (Throwable $e) {
+            $this->handleException($e, 'No se pudo abrir el registro para edición.', ['id' => $id]);
+        }
     }
 
     public function guardar(): void
     {
-        $this->validate();
-
         try {
+            $this->validate();
+
             DB::transaction(function () {
                 $data = [
                     'codigo' => $this->codigo,
@@ -155,9 +176,11 @@ class MediosPagos extends Component
             $this->showModal = false;
             $this->resetForm();
 
+        } catch (ValidationException $e) {
+            // Deja que Livewire muestre los errores de validación por campo
+            throw $e;
         } catch (Throwable $e) {
-            Log::error('Error guardando MedioPago', ['error' => $e->getMessage()]);
-            PendingToast::create()->danger()->message('Error al guardar.')->duration(3000);
+            $this->handleException($e, 'Error al guardar el medio de pago.');
         }
     }
 
@@ -180,8 +203,9 @@ class MediosPagos extends Component
             $this->confirmingDeleteId = null;
             PendingToast::create()->success()->message('Medio de pago eliminado.')->duration(2500);
         } catch (Throwable $e) {
-            Log::error('Error eliminando MedioPago', ['error' => $e->getMessage()]);
-            PendingToast::create()->danger()->message('No se pudo eliminar.')->duration(2500);
+            $this->handleException($e, 'No se pudo eliminar el medio de pago.', [
+                'id' => $this->confirmingDeleteId
+            ]);
         }
     }
 
@@ -194,8 +218,7 @@ class MediosPagos extends Component
 
             PendingToast::create()->info()->message('Estado actualizado.')->duration(2000);
         } catch (Throwable $e) {
-            Log::error('Error cambiando activo MedioPago', ['error' => $e->getMessage()]);
-            PendingToast::create()->danger()->message('No se pudo cambiar el estado.')->duration(2500);
+            $this->handleException($e, 'No se pudo cambiar el estado.', ['id' => $id]);
         }
     }
 
@@ -207,5 +230,23 @@ class MediosPagos extends Component
         ]);
         $this->activo = true;
         $this->orden  = 1;
+    }
+
+    /**
+     * Log centralizado + toast de error.
+     */
+    private function handleException(Throwable $e, string $userMessage, array $context = []): void
+    {
+        Log::error($userMessage, array_merge($context, [
+            'component' => static::class,
+            'exception' => get_class($e),
+            'message'   => $e->getMessage(),
+            'trace'     => $e->getTraceAsString(),
+        ]));
+
+        PendingToast::create()->danger()->message($userMessage)->duration(3500);
+
+        // También puedes mostrar un error no asociado a campo:
+        // $this->addError('general', $userMessage);
     }
 }

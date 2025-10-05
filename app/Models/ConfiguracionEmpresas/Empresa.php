@@ -19,19 +19,27 @@ class Empresa extends Model
         'extra'     => 'array',
     ];
 
-    // Ahora los *_path guardan el data URL base64; los accessors sólo lo devuelven.
+    /** Detecta si el valor es base64 o una ruta */
+    protected function asBase64Url(?string $value): ?string
+    {
+        if (!$value) return null;
+        return str_starts_with($value, 'data:image')
+            ? $value
+            : asset('storage/'.$value);
+    }
+
     public function getLogoUrlAttribute(): ?string
     {
-        return $this->logo_path ?: null;
+        return $this->asBase64Url($this->logo_path);
     }
 
     public function getLogoDarkUrlAttribute(): ?string
     {
-        return $this->logo_dark_path ?: null;
+        return $this->asBase64Url($this->logo_dark_path);
     }
 
     public function getFaviconUrlAttribute(): ?string
     {
-        return $this->favicon_path ?: null;
+        return $this->asBase64Url($this->favicon_path);
     }
 }

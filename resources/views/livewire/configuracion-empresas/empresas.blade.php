@@ -155,22 +155,49 @@
         </div>
 
         {{-- Logo claro --}}
-        <div class="group">
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
-          <input type="file" wire:model="logo" accept="image/*"
-                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
-          @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-          <div class="mt-3 flex items-center gap-3">
-            @if ($logo)
-              <img src="{{ $logo->temporaryUrl() }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo">
-            @elseif ($empresa?->logo_url)
-              <img src="{{ $empresa->logo_url }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo actual">
-            @endif
-          </div>
-          <div wire:loading wire:target="logo" class="mt-2 text-xs text-gray-500 flex items-center gap-2">
-            <i class="fa-solid fa-spinner animate-spin"></i> Subiendo logo...
-          </div>
-        </div>
+      <div class="group">
+  <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
+
+  {{-- Input de archivo --}}
+  <input type="file" wire:model="logo" accept="image/*"
+         class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 
+                file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 
+                hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
+
+  {{-- Errores --}}
+  @error('logo')
+    <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+  @enderror
+
+  {{-- Vista previa --}}
+  <div class="mt-3 flex items-center gap-3">
+    @if ($logo)
+      {{-- Previsualización cuando se selecciona un nuevo archivo --}}
+      <img src="{{ $logo->temporaryUrl() }}" 
+           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" 
+           alt="preview logo">
+    @elseif (!empty($empresa?->logo_url))
+      {{-- Carga desde Base64 o desde asset() automáticamente --}}
+      <img src="{{ $empresa->logo_url }}" 
+           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" 
+           alt="logo actual">
+    @else
+      {{-- Placeholder si no hay logo --}}
+      <div class="h-12 w-12 flex items-center justify-center rounded-xl bg-gray-100 
+                  dark:bg-gray-800 text-gray-400 text-xs border border-gray-200 
+                  dark:border-gray-700">
+        <i class="fa-solid fa-image"></i>
+      </div>
+    @endif
+  </div>
+
+  {{-- Indicador de carga --}}
+  <div wire:loading wire:target="logo" 
+       class="mt-2 text-xs text-gray-500 flex items-center gap-2">
+    <i class="fa-solid fa-spinner animate-spin"></i> Subiendo logo...
+  </div>
+</div>
+
 
         {{-- Logo oscuro --}}
         <div class="group">

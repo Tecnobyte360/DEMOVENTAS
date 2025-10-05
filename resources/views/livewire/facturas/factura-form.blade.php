@@ -745,7 +745,7 @@
       <span wire:loading.remove wire:target="emitir">Emitir</span>
       <span wire:loading wire:target="emitir">Emitiendo…</span>
     </button>
-</div>
+
 
               </div>
             </div>

@@ -115,7 +115,7 @@ class FacturaForm extends Component
                 $this->aplicarFormaPago($this->tipo_pago);
                 if (empty($this->terminos_pago)) {
                     $this->terminos_pago = $this->tipo_pago === 'credito'
-                        ? 'Crédito a '.(int)($this->plazo_dias ?: 30).' días'
+                        ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
                         : 'Contado';
                 }
             } else {
@@ -130,7 +130,6 @@ class FacturaForm extends Component
             }
 
             $this->setCuentaCobroPorDefecto();
-
         } catch (Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo inicializar el formulario de factura.')->duration(7000);
@@ -154,7 +153,9 @@ class FacturaForm extends Component
             $bodegas = bodegas::orderBy('nombre')->get();
 
             $cuentasIngresos = PlanCuentas::query()
-                ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
+                ->where(function ($q) {
+                    $q->where('titulo', 0)->orWhereNull('titulo');
+                })
                 ->where('cuenta_activa', 1)
                 ->orderBy('codigo')
                 ->get(['id', 'codigo', 'nombre']);
@@ -168,16 +169,16 @@ class FacturaForm extends Component
                 ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
 
             $impuestosVentas = Impuesto::activos()
-                ->whereIn('aplica_sobre', ['VENTAS','VENTA','AMBOS','TODOS'])
+                ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
                 ->orderBy('prioridad')
                 ->orderBy('nombre')
-                ->get(['id','codigo','nombre','porcentaje','monto_fijo','incluido_en_precio']);
+                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
 
             // ⬇️ NUEVO: todas las condiciones de pago (filtra por activo si aplica)
             $condicionesPago = CondicionPago::query()
                 // ->where('activo', 1)
                 ->orderBy('nombre')
-                ->get(['id','nombre','tipo','plazo_dias']);
+                ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
 
             return view('livewire.facturas.factura-form', [
                 'clientes'         => $clientes,
@@ -527,7 +528,7 @@ class FacturaForm extends Component
         if (!is_null($imp->porcentaje)) {
             if ($imp->incluido_en_precio && $imp->porcentaje > 0) {
                 $pu = (float)$this->lineas[$i]['precio_unitario'];
-                $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje/100), 2) : 0.0;
+                $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
             }
             $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
         } else {
@@ -567,7 +568,7 @@ class FacturaForm extends Component
             $d = max((int)$this->plazo_dias, 1);
             $this->plazo_dias  = $d;
             $this->vencimiento = Carbon::parse($this->fecha)->addDays($d)->toDateString();
-            $this->terminos_pago = 'Crédito a '.$d.' días';
+            $this->terminos_pago = 'Crédito a ' . $d . ' días';
         }
     }
 
@@ -613,7 +614,9 @@ class FacturaForm extends Component
         return PlanCuentas::query()
             ->where('clase_cuenta', $clase)
             ->where('cuenta_activa', 1)
-            ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
+            ->where(function ($q) {
+                $q->where('titulo', 0)->orWhereNull('titulo');
+            })
             ->value('id');
     }
 
@@ -659,7 +662,7 @@ class FacturaForm extends Component
             $d = max((int)($this->plazo_dias ?: 30), 1);
             $this->plazo_dias    = $d;
             $this->vencimiento   = Carbon::parse($this->fecha)->addDays($d)->toDateString();
-            $this->terminos_pago = 'Crédito a '.$d.' días';
+            $this->terminos_pago = 'Crédito a ' . $d . ' días';
         }
     }
 
@@ -769,19 +772,19 @@ class FacturaForm extends Component
 
     private function nombreProducto(int $productoId): string
     {
-        $p = Producto::query()->select('id','nombre','codigo','ItemCode')->find($productoId);
-        if (!$p) return 'Producto #'.$productoId;
+        $p = Producto::query()->select('id', 'nombre', 'codigo', 'ItemCode')->find($productoId);
+        if (!$p) return 'Producto #' . $productoId;
 
         $codigo = $p->ItemCode ?? $p->codigo ?? null;
-        return $codigo ? ($codigo.' - '.($p->nombre ?? '')) : ($p->nombre ?? ('Producto #'.$productoId));
+        return $codigo ? ($codigo . ' - ' . ($p->nombre ?? '')) : ($p->nombre ?? ('Producto #' . $productoId));
     }
 
     private function nombreBodega(int $bodegaId): string
     {
-        $b = bodegas::query()->select('id','nombre','codigo')->find($bodegaId);
-        if (!$b) return 'Bodega #'.$bodegaId;
+        $b = bodegas::query()->select('id', 'nombre', 'codigo')->find($bodegaId);
+        if (!$b) return 'Bodega #' . $bodegaId;
 
-        return ($b->codigo ? $b->codigo.' - ' : '').($b->nombre ?? 'Bodega #'.$bodegaId);
+        return ($b->codigo ? $b->codigo . ' - ' : '') . ($b->nombre ?? 'Bodega #' . $bodegaId);
     }
 
     /** Devuelve arreglo con todas las líneas que presentan faltantes de stock. */
@@ -804,7 +807,7 @@ class FacturaForm extends Component
             if ($disponible + 1e-6 < $qty) {
                 $faltantes[] = [
                     'index'      => $i,
-                    'producto_id'=> $pid,
+                    'producto_id' => $pid,
                     'bodega_id'  => $bid,
                     'producto'   => $this->nombreProducto($pid),
                     'bodega'     => $this->nombreBodega($bid),
@@ -933,10 +936,9 @@ class FacturaForm extends Component
             }
 
             PendingToast::create()
-                ->success()->message('Factura guardada (ID: '.$this->factura->id.').')
+                ->success()->message('Factura guardada (ID: ' . $this->factura->id . ').')
                 ->duration(5000);
             $this->dispatch('refrescar-lista-facturas');
-
         } catch (\Throwable $e) {
             Log::error('GUARDAR ERROR', ['msg' => $e->getMessage()]);
             PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
@@ -961,7 +963,7 @@ class FacturaForm extends Component
                 // 1) Persisto borrador y recalculo
                 $this->persistirBorrador();
 
-                $this->factura->refresh()->loadMissing(['detalles','cliente','socioNegocio'])->recalcularTotales()->save();
+                $this->factura->refresh()->loadMissing(['detalles', 'cliente', 'socioNegocio'])->recalcularTotales()->save();
 
                 if ($this->tipo_pago === 'contado') {
                     $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
@@ -1007,7 +1009,6 @@ class FacturaForm extends Component
                 ->success()->message('Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').')
                 ->duration(6000);
             $this->dispatch('refrescar-lista-facturas');
-
         } catch (\Throwable $e) {
             Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
             $msg = config('app.debug') ? ($e->getMessage() ?? 'No se pudo emitir la factura.') : 'No se pudo emitir la factura.';
@@ -1026,22 +1027,21 @@ class FacturaForm extends Component
         try {
             if (!$this->factura?->id) return;
 
-           DB::transaction(function () {
-    $this->factura->refresh()->loadMissing('detalles');
+            DB::transaction(function () {
+                $this->factura->refresh()->loadMissing('detalles');
 
-    // Si estaba emitida o cerrada, revertimos inventario y contabilidad
-    if (in_array($this->factura->estado, ['emitida', 'cerrado'], true)) {
-        \App\Services\InventarioService::revertirPorFactura($this->factura);
-        \App\Services\ContabilidadService::revertirPorFactura($this->factura);
-    }
+                // Si estaba emitida o cerrada, revertimos inventario y contabilidad
+                if (in_array($this->factura->estado, ['emitida', 'cerrado'], true)) {
+                    \App\Services\InventarioService::revertirPorFactura($this->factura);
+                    \App\Services\ContabilidadService::revertirPorFactura($this->factura);
+                }
 
-    $this->factura->update(['estado' => 'anulada']);
-    $this->estado = 'anulada';
-}, 3);
+                $this->factura->update(['estado' => 'anulada']);
+                $this->estado = 'anulada';
+            }, 3);
 
             PendingToast::create()->info()->message('Factura anulada.')->duration(4500);
             $this->dispatch('refrescar-lista-facturas');
-
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo anular.')->duration(7000);
@@ -1072,7 +1072,6 @@ class FacturaForm extends Component
 
             $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
                 ->to(\App\Livewire\Facturas\PagosFactura::class);
-
         } catch (\Throwable $e) {
             $msg = trim((string) $e->getMessage());
             if ($msg === '') $msg = 'Ocurrió un error inesperado.';
@@ -1112,8 +1111,10 @@ class FacturaForm extends Component
     {
         if (is_array($s->condiciones_pago_efectivas ?? null)) return $s->condiciones_pago_efectivas;
         if (is_array($s->condiciones_pago ?? null))         return $s->condiciones_pago;
-        if (method_exists($s, 'condicionPago')
-            && ($s->relationLoaded('condicionPago') ? $s->condicionPago : $s->loadMissing('condicionPago')->condicionPago)) {
+        if (
+            method_exists($s, 'condicionPago')
+            && ($s->relationLoaded('condicionPago') ? $s->condicionPago : $s->loadMissing('condicionPago')->condicionPago)
+        ) {
             $cp = $s->condicionPago;
             return [
                 'id'                   => $cp->id,
@@ -1139,7 +1140,8 @@ class FacturaForm extends Component
 
         $cp = $this->condicionPagoDe($socio);
 
-        $tipo = 'contado'; $plazo = null;
+        $tipo = 'contado';
+        $plazo = null;
         if ($cp) {
             $raw = strtolower((string)($cp['tipo'] ?? $cp['tipo_credito'] ?? 'contado'));
             $tipo = (str_starts_with($raw, 'cred')) ? 'credito' : 'contado';
@@ -1257,4 +1259,37 @@ class FacturaForm extends Component
         }));
         return $fake;
     }
+
+    public function getFormularioCompletoProperty(): bool
+{
+    // Verifica los campos básicos obligatorios
+    if (
+        !$this->serie_id ||
+        !$this->socio_negocio_id ||
+        empty($this->fecha) ||
+        empty($this->vencimiento) ||
+        empty($this->tipo_pago) ||
+        !$this->cuenta_cobro_id ||
+        empty($this->terminos_pago)
+    ) {
+        return false;
+    }
+
+    // Verifica al menos una línea de producto válida
+    if (empty($this->lineas)) return false;
+
+    foreach ($this->lineas as $l) {
+        if (
+            empty($l['producto_id']) ||
+            empty($l['bodega_id']) ||
+            ($l['cantidad'] ?? 0) <= 0 ||
+            ($l['precio_unitario'] ?? 0) <= 0
+        ) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 }

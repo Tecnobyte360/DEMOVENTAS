@@ -704,42 +704,49 @@
                 </div>
               </template>
 
-              <div class="flex flex-wrap justify-end gap-2">
-                <button type="button"
-                        class="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-                               transition ring-offset-2"
-                        :class="isNext('pagos') ? 'ring-4 ring-emerald-300 animate-pulse' : ''"
-                        wire:click="abrirPagos" wire:loading.attr="disabled" wire:target="abrirPagos,guardar,emitir"
-                        x-data="{e:@entangle('estado')}" :disabled="['anulada','cerrado'].includes(e)">
-                  <i class="fa-solid fa-cash-register mr-2"></i>
-                  <span>Pagos</span>
-                </button>
+             <div class="flex flex-wrap justify-end gap-2"
+     x-data="{ completo: @entangle('formularioCompleto'), estado: @entangle('estado') }">
 
-                <button type="button"
-                        class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-                               transition ring-offset-2"
-                        :class="isNext('guardar') ? 'ring-4 ring-slate-300 animate-pulse' : ''"
-                        wire:click="guardar" wire:loading.attr="disabled" wire:target="guardar,emitir"
-                        x-data="{e:@entangle('estado')}" :disabled="['anulada','cerrado'].includes(e)">
-                  <i class="fa-solid fa-floppy-disk mr-2"></i>
-                  <span wire:loading.remove wire:target="guardar">Factura Borrador</span>
-                  <span wire:loading wire:target="guardar">Guardando…</span>
-                </button>
+    <button type="button"
+            class="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow 
+                   disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
+            :class="isNext('pagos') ? 'ring-4 ring-emerald-300 animate-pulse' : ''"
+            wire:click="abrirPagos" 
+            wire:loading.attr="disabled" 
+            wire:target="abrirPagos,guardar,emitir"
+            :disabled="!completo || ['anulada','cerrado'].includes(estado)">
+      <i class="fa-solid fa-cash-register mr-2"></i>
+      <span>Pagos</span>
+    </button>
 
-                <button type="button"
-                        class="h-11 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-                               transition ring-offset-2"
-                        :class="isNext('emitir') ? 'ring-4 ring-indigo-300 animate-pulse' : ''"
-                        wire:click="emitir"
-                        title="{{ $bloqueaEmitir ? 'Factura de contado: requiere pago total para emitir' : '' }}"
-                        @if($bloqueaEmitir) disabled @endif
-                        wire:loading.attr="disabled" wire:target="emitir,guardar"
-                        x-data="{e:@entangle('estado'), be:@js((bool)($bloqueaEmitir ?? false))}"
-                        :disabled="['anulada','cerrado'].includes(e) || be">
-                  <i class="fa-solid fa-stamp mr-2"></i>
-                  <span wire:loading.remove wire:target="emitir">Emitir</span>
-                  <span wire:loading wire:target="emitir">Emitiendo…</span>
-                </button>
+    <button type="button"
+            class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow 
+                   disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
+            :class="isNext('guardar') ? 'ring-4 ring-slate-300 animate-pulse' : ''"
+            wire:click="guardar" 
+            wire:loading.attr="disabled" 
+            wire:target="guardar,emitir"
+            :disabled="!completo || ['anulada','cerrado'].includes(estado)">
+      <i class="fa-solid fa-floppy-disk mr-2"></i>
+      <span wire:loading.remove wire:target="guardar">Factura Borrador</span>
+      <span wire:loading wire:target="guardar">Guardando…</span>
+    </button>
+
+    <button type="button"
+            class="h-11 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 
+                   hover:from-indigo-700 hover:to-violet-700 text-white shadow 
+                   disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
+            :class="isNext('emitir') ? 'ring-4 ring-indigo-300 animate-pulse' : ''"
+            wire:click="emitir"
+            wire:loading.attr="disabled" 
+            wire:target="emitir,guardar"
+            :disabled="!completo || ['anulada','cerrado'].includes(estado)">
+      <i class="fa-solid fa-stamp mr-2"></i>
+      <span wire:loading.remove wire:target="emitir">Emitir</span>
+      <span wire:loading wire:target="emitir">Emitiendo…</span>
+    </button>
+</div>
+
               </div>
             </div>
           </div>

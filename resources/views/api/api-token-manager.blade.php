@@ -1,4 +1,4 @@
-{{-- <div>
+<div>
     <!-- Generate API Token -->
     <x-form-section submit="createApiToken">
         <x-slot name="title">
@@ -166,4 +166,4 @@
             </x-danger-button>
         </x-slot>
     </x-confirmation-modal>
-</div> --}}
+</div>

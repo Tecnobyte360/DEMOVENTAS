@@ -46,7 +46,7 @@ class Producto extends Model
 
     /* ===================== Relaciones ===================== */
 
-    public function subcategoria()
+     public function subcategoria()
     {
         return $this->belongsTo(Subcategoria::class);
     }
@@ -68,6 +68,11 @@ class Producto extends Model
         return $this->belongsTo(\App\Models\Impuestos\Impuesto::class, 'impuesto_id');
     }
 
+    public function cuentaIngreso()
+    {
+        return $this->belongsTo(\App\Models\CuentasContables\PlanCuentas::class, 'cuenta_ingreso_id');
+    }
+
     public function cuentas()
     {
         return $this->hasMany(\App\Models\Productos\ProductoCuenta::class);
@@ -77,7 +82,6 @@ class Producto extends Model
     {
         return $this->belongsTo(UnidadesMedida::class, 'unidad_medida_id');
     }
-
     /* ===================== Accessors / Mutators ===================== */
 
     /**

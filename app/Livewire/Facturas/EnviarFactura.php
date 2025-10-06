@@ -3,12 +3,15 @@
 namespace App\Livewire\Facturas;
 
 use App\Mail\FacturaPdfMail;
+use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Models\Factura\Factura;
+
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\Attributes\On;
+use Masmerise\Toaster\PendingToast;
 
 class EnviarFactura extends Component
 {
@@ -16,7 +19,7 @@ class EnviarFactura extends Component
     public bool $show = false;
 
     public string  $para = '';
-    public ?string $cc = null;   // Emails separados por coma, ; o espacios
+    public ?string $cc = null;      
     public ?string $asunto = null;
 
     protected $rules = [
@@ -28,7 +31,7 @@ class EnviarFactura extends Component
     #[On('abrir-enviar-factura')]
     public function abrir(int $id): void
     {
-        $f = Factura::with('cliente','serie','detalles')->findOrFail($id);
+        $f = Factura::with('cliente','serie')->findOrFail($id);
 
         $this->facturaId = $f->id;
         $this->para      = $f->cliente->correo ?? '';
@@ -36,10 +39,10 @@ class EnviarFactura extends Component
         $len  = $f->serie->longitud ?? 6;
         $num  = $f->numero !== null ? str_pad((string)$f->numero, $len, '0', STR_PAD_LEFT) : '';
         $pref = $f->prefijo ? "{$f->prefijo}-" : '';
-
         $this->asunto = "Factura {$pref}{$num}";
-        $this->cc     = null;
-        $this->show   = true;
+
+        $this->cc   = null;
+        $this->show = true;
 
         $this->resetErrorBag();
         $this->resetValidation();
@@ -54,87 +57,127 @@ class EnviarFactura extends Component
     {
         $this->validate();
 
-        $factura = Factura::with('cliente','serie','detalles.producto','detalles.bodega')
-            ->findOrFail($this->facturaId);
-
-        // === Logo desde public/storage/empresas/logos (última imagen) ===
-        $logoSrc = $this->logoEmpresaSrcFromPublicStorage();
-
-        $empresa = [
-            'nombre'         => 'LOS-VULCANOS',
-            'logo_src'       => $logoSrc,   // ⬅️ aquí va el base64 del logo
-            'email'          => 'ventas@losvulcanos.com',
-            'website'        => null,
-            'nit'            => '222222222',
-            'telefono'       => '3216499744',
-            'direccion'      => 'MEDELLIN ANTIOQUIA',
-            'color_primario' => '#223361',
-        ];
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.factura', [
-            'factura' => $factura,
-            'empresa' => $empresa,
-        ])->setPaper('a4');
-
-        $len  = $factura->serie->longitud ?? 6;
-        $num  = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '000001';
-        $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
-        $name = "FACT-{$pref}{$num}.pdf";
-        $path = "tmp/{$name}";
-
-        Storage::put($path, $pdf->output());
-        $abs = Storage::path($path);
-
-        $ccs = collect(preg_split('/[;, ]+/', (string)$this->cc, -1, PREG_SPLIT_NO_EMPTY))
-            ->filter(fn($v) => filter_var($v, FILTER_VALIDATE_EMAIL))
-            ->values()
-            ->all();
+        $tmpRel = null;
 
         try {
+            $factura = Factura::with('cliente','serie','detalles.producto','detalles.bodega')
+                ->findOrFail($this->facturaId);
+
+            // ====== Empresa desde tu tabla/configuración
+            $empresa = $this->empresaActual(); // ← arreglo listo para la vista PDF
+
+            // ====== PDF
+            $len  = $factura->serie->longitud ?? 6;
+            $num  = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '000001';
+            $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
+            $name = "FACT-{$pref}{$num}.pdf";
+
+            $pdf = Pdf::loadView('pdf.factura', [
+                'factura' => $factura,
+                'empresa' => $empresa,
+            ])->setPaper('a4');
+
+            $tmpRel = "tmp/{$name}";
+            Storage::put($tmpRel, $pdf->output());
+            $tmpAbs = Storage::path($tmpRel);
+
+            // ====== CCs válidos
+            $ccs = collect(preg_split('/[;, ]+/', (string)$this->cc, -1, PREG_SPLIT_NO_EMPTY))
+                ->filter(fn($v) => filter_var($v, FILTER_VALIDATE_EMAIL))
+                ->values()
+                ->all();
+
+            // ====== Envío
             Mail::to($this->para)
                 ->cc($ccs)
-                ->send(new \App\Mail\FacturaPdfMail(
+                ->send(new FacturaPdfMail(
                     factura: $factura,
-                    pdfPath: $abs,
+                    pdfPath: $tmpAbs,
                     asunto: (string)($this->asunto ?: "Factura {$pref}{$num}")
                 ));
 
-            $this->dispatch('toast', type:'success', msg:'Factura enviada por correo.');
+            // Éxito
+            PendingToast::create()->success()->message('Factura enviada con éxito.')->duration(6000);
             $this->show = false;
+
+            // refresca el form si está abierto
             $this->dispatch('$refresh')->to(\App\Livewire\Facturas\FacturaForm::class);
+
+        } catch (\Throwable $e) {
+            $msg = mb_strimwidth($e->getMessage() ?: 'Error desconocido', 0, 220, '…');
+            PendingToast::create()->error()->message('No se pudo enviar la factura: ' . $msg)->duration(11000);
         } finally {
-            Storage::delete($path);
+            if ($tmpRel && Storage::exists($tmpRel)) {
+                Storage::delete($tmpRel);
+            }
         }
     }
 
     /**
-     * Devuelve el logo en base64 tomando la imagen MÁS RECIENTE
-     * dentro de public/storage/empresas/logos (disk 'public' => storage/app/public).
+     * Construye el arreglo de empresa a partir de tu modelo Empresa (tabla `empresas`).
+     * - Toma la empresa activa (`is_activa = 1`) o, si no hay, la primera.
+     * - Convierte `logo_path`/`logo_dark_path` a data URL si el archivo existe en disk `public`.
      */
-    protected function logoEmpresaSrcFromPublicStorage(): ?string
+    private function empresaActual(): array
     {
+        $e = Empresa::where('is_activa', true)->first() ?: Empresa::first();
+
+        if (!$e) {
+            // Fallback sin registros
+            return [
+                'nombre'         => 'Mi Empresa',
+                'logo_src'       => null,
+                'email'          => null,
+                'website'        => null,
+                'nit'            => null,
+                'telefono'       => null,
+                'direccion'      => null,
+                'color_primario' => '#223361',
+            ];
+        }
+
+        // Elige logo dark si existe, si no el normal
+        $logo = $this->toDataUrlFromPublic($e->logo_dark_path ?: $e->logo_path);
+
+        return [
+            'nombre'         => (string)$e->nombre,
+            'logo_src'       => $logo,
+            'email'          => $e->email ?: null,
+            'website'        => $e->sitio_web ?: null,
+            'nit'            => $e->nit ?: null,
+            'telefono'       => $e->telefono ?: null,
+            'direccion'      => $e->direccion ?: null,
+            'color_primario' => $e->color_primario ?: '#223361',
+        ];
+    }
+
+    /**
+     * Si $path es URL absoluta => la devuelve tal cual.
+     * Si es ruta relativa en disk `public` => devuelve data URL si existe; si no, null.
+     */
+    private function toDataUrlFromPublic(?string $path): ?string
+    {
+        if (!$path) return null;
+
+        if (preg_match('#^https?://#i', $path)) {
+            return $path; // ya es URL
+        }
+
+        $normalized = preg_replace('#^storage/#', '', ltrim($path, '/')); // admite "storage/..."
         $disk = Storage::disk('public');
-        $dir  = 'empresas/logos';
 
-        if (!$disk->exists($dir)) {
-            return null;
-        }
+        if (!$disk->exists($normalized)) return null;
 
-        $files = collect($disk->files($dir))
-            ->filter(fn($f) => preg_match('/\.(png|jpe?g|webp)$/i', $f))
-            ->sortByDesc(fn($f) => $disk->lastModified($f))
-            ->values();
-
-        if ($files->isEmpty()) {
-            return null;
-        }
-
-        $abs  = $disk->path($files[0]);
+        $abs  = $disk->path($normalized);
         $ext  = strtolower(pathinfo($abs, PATHINFO_EXTENSION));
         $mime = $ext === 'jpg' ? 'jpeg' : $ext;
 
-        return 'data:image/'.$mime.';base64,'.base64_encode(file_get_contents($abs));
+        $data = @file_get_contents($abs);
+        if ($data === false) return null;
+
+        return 'data:image/'.$mime.';base64,'.base64_encode($data);
     }
+
     public function render()
     {
         return view('livewire.facturas.enviar-factura');

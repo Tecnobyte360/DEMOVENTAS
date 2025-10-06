@@ -3,7 +3,7 @@
 namespace App\Livewire\Facturas;
 
 use App\Mail\FacturaPdfMail;
-use App\Models\Factura\factura;
+use App\Models\Factura\Factura;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -28,7 +28,7 @@ class EnviarFactura extends Component
     #[On('abrir-enviar-factura')]
     public function abrir(int $id): void
     {
-        $f = factura::with('cliente','serie','detalles')->findOrFail($id);
+        $f = Factura::with('cliente','serie','detalles')->findOrFail($id);
 
         $this->facturaId = $f->id;
         $this->para      = $f->cliente->correo ?? '';
@@ -54,7 +54,7 @@ class EnviarFactura extends Component
     {
         $this->validate();
 
-        $factura = factura::with('cliente','serie','detalles.producto','detalles.bodega')
+        $factura = Factura::with('cliente','serie','detalles.producto','detalles.bodega')
             ->findOrFail($this->facturaId);
 
         // === Logo desde public/storage/empresas/logos (última imagen) ===

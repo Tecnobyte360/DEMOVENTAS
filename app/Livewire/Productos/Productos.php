@@ -471,4 +471,27 @@ class Productos extends Component
         if (!is_null($imp->monto_fijo)) return round($base + (float)$imp->monto_fijo, 2);
         return round($base, 2);
     }
+
+    private function verificarStockParaLineas(): bool
+{
+    try {
+        $fake = $this->buildFakeFacturaFromLines();
+        \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
+        return true;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
+/** Igual que el verificador, pero regresando el detalle de faltantes. */
+private function verificarStockParaLineasConDetalle(): array
+{
+    try {
+        $fake = $this->buildFakeFacturaFromLines();
+        \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
+        return $this->faltantesDeStock(); // en teoría []
+    } catch (\Throwable $e) {
+        return $this->faltantesDeStock();
+    }
+}
 }

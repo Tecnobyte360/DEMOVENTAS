@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfiguracionEmpresas\Empresa;
-use App\Models\Factura\factura; // tu modelo en minúscula
+use App\Models\Factura\Factura; 
 use Illuminate\Support\Facades\Auth;
 
 class FacturaTicketController extends Controller
 {
-     public function show(factura $factura)
+     public function show(Factura $factura)
     {
         $factura->load(['cliente','serie','detalles.producto','detalles.bodega']);
 

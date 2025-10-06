@@ -15,6 +15,8 @@ class Producto extends Model
     public const MOV_SEGUN_ARTICULO     = 'ARTICULO';
     public const MOV_SEGUN_SUBCATEGORIA = 'SUBCATEGORIA';
 
+    protected $table = 'productos';
+
     protected $fillable = [
         'nombre',
         'descripcion',
@@ -28,13 +30,15 @@ class Producto extends Model
         'cuenta_ingreso_id',
         'mov_contable_segun',
         'unidad_medida_id',
-        'imagen_path', // aquí se guarda el base64
+        // Base64 en BD:
+        'imagen_path',
     ];
 
     protected $casts = [
         'activo' => 'boolean',
     ];
 
+    // Para exponer helpers en ->toArray() / JSON
     protected $appends = [
         'precio_con_iva',
         'imagen_url',
@@ -74,26 +78,54 @@ class Producto extends Model
         return $this->belongsTo(UnidadesMedida::class, 'unidad_medida_id');
     }
 
-    /* ===================== Accessors ===================== */
+    /* ===================== Accessors / Mutators ===================== */
 
+    /**
+     * Precio con IVA (solo lectura).
+     */
     public function getPrecioConIvaAttribute(): float
     {
-        $base = (float) ($this->precio ?? 0);
+        $base = (float)($this->precio ?? 0);
         $imp  = $this->impuesto;
 
         if (!$imp) return round($base, 2);
-        if ($imp->porcentaje !== null) return round($base * (1 + ((float)$imp->porcentaje / 100)), 2);
-        if ($imp->monto_fijo !== null) return round($base + (float)$imp->monto_fijo, 2);
+        if (!is_null($imp->porcentaje)) return round($base * (1 + ((float)$imp->porcentaje / 100)), 2);
+        if (!is_null($imp->monto_fijo))  return round($base + (float)$imp->monto_fijo, 2);
 
         return round($base, 2);
     }
 
     /**
-     * Devuelve el Base64 listo para mostrar.
+     * URL para <img src="...">. Como guardamos Base64, devolvemos tal cual.
      */
     public function getImagenUrlAttribute(): ?string
     {
         return $this->imagen_path ?: null;
+    }
+
+    /**
+     * Mutator: Normaliza lo que se asigne a imagen_path.
+     * - Si llega vacío => null
+     * - Si llega data-uri (data:image/...;base64,xxx) => guarda tal cual
+     * - Si llega solo base64 => le antepone data-uri con image/png
+     */
+    public function setImagenPathAttribute($value): void
+    {
+        $v = is_string($value) ? trim($value) : null;
+        if (!$v) {
+            $this->attributes['imagen_path'] = null;
+            return;
+        }
+
+        // ¿Ya es data-uri completa?
+        if (str_starts_with($v, 'data:image/')) {
+            $this->attributes['imagen_path'] = $v;
+            return;
+        }
+
+        // ¿Parece base64 “pelado”? (sin prefijo)
+        // Nota: no validamos exhaustivamente; asumimos que ya se validó en el componente.
+        $this->attributes['imagen_path'] = 'data:image/png;base64,'.$v;
     }
 
     /* ===================== Helpers ===================== */

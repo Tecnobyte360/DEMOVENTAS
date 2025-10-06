@@ -230,7 +230,7 @@ class Productos extends Component
                 'activo'              => 'required|boolean',
                 'impuesto_id'         => 'nullable|exists:impuestos,id',
                 'unidad_medida_id'    => 'nullable|exists:unidades_medida,id',
-                'imagen'              => 'nullable|image|max:2048', // 2MB
+               'imagen' => 'nullable|mimes:jpg,jpeg,png,webp,gif,svg,bmp|max:5120',
                 'stockMinimoGlobal'   => 'nullable|integer|min:0',
                 'stockMaximoGlobal'   => 'nullable|integer|min:0|gte:stockMinimoGlobal',
                 'mov_contable_segun'  => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
@@ -301,7 +301,7 @@ class Productos extends Component
             'costo'               => 'nullable|numeric|min:0',
             'impuesto_id'         => 'nullable|exists:impuestos,id',
             'unidad_medida_id'    => 'nullable|exists:unidades_medida,id',
-            'imagen'              => 'nullable|image|max:2048',
+            'imagen' => 'nullable|mimes:jpg,jpeg,png,webp,gif,svg,bmp|max:5120',
             'mov_contable_segun'  => 'required|in:' . \App\Models\Productos\Producto::MOV_SEGUN_ARTICULO . ',' . \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA,
         ], $this->reglasCuentas()));
 

@@ -138,33 +138,35 @@
         </div>
 
         {{-- Imagen (Base64 directo, sin upload temporal) --}}
-        <div class="relative"
-             x-data="{
-                vista: @entangle('imagen_base64').defer,
-                async onFile(e){
-                  const file = e.target.files[0];
-                  if(!file){ this.vista=null; return; }
-                  const ok = ['image/jpeg','image/png','image/webp','image/gif','image/bmp','image/svg+xml'];
-                  if(!ok.includes(file.type)){ alert('Formato no permitido'); e.target.value=''; return; }
-                  const maxMB=5;
-                  if(file.size > maxMB*1024*1024){ alert('Máximo '+maxMB+' MB'); e.target.value=''; return; }
-                  const r=new FileReader();
-                  r.onload=()=>{ this.vista = r.result; }; // data:image/...;base64,...
-                  r.readAsDataURL(file);
-                }
-             }">
-          <label class="block text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1">Imagen</label>
+       <div class="relative"
+     x-data="{
+        vista: @entangle('imagen_base64').live,   /* <- antes: .defer */
+        async onFile(e){
+          const file = e.target.files[0];
+          if(!file){ this.vista=null; return; }
+          const ok = ['image/jpeg','image/png','image/webp','image/gif','image/bmp','image/svg+xml'];
+          if(!ok.includes(file.type)){ alert('Formato no permitido'); e.target.value=''; return; }
+          const maxMB=5;
+          if(file.size > maxMB*1024*1024){ alert('Máximo '+maxMB+' MB'); e.target.value=''; return; }
+          const r=new FileReader();
+          r.onload=()=>{ this.vista = r.result; }; // data:image/...;base64,...
+          r.readAsDataURL(file);
+        }
+     }">
+  <label class="block text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1">Imagen</label>
 
-          <input type="file" accept="image/*" @change="onFile"
-                 class="w-full px-4 py-2 rounded-xl border
-                        @error('imagen_base64') border-red-500 @else border-gray-300 @enderror
-                        dark:border-gray-700 dark:bg-gray-800 dark:text-white
-                        focus:ring-2 focus:ring-violet-600 focus:outline-none"/>
+  <input type="file" accept="image/*" @change="onFile"
+         class="w-full px-4 py-2 rounded-xl border
+                @error('imagen_base64') border-red-500 @else border-gray-300 @enderror
+                dark:border-gray-700 dark:bg-gray-800 dark:text-white
+                focus:ring-2 focus:ring-violet-600 focus:outline-none"/>
 
-          {{-- Preview de lo nuevo (Base64) --}}
-          <template x-if="vista">
-            <img :src="vista" class="mt-2 h-20 w-20 rounded-lg object-cover ring-2 ring-violet-500/30" alt="Preview">
-          </template>
+  <!-- Asegura que Livewire reciba el valor -->
+  <input type="hidden" wire:model="imagen_base64">
+
+  <template x-if="vista">
+    <img :src="vista" class="mt-2 h-20 w-20 rounded-lg object-cover ring-2 ring-violet-500/30" alt="Preview">
+  </template>
 
           {{-- Imagen actual guardada cuando editas y no elegiste otra --}}
           @if($isEdit && $producto_id)

@@ -963,7 +963,18 @@ public function guardar(): void
 }
 
 
-  
+    private function verificarStockParaLineas(): bool
+{
+    try {
+        $fake = $this->buildFakeFacturaFromLines();
+        \App\Services\InventarioService::verificarDisponibilidadParaFactura($fake);
+        return true;
+    } catch (\Throwable $e) {
+        return false;
+    }
+}
+
+
 
 public function emitir(): void
 {

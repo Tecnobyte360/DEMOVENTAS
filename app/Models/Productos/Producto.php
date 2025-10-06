@@ -4,7 +4,6 @@ namespace App\Models\Productos;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage; // <- para url pública
 use App\Models\Categorias\Subcategoria;
 use App\Models\bodegas;
 use App\Models\UnidadesMedida;
@@ -29,14 +28,13 @@ class Producto extends Model
         'cuenta_ingreso_id',
         'mov_contable_segun',
         'unidad_medida_id',
-        'imagen_path',
+        'imagen_path', // aquí se guarda el base64
     ];
 
     protected $casts = [
         'activo' => 'boolean',
     ];
 
-    // Para que venga en ->toArray() / JSON sin llamarlo explícitamente
     protected $appends = [
         'precio_con_iva',
         'imagen_url',
@@ -66,11 +64,6 @@ class Producto extends Model
         return $this->belongsTo(\App\Models\Impuestos\Impuesto::class, 'impuesto_id');
     }
 
-    public function cuentaIngreso()
-    {
-        return $this->belongsTo(\App\Models\CuentasContables\PlanCuentas::class, 'cuenta_ingreso_id');
-    }
-
     public function cuentas()
     {
         return $this->hasMany(\App\Models\Productos\ProductoCuenta::class);
@@ -89,31 +82,19 @@ class Producto extends Model
         $imp  = $this->impuesto;
 
         if (!$imp) return round($base, 2);
-
-        if ($imp->porcentaje !== null) {
-            return round($base * (1 + ((float) $imp->porcentaje / 100)), 2);
-        }
-
-        if ($imp->monto_fijo !== null) {
-            return round($base + (float) $imp->monto_fijo, 2);
-        }
+        if ($imp->porcentaje !== null) return round($base * (1 + ((float)$imp->porcentaje / 100)), 2);
+        if ($imp->monto_fijo !== null) return round($base + (float)$imp->monto_fijo, 2);
 
         return round($base, 2);
     }
 
     /**
-     * URL pública de la imagen almacenada en storage/app/public/...
-     * Retorna null si no hay imagen.
+     * Devuelve el Base64 listo para mostrar.
      */
-   public function getImagenUrlAttribute(): ?string
-{
-    if (!$this->imagen_path) {
-        return null;
+    public function getImagenUrlAttribute(): ?string
+    {
+        return $this->imagen_path ?: null;
     }
-
-    return \Illuminate\Support\Facades\Storage::url($this->imagen_path);
-}
-
 
     /* ===================== Helpers ===================== */
 

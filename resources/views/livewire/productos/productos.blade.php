@@ -136,20 +136,34 @@
         </div>
 
        
-        <div class="relative">
-          <label class="block text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1">Imagen</label>
-          <input type="file" accept="image/*" wire:model="imagen"
-                 class="w-full px-4 py-2 rounded-xl border
-                 @error('imagen') border-red-500 @else border-gray-300 @enderror
-                 dark:border-gray-700 dark:bg-gray-800 dark:text-white
-                 focus:ring-2 focus:ring-violet-600 focus:outline-none"/>
-          @error('imagen') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
+       {{-- Imagen --}}
+<div class="relative">
+  <label class="block text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1">Imagen</label>
+  <input type="file" accept="image/*" wire:model="imagen"
+         class="w-full px-4 py-2 rounded-xl border
+         @error('imagen') border-red-500 @else border-gray-300 @enderror
+         dark:border-gray-700 dark:bg-gray-800 dark:text-white
+         focus:ring-2 focus:ring-violet-600 focus:outline-none"/>
+  @error('imagen') <span class="text-red-600 text-xs">{{ $message }}</span> @enderror
 
-          {{-- Preview temporal --}}
-          @if($imagen)
-            <img src="{{ $imagen->temporaryUrl() }}" class="mt-2 h-20 w-20 rounded-lg object-cover ring-2 ring-violet-500/30" alt="Preview">
-          @endif
-        </div>
+  {{-- Preview temporal (al elegir nueva imagen) --}}
+  @if($imagen)
+    <img src="{{ $imagen->temporaryUrl() }}"
+         class="mt-2 h-20 w-20 rounded-lg object-cover ring-2 ring-violet-500/30"
+         alt="Preview">
+  @endif
+
+  {{-- Imagen actual guardada (cuando editas y aún no subes otra) --}}
+  @if(!$imagen && $isEdit && $producto_id)
+    @php $p = $productos->firstWhere('id', $producto_id); @endphp
+    @if($p && $p->imagen_url)
+      <img src="{{ $p->imagen_url }}"
+           class="mt-2 h-20 w-20 rounded-lg object-cover ring-1 ring-gray-300 dark:ring-gray-700"
+           alt="Imagen actual">
+    @endif
+  @endif
+</div>
+
 
         {{-- Stock Global Mínimo --}}
         <div class="relative">
@@ -358,19 +372,17 @@
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
               <td class="p-3">{{ $prod->id }}</td>
 
-              {{-- Imagen --}}
-              <td class="p-3">
-                @php
-                  $img = $prod->imagen_path ? asset('storage/'.$prod->imagen_path) : null;
-                @endphp
-                @if($img)
-                  <img src="{{ $img }}" alt="img" class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700">
-                @else
-                  <div class="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700 grid place-items-center text-gray-400">
-                    <i class="fas fa-image"></i>
-                  </div>
-                @endif
-              </td>
+<td class="p-3">
+  @if($prod->imagen_url)
+    <img src="{{ $prod->imagen_url }}" alt="img"
+         class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700">
+  @else
+    <div class="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700 grid place-items-center text-gray-400">
+      <i class="fas fa-image"></i>
+    </div>
+  @endif
+</td>
+
 
               <td class="p-3">{{ $prod->nombre }}</td>
               <td class="p-3">{{ $prod->descripcion }}</td>

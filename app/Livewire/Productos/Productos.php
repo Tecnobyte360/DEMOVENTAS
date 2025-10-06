@@ -5,7 +5,6 @@ namespace App\Livewire\Productos;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 use App\Models\bodegas;
 use App\Models\Productos\Producto;
@@ -14,7 +13,6 @@ use App\Models\Impuestos\Impuesto as ImpuestoModel;
 use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\UnidadesMedida;
-use App\Models\UnidadMedida;                 // <- NUEVO
 use Masmerise\Toaster\PendingToast;
 
 class Productos extends Component
@@ -22,7 +20,7 @@ class Productos extends Component
     use WithFileUploads;
 
     /** Listas */
-    public $productos, $subcategorias, $bodegas, $impuestos, $unidades;  // <- $unidades NUEVO
+    public $productos, $subcategorias, $bodegas, $impuestos, $unidades;
 
     /** Catálogos dinámicos para cuentas */
     public $tiposCuenta;
@@ -36,8 +34,8 @@ class Productos extends Component
     public ?int $impuesto_id = null;
 
     /** Unidad de medida + imagen */
-    public ?int $unidad_medida_id = null;     // <- NUEVO
-    public $imagen = null;                    // <- NUEVO (archivo Livewire)
+    public ?int $unidad_medida_id = null;
+    public $imagen = null; // archivo Livewire
 
     /** Movimiento contable según (ARTICULO | SUBCATEGORIA) */
     public string $mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
@@ -103,7 +101,7 @@ class Productos extends Component
             'impuesto',
             'cuentas.tipo',
             'cuentas.cuentaPUC',
-            'unidadMedida',         // <- para mostrar en tabla si lo usas
+            'unidadMedida',
         ]);
 
         if ($this->search) {
@@ -129,7 +127,7 @@ class Productos extends Component
             'impuestos'   => $this->impuestos,
             'tiposCuenta' => $this->tiposCuenta,
             'cuentasPUC'  => $this->cuentasPUC,
-            'unidades'    => $this->unidades,     // <- para el <select>
+            'unidades'    => $this->unidades,
         ]);
     }
 
@@ -206,6 +204,17 @@ class Productos extends Component
 
     public function eliminarBodega($id) { unset($this->stocksPorBodega[$id]); }
 
+    /* =======================================
+     * CONVERTIR IMAGEN A BASE64
+     * ======================================= */
+    private function toBase64($uploadedFile): ?string
+    {
+        if (!$uploadedFile) return null;
+        $mime = $uploadedFile->getMimeType() ?: 'image/jpeg';
+        $data = file_get_contents($uploadedFile->getRealPath());
+        return 'data:' . $mime . ';base64,' . base64_encode($data);
+    }
+
     /** ===== Store ===== */
     public function store()
     {
@@ -220,8 +229,8 @@ class Productos extends Component
                 'costo'               => 'nullable|numeric|min:0',
                 'activo'              => 'required|boolean',
                 'impuesto_id'         => 'nullable|exists:impuestos,id',
-                'unidad_medida_id'    => 'nullable|exists:unidades_medida,id', // <- NUEVO
-                'imagen'              => 'nullable|image|max:2048',             // <- NUEVO (hasta 2MB)
+                'unidad_medida_id'    => 'nullable|exists:unidades_medida,id',
+                'imagen'              => 'nullable|image|max:2048', // 2MB
                 'stockMinimoGlobal'   => 'nullable|integer|min:0',
                 'stockMaximoGlobal'   => 'nullable|integer|min:0|gte:stockMinimoGlobal',
                 'mov_contable_segun'  => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
@@ -235,11 +244,8 @@ class Productos extends Component
 
             $this->aplicarStockGlobalSiExiste();
 
-            // Subir imagen si viene
-            $imagenPath = null;
-            if ($this->imagen) {
-                $imagenPath = $this->imagen->store('productos', 'public'); // storage/app/public/productos/...
-            }
+            // 🔥 Convertir a Base64 (sin usar storage)
+            $imagenBase64 = $this->imagen ? $this->toBase64($this->imagen) : null;
 
             $producto = Producto::create([
                 'nombre'              => $this->nombre,
@@ -252,8 +258,8 @@ class Productos extends Component
                 'activo'              => $this->activo,
                 'subcategoria_id'     => $this->subcategoria_id,
                 'impuesto_id'         => $this->impuesto_id,
-                'unidad_medida_id'    => $this->unidad_medida_id,  // <- NUEVO
-                'imagen_path'         => $imagenPath,               // <- NUEVO
+                'unidad_medida_id'    => $this->unidad_medida_id,
+                'imagen_path'         => $imagenBase64, // << Base64 en BD
                 'mov_contable_segun'  => $this->mov_contable_segun,
             ]);
 
@@ -285,75 +291,117 @@ class Productos extends Component
     }
 
     /** ===== Update ===== */
-    public function update()
-    {
-        try {
-            $this->validate(array_merge([
-                'nombre'              => 'required|string|max:255',
-                'subcategoria_id'     => 'required|exists:subcategorias,id',
-                'precio'              => 'required|numeric|min:0',
-                'costo'               => 'nullable|numeric|min:0',
-                'impuesto_id'         => 'nullable|exists:impuestos,id',
-                'unidad_medida_id'    => 'nullable|exists:unidades_medida,id', // <- NUEVO
-                'imagen'              => 'nullable|image|max:2048',             // <- NUEVO
-                'mov_contable_segun'  => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
-            ], $this->reglasCuentas()));
+   public function update()
+{
+    try {
+        $this->validate(array_merge([
+            'nombre'              => 'required|string|max:255',
+            'subcategoria_id'     => 'required|exists:subcategorias,id',
+            'precio'              => 'required|numeric|min:0',
+            'costo'               => 'nullable|numeric|min:0',
+            'impuesto_id'         => 'nullable|exists:impuestos,id',
+            'unidad_medida_id'    => 'nullable|exists:unidades_medida,id',
+            'imagen'              => 'nullable|image|max:2048',
+            'mov_contable_segun'  => 'required|in:' . \App\Models\Productos\Producto::MOV_SEGUN_ARTICULO . ',' . \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA,
+        ], $this->reglasCuentas()));
 
-            $this->aplicarStockGlobalSiExiste();
+        $this->aplicarStockGlobalSiExiste();
 
-            $producto = Producto::findOrFail($this->producto_id);
+        $producto = \App\Models\Productos\Producto::findOrFail($this->producto_id);
 
-            $data = [
-                'nombre'              => $this->nombre,
-                'descripcion'         => $this->descripcion,
-                'precio'              => $this->precio,
-                'costo'               => $this->costo ?? 0,
-                'activo'              => $this->activo,
-                'subcategoria_id'     => $this->subcategoria_id,
-                'impuesto_id'         => $this->impuesto_id,
-                'unidad_medida_id'    => $this->unidad_medida_id,  // <- NUEVO
-                'mov_contable_segun'  => $this->mov_contable_segun,
-            ];
+        $data = [
+            'nombre'              => $this->nombre,
+            'descripcion'         => $this->descripcion,
+            'precio'              => $this->precio,
+            'costo'               => $this->costo ?? 0,
+            'activo'              => $this->activo,
+            'subcategoria_id'     => $this->subcategoria_id,
+            'impuesto_id'         => $this->impuesto_id,
+            'unidad_medida_id'    => $this->unidad_medida_id,
+            'mov_contable_segun'  => $this->mov_contable_segun,
+        ];
 
-            // Si sube nueva imagen, reemplaza y elimina la anterior (si existe)
-            if ($this->imagen) {
-                if ($producto->imagen_path && Storage::disk('public')->exists($producto->imagen_path)) {
-                    Storage::disk('public')->delete($producto->imagen_path);
-                }
-                $data['imagen_path'] = $this->imagen->store('productos', 'public');
-            }
-
-            $producto->update($data);
-
-            if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-                foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
-                    if (!$pucId) continue;
-                    $producto->cuentas()->updateOrCreate(
-                        ['tipo_id' => (int)$tipoId],
-                        ['plan_cuentas_id' => (int)$pucId]
-                    );
-                }
-            } else {
-                $producto->cuentas()->delete();
-            }
-
-            foreach ($this->stocksPorBodega as $bodegaId => $stockData) {
-                $producto->bodegas()->syncWithoutDetaching([
-                    $bodegaId => [
-                        'stock_minimo' => $stockData['stock_minimo'] ?? 0,
-                        'stock_maximo' => $stockData['stock_maximo'] ?? null,
-                    ]
-                ]);
-            }
-
-            $this->resetInput();
-            PendingToast::create()->success()->message('Producto actualizado exitosamente.')->duration(5000);
-
-        } catch (\Throwable $e) {
-            Log::error('Error al actualizar producto', ['id'=>$this->producto_id, 'message'=>$e->getMessage()]);
-            PendingToast::create()->error()->message('Error al actualizar el producto.')->duration(8000);
+        // Si sube nueva imagen, reemplaza por Base64 (sin tocar disco)
+        if ($this->imagen) {
+            $data['imagen_path'] = $this->toBase64($this->imagen);
         }
+
+        $producto->update($data);
+
+        if ($this->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_ARTICULO) {
+            foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
+                if (!$pucId) continue;
+                $producto->cuentas()->updateOrCreate(
+                    ['tipo_id' => (int)$tipoId],
+                    ['plan_cuentas_id' => (int)$pucId]
+                );
+            }
+        } else {
+            $producto->cuentas()->delete();
+        }
+
+        foreach ($this->stocksPorBodega as $bodegaId => $stockData) {
+            $producto->bodegas()->syncWithoutDetaching([
+                $bodegaId => [
+                    'stock_minimo' => $stockData['stock_minimo'] ?? 0,
+                    'stock_maximo' => $stockData['stock_maximo'] ?? null,
+                ]
+            ]);
+        }
+
+        $this->resetInput();
+        \Masmerise\Toaster\PendingToast::create()
+            ->success()
+            ->message('Producto actualizado exitosamente.')
+            ->duration(5000);
+
+    } catch (\Throwable $e) {
+        // Log completo para depurar
+        \Illuminate\Support\Facades\Log::error('Error al actualizar producto', [
+            'id'    => $this->producto_id,
+            'msg'   => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        // Mensaje amigable y con detalle útil (limitado)
+        $detalle = config('app.debug')
+            ? $this->prettyException($e)
+            : 'Ocurrió un error inesperado.';
+
+        \Masmerise\Toaster\PendingToast::create()
+            ->error()
+            ->message('Error al actualizar el producto: '.$detalle)
+            ->duration(12000);
     }
+}
+
+/**
+ * Devuelve un mensaje legible según el tipo de excepción
+ * (validación, QueryException de MySQL/SQL Server, etc.).
+ */
+private function prettyException(\Throwable $e): string
+{
+    // Validación
+    if ($e instanceof \Illuminate\Validation\ValidationException) {
+        return 'Corrige los campos marcados y vuelve a intentar.';
+    }
+
+    // Errores de BD: intenta extraer detalle del driver (PDO)
+    if ($e instanceof \Illuminate\Database\QueryException) {
+        $driverMsg = $e->errorInfo[2] ?? null;          // suele traer el detalle útil
+        $msg = $driverMsg ?: $e->getMessage();
+        return \Illuminate\Support\Str::limit($msg, 220);
+    }
+
+    // Si la excepción tiene "previous" (envoltorios)
+    if ($e->getPrevious()) {
+        return \Illuminate\Support\Str::limit($e->getPrevious()->getMessage(), 220);
+    }
+
+    // Fallback
+    return \Illuminate\Support\Str::limit($e->getMessage(), 220);
+}
+
 
     /** ===== Edit ===== */
     public function edit($id)
@@ -369,8 +417,8 @@ class Productos extends Component
             $this->activo             = (bool) $producto->activo;
             $this->subcategoria_id    = $producto->subcategoria_id;
             $this->impuesto_id        = $producto->impuesto_id;
-            $this->unidad_medida_id   = $producto->unidad_medida_id;   // <- NUEVO
-            $this->imagen             = null;                          // <- para no pre-cargar archivos
+            $this->unidad_medida_id   = $producto->unidad_medida_id;
+            $this->imagen             = null; // no precargar archivos
             $this->mov_contable_segun = $producto->mov_contable_segun ?? Producto::MOV_SEGUN_ARTICULO;
             $this->isEdit             = true;
 
@@ -404,8 +452,8 @@ class Productos extends Component
             'costo'               => 'nullable|numeric|min:0',
             'activo'              => 'required|boolean',
             'impuesto_id'         => 'nullable|exists:impuestos,id',
-            'unidad_medida_id'    => 'nullable|exists:unidades_medida,id', // <- NUEVO
-            'imagen'              => 'nullable|image|max:2048',             // <- NUEVO
+            'unidad_medida_id'    => 'nullable|exists:unidades_medida,id',
+            'imagen'              => 'nullable|image|max:2048',
             'stockMinimoGlobal'   => 'nullable|integer|min:0',
             'stockMaximoGlobal'   => 'nullable|integer|min:0|gte:stockMinimoGlobal',
             'mov_contable_segun'  => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
@@ -441,7 +489,7 @@ class Productos extends Component
     {
         $this->reset([
             'nombre','descripcion','precio','costo','activo','subcategoria_id','impuesto_id',
-            'unidad_medida_id','imagen',                      // <- NUEVO
+            'unidad_medida_id','imagen',
             'producto_id','isEdit','bodegaSeleccionada','stockMinimo','stockMaximo',
             'stocksPorBodega','stockMinimoGlobal','stockMaximoGlobal',
         ]);

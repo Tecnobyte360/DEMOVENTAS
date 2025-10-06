@@ -15,8 +15,8 @@ return new class extends Migration
                   ->constrained('unidades_medida')
                   ->nullOnDelete(); 
 
-            // Ruta (storage/app/public/...) a la imagen del producto
-            $table->string('imagen_path')->nullable();
+           
+        $table->longText('imagen_path')->nullable()->change();
         });
     }
 

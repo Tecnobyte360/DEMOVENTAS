@@ -76,13 +76,21 @@ class PlanCuentas extends Model
     }
 
     /**
-     * ✅ Ordena por código con padding (MySQL).
-     * Si tus códigos tienen puntos (p.ej. 1.1.05) también queda bien.
+     * ✅ Ordena por código con padding, compatible con MySQL/MariaDB, PostgreSQL, SQLite y SQL Server.
      */
-    public function scopeOrdenCodigo($q)
+    public function scopeOrdenCodigo($q, int $padLen = 20)
     {
-        // 12 dígitos suele alcanzar para la mayoría de PUC; sube si necesitas más.
-        return $q->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')");
+        $driver = $q->getQuery()->getConnection()->getDriverName(); // 'mysql','pgsql','sqlite','sqlsrv'
+
+        if ($driver === 'sqlsrv') {
+            // Ej.: RIGHT(REPLICATE('0',20) + REPLACE(CAST(codigo AS varchar(255)),'.',''), 20)
+            $expr = "RIGHT(REPLICATE('0', {$padLen}) + REPLACE(CAST(codigo AS varchar(255)), '.', ''), {$padLen})";
+        } else {
+            // MySQL, MariaDB, PostgreSQL, SQLite tienen LPAD
+            $expr = "LPAD(REPLACE(codigo, '.', ''), {$padLen}, '0')";
+        }
+
+        return $q->orderByRaw("$expr ASC");
     }
 
     public function scopeImputables($q)
@@ -96,10 +104,7 @@ class PlanCuentas extends Model
     /* ================= Helpers UI ================= */
     public function getTieneHijosAttribute(): bool
     {
-        // Evita N+1 si ya están cargados
-        if ($this->relationLoaded('hijos')) {
-            return $this->hijos->isNotEmpty();
-        }
+        if ($this->relationLoaded('hijos')) return $this->hijos->isNotEmpty();
         return $this->hijos()->exists();
     }
 
@@ -110,7 +115,6 @@ class PlanCuentas extends Model
 
     public function getIndentPxAttribute(): int
     {
-        // usa nivel_visual si viene desde flatTree(), sino nivel de BD
         $nivel = property_exists($this, 'nivel_visual') ? (int)$this->nivel_visual : (int)$this->nivel;
         return max(0, ($nivel - 1) * 18);
     }
@@ -127,7 +131,6 @@ class PlanCuentas extends Model
 
     /**
      * Devuelve el árbol “aplanado” en orden jerárquico padre→hijos.
-     * Úsalo en tu Livewire para pintar la tabla.
      */
     public static function flatTree(
         ?string $naturaleza = 'TODAS',
@@ -135,28 +138,21 @@ class PlanCuentas extends Model
         bool $soloActivas = false,
         ?string $busqueda = null
     ): Collection {
-        // 1) Trae TODO lo necesario en un solo viaje
         $items = static::query()
             ->when($soloActivas, fn($q) => $q->where('cuenta_activa', 1))
             ->naturaleza($naturaleza)
             ->buscar($busqueda)
-            ->ordenCodigo()             // orden base por código padded
+            ->ordenCodigo()
             ->get();
 
-        // 2) Agrupa por padre para recorrer en memoria
         $porPadre = $items->groupBy('padre_id');
 
-        // 3) DFS para “aplanar” en orden jerárquico
         $flat = collect();
         $walk = function ($padreId, $nivel) use (&$walk, $porPadre, $nivelMax, $flat) {
             foreach (($porPadre[$padreId] ?? collect()) as $nodo) {
                 if (!is_null($nivelMax) && $nivel > $nivelMax) continue;
-
-                // anota nivel_visual para la UI (indentación)
                 $nodo->nivel_visual = $nivel;
                 $flat->push($nodo);
-
-                // baja a los hijos
                 $walk($nodo->id, $nivel + 1);
             }
         };
@@ -173,12 +169,12 @@ class PlanCuentas extends Model
         });
     }
 
-    /* ===== Naturaleza por prefijo del código (MySQL) ===== */
+    /**
+     * Naturaleza por prefijo del código (compatible con SQL Server / MySQL / PG / SQLite).
+     */
     public function scopeNaturalezaArbol($q, ?string $nat)
     {
-        if (!$nat || strtoupper($nat) === 'TODAS') {
-            return $q;
-        }
+        if (!$nat || strtoupper($nat) === 'TODAS') return $q;
 
         $map = [
             'ACTIVOS'     => '1',
@@ -193,13 +189,13 @@ class PlanCuentas extends Model
         $pref = $map[$natU] ?? null;
 
         if ($pref) {
-            // Por árbol: todo lo que cuelga del dígito raíz (quita puntos si tu código tiene 1.1.05)
-            return $q->whereRaw("
-                LEFT(REPLACE(CAST(codigo AS CHAR), '.', ''), 1) = ?
-            ", [$pref]);
+            $driver = $q->getQuery()->getConnection()->getDriverName();
+            $cast   = ($driver === 'sqlsrv') ? "CAST(codigo AS varchar(255))" : "CAST(codigo AS CHAR)";
+            // Quita puntos y toma el primer dígito del árbol
+            return $q->whereRaw("LEFT(REPLACE($cast, '.', ''), 1) = ?", [$pref]);
         }
 
-        // Fallback por columna naturaleza, saneando espacios/case
+        // Fallback por columna naturaleza
         return $q->whereRaw("TRIM(UPPER(naturaleza)) = ?", [$natU]);
     }
 

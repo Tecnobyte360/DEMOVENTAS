@@ -33,7 +33,7 @@ class Productos extends Component
 
     /** Unidad de medida + imagen (como Base64) */
     public ?int $unidad_medida_id = null;
-    public ?string $imagen_base64 = null; // <- NUEVO (data URL)
+    public ?string $imagen_base64 = null; // data URL base64
 
     /** Movimiento contable según (ARTICULO | SUBCATEGORIA) */
     public string $mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
@@ -100,6 +100,7 @@ class Productos extends Component
 
         $this->productos = $query->get();
 
+        // Preview de precio + IVA mientras editas
         if ($this->isEdit && $this->producto_id) {
             $this->productos = $this->productos->map(function ($p) {
                 if ($p->id === (int)$this->producto_id) {
@@ -118,6 +119,46 @@ class Productos extends Component
             'cuentasPUC'  => $this->cuentasPUC,
             'unidades'    => $this->unidades,
         ]);
+    }
+
+    /* ========================= EDIT ========================= */
+    public function edit(int $id): void
+    {
+        try {
+            $producto = Producto::with(['bodegas','cuentas'])->findOrFail($id);
+
+            $this->producto_id        = $producto->id;
+            $this->nombre             = $producto->nombre;
+            $this->descripcion        = $producto->descripcion;
+            $this->precio             = $producto->precio;
+            $this->costo              = $producto->costo;
+            $this->activo             = (bool) $producto->activo;
+            $this->subcategoria_id    = $producto->subcategoria_id;
+            $this->impuesto_id        = $producto->impuesto_id;
+            $this->unidad_medida_id   = $producto->unidad_medida_id;
+            $this->imagen_base64      = null; // no precargamos la dataURL (ya se muestra desde BD)
+            $this->mov_contable_segun = $producto->mov_contable_segun ?? Producto::MOV_SEGUN_ARTICULO;
+            $this->isEdit             = true;
+
+            // Cuentas actuales
+            $this->cuentasPorTipo = [];
+            foreach ($this->tiposCuenta as $t) $this->cuentasPorTipo[$t->id] = null;
+            foreach ($producto->cuentas as $pc) {
+                $this->cuentasPorTipo[$pc->tipo_id] = $pc->plan_cuentas_id;
+            }
+
+            // Stocks por bodega
+            $this->stocksPorBodega = [];
+            foreach ($producto->bodegas as $bodega) {
+                $this->stocksPorBodega[$bodega->id] = [
+                    'stock_minimo' => $bodega->pivot->stock_minimo,
+                    'stock_maximo' => $bodega->pivot->stock_maximo,
+                ];
+            }
+        } catch (\Throwable $e) {
+            Log::error('Error al cargar producto para edición', ['id'=>$id, 'msg'=>$e->getMessage()]);
+            PendingToast::create()->error()->message('Error al cargar el producto.')->duration(7000);
+        }
     }
 
     /** ===== Modal Cuentas ===== */
@@ -184,7 +225,7 @@ class Productos extends Component
     public function eliminarBodega($id) { unset($this->stocksPorBodega[$id]); }
 
     /* =======================================
-     * Helpers imagen Base64 (sin storage)
+     * Validar imagen Base64 (sin storage)
      * ======================================= */
     private function validarDataUrl(?string $dataUrl, int $maxMB = 5): void
     {
@@ -196,9 +237,8 @@ class Productos extends Component
             ]);
         }
 
-        // Calcular tamaño aproximado del base64 (bytes)
         [$meta, $payload] = explode(',', $dataUrl, 2);
-        $sizeBytes = (int) (strlen($payload) * 3 / 4); // aproximación
+        $sizeBytes = (int) (strlen($payload) * 3 / 4); // aproximado
         $maxBytes  = $maxMB * 1024 * 1024;
 
         if ($sizeBytes > $maxBytes) {
@@ -251,7 +291,7 @@ class Productos extends Component
                 'subcategoria_id'    => $this->subcategoria_id,
                 'impuesto_id'        => $this->impuesto_id,
                 'unidad_medida_id'   => $this->unidad_medida_id,
-                'imagen_path'        => $this->imagen_base64, // <- Base64 directo
+                'imagen_path'        => $this->imagen_base64, // Base64 directo a BD
                 'mov_contable_segun' => $this->mov_contable_segun,
             ]);
 
@@ -296,7 +336,6 @@ class Productos extends Component
                 'mov_contable_segun' => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
             ], $this->reglasCuentas()));
 
-            // Validar imagen Base64 SÓLO si llegó una nueva
             if (!empty($this->imagen_base64)) {
                 $this->validarDataUrl($this->imagen_base64, 5);
             }
@@ -318,7 +357,7 @@ class Productos extends Component
             ];
 
             if (!empty($this->imagen_base64)) {
-                $data['imagen_path'] = $this->imagen_base64; // <- reemplazar por nueva base64
+                $data['imagen_path'] = $this->imagen_base64;
             }
 
             $producto->update($data);
@@ -416,13 +455,17 @@ class Productos extends Component
         if (!$this->impuesto_id || !$this->impuestos) return null;
         return $this->impuestos->firstWhere('id', (int)$this->impuesto_id);
     }
+
     public function getDebeIngresarCuentasProperty(): bool
-    { return $this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO; }
+    {
+        return $this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO;
+    }
 
     public function getPrecioConIvaTmpProperty(): float
     {
         $base = (float) ($this->precio ?? 0);
         $imp  = $this->impuestoSeleccionado;
+
         if (!$imp) return round($base, 2);
         if (!is_null($imp->porcentaje)) return round($base * (1 + ((float)$imp->porcentaje / 100)), 2);
         if (!is_null($imp->monto_fijo)) return round($base + (float)$imp->monto_fijo, 2);

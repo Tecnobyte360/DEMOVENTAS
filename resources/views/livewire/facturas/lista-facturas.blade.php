@@ -105,7 +105,7 @@
       <i class="fa-solid fa-envelope mr-1"></i> Enviar
     </button>
 
-    {{-- 👇 NUEVO: Vista previa POS dentro de un modal --}}
+
     <button type="button"
             class="px-2.5 py-1.5 rounded-md bg-amber-600 text-white text-xs hover:bg-amber-700"
             wire:click="preview({{ $f->id }})"
@@ -113,18 +113,12 @@
       <i class="fa-solid fa-eye mr-1"></i> Vista previa
     </button>
 
-    {{-- Imprimir POS en nueva pestaña (dejas tu botón actual) --}}
-    <a href="{{ route('facturas.ticket', $f->id) }}"
-       target="_blank"
-       class="px-2.5 py-1.5 rounded-md bg-emerald-600 text-white text-xs hover:bg-emerald-700"
-       title="Imprimir ticket (POS)">
-      <i class="fa-solid fa-print mr-1"></i> POS
-    </a>
+   
     <button type="button"
         class="px-2.5 py-1.5 rounded-md bg-emerald-700 text-white text-xs hover:bg-emerald-800"
         onclick="imprimirPOS({{ $f->id }})"
         title="Imprimir directo en POS (ESC/POS)">
-  <i class="fa-solid fa-receipt mr-1"></i> Imprimir POS
+  <i class="fa-solid fa-receipt mr-1"></i> Imprimir Factura
 </button>
 
 @once

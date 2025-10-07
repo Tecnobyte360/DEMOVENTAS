@@ -59,7 +59,7 @@
       {{-- ✅ ====== Notas Crédito: crear ====== --}}
       <section x-show="tab === 'nc_form'" x-transition class="space-y-4">
         <h2 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <i class="fa-solid fa-arrow-rotate-left text-violet-600"></i> Nueva nota crédito
+          <i class=""></i> 
         </h2>
         <livewire:facturas.nota-credito-form />
       </section>

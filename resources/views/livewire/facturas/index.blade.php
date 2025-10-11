@@ -73,7 +73,7 @@
         <h2 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
           <i class="fa-solid fa-rectangle-list text-indigo-500"></i> Notas crédito generadas
         </h2>
-        <livewire:facturas.lista-notas-credito />
+        <livewire:facturas.nota-credito-form />
       </section>
 
     </div>

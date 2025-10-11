@@ -36,41 +36,7 @@
     x-on:preview-image.window="src = $event.detail.src; title = $event.detail.title || ''; open = true;"
     x-id="['imgviewer']"
   >
-    <template x-teleport="body">
-      <div
-        x-show="open"
-        x-transition.opacity
-        @keydown.escape.window="open = false"
-        class="fixed inset-0 z-[100] flex items-center justify-center p-4"
-        :aria-labelledby="$id('imgviewer')"
-        role="dialog" aria-modal="true"
-      >
-        <div class="absolute inset-0 bg-black/70" @click="open = false"></div>
-
-        <div
-          class="relative max-w-5xl w-full bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden ring-1 ring-black/10 dark:ring-white/10"
-          x-transition.scale.origin.center
-        >
-          <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-            <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate" :id="$id('imgviewer')" x-text="title || 'Vista previa'"></h3>
-            <button class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" @click="open = false" aria-label="Cerrar" title="Cerrar (Esc)">
-              <i class="fa-solid fa-xmark text-lg text-gray-600 dark:text-gray-300"></i>
-            </button>
-          </div>
-
-          <div class="bg-black/5 dark:bg-white/5 grid place-items-center max-h-[80vh]">
-            <img x-show="!!src" :src="src" :alt="title || 'Imagen'" class="max-h-[78vh] w-auto object-contain" @click.stop>
-          </div>
-
-          <div class="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800">
-            <a :href="src" target="_blank" class="px-3 py-2 rounded-xl text-sm font-medium bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200">
-              Abrir en pestaña nueva
-            </a>
-            <button @click="open = false" class="px-3 py-2 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">Cerrar</button>
-          </div>
-        </div>
-      </div>
-    </template>
+    
   </div>
   {{-- ================= FIN PREVISUALIZADOR ================= --}}
 

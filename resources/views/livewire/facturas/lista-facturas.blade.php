@@ -4,7 +4,7 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
 @endassets
 
-<div class="mt-8 space-y-4 max-w-7xl mx-auto">
+<div class="mt-8 space-y-4">
 
   {{-- Filtros / Buscador --}}
   <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/60 backdrop-blur p-3 md:p-4">
@@ -45,111 +45,86 @@
   </div>
 
   {{-- Tabla desktop --}}
-  <div class="hidden md:block overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/60 backdrop-blur">
-    <table class="min-w-full text-sm">
-      <thead class="sticky top-0 z-10 bg-gray-100/90 backdrop-blur dark:bg-gray-800/80 text-gray-700 dark:text-gray-200 uppercase text-xs tracking-wider">
-        <tr>
-          <th class="p-3 text-left">Prefijo</th>
-          <th class="p-3 text-left">Número</th>
-          <th class="p-3 text-left">Fecha</th>
-          <th class="p-3 text-left">Cliente</th>
-          <th class="p-3 text-right">Subtotal</th>
-          <th class="p-3 text-right">Impuestos</th>
-          <th class="p-3 text-right">Total</th>
-          <th class="p-3 text-left">Estado</th>
-          <th class="p-3 text-left">Acciones</th>
+  {{-- Tabla desktop (suave y moderna) --}}
+<div class="hidden md:block overflow-x-auto rounded-3xl border border-gray-200/70 dark:border-gray-800 bg-white/60 dark:bg-gray-900/60 backdrop-blur-md shadow-xl">
+  <table class="min-w-full text-sm text-gray-700 dark:text-gray-100">
+    <thead class="bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-xs uppercase tracking-wider text-gray-600 dark:text-gray-300">
+      <tr>
+        <th class="p-3 text-left font-semibold">Prefijo</th>
+        <th class="p-3 text-left font-semibold">Número</th>
+        <th class="p-3 text-left font-semibold">Fecha</th>
+        <th class="p-3 text-left font-semibold">Cliente</th>
+        <th class="p-3 text-right font-semibold">Subtotal</th>
+        <th class="p-3 text-right font-semibold">Impuestos</th>
+        <th class="p-3 text-right font-semibold">Total</th>
+        <th class="p-3 text-left font-semibold">Estado</th>
+        <th class="p-3 text-left font-semibold">Acciones</th>
+      </tr>
+    </thead>
+
+    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+      @forelse($items as $f)
+        @php
+          $len = $f->serie->longitud ?? 6;
+          $num = $f->numero !== null ? str_pad((string)$f->numero, $len, '0', STR_PAD_LEFT) : '—';
+          $badge = [
+            'borrador' => 'bg-slate-100 text-slate-700',
+            'emitida'  => 'bg-indigo-100 text-indigo-700',
+            'parcialmente_pagada' => 'bg-amber-100 text-amber-700',
+            'pagada'   => 'bg-emerald-100 text-emerald-700',
+            'anulada'  => 'bg-rose-100 text-rose-700',
+          ][$f->estado] ?? 'bg-slate-100 text-slate-700';
+        @endphp
+
+        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-all duration-200 ease-in-out">
+          <td class="p-3 font-medium">{{ $f->prefijo ?? '—' }}</td>
+          <td class="p-3 font-semibold text-indigo-700 dark:text-indigo-300">{{ $num }}</td>
+          <td class="p-3 whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($f->fecha)->format('d/m/Y') }}</td>
+          <td class="p-3">
+            <div class="truncate max-w-[300px]">
+              {{ $f->cliente->razon_social ?? '—' }}
+              @if(!empty($f->cliente?->nit))
+                <span class="text-xs text-gray-400">({{ $f->cliente->nit }})</span>
+              @endif
+            </div>
+          </td>
+          <td class="p-3 text-right">${{ number_format($f->subtotal, 2) }}</td>
+          <td class="p-3 text-right">${{ number_format($f->impuestos, 2) }}</td>
+          <td class="p-3 text-right font-semibold">${{ number_format($f->total, 2) }}</td>
+          <td class="p-3">
+            <span class="px-3 py-1 rounded-full text-[11px] font-semibold {{ $badge }} shadow-sm">
+              {{ ucwords(str_replace('_',' ',$f->estado)) }}
+            </span>
+          </td>
+          <td class="p-3 whitespace-nowrap">
+            <div class="flex items-center gap-1.5">
+              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:bg-black/80 transition">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
+              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition">
+                <i class="fa-solid fa-envelope"></i>
+              </button>
+              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-xs hover:bg-amber-600 transition">
+                <i class="fa-solid fa-eye"></i>
+              </button>
+              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-700 transition">
+                <i class="fa-solid fa-receipt"></i>
+              </button>
+            </div>
+          </td>
         </tr>
-      </thead>
+      @empty
+        <tr>
+          <td colspan="9" class="p-6 text-center text-gray-500 dark:text-gray-400">
+            Sin resultados…
+          </td>
+        </tr>
+      @endforelse
+    </tbody>
+  </table>
+</div>
 
-      <tbody class="divide-y divide-gray-200/80 dark:divide-gray-800">
-        @forelse($items as $f)
-          @php
-            $len = $f->serie->longitud ?? 6;
-            $num = $f->numero !== null ? str_pad((string)$f->numero, $len, '0', STR_PAD_LEFT) : '—';
-            $badge = [
-              'borrador' => 'bg-slate-200 text-slate-700 ring-1 ring-slate-300/60',
-              'emitida'  => 'bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200/70',
-              'parcialmente_pagada' => 'bg-amber-100 text-amber-700 ring-1 ring-amber-200/70',
-              'pagada'   => 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200/70',
-              'anulada'  => 'bg-rose-100 text-rose-700 ring-1 ring-rose-200/70',
-            ][$f->estado] ?? 'bg-slate-100 text-slate-700 ring-1 ring-slate-200/70';
-          @endphp
-
-          <tr class="odd:bg-white/70 even:bg-gray-50/60 dark:odd:bg-gray-900/40 dark:even:bg-gray-900/20 hover:bg-gray-50/90 dark:hover:bg-gray-800/60 transition">
-            <td class="p-3 font-semibold text-gray-700 dark:text-gray-100 whitespace-nowrap">
-              {{ $f->prefijo ?? '—' }}
-            </td>
-            <td class="p-3 font-semibold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{{ $num }}</td>
-            <td class="p-3 whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($f->fecha)->format('d/m/Y') }}</td>
-            <td class="p-3">
-              <div class="truncate max-w-[360px] text-gray-800 dark:text-gray-100">
-                {{ $f->cliente->razon_social ?? '—' }}
-                @if(!empty($f->cliente?->nit))
-                  <span class="text-xs text-gray-400">({{ $f->cliente->nit }})</span>
-                @endif
-              </div>
-            </td>
-
-            <td class="p-3 text-right whitespace-nowrap font-mono tabular-nums">${{ number_format($f->subtotal,2) }}</td>
-            <td class="p-3 text-right whitespace-nowrap font-mono tabular-nums">${{ number_format($f->impuestos,2) }}</td>
-            <td class="p-3 text-right font-semibold whitespace-nowrap font-mono tabular-nums">${{ number_format($f->total,2) }}</td>
-
-            <td class="p-3">
-              <span class="px-3 py-1 rounded-full text-[11px] font-semibold {{ $badge }}">
-                {{ ucwords(str_replace('_',' ',$f->estado)) }}
-              </span>
-            </td>
-
-            {{-- Acciones --}}
-            <td class="p-3 whitespace-nowrap">
-              <div class="flex items-center gap-1.5">
-
-                {{-- Editar: gris outline --}}
-                <button type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300/70 text-gray-800 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
-                        wire:click="abrir({{ $f->id }})"
-                        title="Editar">
-                  <i class="fa-solid fa-pen-to-square"></i>
-                  <span class="hidden xl:inline">Editar</span>
-                </button>
-
-                {{-- Enviar: primario índigo --}}
-                <button type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-                        wire:click="enviarPorCorreo({{ $f->id }})"
-                        title="Enviar por correo">
-                  <i class="fa-solid fa-envelope"></i>
-                  <span class="hidden xl:inline">Enviar</span>
-                </button>
-
-                {{-- Vista previa: acento ámbar --}}
-                <button type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600"
-                        wire:click="preview({{ $f->id }})"
-                        title="Vista previa POS">
-                  <i class="fa-solid fa-eye"></i>
-                  <span class="hidden xl:inline">Vista previa</span>
-                </button>
-
-                {{-- Imprimir: acento esmeralda --}}
-                <button type="button"
-                        class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                        onclick="imprimirPOS({{ $f->id }})"
-                        title="Imprimir directo en POS (ESC/POS)">
-                  <i class="fa-solid fa-receipt"></i>
-                  <span class="hidden xl:inline">Imprimir</span>
-                </button>
-              </div>
-            </td>
-          </tr>
-        @empty
-          <tr>
-            <td colspan="9" class="p-6 text-center text-gray-500 dark:text-gray-400">Sin resultados…</td>
-          </tr>
-        @endforelse
-      </tbody>
-    </table>
-  </div>
+ 
 
   {{-- Lista móvil (cards) --}}
   <div class="md:hidden space-y-3">
@@ -189,7 +164,7 @@
           </div>
           <div class="text-right">
             <div class="text-xs text-gray-500">Total</div>
-            <div class="font-semibold font-mono tabular-nums">${{ number_format($f->total,2) }}</div>
+            <div class="font-semibold">${{ number_format($f->total,2) }}</div>
           </div>
         </div>
 
@@ -204,7 +179,7 @@
         </div>
 
         <div class="mt-3 grid grid-cols-4 gap-2">
-          <button class="px-2 py-2 rounded-xl border border-gray-300/70 text-gray-800 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-100 dark:hover:bg-gray-800"
+          <button class="px-2 py-2 rounded-xl bg-gray-900 text-white text-xs hover:bg-black/90 dark:bg-gray-700 dark:hover:bg-gray-600"
                   wire:click="abrir({{ $f->id }})" title="Editar">
             <i class="fa-solid fa-pen-to-square"></i>
           </button>
@@ -227,7 +202,7 @@
     @endforelse
   </div>
 
-  {{-- Modal de Vista Previa --}}
+  {{-- Modal de Vista Previa (tu versión actual) --}}
   @if($showPreview)
     <div class="fixed inset-0 z-[100]">
       <div class="absolute inset-0 bg-black/50" wire:click="closePreview"></div>

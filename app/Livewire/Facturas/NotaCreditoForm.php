@@ -3,7 +3,6 @@
 namespace App\Livewire\Facturas;
 
 use Livewire\Component;
-use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +26,11 @@ use Masmerise\Toaster\PendingToast;
 
 class NotaCreditoForm extends Component
 {
+    /*** IMPORTANTE: Livewire v2 usa $listeners, no atributos #[On()] */
+    protected $listeners = [
+        'abrir-nota-credito' => 'abrir',
+    ];
+
     public ?NotaCredito $nota = null;
     public string $documento = 'nota_credito';
     public ?Serie $serieDefault = null;
@@ -96,7 +100,6 @@ class NotaCreditoForm extends Component
         'lineas.*.impuesto_pct' => 'porcentaje de impuesto',
     ];
 
-    #[On('abrir-nota-credito')]
     public function abrir(int $id): void
     {
         $this->cargarNota($id);
@@ -282,7 +285,7 @@ class NotaCreditoForm extends Component
             $this->refreshStockLinea($i);
             $this->resetErrorBag();
             $this->resetValidation();
-            $this->dispatch('$refresh');
+            $this->emit('$refresh'); // v2
             return;
         }
 
@@ -296,7 +299,7 @@ class NotaCreditoForm extends Component
             $i = (int) $m[1];
             if (isset($this->lineas[$i])) {
                 $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
+                $this->emit('$refresh'); // v2
             }
             return;
         }
@@ -323,7 +326,7 @@ class NotaCreditoForm extends Component
         $socio = SocioNegocio::with('condicionPago')->find($id);
         $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
 
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     public function updatedFacturaId($val): void
@@ -342,7 +345,7 @@ class NotaCreditoForm extends Component
             $this->numeroFacturaSeleccionada = null;
         }
 
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     public function updatedTipoPago($val): void
@@ -441,7 +444,7 @@ class NotaCreditoForm extends Component
         ];
         $this->normalizeLinea($l);
         $this->lineas[] = $l;
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     public function removeLinea(int $i): void
@@ -449,7 +452,7 @@ class NotaCreditoForm extends Component
         if ($this->bloqueada) return;
         if (!isset($this->lineas[$i])) return;
         array_splice($this->lineas, $i, 1);
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     public function setProducto(int $i, $id): void
@@ -468,7 +471,7 @@ class NotaCreditoForm extends Component
                 $this->lineas[$i]['impuesto_id']       = null;
                 $this->lineas[$i]['impuesto_pct']      = 0.0;
                 $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
+                $this->emit('$refresh'); // v2
                 return;
             }
 
@@ -484,7 +487,7 @@ class NotaCreditoForm extends Component
                 $this->lineas[$i]['impuesto_id']       = null;
                 $this->lineas[$i]['impuesto_pct']      = 0.0;
                 $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
+                $this->emit('$refresh'); // v2
                 return;
             }
 
@@ -526,7 +529,7 @@ class NotaCreditoForm extends Component
             $this->lineas[$i]['impuesto_pct']    = $ivaPct;
 
             $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
+            $this->emit('$refresh'); // v2
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
@@ -544,7 +547,7 @@ class NotaCreditoForm extends Component
         if (!$impId) {
             $this->lineas[$i]['impuesto_pct'] = 0.0;
             $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
+            $this->emit('$refresh'); // v2
             return;
         }
 
@@ -552,7 +555,7 @@ class NotaCreditoForm extends Component
         if (!$imp || !$imp->activo) {
             $this->lineas[$i]['impuesto_pct'] = 0.0;
             $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
+            $this->emit('$refresh'); // v2
             return;
         }
 
@@ -567,7 +570,7 @@ class NotaCreditoForm extends Component
         }
 
         $this->normalizeLinea($this->lineas[$i]);
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     public function aplicarFormaPago(string $tipo): void
@@ -617,7 +620,7 @@ class NotaCreditoForm extends Component
             ?: $this->idCuentaPorClase('CAJA_GENERAL')
             ?: $this->idCuentaPorClase('BANCOS');
 
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     private function setCuentaDesdeCliente(?int $clienteId): void
@@ -637,7 +640,7 @@ class NotaCreditoForm extends Component
                 ?: $this->idCuentaPorClase('BANCOS');
         }
 
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     private function idCuentaPorClase(string $clase): ?int
@@ -807,7 +810,7 @@ class NotaCreditoForm extends Component
 
             $this->persistirBorrador();
             PendingToast::create()->success()->message('Nota crédito guardada (ID: '.$this->nota->id.').')->duration(5000);
-            $this->dispatch('refrescar-lista-notas');
+            $this->emit('refrescar-lista-notas'); // v2
         } catch (\Throwable $e) {
             Log::error('NC GUARDAR ERROR', ['msg' => $e->getMessage()]);
             $msg = config('app.debug') ? $e->getMessage() : 'No se pudo guardar.';
@@ -859,7 +862,7 @@ class NotaCreditoForm extends Component
             PendingToast::create()
                 ->success()->message('Nota crédito emitida (ID: ' . $this->nota->id . ', No: ' . $this->nota->prefijo . '-' . $this->nota->numero . ').')
                 ->duration(6000);
-            $this->dispatch('refrescar-lista-notas');
+            $this->emit('refrescar-lista-notas'); // v2
 
         } catch (\Throwable $e) {
             Log::error('NC EMITIR ERROR', ['msg' => $e->getMessage()]);
@@ -886,7 +889,7 @@ class NotaCreditoForm extends Component
             }, 3);
 
             PendingToast::create()->info()->message('Nota crédito anulada.')->duration(4500);
-            $this->dispatch('refrescar-lista-notas');
+            $this->emit('refrescar-lista-notas'); // v2
 
         } catch (\Throwable $e) {
             report($e);
@@ -930,7 +933,7 @@ class NotaCreditoForm extends Component
 
         $pref = (string)($f->prefijo ?? '');
         $num  = (string)($f->numero ?? '');
-        return trim($pref) !== '' ? "{$pref}-{$num}" : $num;
+        return trim($prefijo = $pref) !== '' ? "{$prefijo}-{$num}" : $num;
     }
 
     public function getStockDeLinea(int $i): float
@@ -947,7 +950,7 @@ class NotaCreditoForm extends Component
 
         if ($pid <= 0 || $bid <= 0) {
             $this->stockVista[$i] = 0.0;
-            $this->dispatch('$refresh');
+            $this->emit('$refresh'); // v2
             return;
         }
 
@@ -957,7 +960,7 @@ class NotaCreditoForm extends Component
             ->value('stock');
 
         $this->stockVista[$i] = (float) ($stock ?? 0);
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     private function condicionPagoDe(SocioNegocio $s): ?array
@@ -1007,11 +1010,15 @@ class NotaCreditoForm extends Component
         $this->condicion_pago_id  = $socio?->condicionPago?->id ?: null;
 
         $this->aplicarFormaPago($this->tipo_pago);
-        $this->dispatch('$refresh');
+        $this->emit('$refresh'); // v2
     }
 
     public function abrirAplicacion(): void
     {
-        $this->dispatch('abrir-aplicacion-nota', id: $this->nota?->id, total: $this->total, factura_id: $this->factura_id);
+        $this->emit('abrir-aplicacion-nota', [
+            'id' => $this->nota?->id,
+            'total' => $this->total,
+            'factura_id' => $this->factura_id,
+        ]); // v2
     }
 }

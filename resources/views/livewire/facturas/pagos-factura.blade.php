@@ -26,15 +26,21 @@
     <div class="w-full max-w-3xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
 
       {{-- Header --}}
-      <div class="px-5 py-4 border-b dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-violet-600 text-white">
-        <h3 class="text-lg font-semibold flex items-center gap-2">
-          <i class="fa-solid fa-cash-register"></i>
-          Registrar pago de factura
-        </h3>
-        <button class="text-white/80 hover:text-white" @click="open=false" wire:click="cerrar" title="Cerrar">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
+     <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 
+            flex items-center justify-between 
+            bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300 
+            dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 
+            text-gray-800 dark:text-white rounded-t-2xl">
+  <h3 class="text-lg font-semibold flex items-center gap-2">
+    <i class="fa-solid fa-cash-register"></i>
+    Registrar pago de factura
+  </h3>
+  <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition" 
+          @click="open=false" wire:click="cerrar" title="Cerrar">
+    <i class="fa-solid fa-xmark"></i>
+  </button>
+</div>
+
 
       {{-- Body --}}
       <div class="p-5 space-y-5">

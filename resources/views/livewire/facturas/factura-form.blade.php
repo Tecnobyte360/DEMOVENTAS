@@ -82,14 +82,15 @@
   <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
     
     <!-- Título -->
-    <div class="space-y-1">
-      <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
-        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-800/10 backdrop-blur">
-          <i class="fas fa-file-invoice-dollar text-gray-700 text-2xl"></i>
-        </span>
-        {{ $factura?->id ? 'Editar factura' : 'Nueva factura de venta' }}
-      </h1>
-    </div>
+   <div class="space-y-1">
+  <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3 text-gray-700">
+    <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-500/10 backdrop-blur-sm">
+      <i class="fas fa-file-invoice-dollar text-gray-500 text-2xl"></i>
+    </span>
+    {{ $factura?->id ? 'Editar factura' : 'Nueva factura de venta' }}
+  </h1>
+</div>
+
 
     <!-- Etiquetas -->
     <div class="flex flex-wrap items-center gap-2">

@@ -117,12 +117,20 @@
               </button>
 
               {{-- Vista previa --}}
-              <button type="button" title="Vista previa"
-                      wire:click="preview({{ $f->id }})"
-                      class="group relative px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-xs hover:bg-amber-600 transition">
-                <i class="fa-solid fa-eye"></i>
-                <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-amber-600 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Vista previa</span>
-              </button>
+             <button type="button" title="Vista previa"
+        wire:click="preview({{ $f->id }})"
+        class="group relative px-2.5 py-1.5 rounded-lg text-white text-xs 
+               bg-gradient-to-r from-amber-400 via-amber-500 to-yellow-500 
+               hover:from-amber-500 hover:to-yellow-600
+               shadow-md hover:shadow-lg transition-all duration-200">
+  <i class="fa-solid fa-eye"></i>
+  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 
+               opacity-0 group-hover:opacity-100 bg-amber-600 text-white text-[11px] px-2 py-1 
+               rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">
+    Vista previa
+  </span>
+</button>
+
 
               {{-- Imprimir --}}
               <button type="button" title="Imprimir"

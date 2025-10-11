@@ -15,20 +15,20 @@
             
             <!-- Header: Left side -->
             <div class="flex">
-                <button
-                    class="text-white hover:text-gray-200 lg:hidden"
-                    @click.stop="sidebarOpen = !sidebarOpen"
-                    aria-controls="sidebar"
-                    :aria-expanded="sidebarOpen"
-                >
-                    <span class="sr-only">Open sidebar</span>
-                    <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
-                        <rect x="4" y="5" width="16" height="2" />
-                        <rect x="4" y="11" width="16" height="2" />
-                        <rect x="4" y="17" width="16" height="2" />
-                    </svg>
-                </button>
-            </div>
+    <button
+        class="text-gray-600 hover:text-gray-800 lg:hidden transition-colors duration-200"
+        @click.stop="sidebarOpen = !sidebarOpen"
+        aria-controls="sidebar"
+        :aria-expanded="sidebarOpen"
+    >
+        <span class="sr-only">Open sidebar</span>
+        <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
+            <rect x="4" y="5" width="16" height="2" />
+            <rect x="4" y="11" width="16" height="2" />
+            <rect x="4" y="17" width="16" height="2" />
+        </svg>
+    </button>
+</div>
 
             <!-- Header: Right side -->
             <div class="flex items-center space-x-3">

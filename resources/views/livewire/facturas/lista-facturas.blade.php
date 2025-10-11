@@ -97,21 +97,57 @@
             </span>
           </td>
           <td class="p-3 whitespace-nowrap">
-            <div class="flex items-center gap-1.5">
-              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:bg-black/80 transition">
-                <i class="fa-solid fa-pen-to-square"></i>
-              </button>
-              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition">
-                <i class="fa-solid fa-envelope"></i>
-              </button>
-              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-xs hover:bg-amber-600 transition">
-                <i class="fa-solid fa-eye"></i>
-              </button>
-              <button type="button" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-700 transition">
-                <i class="fa-solid fa-receipt"></i>
-              </button>
-            </div>
-          </td>
+  <div class="flex items-center gap-2">
+    {{-- Editar --}}
+    <button type="button"
+            wire:click="abrir({{ $f->id }})"
+            class="group relative px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:bg-black/80 transition">
+      <i class="fa-solid fa-pen-to-square"></i>
+      <span class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
+                   bg-gray-900 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap
+                   transition-all duration-200 shadow-lg">
+        Editar
+      </span>
+    </button>
+
+    {{-- Enviar por correo --}}
+    <button type="button"
+            wire:click="enviarPorCorreo({{ $f->id }})"
+            class="group relative px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition">
+      <i class="fa-solid fa-envelope"></i>
+      <span class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
+                   bg-indigo-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap
+                   transition-all duration-200 shadow-lg">
+        Enviar por correo
+      </span>
+    </button>
+
+    {{-- Vista previa --}}
+    <button type="button"
+            wire:click="preview({{ $f->id }})"
+            class="group relative px-2.5 py-1.5 rounded-lg bg-amber-500 text-white text-xs hover:bg-amber-600 transition">
+      <i class="fa-solid fa-eye"></i>
+      <span class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
+                   bg-amber-600 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap
+                   transition-all duration-200 shadow-lg">
+        Vista previa
+      </span>
+    </button>
+
+    {{-- Imprimir --}}
+    <button type="button"
+            onclick="imprimirPOS({{ $f->id }})"
+            class="group relative px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-700 transition">
+      <i class="fa-solid fa-receipt"></i>
+      <span class="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100
+                   bg-emerald-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap
+                   transition-all duration-200 shadow-lg">
+        Imprimir
+      </span>
+    </button>
+  </div>
+</td>
+
         </tr>
       @empty
         <tr>

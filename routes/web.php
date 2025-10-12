@@ -27,6 +27,7 @@ use App\Livewire\Cotizaciones\Cotizacion;
 use App\Livewire\CuentasContables\PlanCuentas;
 use App\Livewire\Facturas\FacturaForm;
 use App\Livewire\Facturas\Index;
+use App\Livewire\Facturas\Listapagosrecibidos;
 use App\Livewire\Facturas\NotaCreditoForm;
 use App\Livewire\Finanzas\Finanzas;
 use App\Livewire\Finanzas\GastosEmpresa;
@@ -265,22 +266,20 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/normas-reparto', NormasReparto::class)->name('normas-reparto.index');
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
-//     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
-// Route::get('/catalogos/ciiu', CiiuActividades::class)
-//     ->name('catalogos.ciiu');
+    //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
+    // Route::get('/catalogos/ciiu', CiiuActividades::class)
+    //     ->name('catalogos.ciiu');
 
     Route::get('/contabilidad/asientos', Asientos::class)
         ->name('asientos.index');
-      Route::get('/condiciones-pago', CondicionesPagos::class)
+    Route::get('/condiciones-pago', CondicionesPagos::class)
         ->name('condicionespago');
 
-        Route::get('/facturas/{id}/editar', \App\Livewire\Facturas\FacturaForm::class)
-    ->name('facturas.edit');
+    Route::get('/facturas/{id}/editar', \App\Livewire\Facturas\FacturaForm::class)
+        ->name('facturas.edit');
 
-          Route::get('/medios-pagos', MediosPagos::class)
+    Route::get('/medios-pagos', MediosPagos::class)
         ->name('Mediospagos');
-
-
-
-
+       Route::get('/Pagos-recibidos', Listapagosrecibidos::class)
+        ->name('PagosRecibidos');  
 });

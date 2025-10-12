@@ -42,7 +42,7 @@
 </div>
 
 
-      {{-- Body --}}
+  
       <div class="p-5 space-y-5">
 
         {{-- Resumen (cifras vienen precargadas desde el componente: fac_total/fac_pagado/fac_saldo) --}}

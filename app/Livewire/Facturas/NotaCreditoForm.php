@@ -3,6 +3,7 @@
 namespace App\Livewire\Facturas;
 
 use Livewire\Component;
+use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Log;
@@ -11,7 +12,6 @@ use Throwable;
 
 use App\Models\Serie\Serie;
 use App\Models\Factura\Factura;
-
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 use App\Models\Bodegas;
@@ -26,11 +26,6 @@ use Masmerise\Toaster\PendingToast;
 
 class NotaCreditoForm extends Component
 {
-    /*** IMPORTANTE: Livewire v2 usa $listeners, no atributos #[On()] */
-    protected $listeners = [
-        'abrir-nota-credito' => 'abrir',
-    ];
-
     public ?NotaCredito $nota = null;
     public string $documento = 'nota_credito';
     public ?Serie $serieDefault = null;
@@ -53,6 +48,9 @@ class NotaCreditoForm extends Component
     public ?string $numeroFacturaSeleccionada = null;
     public ?int $cuenta_cobro_id = null;
     public ?int $condicion_pago_id = null;
+
+    /** Facturas reactivas del cliente seleccionado */
+    public array $facturasCliente = [];
 
     protected $rules = [
         'serie_id'                   => 'required|integer|exists:series,id',
@@ -100,6 +98,7 @@ class NotaCreditoForm extends Component
         'lineas.*.impuesto_pct' => 'porcentaje de impuesto',
     ];
 
+    #[On('abrir-nota-credito')]
     public function abrir(int $id): void
     {
         $this->cargarNota($id);
@@ -117,6 +116,7 @@ class NotaCreditoForm extends Component
             } else {
                 $this->addLinea();
                 $this->terminos_pago = 'Nota crédito';
+
                 if ($factura_id) {
                     $this->factura_id = $factura_id;
                     $this->precargarDesdeFactura($factura_id);
@@ -124,6 +124,10 @@ class NotaCreditoForm extends Component
             }
 
             $this->setCuentaCobroPorDefecto();
+
+            if ($this->socio_negocio_id) {
+                $this->refrescarFacturasCliente();
+            }
         } catch (Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo inicializar la nota crédito.')->duration(7000);
@@ -160,7 +164,7 @@ class NotaCreditoForm extends Component
                 ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
 
             $impuestosVentas = Impuesto::activos()
-                ->whereIn('aplica_sobre', ['VENTAS','VENTA','AMBOS','TODOS'])
+                ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
                 ->orderBy('prioridad')
                 ->orderBy('nombre')
                 ->get(['id','codigo','nombre','porcentaje','monto_fijo','incluido_en_precio']);
@@ -168,17 +172,6 @@ class NotaCreditoForm extends Component
             $condicionesPago = CondicionPago::query()
                 ->orderBy('nombre')
                 ->get(['id','nombre','tipo','plazo_dias']);
-
-            $facturasCliente = collect();
-            if ($this->socio_negocio_id) {
-                $facturasCliente = Factura::query()
-                    ->where('socio_negocio_id', (int)$this->socio_negocio_id)
-                    ->whereIn('estado', ['emitida','cerrado'])
-                    ->orderByDesc('fecha')
-                    ->orderByDesc('id')
-                    ->limit(100)
-                    ->get(['id','prefijo','numero','fecha','total']);
-            }
 
             return view('livewire.facturas.nota-credito-form', [
                 'clientes'         => $clientes,
@@ -192,7 +185,7 @@ class NotaCreditoForm extends Component
                 'impuestosVentas'  => $impuestosVentas,
                 'bloqueada'        => $this->bloqueada,
                 'condicionesPago'  => $condicionesPago,
-                'facturasCliente'  => $facturasCliente,
+                'facturasCliente'  => collect($this->facturasCliente),
             ]);
         } catch (Throwable $e) {
             report($e);
@@ -226,9 +219,7 @@ class NotaCreditoForm extends Component
     private function abortIfLocked(string $accion = 'editar'): bool
     {
         if ($this->bloqueada) {
-            PendingToast::create()
-                ->warning()->message("La nota está {$this->estado}; no se puede {$accion}.")
-                ->duration(7000);
+            PendingToast::create()->warning()->message("La nota está {$this->estado}; no se puede {$accion}.")->duration(7000);
             return true;
         }
         return false;
@@ -247,17 +238,15 @@ class NotaCreditoForm extends Component
 
     private function resolveCuentaIngresoParaProducto(Producto $p): ?int
     {
-        if (!empty($p->cuenta_ingreso_id)) {
-            return (int) $p->cuenta_ingreso_id;
-        }
+        if (!empty($p->cuenta_ingreso_id)) return (int) $p->cuenta_ingreso_id;
+
         $tipoId = $this->tipoIngresoId();
         if ($tipoId) {
             $cuenta = $p->relationLoaded('cuentas')
                 ? $p->cuentas->firstWhere('tipo_id', (int)$tipoId)
                 : $p->cuentas()->where('tipo_id', (int)$tipoId)->first();
-            if ($cuenta && $cuenta->plan_cuentas_id) {
-                return (int) $cuenta->plan_cuentas_id;
-            }
+
+            if ($cuenta && $cuenta->plan_cuentas_id) return (int) $cuenta->plan_cuentas_id;
         }
         return null;
     }
@@ -285,7 +274,7 @@ class NotaCreditoForm extends Component
             $this->refreshStockLinea($i);
             $this->resetErrorBag();
             $this->resetValidation();
-            $this->emit('$refresh'); // v2
+            $this->dispatch('$refresh');
             return;
         }
 
@@ -299,7 +288,7 @@ class NotaCreditoForm extends Component
             $i = (int) $m[1];
             if (isset($this->lineas[$i])) {
                 $this->normalizeLinea($this->lineas[$i]);
-                $this->emit('$refresh'); // v2
+                $this->dispatch('$refresh');
             }
             return;
         }
@@ -312,40 +301,138 @@ class NotaCreditoForm extends Component
         }
     }
 
-    public function updatedSocioNegocioId($val): void
-    {
-        if ($this->bloqueada) return;
+    /* === Cuando cambia CLIENTE: limpiar selección y cargar facturas === */
+public function updatedSocioNegocioId($val): void
+{
+    if ($this->bloqueada) return;
 
-        $id = (int) $val;
-        $this->factura_id = null;
-        $this->numeroFacturaSeleccionada = null;
+    $id = (int) $val;
+    Log::info('NC: cliente cambiado', ['clienteId' => $id]);
 
-        $this->setCuentaDesdeCliente($id);
-        $this->setPagoDesdeCliente($id);
+    // limpiar selección previa
+    $this->factura_id = null;
+    $this->numeroFacturaSeleccionada = null;
 
-        $socio = SocioNegocio::with('condicionPago')->find($id);
-        $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+    // setear cuenta / forma de pago desde el cliente
+    $this->setCuentaDesdeCliente($id);
+    $this->setPagoDesdeCliente($id);
 
-        $this->emit('$refresh'); // v2
-    }
+    // cargar facturas del cliente
+    $this->refrescarFacturasCliente();
 
+    // condición de pago por defecto (opcional)
+    $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')->find($id);
+    $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+
+    $this->dispatch('$refresh');
+}
+
+
+public function onClienteChange($val): void
+{
+    if ($this->bloqueada) return;
+
+    $id = (int) $val;
+
+    // limpiar selección previa
+    $this->factura_id = null;
+    $this->numeroFacturaSeleccionada = null;
+
+    // setear cuentas/forma de pago
+    $this->setCuentaDesdeCliente($id);
+    $this->setPagoDesdeCliente($id);
+
+    // cargar facturas del cliente
+    $this->refrescarFacturasCliente();
+
+    // id de condición de pago
+    $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')->find($id);
+    $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+
+    $this->dispatch('$refresh');
+}
+
+
+    /* === Cargar y mapear facturas del cliente === */
+  private function refrescarFacturasCliente(): void
+{
+    $this->facturasCliente = [];
+
+    $clienteId = (int) ($this->socio_negocio_id ?? 0);
+    if ($clienteId <= 0) return;
+
+    $rows = \App\Models\Factura\Factura::query()
+        ->where('socio_negocio_id', $clienteId)
+        // ->where('saldo', '>', 0) // ← si solo quieres con saldo
+        ->orderByDesc('fecha')
+        ->orderByDesc('id')
+        ->limit(300)
+        ->get(['id','prefijo','numero','fecha','total','saldo']);
+
+    Log::info('NC: facturas cargadas', [
+        'clienteId' => $clienteId,
+        'count'     => $rows->count(),
+    ]);
+
+    $this->facturasCliente = $rows->map(function ($f) {
+        $num    = (string)($f->numero ?? '');
+        $pref   = trim((string)($f->prefijo ?? ''));
+        $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
+
+        // fecha segura
+        $fecha = $f->fecha instanceof \Carbon\Carbon
+            ? $f->fecha->toDateString()
+            : (string) $f->fecha;
+
+        return [
+            'id'      => (int) $f->id,
+            'numero'  => $numFmt,
+            'fecha'   => $fecha,
+            'total'   => (float) ($f->total ?? 0),
+            'saldo'   => (float) ($f->saldo ?? 0),
+            'prefijo' => $pref,
+            'crudo'   => $num,
+        ];
+    })->all();
+
+    $this->dispatch('$refresh');
+}
+
+
+    /* === Cuando cambia FACTURA: precargar todo desde la factura === */
     public function updatedFacturaId($val): void
     {
         if ($this->bloqueada) return;
 
         $id = (int) $val;
-        if ($id > 0) {
+
+        if ($id <= 0) {
+            $this->numeroFacturaSeleccionada = null;
+            $this->dispatch('$refresh');
+            return;
+        }
+
+        try {
+            // Cargar TODO: cliente/moneda/líneas/imp, etc.
             $this->precargarDesdeFactura($id);
 
+            // Número formateado para mostrar
             $f = Factura::select('id','prefijo','numero')->find($id);
             $this->numeroFacturaSeleccionada = $f
                 ? (trim((string)$f->prefijo) !== '' ? ($f->prefijo.'-'.$f->numero) : (string)$f->numero)
                 : (string)$id;
-        } else {
-            $this->numeroFacturaSeleccionada = null;
-        }
 
-        $this->emit('$refresh'); // v2
+            // asegurar que queda seteado
+            $this->factura_id = $id;
+
+            $this->dispatch('$refresh');
+        } catch (\Throwable $e) {
+            report($e);
+            PendingToast::create()->error()->message('No se pudo cargar la factura seleccionada.')->duration(7000);
+            $this->factura_id = null;
+            $this->numeroFacturaSeleccionada = null;
+            $this->dispatch('$refresh');
+        }
     }
 
     public function updatedTipoPago($val): void
@@ -387,6 +474,10 @@ class NotaCreditoForm extends Component
                 return $l;
             })->toArray();
 
+            if ($this->socio_negocio_id) {
+                $this->refrescarFacturasCliente();
+            }
+
             $this->resetErrorBag();
             $this->resetValidation();
         } catch (Throwable $e) {
@@ -420,7 +511,12 @@ class NotaCreditoForm extends Component
                 return $l;
             })->toArray();
 
+            // Cuenta y forma de pago desde el cliente
             $this->setCuentaDesdeCliente($f->socio_negocio_id);
+            $this->setPagoDesdeCliente($f->socio_negocio_id);
+
+            // Facturas del cliente recién seteado
+            $this->refrescarFacturasCliente();
         } catch (Throwable $e) {
             report($e);
             PendingToast::create()->warning()->message('No se pudo precargar desde la factura.')->duration(7000);
@@ -444,7 +540,7 @@ class NotaCreditoForm extends Component
         ];
         $this->normalizeLinea($l);
         $this->lineas[] = $l;
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     public function removeLinea(int $i): void
@@ -452,7 +548,7 @@ class NotaCreditoForm extends Component
         if ($this->bloqueada) return;
         if (!isset($this->lineas[$i])) return;
         array_splice($this->lineas, $i, 1);
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     public function setProducto(int $i, $id): void
@@ -471,7 +567,7 @@ class NotaCreditoForm extends Component
                 $this->lineas[$i]['impuesto_id']       = null;
                 $this->lineas[$i]['impuesto_pct']      = 0.0;
                 $this->normalizeLinea($this->lineas[$i]);
-                $this->emit('$refresh'); // v2
+                $this->dispatch('$refresh');
                 return;
             }
 
@@ -487,7 +583,7 @@ class NotaCreditoForm extends Component
                 $this->lineas[$i]['impuesto_id']       = null;
                 $this->lineas[$i]['impuesto_pct']      = 0.0;
                 $this->normalizeLinea($this->lineas[$i]);
-                $this->emit('$refresh'); // v2
+                $this->dispatch('$refresh');
                 return;
             }
 
@@ -529,7 +625,7 @@ class NotaCreditoForm extends Component
             $this->lineas[$i]['impuesto_pct']    = $ivaPct;
 
             $this->normalizeLinea($this->lineas[$i]);
-            $this->emit('$refresh'); // v2
+            $this->dispatch('$refresh');
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
@@ -547,7 +643,7 @@ class NotaCreditoForm extends Component
         if (!$impId) {
             $this->lineas[$i]['impuesto_pct'] = 0.0;
             $this->normalizeLinea($this->lineas[$i]);
-            $this->emit('$refresh'); // v2
+            $this->dispatch('$refresh');
             return;
         }
 
@@ -555,7 +651,7 @@ class NotaCreditoForm extends Component
         if (!$imp || !$imp->activo) {
             $this->lineas[$i]['impuesto_pct'] = 0.0;
             $this->normalizeLinea($this->lineas[$i]);
-            $this->emit('$refresh'); // v2
+            $this->dispatch('$refresh');
             return;
         }
 
@@ -570,7 +666,7 @@ class NotaCreditoForm extends Component
         }
 
         $this->normalizeLinea($this->lineas[$i]);
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     public function aplicarFormaPago(string $tipo): void
@@ -620,7 +716,7 @@ class NotaCreditoForm extends Component
             ?: $this->idCuentaPorClase('CAJA_GENERAL')
             ?: $this->idCuentaPorClase('BANCOS');
 
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     private function setCuentaDesdeCliente(?int $clienteId): void
@@ -640,7 +736,7 @@ class NotaCreditoForm extends Component
                 ?: $this->idCuentaPorClase('BANCOS');
         }
 
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     private function idCuentaPorClase(string $clase): ?int
@@ -648,7 +744,7 @@ class NotaCreditoForm extends Component
         return PlanCuentas::query()
             ->where('clase_cuenta', $clase)
             ->where('cuenta_activa', 1)
-            ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
             ->value('id');
     }
 
@@ -700,9 +796,7 @@ class NotaCreditoForm extends Component
 
     protected function persistirBorrador(): void
     {
-        if ($this->bloqueada) {
-            throw new \RuntimeException('La nota está bloqueada y no se puede modificar.');
-        }
+        if ($this->bloqueada) throw new \RuntimeException('La nota está bloqueada y no se puede modificar.');
 
         DB::transaction(function () {
             $this->normalizarPagoAntesDeValidar();
@@ -810,7 +904,7 @@ class NotaCreditoForm extends Component
 
             $this->persistirBorrador();
             PendingToast::create()->success()->message('Nota crédito guardada (ID: '.$this->nota->id.').')->duration(5000);
-            $this->emit('refrescar-lista-notas'); // v2
+            $this->dispatch('refrescar-lista-notas');
         } catch (\Throwable $e) {
             Log::error('NC GUARDAR ERROR', ['msg' => $e->getMessage()]);
             $msg = config('app.debug') ? $e->getMessage() : 'No se pudo guardar.';
@@ -862,8 +956,7 @@ class NotaCreditoForm extends Component
             PendingToast::create()
                 ->success()->message('Nota crédito emitida (ID: ' . $this->nota->id . ', No: ' . $this->nota->prefijo . '-' . $this->nota->numero . ').')
                 ->duration(6000);
-            $this->emit('refrescar-lista-notas'); // v2
-
+            $this->dispatch('refrescar-lista-notas');
         } catch (\Throwable $e) {
             Log::error('NC EMITIR ERROR', ['msg' => $e->getMessage()]);
             $msg = config('app.debug') ? ($e->getMessage() ?? 'No se pudo emitir la Nota Crédito.') : 'No se pudo emitir la Nota Crédito.';
@@ -889,7 +982,7 @@ class NotaCreditoForm extends Component
             }, 3);
 
             PendingToast::create()->info()->message('Nota crédito anulada.')->duration(4500);
-            $this->emit('refrescar-lista-notas'); // v2
+            $this->dispatch('refrescar-lista-notas');
 
         } catch (\Throwable $e) {
             report($e);
@@ -907,18 +1000,14 @@ class NotaCreditoForm extends Component
         $s = Serie::find($serieId);
         if (!$s) return null;
 
-        $relleno = (int)($s->relleno ?? 0);
+        $len     = (int)($s->longitud ?? 6);
         $proximo = (int)($s->proximo ?? 0);
         $hasta   = (int)($s->hasta ?? 0);
         $prefijo = (string)($s->prefijo ?? '');
 
-        if ($hasta > 0 && $proximo > $hasta) {
-            return 'Serie agotada';
-        }
+        if ($hasta > 0 && $proximo > $hasta) return 'Serie agotada';
 
-        $num = $relleno > 0
-            ? str_pad((string)$proximo, $relleno, '0', STR_PAD_LEFT)
-            : (string)$proximo;
+        $num = $len > 0 ? str_pad((string)$proximo, $len, '0', STR_PAD_LEFT) : (string)$proximo;
 
         return trim($prefijo) !== '' ? "{$prefijo}-{$num}" : $num;
     }
@@ -933,7 +1022,7 @@ class NotaCreditoForm extends Component
 
         $pref = (string)($f->prefijo ?? '');
         $num  = (string)($f->numero ?? '');
-        return trim($prefijo = $pref) !== '' ? "{$prefijo}-{$num}" : $num;
+        return trim($pref) !== '' ? "{$pref}-{$num}" : $num;
     }
 
     public function getStockDeLinea(int $i): float
@@ -950,7 +1039,7 @@ class NotaCreditoForm extends Component
 
         if ($pid <= 0 || $bid <= 0) {
             $this->stockVista[$i] = 0.0;
-            $this->emit('$refresh'); // v2
+            $this->dispatch('$refresh');
             return;
         }
 
@@ -960,7 +1049,7 @@ class NotaCreditoForm extends Component
             ->value('stock');
 
         $this->stockVista[$i] = (float) ($stock ?? 0);
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     private function condicionPagoDe(SocioNegocio $s): ?array
@@ -1010,15 +1099,11 @@ class NotaCreditoForm extends Component
         $this->condicion_pago_id  = $socio?->condicionPago?->id ?: null;
 
         $this->aplicarFormaPago($this->tipo_pago);
-        $this->emit('$refresh'); // v2
+        $this->dispatch('$refresh');
     }
 
     public function abrirAplicacion(): void
     {
-        $this->emit('abrir-aplicacion-nota', [
-            'id' => $this->nota?->id,
-            'total' => $this->total,
-            'factura_id' => $this->factura_id,
-        ]); // v2
+        $this->dispatch('abrir-aplicacion-nota', id: $this->nota?->id, total: $this->total, factura_id: $this->factura_id);
     }
 }

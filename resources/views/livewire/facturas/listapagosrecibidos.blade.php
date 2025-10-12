@@ -1,5 +1,3 @@
-{{-- resources/views/livewire/facturas/listapagosrecibidos.blade.php --}}
-
 @once
   @push('styles')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -37,7 +35,19 @@
         </p>
       </div>
 
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-3">
+        {{-- Botón para registrar nuevo pago --}}
+        <button
+          wire:click="$dispatch('abrir-modal-pago', { facturaId: null })"
+          class="flex items-center gap-2 px-4 py-2 rounded-2xl 
+                 bg-gradient-to-r from-indigo-600 to-violet-600 
+                 hover:from-indigo-700 hover:to-violet-700 
+                 text-white font-semibold shadow-lg transition-all duration-150">
+          <i class="fa-solid fa-circle-plus"></i>
+          Registrar pago
+        </button>
+
+        {{-- Total general --}}
         <span
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/70 dark:bg-gray-800/60
                  font-semibold text-xs md:text-sm text-gray-700 dark:text-gray-200 shadow-sm">
@@ -67,8 +77,7 @@
       <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
         {{-- Buscar --}}
         <div class="md:col-span-4">
-          <label
-            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
             Buscar
           </label>
           <input type="text" wire:model.debounce.400ms="buscar"
@@ -115,13 +124,16 @@
         {{-- Botones --}}
         <div class="md:col-span-2 flex items-end gap-3">
           <button wire:click="$refresh"
-                  class="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gray-700 hover:bg-gray-800 text-white shadow">
+                  class="flex items-center gap-2 px-4 py-2 rounded-2xl 
+                         bg-gradient-to-r from-indigo-600 to-violet-600 
+                         hover:from-indigo-700 hover:to-violet-700 
+                         text-white font-semibold shadow transition-all duration-150">
             <i class="fa-solid fa-magnifying-glass"></i> Buscar
           </button>
           <button
             wire:click="$set('buscar','');$set('medio_pago_id',null);$set('fecha_inicio',null);$set('fecha_fin',null)"
-            class="px-4 py-2 rounded-2xl border-2 border-gray-200 dark:border-gray-700
-                   hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200">
+            class="px-4 py-2 rounded-2xl border-2 border-gray-300 text-gray-700 
+                   hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-all duration-150">
             Limpiar
           </button>
         </div>
@@ -130,28 +142,8 @@
 
     {{-- ===== LISTADO ===== --}}
     <section class="p-4 md:p-6" aria-label="Listado de pagos recibidos">
-      {{-- Móvil: Cards --}}
-      <div class="md:hidden space-y-3">
-        @forelse($pagos as $p)
-          <article class="rounded-2xl border border-gray-200 dark:border-gray-800 p-4 bg-white dark:bg-gray-900">
-            <div class="flex justify-between items-start mb-2">
-              <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">{{ $p->metodo ?: '—' }}</span>
-              <span class="text-base font-bold text-gray-900 dark:text-white">$ {{ number_format($p->monto,2,',','.') }}</span>
-            </div>
-            <div class="text-sm text-gray-700 dark:text-gray-200">
-              <p><span class="font-semibold">Factura:</span> {{ $p->factura?->numero_formateado ?? '—' }}</p>
-              <p><span class="font-semibold">Cliente:</span> {{ $p->factura?->cliente?->razon_social ?? '—' }}</p>
-              <p><span class="font-semibold">Fecha:</span> {{ $p->fecha->format('Y-m-d') }}</p>
-              <p><span class="font-semibold">Referencia:</span> {{ $p->referencia ?: '—' }}</p>
-            </div>
-          </article>
-        @empty
-          <div class="rounded-xl border border-dashed p-6 text-center text-gray-500">No hay pagos registrados.</div>
-        @endforelse
-      </div>
-
       {{-- Desktop: Tabla --}}
-      <div class="hidden md:block overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800">
+      <div class="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800">
         <table class="min-w-full text-sm">
           <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 uppercase text-xs tracking-wider">
             <tr>
@@ -186,6 +178,7 @@
         </table>
       </div>
 
+      {{-- Paginación --}}
       <div
         class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
         <div>
@@ -197,6 +190,9 @@
       </div>
     </section>
   </section>
+
+  {{-- Modal de registro de pago --}}
+  <livewire:facturas.pagos-factura />
 
   {{-- Loading --}}
   <div wire:loading.delay

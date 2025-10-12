@@ -1,7 +1,5 @@
 <?php
 
-// app/Livewire/Facturas/ListaFacturas.php
-
 namespace App\Livewire\Facturas;
 
 use App\Models\Factura\Factura;
@@ -16,7 +14,6 @@ class ListaFacturas extends Component
     public string $estado = 'todas';
     public int $perPage = 12;
 
-    // 👇 NUEVO: control del modal de vista previa
     public bool $showPreview = false;
     public ?int $previewId = null;
 
@@ -39,7 +36,6 @@ class ListaFacturas extends Component
              ->to(\App\Livewire\Facturas\EnviarFactura::class);
     }
 
-    // 👇 NUEVO: abrir/cerrar previsualización
     public function preview(int $id): void
     {
         $this->previewId   = $id;
@@ -49,6 +45,13 @@ class ListaFacturas extends Component
     public function closePreview(): void
     {
         $this->reset(['showPreview','previewId']);
+    }
+
+    // ✅ NUEVO: Abrir modal de pago desde lista de facturas
+    public function registrarPago(int $id): void
+    {
+        $this->dispatch('abrir-modal-pago', facturaId: $id)
+             ->to(\App\Livewire\Facturas\PagosFactura::class);
     }
 
     public function render()

@@ -103,7 +103,7 @@ class Listapagosrecibidos extends Component
             ->with([
                 'factura:id,numero,prefijo,serie_id,socio_negocio_id,fecha',
                 'factura.serie:id,prefijo,longitud',
-                'factura.cliente:id,razon_social,numero_documento',
+            'factura.cliente:id,razon_social,nit',
                 'medioPago:id,nombre,codigo',
             ])
             ->leftJoin('facturas', 'factura_pagos.factura_id', '=', 'facturas.id')

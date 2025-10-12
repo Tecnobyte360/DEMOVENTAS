@@ -170,6 +170,8 @@ public function abrir(?int $facturaId = null): void
         $this->diff     = round($this->fac_saldo - $this->sumMonto, 2);
     }
 
+
+
     public function guardarPago(): void
 {
     $this->validate();
@@ -177,12 +179,15 @@ public function abrir(?int $facturaId = null): void
     if (!$this->facturaId) return;
     $factura = Factura::findOrFail($this->facturaId);
 
-    // 🛑 Bloqueo: solo permitir pagos si la factura está emitida o parcialmente pagada
+    // 🧩 Lógica de bloqueo según tipo de factura
+    $esContado = $factura->tipo_pago === 'contado';
     $estadosPermitidos = ['emitida', 'parcialmente_pagada', 'pagada'];
-    if (!in_array($factura->estado, $estadosPermitidos)) {
+
+    // Si es contado y aún no está emitida → bloquear
+    if ($esContado && !in_array($factura->estado, $estadosPermitidos)) {
         \Masmerise\Toaster\PendingToast::create()
             ->warning()
-            ->message("No se puede registrar un pago porque la factura #{$factura->numero} aún no está emitida.")
+            ->message("No se puede registrar un pago porque la factura de contado #{$factura->numero} aún no está emitida.")
             ->duration(6000);
         return;
     }
@@ -223,10 +228,10 @@ public function abrir(?int $facturaId = null): void
                 $aplicado += $monto;
             }
 
-            // Un solo asiento para todos los medios
+            // Un solo asiento contable para todos los medios
             $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
 
-            // Vincular asiento a los pagos (si la columna existe)
+            // Vincular asiento a los pagos (si existe la columna)
             foreach ($pagos as $p) {
                 if ($p->isFillable('asiento_id') || Schema::hasColumn($p->getTable(), 'asiento_id')) {
                     $p->update(['asiento_id' => $asiento->id]);
@@ -235,6 +240,7 @@ public function abrir(?int $facturaId = null): void
 
             // Recalcular totales y cerrar si queda en cero
             $factura->refresh()->recalcularTotales()->save();
+
             if (round((float)$factura->saldo, 2) === 0.0) {
                 $factura->update([
                     'estado'         => 'cerrado',
@@ -250,17 +256,24 @@ public function abrir(?int $facturaId = null): void
         return;
     }
 
-    // Éxito
+    // ✅ Éxito
     $factura->refresh();
+
     if (round((float)$factura->saldo, 2) === 0.0 && $factura->tipo_pago === 'contado') {
         $this->dispatch('pago-registrado', facturaId: $factura->id)
             ->to(\App\Livewire\Facturas\FacturaForm::class);
     }
 
-    PendingToast::create()->success()->message('Pago registrado y contabilizado.')->duration(4000);
-    $this->dispatch('abrir-factura', id: $factura->id)->to(\App\Livewire\Facturas\FacturaForm::class);
+    PendingToast::create()->success()
+        ->message('Pago registrado y contabilizado.')
+        ->duration(4000);
+
+    $this->dispatch('abrir-factura', id: $factura->id)
+        ->to(\App\Livewire\Facturas\FacturaForm::class);
+
     $this->show = false;
 }
+
 
 
     /** Nombre del medio acotado al largo de tu columna 'metodo' (evita truncamiento). */

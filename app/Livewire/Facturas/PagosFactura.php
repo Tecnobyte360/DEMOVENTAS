@@ -271,4 +271,6 @@ public function abrir(?int $facturaId = null): void
         $texto = trim(($m->codigo ? "{$m->codigo} - " : '').($m->nombre ?? ''));
         return $texto !== '' ? mb_strimwidth($texto, 0, $maxLen, '') : null;
     }
+
+    
 }

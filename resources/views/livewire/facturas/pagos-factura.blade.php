@@ -42,24 +42,38 @@
       <div class="p-5 space-y-5">
 
         {{-- 🧾 Selector de factura (solo si no hay factura preseleccionada) --}}
-        @if(!$facturaId)
-          <div>
-            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-              Seleccionar factura
-            </label>
-            <select wire:model="facturaId"
-                    class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700 
-                           dark:bg-gray-800 dark:text-white px-3 focus:ring-2 focus:ring-indigo-500">
-              <option value="">— Selecciona una factura —</option>
-              @foreach(\App\Models\Factura\Factura::where('saldo', '>', 0)->orderByDesc('id')->get(['id','numero','total','saldo']) as $f)
-                <option value="{{ $f->id }}">
-                  #{{ $f->numero }} — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
-                </option>
-              @endforeach
-            </select>
-            @error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
-          </div>
-        @endif
+      @if(!$facturaId)
+  <div>
+    <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+      Seleccionar factura
+    </label>
+
+    <select wire:model="facturaId"
+            class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
+                   dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
+      <option value="">— Selecciona una factura —</option>
+      @foreach(\App\Models\Factura\Factura::with('socioNegocio')
+                ->where('saldo', '>', 0)
+                ->orderByDesc('id')
+                ->limit(100)
+                ->get(['id','numero','prefijo','fecha','total','saldo']) as $f)
+        <option value="{{ $f->id }}">
+          {{-- Ejemplo: FAVE001-0007 — Doblamos S.A.S — 2025-10-11 — Total: $4.500.000 — Saldo: $1.000.000 --}}
+          {{ $f->prefijo ? $f->prefijo.'-' : '' }}{{ str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT) }}
+          — {{ $f->socioNegocio?->razon_social ?? 'Sin cliente' }}
+          — {{ \Carbon\Carbon::parse($f->fecha)->format('Y-m-d') }}
+          — Total: ${{ number_format($f->total, 0, ',', '.') }}
+          — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
+        </option>
+      @endforeach
+    </select>
+
+    @error('facturaId')
+      <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+    @enderror
+  </div>
+@endif
+
 
         {{-- 🧮 Resumen de montos --}}
         <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-800/40">

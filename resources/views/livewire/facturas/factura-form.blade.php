@@ -480,14 +480,16 @@
     </section>
 
     {{-- ===== FOOTER STICKY DE ACCIONES ===== --}}
-    @php
-      $esContado    = ($tipo_pago === 'contado');
-      $totalVista   = round((float)($this->total ?? 0), 2);
-      $pagadoVista  = round((float)($factura->pagado ?? 0), 2);
-      $saldoVista   = max(round($totalVista - $pagadoVista, 2), 0);
-      $tieneFactura = (bool) ($factura?->id);
-      $bloqueaEmitir = $esContado && ( !$tieneFactura || $saldoVista > 0.01 );
-    @endphp
+  @php
+  $esContado    = ($tipo_pago === 'contado');
+  $esCredito    = ($tipo_pago === 'credito');
+  $totalVista   = round((float)($this->total ?? 0), 2);
+  $pagadoVista  = round((float)($factura->pagado ?? 0), 2);
+  $saldoVista   = max(round($totalVista - $pagadoVista, 2), 0);
+  $tieneFactura = (bool) ($factura?->id);
+  // 🔹 Bloquea emitir solo si es contado y no está completamente pagada
+  $bloqueaEmitir = $esContado && ( !$tieneFactura || $saldoVista > 0.01 );
+@endphp
 
     <footer
       class="sticky bottom-0 inset-x-0 bg-white/85 dark:bg-gray-900/85 backdrop-blur border-t border-gray-200 dark:border-gray-800"
@@ -667,19 +669,22 @@
                 </button>
 
                 <button type="button"
-                        class="h-11 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-                               transition ring-offset-2"
-                        :class="isNext('emitir') ? 'ring-4 ring-indigo-300 animate-pulse' : ''"
-                        wire:click="emitir"
-                        title="{{ $bloqueaEmitir ? 'Factura de contado: requiere pago total para emitir' : '' }}"
-                        @if($bloqueaEmitir) disabled @endif
-                        wire:loading.attr="disabled" wire:target="emitir,guardar"
-                        x-data="{e:@entangle('estado'), be:@js((bool)($bloqueaEmitir ?? false))}"
-                        :disabled="['anulada','cerrado'].includes(e) || be">
-                  <i class="fa-solid fa-stamp mr-2"></i>
-                  <span wire:loading.remove wire:target="emitir">Emitir</span>
-                  <span wire:loading wire:target="emitir">Emitiendo…</span>
-                </button>
+        class="h-11 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
+               transition ring-offset-2"
+        :class="isNext('emitir') ? 'ring-4 ring-indigo-300 animate-pulse' : ''"
+        wire:click="emitir"
+        {{-- 🔹 Solo muestra tooltip si es contado y requiere pago total --}}
+        title="{{ $esContado && $bloqueaEmitir ? 'Factura de contado: requiere pago total para emitir' : '' }}"
+        {{-- 🔹 Solo bloquea si es contado y tiene saldo --}}
+        @if($esContado && $bloqueaEmitir) disabled @endif
+        wire:loading.attr="disabled" wire:target="emitir,guardar"
+        x-data="{e:@entangle('estado'), be:@js((bool)($bloqueaEmitir ?? false)), contado:@js($esContado)}"
+        :disabled="['anulada','cerrado'].includes(e) || (contado && be)">
+  <i class="fa-solid fa-stamp mr-2"></i>
+  <span wire:loading.remove wire:target="emitir">Emitir</span>
+  <span wire:loading wire:target="emitir">Emitiendo…</span>
+</button>
+
               </div>
             </div>
           </div>

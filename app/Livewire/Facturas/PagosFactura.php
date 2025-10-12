@@ -77,38 +77,53 @@ class PagosFactura extends Component
             'medios'  => $this->medios,
         ]);
     }
+#[On('abrir-modal-pago')]
+public function abrir(?int $facturaId = null): void
+{
+    $this->facturaId = $facturaId;
+    $this->show      = true;
+    $this->fecha     = now()->toDateString();
+    $this->notas     = null;
 
-    #[On('abrir-modal-pago')]
-    public function abrir(int $facturaId): void
-    {
-        $this->facturaId = $facturaId;
-        $this->show      = true;
-        $this->fecha     = now()->toDateString();
-        $this->notas     = null;
+    // cargar medios
+    $this->medios = MedioPagos::query()
+        ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
+        ->orderBy('nombre')
+        ->get(['id','codigo','nombre']);
 
-        $this->medios = MedioPagos::query()
-            ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
-            ->orderBy('nombre')
-            ->get(['id','codigo','nombre']);
-
+    // si se abre desde una factura existente
+    if ($facturaId) {
         $f = Factura::findOrFail($facturaId);
         $this->fac_total  = (float) $f->total;
         $this->fac_pagado = (float) $f->pagado;
         $this->fac_saldo  = (float) $f->saldo;
 
         $medioDefault = $this->medios->first()?->id ?? null;
-
         $this->items = [[
             'medio_pago_id' => $medioDefault,
             'porcentaje'    => $this->fac_saldo > 0 ? 100 : 0,
             'monto'         => round($this->fac_saldo, 2),
             'referencia'    => null,
         ]];
-
-        $this->resetErrorBag();
-        $this->resetValidation();
-        $this->recalc();
     }
+    // si se abre sin factura (pago manual)
+    else {
+        $this->fac_total  = 0;
+        $this->fac_pagado = 0;
+        $this->fac_saldo  = 0;
+
+        $this->items = [[
+            'medio_pago_id' => null,
+            'porcentaje'    => 0,
+            'monto'         => 0,
+            'referencia'    => null,
+        ]];
+    }
+
+    $this->resetErrorBag();
+    $this->resetValidation();
+    $this->recalc();
+}
 
     public function cerrar(): void
     {

@@ -240,13 +240,15 @@
             Cancelar
           </button>
 
-          <button class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 
-                         disabled:opacity-50 disabled:cursor-not-allowed"
-                  wire:click="guardarPago"
-                  :disabled="$wire.diff !== 0 || !$wire.facturaId"
-                  :title="$wire.diff !== 0 ? 'La suma debe igualar el saldo' : (!$wire.facturaId ? 'Selecciona una factura' : 'Guardar pago')">
-            <i class="fa-solid fa-check mr-2"></i> Guardar pago
-          </button>
+         <button
+  class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+  wire:click="guardarPago"
+  :disabled="$wire.diff !== 0 || !['emitida','parcialmente_pagada','pagada'].includes($wire.factura?.estado ?? 'borrador')"
+  title="Solo se puede pagar una factura emitida"
+>
+  <i class="fa-solid fa-check mr-2"></i> Guardar pago
+</button>
+
         </div>
       </div>
     </div>

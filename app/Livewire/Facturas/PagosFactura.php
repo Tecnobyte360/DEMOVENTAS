@@ -171,86 +171,97 @@ public function abrir(?int $facturaId = null): void
     }
 
     public function guardarPago(): void
-    {
-        $this->validate();
+{
+    $this->validate();
 
-        if (!$this->facturaId) return;
-        $factura = Factura::findOrFail($this->facturaId);
+    if (!$this->facturaId) return;
+    $factura = Factura::findOrFail($this->facturaId);
 
-        if (round($this->sumMonto, 2) !== round($this->fac_saldo, 2)) {
-            PendingToast::create()->warning()
-                ->message('El total distribuido debe ser igual al saldo de la factura.')
-                ->duration(7000);
-            return;
-        }
-
-        try {
-            DB::transaction(function () use ($factura) {
-                /** @var \App\Models\Factura\FacturaPago[] $pagos */
-                $pagos    = [];
-                $aplicado = 0.0;
-
-                foreach ($this->items as $row) {
-                    $monto = (float) ($row['monto'] ?? 0);
-                    if ($monto <= 0) continue;
-
-                    /** @var FacturaPago $pago */
-                    $pago = $factura->registrarPago([
-                        'fecha'         => $this->fecha,
-                        'medio_pago_id' => (int)($row['medio_pago_id'] ?? 0),
-                        // evita truncamiento en DB (ajusta largo al de tu columna)
-                        'metodo'        => $this->safeMetodo((int)($row['medio_pago_id'] ?? 0)),
-                        'referencia'    => $row['referencia'] ?? null,
-                        'monto'         => $monto,
-                        'notas'         => $this->notas,
-                    ]);
-
-                    if (!$pago instanceof FacturaPago) {
-                        throw new \RuntimeException('registrarPago() no devolvió FacturaPago.');
-                    }
-
-                    $pagos[]   = $pago;
-                    $aplicado += $monto;
-                }
-
-                // Un solo asiento para todos los medios
-                $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
-
-                // opcional: dejar vínculo al asiento en cada pago (si existe la columna)
-                foreach ($pagos as $p) {
-                    if ($p->isFillable('asiento_id') || Schema::hasColumn($p->getTable(), 'asiento_id')) {
-                        $p->update(['asiento_id' => $asiento->id]);
-                    }
-                }
-
-                // Recalcular y cerrar si quedó en cero
-                $factura->refresh()->recalcularTotales()->save();
-                if (round((float)$factura->saldo, 2) === 0.0) {
-                    $factura->update([
-                        'estado'         => 'cerrado',
-                        'monto_aplicado' => round((float)($factura->monto_aplicado ?? 0) + $aplicado, 2),
-                    ]);
-                }
-            }, 3);
-        } catch (\Throwable $e) {
-            report($e);
-            PendingToast::create()->error()
-                ->message('No se pudo registrar y contabilizar el pago: '.$e->getMessage())
-                ->duration(9000);
-            return;
-        }
-
-        // Éxito
-        $factura->refresh();
-        if (round((float)$factura->saldo, 2) === 0.0 && $factura->tipo_pago === 'contado') {
-            $this->dispatch('pago-registrado', facturaId: $factura->id)
-                ->to(\App\Livewire\Facturas\FacturaForm::class);
-        }
-
-        PendingToast::create()->success()->message('Pago registrado y contabilizado.')->duration(4000);
-        $this->dispatch('abrir-factura', id: $factura->id)->to(\App\Livewire\Facturas\FacturaForm::class);
-        $this->show = false;
+    // 🛑 Bloqueo: solo permitir pagos si la factura está emitida o parcialmente pagada
+    $estadosPermitidos = ['emitida', 'parcialmente_pagada', 'pagada'];
+    if (!in_array($factura->estado, $estadosPermitidos)) {
+        \Masmerise\Toaster\PendingToast::create()
+            ->warning()
+            ->message("No se puede registrar un pago porque la factura #{$factura->numero} aún no está emitida.")
+            ->duration(6000);
+        return;
     }
+
+    // Validar que el total distribuido sea igual al saldo
+    if (round($this->sumMonto, 2) !== round($this->fac_saldo, 2)) {
+        PendingToast::create()->warning()
+            ->message('El total distribuido debe ser igual al saldo de la factura.')
+            ->duration(7000);
+        return;
+    }
+
+    try {
+        DB::transaction(function () use ($factura) {
+            /** @var \App\Models\Factura\FacturaPago[] $pagos */
+            $pagos    = [];
+            $aplicado = 0.0;
+
+            foreach ($this->items as $row) {
+                $monto = (float) ($row['monto'] ?? 0);
+                if ($monto <= 0) continue;
+
+                /** @var FacturaPago $pago */
+                $pago = $factura->registrarPago([
+                    'fecha'         => $this->fecha,
+                    'medio_pago_id' => (int)($row['medio_pago_id'] ?? 0),
+                    'metodo'        => $this->safeMetodo((int)($row['medio_pago_id'] ?? 0)),
+                    'referencia'    => $row['referencia'] ?? null,
+                    'monto'         => $monto,
+                    'notas'         => $this->notas,
+                ]);
+
+                if (!$pago instanceof FacturaPago) {
+                    throw new \RuntimeException('registrarPago() no devolvió FacturaPago.');
+                }
+
+                $pagos[]   = $pago;
+                $aplicado += $monto;
+            }
+
+            // Un solo asiento para todos los medios
+            $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
+
+            // Vincular asiento a los pagos (si la columna existe)
+            foreach ($pagos as $p) {
+                if ($p->isFillable('asiento_id') || Schema::hasColumn($p->getTable(), 'asiento_id')) {
+                    $p->update(['asiento_id' => $asiento->id]);
+                }
+            }
+
+            // Recalcular totales y cerrar si queda en cero
+            $factura->refresh()->recalcularTotales()->save();
+            if (round((float)$factura->saldo, 2) === 0.0) {
+                $factura->update([
+                    'estado'         => 'cerrado',
+                    'monto_aplicado' => round((float)($factura->monto_aplicado ?? 0) + $aplicado, 2),
+                ]);
+            }
+        }, 3);
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()->error()
+            ->message('No se pudo registrar y contabilizar el pago: '.$e->getMessage())
+            ->duration(9000);
+        return;
+    }
+
+    // Éxito
+    $factura->refresh();
+    if (round((float)$factura->saldo, 2) === 0.0 && $factura->tipo_pago === 'contado') {
+        $this->dispatch('pago-registrado', facturaId: $factura->id)
+            ->to(\App\Livewire\Facturas\FacturaForm::class);
+    }
+
+    PendingToast::create()->success()->message('Pago registrado y contabilizado.')->duration(4000);
+    $this->dispatch('abrir-factura', id: $factura->id)->to(\App\Livewire\Facturas\FacturaForm::class);
+    $this->show = false;
+}
+
 
     /** Nombre del medio acotado al largo de tu columna 'metodo' (evita truncamiento). */
     private function safeMetodo(int $medioId, int $maxLen = 60): ?string

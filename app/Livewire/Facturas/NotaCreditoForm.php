@@ -334,6 +334,9 @@ public function onClienteChange($val): void
 
     $id = (int) $val;
 
+    // 👇 IMPORTANTE: sincroniza la propiedad que usa refrescarFacturasCliente()
+    $this->socio_negocio_id = $id;
+
     // limpiar selección previa
     $this->factura_id = null;
     $this->numeroFacturaSeleccionada = null;
@@ -342,7 +345,7 @@ public function onClienteChange($val): void
     $this->setCuentaDesdeCliente($id);
     $this->setPagoDesdeCliente($id);
 
-    // cargar facturas del cliente
+    // cargar facturas del cliente (ahora sí con el id correcto)
     $this->refrescarFacturasCliente();
 
     // id de condición de pago
@@ -352,6 +355,42 @@ public function onClienteChange($val): void
     $this->dispatch('$refresh');
 }
 
+
+public function onFacturaChange($val): void
+{
+    if ($this->bloqueada) return;
+
+    $id = (int) $val;
+    if ($id <= 0) {
+        $this->numeroFacturaSeleccionada = null;
+        $this->factura_id = null;
+        $this->dispatch('$refresh');
+        return;
+    }
+
+    try {
+        // Cargar cliente/moneda/líneas/imp, etc.
+        $this->precargarDesdeFactura($id);
+
+        // Mostrar número formateado
+        $f = Factura::select('id','prefijo','numero')->find($id);
+        $this->numeroFacturaSeleccionada = $f
+            ? (trim((string)$f->prefijo) !== '' ? ($f->prefijo.'-'.$f->numero) : (string)$f->numero)
+            : (string)$id;
+
+        // Asegurar propiedad seteada
+        $this->factura_id = $id;
+
+        $this->dispatch('$refresh');
+        PendingToast::create()->info()->message('Productos de la factura cargados.')->duration(3500);
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()->error()->message('No se pudo cargar la factura seleccionada.')->duration(7000);
+        $this->factura_id = null;
+        $this->numeroFacturaSeleccionada = null;
+        $this->dispatch('$refresh');
+    }
+}
 
     /* === Cargar y mapear facturas del cliente === */
   private function refrescarFacturasCliente(): void

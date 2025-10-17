@@ -17,9 +17,10 @@
           Cliente <span class="text-red-500">*</span>
         </label>
 
-     <select
+    <select
   wire:key="cliente-select"
   wire:model.number="socio_negocio_id"
+  wire:change="onClienteChange($event.target.value)"
   class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 ..."
 >
   <option value="">— Seleccione —</option>
@@ -28,6 +29,9 @@
   @endforeach
 </select>
 
+@error('socio_negocio_id')
+  <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+@enderror
 
 
         @error('socio_negocio_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror>

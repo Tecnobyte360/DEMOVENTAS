@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Facturas;
 
+use App\Models\Bodega;
 use Livewire\Component;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,7 @@ use App\Models\Serie\Serie;
 use App\Models\Factura\Factura;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
-use App\Models\Bodegas;
+
 use App\Models\CondicionPago\CondicionPago;
 use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Productos\ProductoCuentaTipo;
@@ -182,7 +183,7 @@ public function render()
         }
 
         // 4) Bodegas
-        $bodegas = Bodegas::orderBy('nombre')->get();
+        $bodegas = Bodega::orderBy('nombre')->get();
 
         // 5) Cuentas
         $cuentasIngresos = PlanCuentas::query()

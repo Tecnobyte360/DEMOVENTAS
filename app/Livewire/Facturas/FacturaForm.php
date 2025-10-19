@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Facturas;
 
+use App\Models\Bodega;
 use Livewire\Component;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
@@ -176,7 +177,7 @@ class FacturaForm extends Component
                 'cuentas.tipo:id,codigo,nombre',
             ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
 
-            $bodegas = bodegas::orderBy('nombre')->get();
+            $bodegas = Bodega::orderBy('nombre')->get();
 
             $cuentasIngresos = PlanCuentas::query()
                 ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
@@ -879,7 +880,7 @@ class FacturaForm extends Component
 
     private function nombreBodega(int $bodegaId): string
     {
-        $b = bodegas::query()->select('id','nombre','codigo')->find($bodegaId);
+        $b = Bodega::query()->select('id','nombre','codigo')->find($bodegaId);
         if (!$b) return 'Bodega #'.$bodegaId;
 
         return ($b->codigo ? $b->codigo.' - ' : '').($b->nombre ?? 'Bodega');
@@ -924,7 +925,7 @@ class FacturaForm extends Component
 
                         if ($stock + 1e-6 < $req) {
                             $prod = \App\Models\Productos\Producto::select('codigo', 'nombre')->find($pid);
-                            $bod  = \App\Models\bodegas::select('nombre')->find($bid);
+                            $bod  = Bodega::select('nombre')->find($bid);
 
                             $codigo   = $prod?->codigo ? (string)$prod->codigo : 's/código';
                             $nombre   = $prod?->nombre ? (string)$prod->nombre : 'Producto';

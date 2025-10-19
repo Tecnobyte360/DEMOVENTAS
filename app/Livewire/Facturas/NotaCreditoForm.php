@@ -144,15 +144,17 @@ class NotaCreditoForm extends Component
         }
     }
 
-  public function render()
+    
+public function render()
 {
     try {
+        // 1) Clientes
         $clientes = SocioNegocio::clientes()
             ->orderBy('razon_social')
             ->take(200)
             ->get();
 
-        // Top de productos para el selector
+        // 2) Productos base
         $productos = Producto::with([
             'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
             'cuentaIngreso:id,codigo,nombre',
@@ -160,18 +162,13 @@ class NotaCreditoForm extends Component
             'cuentas.cuentaPUC:id,codigo,nombre',
             'cuentas.tipo:id,codigo,nombre',
         ])
-            ->where('activo', 1)
-            ->orderBy('nombre')
-            ->take(300)
-            ->get();
+        ->where('activo', 1)
+        ->orderBy('nombre')
+        ->take(300)
+        ->get();
 
-        // Incluir productos ya cargados en líneas (aunque inactivos)
-        $idsSeleccionados = collect($this->lineas)
-            ->pluck('producto_id')
-            ->filter()
-            ->unique()
-            ->values();
-
+        // 3) Extra seleccionados
+        $idsSeleccionados = collect($this->lineas)->pluck('producto_id')->filter()->unique()->values();
         if ($idsSeleccionados->isNotEmpty()) {
             $extra = Producto::with([
                 'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
@@ -184,32 +181,33 @@ class NotaCreditoForm extends Component
             $productos = $productos->merge($extra)->unique('id')->values();
         }
 
+        // 4) Bodegas
         $bodegas = Bodegas::orderBy('nombre')->get();
 
+        // 5) Cuentas
         $cuentasIngresos = PlanCuentas::query()
             ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
             ->where('cuenta_activa', 1)
             ->orderBy('codigo')
             ->get(['id', 'codigo', 'nombre']);
 
-        $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)
-            ->where('titulo', 0)
+        $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
             ->where('clase_cuenta', 'CXC_CLIENTES')
             ->orderBy('codigo')
             ->get(['id', 'codigo', 'nombre']);
 
-        $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)
-            ->where('titulo', 0)
+        $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
             ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
+            ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
 
+        // 6) Impuestos
         $impuestosVentas = Impuesto::activos()
             ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
             ->orderBy('prioridad')
             ->orderBy('nombre')
             ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
 
+        // 7) Condiciones de pago
         $condicionesPago = CondicionPago::orderBy('nombre')
             ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
 
@@ -228,21 +226,17 @@ class NotaCreditoForm extends Component
             'facturasCliente'  => collect($this->facturasCliente),
         ]);
 
-    } catch (Throwable $e) {
-        // Registrar el error completo en logs
-        report($e);
+    } catch (\Throwable $e) {
+        // Log detallado con “pistas”
+        Log::error('NotaCreditoForm render() fallo', [
+            'msg'   => $e->getMessage(),
+            'code'  => $e->getCode(),
+            'file'  => $e->getFile(),
+            'line'  => $e->getLine(),
+            'trace' => substr($e->getTraceAsString(), 0, 2000), // recorta para no saturar
+        ]);
 
-        // Mostrar mensaje amigable con detalle del error
-        $mensaje = "No se pudieron cargar los datos auxiliares.";
-        if (app()->environment('local') || app()->environment('development')) {
-            // En desarrollo muestra detalle del error
-            $mensaje .= ' Detalle: ' . $e->getMessage();
-        }
-
-        PendingToast::create()
-            ->error()
-            ->message($mensaje)
-            ->duration(8000);
+        PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
 
         return view('livewire.facturas.nota-credito-form', [
             'clientes'         => collect(),
@@ -260,6 +254,7 @@ class NotaCreditoForm extends Component
         ]);
     }
 }
+
 
     /* ===== BLOQUEO / SOLO LECTURA ===== */
 

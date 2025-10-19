@@ -121,7 +121,7 @@
                    bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 
                    focus:ring-violet-300/60"
           >
-            <option value="">-- Seleccione condición --</option>
+    
             @foreach($condicionesPago as $cond)
               <option value="{{ $cond->id }}">
                 {{ $cond->nombre }}
@@ -657,33 +657,42 @@
                   <span>Pagos</span>
                 </button>
 
-                <button type="button"
-                        class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-                               transition ring-offset-2"
-                        :class="isNext('guardar') ? 'ring-4 ring-slate-300 animate-pulse' : ''"
-                        wire:click="guardar" wire:loading.attr="disabled" wire:target="guardar,emitir"
-                        x-data="{e:@entangle('estado')}" :disabled="['anulada','cerrado'].includes(e)">
-                  <i class="fa-solid fa-floppy-disk mr-2"></i>
-                  <span wire:loading.remove wire:target="guardar">Factura Borrador</span>
-                  <span wire:loading wire:target="guardar">Guardando…</span>
-                </button>
-
-                <button type="button"
-        class="h-11 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-               transition ring-offset-2"
-        :class="isNext('emitir') ? 'ring-4 ring-indigo-300 animate-pulse' : ''"
-        wire:click="emitir"
-        {{-- 🔹 Solo muestra tooltip si es contado y requiere pago total --}}
-        title="{{ $esContado && $bloqueaEmitir ? 'Factura de contado: requiere pago total para emitir' : '' }}"
-        {{-- 🔹 Solo bloquea si es contado y tiene saldo --}}
-        @if($esContado && $bloqueaEmitir) disabled @endif
-        wire:loading.attr="disabled" wire:target="emitir,guardar"
-        x-data="{e:@entangle('estado'), be:@js((bool)($bloqueaEmitir ?? false)), contado:@js($esContado)}"
-        :disabled="['anulada','cerrado'].includes(e) || (contado && be)">
-  <i class="fa-solid fa-stamp mr-2"></i>
-  <span wire:loading.remove wire:target="emitir">Emitir</span>
-  <span wire:loading wire:target="emitir">Emitiendo…</span>
+            {{-- Botón Guardar (sin cambios relevantes) --}}
+          <button type="button"
+  class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
+  :class="isNext('guardar') ? 'ring-4 ring-slate-300 animate-pulse' : ''"
+  wire:click="guardar"
+  wire:loading.attr="disabled"
+  wire:target="guardar,emitir"
+  x-data="{ e: @entangle('estado') }"
+  :disabled="['anulada','cerrado'].includes(e)">
+  <i class="fa-solid fa-floppy-disk mr-2"></i>
+  <span wire:loading.remove wire:target="guardar">Factura Borrador</span>
+  <span wire:loading wire:target="guardar">Guardando…</span>
 </button>
+
+            {{-- Botón Emitir (modificado) --}}
+            <button type="button"
+                x-data="{ 
+                  e: @entangle('estado'), 
+                  contado: @js($esContado), 
+                  bloquea: @js((bool)($bloqueaEmitir ?? false)) 
+                }"
+                wire:click="emitir"
+                wire:loading.attr="disabled"
+                wire:target="emitir,guardar"
+                :disabled="['anulada','cerrado'].includes(e) || contado"
+                :class="[
+                  'h-11 px-4 rounded-2xl transition ring-offset-2 shadow disabled:opacity-50 disabled:cursor-not-allowed',
+                  (contado) 
+                    ? 'bg-gray-400 text-gray-100 cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white'
+                ]"
+                title="{{ $esContado ? 'Factura de contado: se emite automáticamente al registrar el pago' : '' }}">
+              <i class="fa-solid fa-stamp mr-2"></i>
+              <span wire:loading.remove wire:target="emitir">Emitir</span>
+              <span wire:loading wire:target="emitir">Emitiendo…</span>
+            </button>
 
               </div>
             </div>

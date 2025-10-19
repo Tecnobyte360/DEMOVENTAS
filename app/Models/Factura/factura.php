@@ -195,4 +195,5 @@ class Factura extends Model
             $this->recalcularTotales()->save();
         });
     }
+    
 }

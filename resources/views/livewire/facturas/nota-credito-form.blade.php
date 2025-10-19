@@ -12,30 +12,26 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {{-- Cliente --}}
-      <section>
-        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
-          Cliente <span class="text-red-500">*</span>
-        </label>
+     <section>
+  <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+    Cliente <span class="text-red-500">*</span>
+  </label>
 
-    <select
-  wire:key="cliente-select"
-  wire:model.number="socio_negocio_id"
-  wire:change="onClienteChange($event.target.value)"
-  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 ..."
->
-  <option value="">— Seleccione —</option>
-  @foreach($clientes as $c)
-    <option value="{{ $c->id }}">{{ $c->razon_social }} ({{ $c->nit }})</option>
-  @endforeach
-</select>
+  <select
+    wire:key="cliente-select-{{ $socio_negocio_id ?? 'x' }}"
+    wire:model.live.number="socio_negocio_id"
+    class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+  >
+    <option value="">— Seleccione —</option>
+    @foreach($clientes as $c)
+      <option value="{{ $c->id }}">{{ $c->razon_social }} ({{ $c->nit }})</option>
+    @endforeach
+  </select>
+  @error('socio_negocio_id')
+    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+  @enderror
+</section>
 
-@error('socio_negocio_id')
-  <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-@enderror
-
-
-        @error('socio_negocio_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror>
-      </section>
 
       {{-- Serie --}}
       <section>
@@ -57,9 +53,7 @@
             </span>
           @endif
         </div>
-        @if($this->proximo_preview)
-          <p class="mt-2 text-xs text-slate-500">Siguiente: <strong>{{ $this->proximo_preview }}</strong></p>
-        @endif
+       
       </section>
 
       {{-- Fechas / Motivo --}}
@@ -82,36 +76,36 @@
       <section>
         <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Factura a afectar (opcional)</label>
 
-        <select
-          wire:model.number="factura_id"
-          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
-        >
-          <option value="">— Ninguna —</option>
-          @foreach($facturasCliente as $f)
-            <option value="{{ $f['id'] }}">
-              #{{ $f['numero'] }} · {{ $f['fecha'] }} · $ {{ number_format($f['total'], 0) }}
-            </option>
-          @endforeach
+        {{-- Loader mientras carga facturas del cliente --}}
+        <div class="mb-2 hidden" wire:loading.class.remove="hidden" wire:target="socio_negocio_id">
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+            <i class="fa-solid fa-spinner fa-spin"></i> Cargando facturas del cliente…
+          </span>
+        </div>
+
+       <select
+  wire:model.number="factura_id"
+  wire:key="facturas-select-{{ $socio_negocio_id ?? 0 }}-{{ count($facturasCliente) }}"
+  wire:change="onFacturaElegida($event.target.value)"
+  @disabled(empty($socio_negocio_id))
+  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-60"
+>
+          @if(empty($socio_negocio_id))
+            <option value="">— Seleccione un cliente primero —</option>
+          @else
+            <option value="">— Ninguna —</option>
+            @forelse($facturasCliente as $f)
+              <option value="{{ $f['id'] }}">
+                #{{ $f['numero'] }} · {{ $f['fecha'] }} · $ {{ number_format($f['total'], 0) }}
+                @if($f['saldo'] > 0) · Saldo: $ {{ number_format($f['saldo'], 0) }} @endif
+              </option>
+            @empty
+              <option value="">(Este cliente no tiene facturas)</option>
+            @endforelse
+          @endif
         </select>
 
-        {{-- Resumen de factura seleccionada --}}
-        @php
-          $fid = (int)($factura_id ?? 0);
-          $fRow = $fid ? collect($facturasCliente)->firstWhere('id',$fid) : null;
-        @endphp
-        @if($fRow)
-          <div class="mt-2 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-900/20 px-3 py-2 text-xs text-indigo-900 dark:text-indigo-200">
-            <div class="flex items-center gap-2">
-              <i class="fa-solid fa-file-invoice"></i>
-              <span class="font-semibold">#{{ $fRow['numero'] }}</span>
-              <span>· Fecha: {{ $fRow['fecha'] }}</span>
-              <span>· Total: $ {{ number_format($fRow['total'], 2) }}</span>
-              <span>· Saldo: $ {{ number_format($fRow['saldo'], 2) }}</span>
-            </div>
-          </div>
-        @endif
-
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Si eliges una factura, podrás <strong>aplicar</strong> esta NC a su saldo.</p>
+        
       </section>
 
       {{-- Cuenta de devolución / CxC --}}
@@ -166,7 +160,12 @@
 
   {{-- ===== PASO 2: Líneas ===== --}}
   <section class="p-6 md:p-8" aria-label="Líneas de la nota crédito">
-    <section class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-x-auto shadow" aria-label="Tabla de líneas">
+    <section
+      class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-x-auto shadow"
+      aria-label="Tabla de líneas"
+      {{-- ✅ key alto nivel para reconstruir tabla cuando cambia factura o cantidad de líneas --}}
+      wire:key="tabla-lineas-{{ $factura_id ?? 0 }}-{{ count($lineas) }}"
+    >
       <table class="min-w-full text-sm">
         <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
           <tr>
@@ -186,7 +185,11 @@
           </tr>
         </thead>
 
-        <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
+        <tbody
+          class="divide-y divide-gray-200 dark:divide-gray-800"
+          {{-- ✅ key del tbody para forzar diff limpio en cambios de factura/lineas --}}
+          wire:key="tbody-lineas-{{ $factura_id ?? 0 }}-{{ count($lineas) }}"
+        >
           @forelse($lineas as $i => $l)
             @php
               $pid = (int)($lineas[$i]['producto_id'] ?? 0);
@@ -197,14 +200,17 @@
               $imgUrl   = $prodSel?->imagen_url ?? null;
             @endphp
 
-            <tr wire:key="linea-{{ $i }}" class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+            <tr
+              wire:key="linea-{{ $i }}-{{ $lineas[$i]['producto_id'] ?? 'x' }}-{{ $lineas[$i]['bodega_id'] ?? 'x' }}"
+              class="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+            >
               {{-- Imagen --}}
               <td class="px-4 py-3 w-[72px]">
                 <div class="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 grid place-items-center overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700">
                   @if($imgUrl)
                     <button type="button" class="group relative h-full w-full"
-                      @click.stop="$dispatch('preview-image', { src: '{{ $imgUrl }}', title: '{{ e($prodSel->nombre ?? 'Producto') }}' })"
-                      aria-label="Ver imagen de {{ $prodSel->nombre ?? 'producto' }}" title="Ver imagen">
+                            @click.stop="$dispatch('preview-image', { src: '{{ $imgUrl }}', title: '{{ e($prodSel->nombre ?? 'Producto') }}' })"
+                            aria-label="Ver imagen de {{ $prodSel->nombre ?? 'producto' }}" title="Ver imagen">
                       <img src="{{ $imgUrl }}" class="h-full w-full object-cover transition group-hover:scale-105" alt="img-{{ $prodSel->nombre ?? 'producto' }}"/>
                       <span class="pointer-events-none absolute inset-0 ring-2 ring-indigo-400/0 group-hover:ring-indigo-400/60 transition"></span>
                       <span class="pointer-events-none absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition">Ver</span>
@@ -220,7 +226,7 @@
               {{-- Producto --}}
               <td class="px-4 py-3 min-w-[260px]">
                 <select
-                  data-first-product
+                  wire:key="prod-{{ $i }}-{{ $lineas[$i]['producto_id'] ?? 'x' }}"
                   wire:model.number="lineas.{{ $i }}.producto_id"
                   wire:change="setProducto({{ $i }}, $event.target.value)"
                   class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
@@ -293,24 +299,6 @@
                     <span class="text-sm italic">Consultando stock…</span>
                   </div>
 
-                  @if (!$pid || !$bid)
-                    <div
-                      wire:loading.remove
-                      wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                      class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 border border-dashed border-gray-300 dark:border-gray-600">
-                      <i class="fas fa-info-circle"></i>
-                      <span class="text-sm italic">Seleccione producto y bodega</span>
-                    </div>
-                  @else
-                    @php $stock = $this->getStockDeLinea($i); @endphp
-                    <div
-                      wire:loading.remove
-                      wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                      class="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-50 border border-green-300 text-green-700">
-                      <i class="fas fa-warehouse"></i>
-                      <span class="text-sm font-semibold">Stock actual: {{ number_format($stock, 0) }}</span>
-                    </div>
-                  @endif
                 </div>
               </td>
 

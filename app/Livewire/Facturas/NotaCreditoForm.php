@@ -52,6 +52,10 @@ class NotaCreditoForm extends Component
     /** Facturas reactivas del cliente seleccionado */
     public array $facturasCliente = [];
 
+    /** === Auto abrir Aplicación === */
+    public bool $autoAbrirAplicacion = true;
+    public bool $aplicacionLanzada = false;
+
     protected $rules = [
         'serie_id'                   => 'required|integer|exists:series,id',
         'socio_negocio_id'           => 'required|integer|exists:socio_negocios,id',
@@ -118,6 +122,7 @@ class NotaCreditoForm extends Component
                 $this->terminos_pago = 'Nota crédito';
 
                 if ($factura_id) {
+                    // precarga inicial (no dispara updatedFacturaId)
                     $this->factura_id = $factura_id;
                     $this->precargarDesdeFactura($factura_id);
                 }
@@ -128,6 +133,11 @@ class NotaCreditoForm extends Component
             if ($this->socio_negocio_id) {
                 $this->refrescarFacturasCliente();
             }
+
+            // Si venimos con factura en la URL y está habilitado, abrir Aplicación
+            if ($this->factura_id && $this->autoAbrirAplicacion) {
+                $this->intentarAbrirAplicacionAuto();
+            }
         } catch (Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo inicializar la nota crédito.')->duration(7000);
@@ -137,15 +147,42 @@ class NotaCreditoForm extends Component
     public function render()
     {
         try {
-            $clientes = SocioNegocio::clientes()->orderBy('razon_social')->take(200)->get();
+            $clientes = SocioNegocio::clientes()
+                ->orderBy('razon_social')
+                ->take(200)
+                ->get();
 
+            // Top de productos para el selector
             $productos = Producto::with([
                 'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
                 'cuentaIngreso:id,codigo,nombre',
                 'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                 'cuentas.cuentaPUC:id,codigo,nombre',
                 'cuentas.tipo:id,codigo,nombre',
-            ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
+            ])
+                ->where('activo', 1)
+                ->orderBy('nombre')
+                ->take(300)
+                ->get();
+
+            // Incluir productos ya cargados en líneas (aunque inactivos)
+            $idsSeleccionados = collect($this->lineas)
+                ->pluck('producto_id')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($idsSeleccionados->isNotEmpty()) {
+                $extra = Producto::with([
+                    'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+                    'cuentaIngreso:id,codigo,nombre',
+                    'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+                    'cuentas.cuentaPUC:id,codigo,nombre',
+                    'cuentas.tipo:id,codigo,nombre',
+                ])->whereIn('id', $idsSeleccionados)->get();
+
+                $productos = $productos->merge($extra)->unique('id')->values();
+            }
 
             $bodegas = Bodegas::orderBy('nombre')->get();
 
@@ -157,7 +194,8 @@ class NotaCreditoForm extends Component
 
             $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
                 ->where('clase_cuenta', 'CXC_CLIENTES')
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre']);
 
             $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
                 ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
@@ -167,11 +205,11 @@ class NotaCreditoForm extends Component
                 ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
                 ->orderBy('prioridad')
                 ->orderBy('nombre')
-                ->get(['id','codigo','nombre','porcentaje','monto_fijo','incluido_en_precio']);
+                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
 
             $condicionesPago = CondicionPago::query()
                 ->orderBy('nombre')
-                ->get(['id','nombre','tipo','plazo_dias']);
+                ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
 
             return view('livewire.facturas.nota-credito-form', [
                 'clientes'         => $clientes,
@@ -302,174 +340,184 @@ class NotaCreditoForm extends Component
     }
 
     /* === Cuando cambia CLIENTE: limpiar selección y cargar facturas === */
-public function updatedSocioNegocioId($val): void
+  public function updatedSocioNegocioId($val): void
 {
     if ($this->bloqueada) return;
 
     $id = (int) $val;
-    Log::info('NC: cliente cambiado', ['clienteId' => $id]);
 
-    // limpiar selección previa
+    // Limpia selección anterior de factura
     $this->factura_id = null;
     $this->numeroFacturaSeleccionada = null;
+    $this->aplicacionLanzada = false;
 
-    // setear cuenta / forma de pago desde el cliente
+    // Ajusta cuentas y condiciones desde el cliente
     $this->setCuentaDesdeCliente($id);
     $this->setPagoDesdeCliente($id);
 
-    // cargar facturas del cliente
+    // 🔥 Cargar facturas del cliente inmediatamente
     $this->refrescarFacturasCliente();
 
-    // condición de pago por defecto (opcional)
-    $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')->find($id);
-    $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
-
+    // (opcional) si quieres abrir algo o hacer más cosas, hazlo aquí.
     $this->dispatch('$refresh');
 }
 
+    private function cargarLineasDesdeFactura(int $facturaId): void
+    {
+        $f = Factura::with(['detalles' => function ($q) {
+            $q->select(
+                'id','factura_id','producto_id','cuenta_ingreso_id','bodega_id',
+                'descripcion','cantidad','precio_unitario','descuento_pct',
+                'impuesto_id','impuesto_pct'
+            );
+        }])->findOrFail($facturaId);
 
-public function onClienteChange($val): void
-{
-    if ($this->bloqueada) return;
+        // ⚠️ Solo actualizar el cliente si REALMENTE cambió
+        if ((int)($this->socio_negocio_id ?? 0) !== (int)$f->socio_negocio_id) {
+            $this->socio_negocio_id = (int) $f->socio_negocio_id; // esto dispara updatedSocioNegocioId
+        }
 
-    $id = (int) $val;
+        $this->moneda = (string) ($f->moneda ?? $this->moneda);
 
-    // 👇 IMPORTANTE: sincroniza la propiedad que usa refrescarFacturasCliente()
-    $this->socio_negocio_id = $id;
+        $numFmt = $f->numero_formateado
+            ?? ($f->prefijo ? ($f->prefijo.'-'.$f->numero) : $f->numero);
 
-    // limpiar selección previa
-    $this->factura_id = null;
-    $this->numeroFacturaSeleccionada = null;
+        $this->tipo_pago     = 'credito';
+        $this->terminos_pago = 'NC por factura ' . ($numFmt ?: $facturaId);
 
-    // setear cuentas/forma de pago
-    $this->setCuentaDesdeCliente($id);
-    $this->setPagoDesdeCliente($id);
+        // Reindexar 0..n (imprescindible para Livewire)
+        $this->lineas = $f->detalles->map(function ($d) {
+            $l = [
+                'producto_id'       => (int) $d->producto_id,
+                'cuenta_ingreso_id' => $d->cuenta_ingreso_id ?: null,
+                'bodega_id'         => (int) $d->bodega_id,
+                'descripcion'       => 'NC: ' . (string) $d->descripcion,
+                'cantidad'          => (float) $d->cantidad,
+                'precio_unitario'   => (float) $d->precio_unitario,
+                'descuento_pct'     => (float) $d->descuento_pct,
+                'impuesto_id'       => $d->impuesto_id ?: null,
+                'impuesto_pct'      => (float) $d->impuesto_pct,
+            ];
+            $this->normalizeLinea($l);
+            return $l;
+        })->values()->all();
 
-    // cargar facturas del cliente (ahora sí con el id correcto)
-    $this->refrescarFacturasCliente();
+        // Si ya tenías el mismo cliente, refresca auxiliares sin resetear factura
+        $this->setCuentaDesdeCliente((int)$f->socio_negocio_id);
+        $this->setPagoDesdeCliente((int)$f->socio_negocio_id);
+        $this->refrescarFacturasCliente();
 
-    // id de condición de pago
-    $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')->find($id);
-    $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+        foreach (array_keys($this->lineas) as $i) {
+            $this->refreshStockLinea($i);
+        }
 
-    $this->dispatch('$refresh');
-}
-
-
-public function onFacturaChange($val): void
-{
-    if ($this->bloqueada) return;
-
-    $id = (int) $val;
-    if ($id <= 0) {
-        $this->numeroFacturaSeleccionada = null;
-        $this->factura_id = null;
-        $this->dispatch('$refresh');
-        return;
-    }
-
-    try {
-        // Cargar cliente/moneda/líneas/imp, etc.
-        $this->precargarDesdeFactura($id);
-
-        // Mostrar número formateado
-        $f = Factura::select('id','prefijo','numero')->find($id);
-        $this->numeroFacturaSeleccionada = $f
-            ? (trim((string)$f->prefijo) !== '' ? ($f->prefijo.'-'.$f->numero) : (string)$f->numero)
-            : (string)$id;
-
-        // Asegurar propiedad seteada
-        $this->factura_id = $id;
-
-        $this->dispatch('$refresh');
-        PendingToast::create()->info()->message('Productos de la factura cargados.')->duration(3500);
-    } catch (\Throwable $e) {
-        report($e);
-        PendingToast::create()->error()->message('No se pudo cargar la factura seleccionada.')->duration(7000);
-        $this->factura_id = null;
-        $this->numeroFacturaSeleccionada = null;
+        $this->resetErrorBag();
+        $this->resetValidation();
         $this->dispatch('$refresh');
     }
-}
 
-    /* === Cargar y mapear facturas del cliente === */
-  private function refrescarFacturasCliente(): void
-{
-    $this->facturasCliente = [];
-
-    $clienteId = (int) ($this->socio_negocio_id ?? 0);
-    if ($clienteId <= 0) return;
-
-    $rows = \App\Models\Factura\Factura::query()
-        ->where('socio_negocio_id', $clienteId)
-        // ->where('saldo', '>', 0) // ← si solo quieres con saldo
-        ->orderByDesc('fecha')
-        ->orderByDesc('id')
-        ->limit(300)
-        ->get(['id','prefijo','numero','fecha','total','saldo']);
-
-    Log::info('NC: facturas cargadas', [
-        'clienteId' => $clienteId,
-        'count'     => $rows->count(),
-    ]);
-
-    $this->facturasCliente = $rows->map(function ($f) {
-        $num    = (string)($f->numero ?? '');
-        $pref   = trim((string)($f->prefijo ?? ''));
-        $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
-
-        // fecha segura
-        $fecha = $f->fecha instanceof \Carbon\Carbon
-            ? $f->fecha->toDateString()
-            : (string) $f->fecha;
-
-        return [
-            'id'      => (int) $f->id,
-            'numero'  => $numFmt,
-            'fecha'   => $fecha,
-            'total'   => (float) ($f->total ?? 0),
-            'saldo'   => (float) ($f->saldo ?? 0),
-            'prefijo' => $pref,
-            'crudo'   => $num,
-        ];
-    })->all();
-
-    $this->dispatch('$refresh');
-}
-
-
-    /* === Cuando cambia FACTURA: precargar todo desde la factura === */
-    public function updatedFacturaId($val): void
+    public function onClienteChange($val): void
     {
         if ($this->bloqueada) return;
 
         $id = (int) $val;
 
+        $this->factura_id = null;
+        $this->numeroFacturaSeleccionada = null;
+        $this->aplicacionLanzada = false;
+
+        $this->setCuentaDesdeCliente($id);
+        $this->setPagoDesdeCliente($id);
+
+        $this->refrescarFacturasCliente();
+
+        $socio = SocioNegocio::with('condicionPago')->find($id);
+        $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+
+        $this->dispatch('$refresh');
+    }
+
+    /* === Cargar y mapear facturas del cliente === */
+    private function refrescarFacturasCliente(): void
+    {
+        $this->facturasCliente = [];
+
+        $clienteId = (int) ($this->socio_negocio_id ?? 0);
+        if ($clienteId <= 0) return;
+
+        $rows = Factura::query()
+            ->where('socio_negocio_id', $clienteId)
+            // ->where('saldo', '>', 0) // si solo quieres con saldo
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->limit(300)
+            ->get(['id', 'prefijo', 'numero', 'fecha', 'total', 'saldo']);
+
+        Log::info('NC: facturas cargadas', [
+            'clienteId' => $clienteId,
+            'count'     => $rows->count(),
+        ]);
+
+        $this->facturasCliente = $rows->map(function ($f) {
+            $num    = (string)($f->numero ?? '');
+            $pref   = trim((string)($f->prefijo ?? ''));
+            $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
+
+            $fecha = $f->fecha instanceof Carbon
+                ? $f->fecha->toDateString()
+                : (string) $f->fecha;
+
+            return [
+                'id'      => (int) $f->id,
+                'numero'  => $numFmt,
+                'fecha'   => $fecha,
+                'total'   => (float) ($f->total ?? 0),
+                'saldo'   => (float) ($f->saldo ?? 0),
+                'prefijo' => $pref,
+                'crudo'   => $num,
+            ];
+        })->all();
+
+        $this->dispatch('$refresh');
+    }
+
+    /* === Cuando cambia FACTURA: precargar todo desde la factura y abrir Aplicación auto === */
+    public function updatedFacturaId($val): void
+    {
+        if ($this->bloqueada) return;
+
+        $id = (int) $val;
         if ($id <= 0) {
             $this->numeroFacturaSeleccionada = null;
+            $this->aplicacionLanzada = false;
             $this->dispatch('$refresh');
             return;
         }
 
         try {
-            // Cargar TODO: cliente/moneda/líneas/imp, etc.
-            $this->precargarDesdeFactura($id);
+            $this->cargarLineasDesdeFactura($id);
 
-            // Número formateado para mostrar
-            $f = Factura::select('id','prefijo','numero')->find($id);
+            $f = Factura::select('id', 'prefijo', 'numero')->find($id);
             $this->numeroFacturaSeleccionada = $f
-                ? (trim((string)$f->prefijo) !== '' ? ($f->prefijo.'-'.$f->numero) : (string)$f->numero)
+                ? (trim((string)$f->prefijo) !== '' ? ($f->prefijo . '-' . $f->numero) : (string)$f->numero)
                 : (string)$id;
 
-            // asegurar que queda seteado
             $this->factura_id = $id;
 
+            PendingToast::create()->success()
+                ->message('Factura cargada correctamente, se importaron los productos.')
+                ->duration(5000);
+
             $this->dispatch('$refresh');
+
+            // 👇 Auto abrir en modo estricto (valida todo)
+            $this->intentarAbrirAplicacionAuto(true);
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo cargar la factura seleccionada.')->duration(7000);
             $this->factura_id = null;
             $this->numeroFacturaSeleccionada = null;
+            $this->aplicacionLanzada = false;
             $this->dispatch('$refresh');
         }
     }
@@ -491,11 +539,22 @@ public function onFacturaChange($val): void
             $this->nota = $n;
 
             $this->fill($n->only([
-                'serie_id','socio_negocio_id','factura_id','fecha','vencimiento',
-                'tipo_pago','plazo_dias','terminos_pago','notas','moneda','estado',
-                'cuenta_cobro_id','condicion_pago_id',
+                'serie_id',
+                'socio_negocio_id',
+                'factura_id',
+                'fecha',
+                'vencimiento',
+                'tipo_pago',
+                'plazo_dias',
+                'terminos_pago',
+                'notas',
+                'moneda',
+                'estado',
+                'cuenta_cobro_id',
+                'condicion_pago_id',
             ]));
 
+            // Reindexar también al cargar nota existente
             $this->lineas = $n->detalles->map(function ($d) {
                 $l = [
                     'id'                => $d->id,
@@ -511,7 +570,7 @@ public function onFacturaChange($val): void
                 ];
                 $this->normalizeLinea($l);
                 return $l;
-            })->toArray();
+            })->values()->all();
 
             if ($this->socio_negocio_id) {
                 $this->refrescarFacturasCliente();
@@ -532,14 +591,15 @@ public function onFacturaChange($val): void
             $this->socio_negocio_id = $f->socio_negocio_id;
             $this->moneda           = $f->moneda;
             $this->tipo_pago        = 'credito';
-            $this->terminos_pago    = 'NC por factura '.$f->prefijo.'-'.$f->numero;
+            $this->terminos_pago    = 'NC por factura ' . $f->prefijo . '-' . $f->numero;
 
+            // Reindexar
             $this->lineas = $f->detalles->map(function ($d) {
                 $l = [
                     'producto_id'       => $d->producto_id,
                     'cuenta_ingreso_id' => $d->cuenta_ingreso_id ?: null,
                     'bodega_id'         => $d->bodega_id,
-                    'descripcion'       => 'NC: '.$d->descripcion,
+                    'descripcion'       => 'NC: ' . $d->descripcion,
                     'cantidad'          => (float)$d->cantidad,
                     'precio_unitario'   => (float)$d->precio_unitario,
                     'descuento_pct'     => (float)$d->descuento_pct,
@@ -548,13 +608,10 @@ public function onFacturaChange($val): void
                 ];
                 $this->normalizeLinea($l);
                 return $l;
-            })->toArray();
+            })->values()->all();
 
-            // Cuenta y forma de pago desde el cliente
             $this->setCuentaDesdeCliente($f->socio_negocio_id);
             $this->setPagoDesdeCliente($f->socio_negocio_id);
-
-            // Facturas del cliente recién seteado
             $this->refrescarFacturasCliente();
         } catch (Throwable $e) {
             report($e);
@@ -697,7 +754,7 @@ public function onFacturaChange($val): void
         if (!is_null($imp->porcentaje)) {
             if ($imp->incluido_en_precio && $imp->porcentaje > 0) {
                 $pu = (float)$this->lineas[$i]['precio_unitario'];
-                $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje/100), 2) : 0.0;
+                $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
             }
             $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
         } else {
@@ -737,7 +794,7 @@ public function onFacturaChange($val): void
             $d = max((int)$this->plazo_dias, 1);
             $this->plazo_dias  = $d;
             $this->vencimiento = Carbon::parse($this->fecha)->addDays($d)->toDateString();
-            $this->terminos_pago = 'Crédito a '.$d.' días';
+            $this->terminos_pago = 'Crédito a ' . $d . ' días';
         }
     }
 
@@ -829,7 +886,7 @@ public function onFacturaChange($val): void
             $d = max((int)($this->plazo_dias ?: 30), 1);
             $this->plazo_dias    = $d;
             $this->vencimiento   = Carbon::parse($this->fecha)->addDays($d)->toDateString();
-            $this->terminos_pago = 'Crédito a '.$d.' días';
+            $this->terminos_pago = 'Crédito a ' . $d . ' días';
         }
     }
 
@@ -916,18 +973,18 @@ public function onFacturaChange($val): void
         foreach ($this->lineas as $i => $l) {
             $this->lineas[$i]['cuenta_ingreso_id'] =
                 isset($l['cuenta_ingreso_id']) && $l['cuenta_ingreso_id'] !== ''
-                    ? (int) $l['cuenta_ingreso_id']
-                    : null;
+                ? (int) $l['cuenta_ingreso_id']
+                : null;
 
             $this->lineas[$i]['bodega_id'] =
                 isset($l['bodega_id']) && $l['bodega_id'] !== ''
-                    ? (int) $l['bodega_id']
-                    : null;
+                ? (int) $l['bodega_id']
+                : null;
 
             $this->lineas[$i]['producto_id'] =
                 isset($l['producto_id']) && $l['producto_id'] !== ''
-                    ? (int) $l['producto_id']
-                    : null;
+                ? (int) $l['producto_id']
+                : null;
         }
     }
 
@@ -942,7 +999,7 @@ public function onFacturaChange($val): void
             if (!$this->validarConToast()) return;
 
             $this->persistirBorrador();
-            PendingToast::create()->success()->message('Nota crédito guardada (ID: '.$this->nota->id.').')->duration(5000);
+            PendingToast::create()->success()->message('Nota crédito guardada (ID: ' . $this->nota->id . ').')->duration(5000);
             $this->dispatch('refrescar-lista-notas');
         } catch (\Throwable $e) {
             Log::error('NC GUARDAR ERROR', ['msg' => $e->getMessage()]);
@@ -964,7 +1021,7 @@ public function onFacturaChange($val): void
             DB::transaction(function () {
                 $this->persistirBorrador();
                 $this->nota->refresh()
-                    ->loadMissing(['detalles','cliente'])
+                    ->loadMissing(['detalles', 'cliente'])
                     ->recalcularTotales()
                     ->save();
 
@@ -1022,7 +1079,6 @@ public function onFacturaChange($val): void
 
             PendingToast::create()->info()->message('Nota crédito anulada.')->duration(4500);
             $this->dispatch('refrescar-lista-notas');
-
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo anular.')->duration(7000);
@@ -1056,7 +1112,7 @@ public function onFacturaChange($val): void
         $fid = (int)($this->factura_id ?? 0);
         if ($fid <= 0) return null;
 
-        $f = Factura::select('prefijo','numero')->find($fid);
+        $f = Factura::select('prefijo', 'numero')->find($fid);
         if (!$f) return null;
 
         $pref = (string)($f->prefijo ?? '');
@@ -1095,8 +1151,10 @@ public function onFacturaChange($val): void
     {
         if (is_array($s->condiciones_pago_efectivas ?? null)) return $s->condiciones_pago_efectivas;
         if (is_array($s->condiciones_pago ?? null))         return $s->condiciones_pago;
-        if (method_exists($s, 'condicionPago')
-            && ($s->relationLoaded('condicionPago') ? $s->condicionPago : $s->loadMissing('condicionPago')->condicionPago)) {
+        if (
+            method_exists($s, 'condicionPago')
+            && ($s->relationLoaded('condicionPago') ? $s->condicionPago : $s->loadMissing('condicionPago')->condicionPago)
+        ) {
             $cp = $s->condicionPago;
             return [
                 'id'                   => $cp->id,
@@ -1122,7 +1180,8 @@ public function onFacturaChange($val): void
 
         $cp = $this->condicionPagoDe($socio);
 
-        $tipo = 'credito'; $plazo = null;
+        $tipo = 'credito';
+        $plazo = null;
         if ($cp) {
             $raw = strtolower((string)($cp['tipo'] ?? $cp['tipo_credito'] ?? 'credito'));
             $tipo = (str_starts_with($raw, 'cred')) ? 'credito' : 'contado';
@@ -1141,8 +1200,123 @@ public function onFacturaChange($val): void
         $this->dispatch('$refresh');
     }
 
+    /** ===== Disparadores del panel de Aplicación ===== */
+
+    private function fireAplicacionEvent(array $payload): void
+    {
+        // Livewire v2
+        if (method_exists($this, 'dispatchBrowserEvent')) {
+            $this->dispatchBrowserEvent('abrir-aplicacion-nota', $payload);
+            return;
+        }
+        // Livewire v3
+        $this->dispatch('abrir-aplicacion-nota', $payload);
+    }
+
     public function abrirAplicacion(): void
     {
-        $this->dispatch('abrir-aplicacion-nota', id: $this->nota?->id, total: $this->total, factura_id: $this->factura_id);
+        if ($this->bloqueada) return;
+
+        // Si ya hay factura seleccionada, persistimos y abrimos directo
+        if ((int)($this->factura_id ?? 0) > 0) {
+            $this->intentarAbrirAplicacionAuto(true);
+            return;
+        }
+
+        // Si no hay factura, intentamos seleccionar automáticamente una candidata
+        $clienteId = (int)($this->socio_negocio_id ?? 0);
+        if ($clienteId <= 0) {
+            PendingToast::create()->warning()->message('Selecciona un cliente para aplicar la nota.')->duration(5000);
+            return;
+        }
+
+        // Aseguramos tener la lista
+        if (empty($this->facturasCliente)) {
+            $this->refrescarFacturasCliente();
+        }
+
+        $candidatas = collect($this->facturasCliente);
+
+        // 1) Preferir con saldo > 0
+        $cSaldo = $candidatas->where('saldo', '>', 0);
+
+        // 2) Si hay varias, tomar la más reciente
+        $pick = ($cSaldo->count() > 0 ? $cSaldo : $candidatas)
+            ->sortByDesc(fn($f) => $f['fecha'] . '|' . $f['id'])
+            ->first();
+
+        if ($pick) {
+            // Autoselecciona y dispara flujo completo (carga líneas + abrir)
+            $this->factura_id = (int)$pick['id'];
+     
+            return;
+        }
+
+        // Si no hay facturas, solo abrir el panel vacío (o advertir)
+        PendingToast::create()->info()->message('Este cliente no tiene facturas para aplicar.')->duration(5000);
+        $this->abrirAplicacionSinFactura();
+    }
+
+    /** Abrir panel sin factura (por compatibilidad con tu JS) */
+    private function abrirAplicacionSinFactura(): void
+    {
+        $this->aplicacionLanzada = true;
+        $payload = [
+            'id'         => $this->nota?->id,
+            'total'      => $this->total,
+            'factura_id' => null,
+        ];
+        $this->fireAplicacionEvent($payload);
+    }
+
+    private function intentarAbrirAplicacionAuto(bool $estricto = true): void
+    {
+        if ($this->bloqueada) return;
+        if (!$this->autoAbrirAplicacion) return;
+        if ($this->aplicacionLanzada) return;
+
+        try {
+            // Normaliza pago
+            $this->normalizarPagoAntesDeValidar();
+            $this->sanearLineasAntesDeValidar();
+
+            // En modo estricto (p.ej. al elegir factura) validamos todo
+            if ($estricto) {
+                if (!$this->validarConToast()) return;
+            } else {
+                // En modo laxo, solo claves mínimas antes de guardar borrador
+                if (!$this->socio_negocio_id) return;
+                if (!$this->cuenta_cobro_id) $this->setCuentaCobroPorDefecto();
+                if (!$this->serie_id && $this->serieDefault) $this->serie_id = $this->serieDefault->id;
+            }
+
+            // Guardar borrador para asegurar $this->nota->id
+            $this->persistirBorrador();
+
+            // Disparar el modal/panel de Aplicación (sin recursión)
+            $this->aplicacionLanzada = true;
+
+            $payload = [
+                'id'         => $this->nota?->id,
+                'total'      => $this->total,
+                'factura_id' => $this->factura_id,
+            ];
+            $this->fireAplicacionEvent($payload);
+
+        } catch (\Throwable $e) {
+            report($e);
+            PendingToast::create()->warning()->message('No se pudo abrir la Aplicación automáticamente.')->duration(6000);
+        }
+    }
+
+    public function onFacturaElegida($id): void
+    {
+        if ($this->bloqueada) return;
+
+        $fid = (int) $id;
+        if ($fid <= 0) return;
+
+        // Esto ya carga líneas, normaliza y lanza apertura auto en modo estricto
+      $this->factura_id = $fid;
     }
 }

@@ -129,7 +129,7 @@ class MediosPagos extends Component
             $this->nombre          = $row->nombre;
             $this->activo          = (bool)$row->activo;
             $this->orden           = (int)$row->orden;
-            $this->plan_cuentas_id = $row->cuenta?->plan_cuentas_id; // trae cuenta asociada
+            $this->plan_cuentas_id = $row->cuenta?->plan_cuentas_id; 
 
             $this->showModal = true;
         } catch (Throwable $e) {

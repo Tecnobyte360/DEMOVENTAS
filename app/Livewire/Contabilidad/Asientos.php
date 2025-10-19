@@ -21,9 +21,12 @@ class Asientos extends Component
     public ?string $tercero = null;
     public int $perPage = 15;
 
+    /** Consolidar líneas en el modal (sumar por cuenta + tercero + impuesto) */
+    public bool $consolidar = true;
+
     // Modal
     public bool $showModal = false;
-    public ?array $asientoDetalle = null;
+    public array $asientoDetalle = [];   // ← arreglo (no null)
     public array $movimientos = [];
     public float $modalTotalDebito = 0.0;
     public float $modalTotalCredito = 0.0;
@@ -82,37 +85,71 @@ class Asientos extends Component
         }
     }
 
+    /** Ver detalle (consolidado por defecto) */
     public function ver(int $id): void
     {
         try {
             $a = Asiento::with(['tercero:id,razon_social,nit'])->findOrFail($id);
 
-            $rows = Movimiento::query()
-                ->join('plan_cuentas as pc', 'pc.id', '=', 'movimientos.cuenta_id')
-                ->leftJoin('socio_negocios as sn', 'sn.id', '=', 'movimientos.tercero_id')
-                // 🔴 clave: tomar el impuesto elegido en el movimiento
-                ->leftJoin('impuestos as imp_m', 'imp_m.id', '=', 'movimientos.impuesto_id')
-                ->where('movimientos.asiento_id', $id)
-                ->orderBy('pc.codigo')
-                ->get([
-                    'movimientos.id as mov_id',
-                    'movimientos.cuenta_id',
-                    'pc.codigo as cuenta_codigo',
-                    'pc.nombre as cuenta_nombre',
-                    'movimientos.debito',
-                    'movimientos.credito',
-                    'movimientos.base_gravable',
-                    'movimientos.tarifa_pct',
-                    'movimientos.valor_impuesto',
-                    'movimientos.detalle',
-                    'movimientos.descripcion',
-                    'sn.razon_social as tercero_nombre',
-                    'sn.nit as tercero_nit',
-                    // 👇 código y nombre del impuesto
-                    'imp_m.codigo as impuesto_codigo',
-                    'imp_m.nombre as impuesto_nombre',
-                ]);
+            if ($this->consolidar) {
+                // Consolidado: sumar por cuenta + tercero + impuesto
+                $rows = Movimiento::query()
+                    ->join('plan_cuentas as pc', 'pc.id', '=', 'movimientos.cuenta_id')
+                    ->leftJoin('socio_negocios as sn', 'sn.id', '=', 'movimientos.tercero_id')
+                    ->leftJoin('impuestos as imp_m', 'imp_m.id', '=', 'movimientos.impuesto_id')
+                    ->where('movimientos.asiento_id', $id)
+                    ->groupBy(
+                        'movimientos.cuenta_id',
+                        'pc.codigo', 'pc.nombre',
+                        'sn.razon_social', 'sn.nit',
+                        'imp_m.codigo', 'imp_m.nombre',
+                        'movimientos.tarifa_pct'
+                    )
+                    ->orderBy('pc.codigo')
+                    ->get([
+                        DB::raw('MIN(movimientos.id) as mov_id'),
+                        'movimientos.cuenta_id',
+                        'pc.codigo as cuenta_codigo',
+                        'pc.nombre as cuenta_nombre',
+                        DB::raw('SUM(movimientos.debito)  as debito'),
+                        DB::raw('SUM(movimientos.credito) as credito'),
+                        DB::raw('SUM(movimientos.base_gravable) as base_gravable'),
+                        'movimientos.tarifa_pct',
+                        DB::raw('SUM(movimientos.valor_impuesto) as valor_impuesto'),
+                        DB::raw('NULL as detalle'),
+                        'sn.razon_social as tercero_nombre',
+                        'sn.nit as tercero_nit',
+                        'imp_m.codigo as impuesto_codigo',
+                        'imp_m.nombre as impuesto_nombre',
+                    ]);
+            } else {
+                // Detalle sin consolidar
+                $rows = Movimiento::query()
+                    ->join('plan_cuentas as pc', 'pc.id', '=', 'movimientos.cuenta_id')
+                    ->leftJoin('socio_negocios as sn', 'sn.id', '=', 'movimientos.tercero_id')
+                    ->leftJoin('impuestos as imp_m', 'imp_m.id', '=', 'movimientos.impuesto_id')
+                    ->where('movimientos.asiento_id', $id)
+                    ->orderBy('pc.codigo')
+                    ->get([
+                        'movimientos.id as mov_id',
+                        'movimientos.cuenta_id',
+                        'pc.codigo as cuenta_codigo',
+                        'pc.nombre as cuenta_nombre',
+                        'movimientos.debito',
+                        'movimientos.credito',
+                        'movimientos.base_gravable',
+                        'movimientos.tarifa_pct',
+                        'movimientos.valor_impuesto',
+                        'movimientos.detalle',
+                        'movimientos.descripcion',
+                        'sn.razon_social as tercero_nombre',
+                        'sn.nit as tercero_nit',
+                        'imp_m.codigo as impuesto_codigo',
+                        'imp_m.nombre as impuesto_nombre',
+                    ]);
+            }
 
+            // Reset totales
             $this->movimientos = [];
             $this->modalTotalDebito = $this->modalTotalCredito = $this->modalTotalBase = $this->modalTotalImpuesto = 0.0;
 
@@ -123,7 +160,7 @@ class Asientos extends Component
                 $impV = (float)($m->valor_impuesto ?? 0);
 
                 $this->movimientos[] = [
-                    'mov_id'          => (int)$m->mov_id,
+                    'mov_id'          => (int)($m->mov_id ?? 0),
                     'cuenta_id'       => (int)$m->cuenta_id,
                     'codigo'          => (string)$m->cuenta_codigo,
                     'nombre'          => (string)$m->cuenta_nombre,
@@ -170,7 +207,7 @@ class Asientos extends Component
     public function cerrarModal(): void
     {
         $this->showModal = false;
-        $this->asientoDetalle = null;
+        $this->asientoDetalle = []; // ← evitar null
         $this->movimientos = [];
         $this->modalTotalDebito = 0.0;
         $this->modalTotalCredito = 0.0;
@@ -179,19 +216,14 @@ class Asientos extends Component
     }
 
     public function abrirOrigen(int $asientoId): void
-{
-    $a = \App\Models\Asiento\Asiento::select('id','origen','origen_id')->findOrFail($asientoId);
+    {
+        $a = \App\Models\Asiento\Asiento::select('id','origen','origen_id')->findOrFail($asientoId);
 
-    if ($a->origen === 'factura' && $a->origen_id) {
-        // Livewire 3:
-        $this->redirectRoute('facturas.edit', ['id' => $a->origen_id], navigate: true);
+        if ($a->origen === 'factura' && $a->origen_id) {
+            $this->redirectRoute('facturas.edit', ['id' => $a->origen_id], navigate: true);
+            return;
+        }
 
-        // Livewire 2 (alternativa):
-        // redirect()->route('facturas.edit', $a->origen_id)->send();
-        return;
+        $this->ver($asientoId);
     }
-
-    // Si no es factura, abre tu modal de detalle
-    $this->ver($asientoId);
-}
 }

@@ -6,13 +6,15 @@ use Livewire\Component;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Masmerise\Toaster\PendingToast;
 
 use App\Models\Factura\Factura;
 use App\Models\Factura\FacturaPago;
 use App\Models\MediosPago\MedioPagos;
 use App\Services\ContabilidadService;
-use Illuminate\Support\Facades\Schema;
+use App\Models\TurnosCaja\turnos_caja;
 
 class PagosFactura extends Component
 {
@@ -77,53 +79,53 @@ class PagosFactura extends Component
             'medios'  => $this->medios,
         ]);
     }
-#[On('abrir-modal-pago')]
-public function abrir(?int $facturaId = null): void
-{
-    $this->facturaId = $facturaId;
-    $this->show      = true;
-    $this->fecha     = now()->toDateString();
-    $this->notas     = null;
 
-    // cargar medios
-    $this->medios = MedioPagos::query()
-        ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
-        ->orderBy('nombre')
-        ->get(['id','codigo','nombre']);
+    #[On('abrir-modal-pago')]
+    public function abrir(?int $facturaId = null): void
+    {
+        $this->facturaId = $facturaId;
+        $this->show      = true;
+        $this->fecha     = now()->toDateString();
+        $this->notas     = null;
 
-    // si se abre desde una factura existente
-    if ($facturaId) {
-        $f = Factura::findOrFail($facturaId);
-        $this->fac_total  = (float) $f->total;
-        $this->fac_pagado = (float) $f->pagado;
-        $this->fac_saldo  = (float) $f->saldo;
+        // cargar medios
+        $this->medios = MedioPagos::query()
+            ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
+            ->orderBy('nombre')
+            ->get(['id','codigo','nombre']);
 
-        $medioDefault = $this->medios->first()?->id ?? null;
-        $this->items = [[
-            'medio_pago_id' => $medioDefault,
-            'porcentaje'    => $this->fac_saldo > 0 ? 100 : 0,
-            'monto'         => round($this->fac_saldo, 2),
-            'referencia'    => null,
-        ]];
+        // si se abre desde una factura existente
+        if ($facturaId) {
+            $f = Factura::findOrFail($facturaId);
+            $this->fac_total  = (float) $f->total;
+            $this->fac_pagado = (float) $f->pagado;
+            $this->fac_saldo  = (float) $f->saldo;
+
+            $medioDefault = $this->medios->first()?->id ?? null;
+            $this->items = [[
+                'medio_pago_id' => $medioDefault,
+                'porcentaje'    => $this->fac_saldo > 0 ? 100 : 0,
+                'monto'         => round($this->fac_saldo, 2),
+                'referencia'    => null,
+            ]];
+        } else {
+            // pago manual (sin factura)
+            $this->fac_total  = 0;
+            $this->fac_pagado = 0;
+            $this->fac_saldo  = 0;
+
+            $this->items = [[
+                'medio_pago_id' => null,
+                'porcentaje'    => 0,
+                'monto'         => 0,
+                'referencia'    => null,
+            ]];
+        }
+
+        $this->resetErrorBag();
+        $this->resetValidation();
+        $this->recalc();
     }
-    // si se abre sin factura (pago manual)
-    else {
-        $this->fac_total  = 0;
-        $this->fac_pagado = 0;
-        $this->fac_saldo  = 0;
-
-        $this->items = [[
-            'medio_pago_id' => null,
-            'porcentaje'    => 0,
-            'monto'         => 0,
-            'referencia'    => null,
-        ]];
-    }
-
-    $this->resetErrorBag();
-    $this->resetValidation();
-    $this->recalc();
-}
 
     public function cerrar(): void
     {
@@ -170,116 +172,122 @@ public function abrir(?int $facturaId = null): void
         $this->diff     = round($this->fac_saldo - $this->sumMonto, 2);
     }
 
+    /** Turno abierto del usuario actual */
+    private function turnoAbiertoActual(): ?turnos_caja
+    {
+        $userId = Auth::id();
+        if (!$userId) return null;
 
+        return turnos_caja::query()
+            ->where('user_id', $userId)
+            ->where('estado', 'abierto')
+            ->first();
+    }
 
     public function guardarPago(): void
-{
-    $this->validate();
+    {
+        $this->validate();
 
-    if (!$this->facturaId) return;
-    $factura = Factura::findOrFail($this->facturaId);
+        if (!$this->facturaId) return;
+        $factura = Factura::findOrFail($this->facturaId);
 
-    // 🧩 Lógica de bloqueo según tipo de factura
-    $esContado = $factura->tipo_pago === 'contado';
-    $estadosPermitidos = ['emitida', 'parcialmente_pagada', 'pagada'];
+        // Validar que el total distribuido sea igual al saldo
+        if (round($this->sumMonto, 2) !== round($this->fac_saldo, 2)) {
+            PendingToast::create()->warning()
+                ->message('El total distribuido debe ser igual al saldo de la factura.')
+                ->duration(7000);
+            return;
+        }
 
-    // Si es contado y aún no está emitida → bloquear
-    if ($esContado && !in_array($factura->estado, $estadosPermitidos)) {
-        \Masmerise\Toaster\PendingToast::create()
-            ->warning()
-            ->message("No se puede registrar un pago porque la factura de contado #{$factura->numero} aún no está emitida.")
-            ->duration(6000);
-        return;
-    }
+        // 🔎 ¿Hay efectivo? (exige turno abierto si lo hay)
+        $idsMedios = collect($this->items)->pluck('medio_pago_id')->filter()->values()->all();
+        $mediosUsados = empty($idsMedios) ? collect() : MedioPagos::whereIn('id', $idsMedios)->get(['id','codigo','nombre']);
+        $hayEfectivo = $mediosUsados->contains(function ($m) {
+            $cod = strtoupper((string)($m->codigo ?? ''));
+            $nom = strtoupper((string)($m->nombre ?? ''));
+            return $cod === 'EFECTIVO' || str_contains($nom, 'EFECTIVO') || $cod === 'CASH';
+        });
 
-    // Validar que el total distribuido sea igual al saldo
-    if (round($this->sumMonto, 2) !== round($this->fac_saldo, 2)) {
-        PendingToast::create()->warning()
-            ->message('El total distribuido debe ser igual al saldo de la factura.')
-            ->duration(7000);
-        return;
-    }
+        $turno = $this->turnoAbiertoActual();
+        if ($hayEfectivo && !$turno) {
+            PendingToast::create()->warning()
+                ->message('No hay un turno de caja abierto para registrar pagos en EFECTIVO. Abre un turno e inténtalo de nuevo.')
+                ->duration(6500);
+            return;
+        }
 
-    try {
-        DB::transaction(function () use ($factura) {
-            /** @var \App\Models\Factura\FacturaPago[] $pagos */
-            $pagos    = [];
-            $aplicado = 0.0;
+        try {
+            DB::transaction(function () use ($factura, $turno) {
+                $pagos    = [];
+                $aplicado = 0.0;
 
-            foreach ($this->items as $row) {
-                $monto = (float) ($row['monto'] ?? 0);
-                if ($monto <= 0) continue;
+                foreach ($this->items as $row) {
+                    $monto = (float) ($row['monto'] ?? 0);
+                    if ($monto <= 0) continue;
 
-                /** @var FacturaPago $pago */
-                $pago = $factura->registrarPago([
-                    'fecha'         => $this->fecha,
-                    'medio_pago_id' => (int)($row['medio_pago_id'] ?? 0),
-                    'metodo'        => $this->safeMetodo((int)($row['medio_pago_id'] ?? 0)),
-                    'referencia'    => $row['referencia'] ?? null,
-                    'monto'         => $monto,
-                    'notas'         => $this->notas,
-                ]);
+                    /** @var FacturaPago $pago */
+                    $pago = $factura->registrarPago([
+                        'fecha'         => $this->fecha,
+                        'medio_pago_id' => (int)($row['medio_pago_id'] ?? 0),
+                        'metodo'        => $this->safeMetodo((int)($row['medio_pago_id'] ?? 0)),
+                        'referencia'    => $row['referencia'] ?? null,
+                        'monto'         => $monto,
+                        'notas'         => $this->notas,
+                        'turno_id'      => $turno?->id,
+                    ]);
 
-                if (!$pago instanceof FacturaPago) {
-                    throw new \RuntimeException('registrarPago() no devolvió FacturaPago.');
+                    if (!$pago instanceof FacturaPago) {
+                        throw new \RuntimeException('registrarPago() no devolvió FacturaPago.');
+                    }
+
+                    $pagos[]   = $pago;
+                    $aplicado += $monto;
                 }
 
-                $pagos[]   = $pago;
-                $aplicado += $monto;
-            }
+                $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
 
-            // Un solo asiento contable para todos los medios
-            $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
-
-            // Vincular asiento a los pagos (si existe la columna)
-            foreach ($pagos as $p) {
-                if ($p->isFillable('asiento_id') || Schema::hasColumn($p->getTable(), 'asiento_id')) {
-                    $p->update(['asiento_id' => $asiento->id]);
+                foreach ($pagos as $p) {
+                    if ($p->isFillable('asiento_id') || Schema::hasColumn($p->getTable(), 'asiento_id')) {
+                        $p->update(['asiento_id' => $asiento->id]);
+                    }
                 }
-            }
 
-            // Recalcular totales y cerrar si queda en cero
-            $factura->refresh()->recalcularTotales()->save();
+                $factura->refresh()->recalcularTotales()->save();
+            }, 3);
+        } catch (\Throwable $e) {
+            report($e);
+            PendingToast::create()->error()
+                ->message('No se pudo registrar y contabilizar el pago: '.$e->getMessage())
+                ->duration(9000);
+            return;
+        }
 
-            if (round((float)$factura->saldo, 2) === 0.0) {
-                $factura->update([
-                    'estado'         => 'cerrado',
-                    'monto_aplicado' => round((float)($factura->monto_aplicado ?? 0) + $aplicado, 2),
-                ]);
-            }
-        }, 3);
-    } catch (\Throwable $e) {
-        report($e);
-        PendingToast::create()->error()
-            ->message('No se pudo registrar y contabilizar el pago: '.$e->getMessage())
-            ->duration(9000);
-        return;
-    }
+        // ✅ Éxito
+        $factura->refresh();
 
-    // ✅ Éxito
-    $factura->refresh();
+        // 🚀 Emitir automáticamente si es contado y pago total
+        if ($factura->tipo_pago === 'contado' && $factura->saldo <= 0.01) {
+            PendingToast::create()->info()
+                ->message('Factura de contado: pago completo recibido, emitiendo automáticamente...')
+                ->duration(4000);
+        }
 
-    if (round((float)$factura->saldo, 2) === 0.0 && $factura->tipo_pago === 'contado') {
+        // 🔄 Notificar al formulario principal (ahí se llama a emitir y cerrar)
         $this->dispatch('pago-registrado', facturaId: $factura->id)
             ->to(\App\Livewire\Facturas\FacturaForm::class);
+
+        PendingToast::create()->success()
+            ->message('Pago registrado y contabilizado.')
+            ->duration(4000);
+
+        $this->dispatch('abrir-factura', id: $factura->id)
+            ->to(\App\Livewire\Facturas\FacturaForm::class);
+
+        $this->show = false;
     }
 
-    PendingToast::create()->success()
-        ->message('Pago registrado y contabilizado.')
-        ->duration(4000);
-
-    $this->dispatch('abrir-factura', id: $factura->id)
-        ->to(\App\Livewire\Facturas\FacturaForm::class);
-
-    $this->show = false;
-}
-
-
-
-    /** Nombre del medio acotado al largo de tu columna 'metodo' (evita truncamiento). */
     private function safeMetodo(int $medioId, int $maxLen = 60): ?string
     {
-        // Preferir catálogo ya cargado
         if ($this->medios->isNotEmpty()) {
             $m = $this->medios->firstWhere('id', $medioId);
             if ($m) {
@@ -288,13 +296,10 @@ public function abrir(?int $facturaId = null): void
             }
         }
 
-        // Fallback BD
         $m = MedioPagos::find($medioId);
         if (!$m) return null;
 
         $texto = trim(($m->codigo ? "{$m->codigo} - " : '').($m->nombre ?? ''));
         return $texto !== '' ? mb_strimwidth($texto, 0, $maxLen, '') : null;
     }
-
-    
 }

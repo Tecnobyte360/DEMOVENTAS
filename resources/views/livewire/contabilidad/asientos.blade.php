@@ -9,7 +9,7 @@
 @once
   @push('scripts')
     <script>
-      // Alpine espera a Livewire (como en tu factura-form)
+      // Alpine espera a Livewire
       window.deferLoadingAlpine = (alpineInit) => {
         document.addEventListener('livewire:init', alpineInit)
       }
@@ -122,72 +122,64 @@
               <td class="px-4 py-3 font-medium text-gray-900 dark:text-gray-100 truncate max-w-[42ch]" title="{{ $a->glosa }}">{{ $a->glosa }}</td>
 
               {{-- Origen con número de factura formateado --}}
-             <td class="px-4 py-3">
-  @php
-    $textoOrigen = null;
-    $abrirFacturaId = null;
+              <td class="px-4 py-3">
+                @php
+                  $textoOrigen = null;
+                  $abrirFacturaId = null;
 
-    // Caso 1: asiento de FACTURA
-    if (($a->origen ?? null) === 'factura' && $a->origen_id) {
-        $ff = \App\Models\Factura\Factura::with('serie')->find($a->origen_id);
-        if ($ff) {
-            $len = $ff->serie->longitud ?? 6;
-            $num = $ff->numero !== null
-                ? str_pad((string)$ff->numero, $len, '0', STR_PAD_LEFT)
-                : '—';
-            $textoOrigen   = ($ff->prefijo ? "{$ff->prefijo}-" : '') . $num;
-            $abrirFacturaId = $ff->id;
-        }
-    }
+                  if (($a->origen ?? null) === 'factura' && $a->origen_id) {
+                      $ff = \App\Models\Factura\Factura::with('serie')->find($a->origen_id);
+                      if ($ff) {
+                          $len = data_get($ff, 'serie.longitud', 6);
+                          $num = $ff->numero !== null ? str_pad((string)$ff->numero, $len, '0', STR_PAD_LEFT) : '—';
+                          $textoOrigen   = ($ff->prefijo ? "{$ff->prefijo}-" : '') . $num;
+                          $abrirFacturaId = $ff->id;
+                      }
+                  }
 
-    // Caso 2: asiento de PAGO_FACTURA → enlazar a su factura
-    if (($a->origen ?? null) === 'pago_factura' && $a->origen_id) {
-        $fp = \App\Models\Factura\FacturaPago::with('factura.serie')->find($a->origen_id);
-        if ($fp && $fp->factura) {
-            $f  = $fp->factura;
-            $len = $f->serie->longitud ?? 6;
-            $num = $f->numero !== null
-                ? str_pad((string)$f->numero, $len, '0', STR_PAD_LEFT)
-                : '—';
-            $textoOrigen    = ($f->prefijo ? "{$f->prefijo}-" : '') . $num;
-            $abrirFacturaId = $f->id;
-        }
-    }
-  @endphp
+                  if (($a->origen ?? null) === 'pago_factura' && $a->origen_id) {
+                      $fp = \App\Models\Factura\FacturaPago::with('factura.serie')->find($a->origen_id);
+                      if ($fp && $fp->factura) {
+                          $f   = $fp->factura;
+                          $len = data_get($f, 'serie.longitud', 6);
+                          $num = $f->numero !== null ? str_pad((string)$f->numero, $len, '0', STR_PAD_LEFT) : '—';
+                          $textoOrigen    = ($f->prefijo ? "{$f->prefijo}-" : '') . $num;
+                          $abrirFacturaId = $f->id;
+                      }
+                  }
+                @endphp
 
-  @if($textoOrigen && $abrirFacturaId)
-    <button
-      type="button"
-      wire:click="$dispatch('abrir-factura', { id: {{ (int)$abrirFacturaId }} })"
-      class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
-             bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200
-             hover:brightness-95 transition focus:outline-none focus:ring-2 focus:ring-indigo-400"
-      title="Abrir Factura {{ $textoOrigen }}"
-    >
-      @if(($a->origen ?? null) === 'pago_factura')
-        pago factura
-      @else
-        factura
-      @endif
-      <span class="ml-1 font-semibold text-indigo-700 font-mono tracking-wider">{{ $textoOrigen }}</span>
-      <i class="fa-solid fa-up-right-from-square text-[10px] ml-1"></i>
-    </button>
+                @if($textoOrigen && $abrirFacturaId)
+                  <button
+                    type="button"
+                    wire:click="$dispatch('abrir-factura', { id: {{ (int)$abrirFacturaId }} })"
+                    class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
+                           bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200
+                           hover:brightness-95 transition focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    title="Abrir Factura {{ $textoOrigen }}"
+                  >
+                    @if(($a->origen ?? null) === 'pago_factura')
+                      pago factura
+                    @else
+                      factura
+                    @endif
+                    <span class="ml-1 font-semibold text-indigo-700 font-mono tracking-wider">{{ $textoOrigen }}</span>
+                    <i class="fa-solid fa-up-right-from-square text-[10px] ml-1"></i>
+                  </button>
 
-    {{-- Si quieres mostrar también el ID del pago cuando el origen es pago_factura --}}
-    @if(($a->origen ?? null) === 'pago_factura')
-      <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px]
-                   bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-        pago #{{ $a->origen_id }}
-      </span>
-    @endif
-  @else
-    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
-                bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-      {{ $a->origen ?? '—' }}@if($a->origen_id) <span class="ml-1">#{{ $a->origen_id }}</span>@endif
-    </span>
-  @endif
-</td>
-
+                  @if(($a->origen ?? null) === 'pago_factura')
+                    <span class="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px]
+                                 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                      pago #{{ $a->origen_id }}
+                    </span>
+                  @endif
+                @else
+                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold
+                              bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                    {{ $a->origen ?? '—' }}@if($a->origen_id) <span class="ml-1">#{{ $a->origen_id }}</span>@endif
+                  </span>
+                @endif
+              </td>
 
               <td class="px-4 py-3">
                 @if(isset($a->tercero) && $a->tercero)
@@ -267,39 +259,42 @@
           <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800">
             <div>
               <h3 class="text-lg font-bold">
-                Asiento #{{ $asientoDetalle['id'] ?? '' }}
+                {{ data_get($asientoDetalle,'id') ? 'Asiento #'.data_get($asientoDetalle,'id') : 'Grupo de asientos' }}
               </h3>
               <p class="text-xs text-gray-500">
-                {{ $asientoDetalle['fecha'] ?? '' }} — {{ $asientoDetalle['glosa'] ?? '' }}
-                @if(!empty($asientoDetalle['origen']))
+                {{ data_get($asientoDetalle,'fecha','') }}
+                @if(data_get($asientoDetalle,'glosa'))
+                  — {{ data_get($asientoDetalle,'glosa') }}
+                @endif
+                @if(data_get($asientoDetalle,'origen'))
                   — Origen:
-                  @if($asientoDetalle['origen'] === 'factura' && !empty($asientoDetalle['origen_id']))
+                  @if(data_get($asientoDetalle,'origen') === 'factura' && data_get($asientoDetalle,'origen_id'))
                     @php
                       $factModalTxt = null;
-                      $ffm = \App\Models\Factura\Factura::with('serie')->find((int)$asientoDetalle['origen_id']);
+                      $ffm = \App\Models\Factura\Factura::with('serie')->find((int) data_get($asientoDetalle,'origen_id'));
                       if ($ffm) {
-                          $lenm = $ffm->serie->longitud ?? 6;
-                          $numm = $ffm->numero !== null
-                              ? str_pad((string)$ffm->numero, $lenm, '0', STR_PAD_LEFT)
-                              : '—';
+                          $lenm = data_get($ffm, 'serie.longitud', 6);
+                          $numm = $ffm->numero !== null ? str_pad((string)$ffm->numero, $lenm, '0', STR_PAD_LEFT) : '—';
                           $factModalTxt = ($ffm->prefijo ? "{$ffm->prefijo}-" : '') . $numm;
                       }
                     @endphp
                     <button
                       type="button"
-                      wire:click="$dispatch('abrir-factura', {{ (int)$asientoDetalle['origen_id'] }})"
+                      wire:click="$dispatch('abrir-factura', { id: {{ (int) data_get($asientoDetalle,'origen_id') }} })"
                       class="underline underline-offset-2 decoration-dotted hover:decoration-solid text-indigo-600 dark:text-indigo-300 font-mono"
-                      title="Abrir Factura {{ $factModalTxt ?? ('#'.$asientoDetalle['origen_id']) }}"
+                      title="Abrir Factura {{ $factModalTxt ?? ('#'.data_get($asientoDetalle,'origen_id')) }}"
                     >
-                      factura {{ $factModalTxt ?? ('#'.$asientoDetalle['origen_id']) }}
+                      factura {{ $factModalTxt ?? ('#'.data_get($asientoDetalle,'origen_id')) }}
                     </button>
                   @else
-                    {{ $asientoDetalle['origen'] }}@if(!empty($asientoDetalle['origen_id'])) (#{{ $asientoDetalle['origen_id'] }}) @endif
+                    {{ data_get($asientoDetalle,'origen') }}
+                    @if(data_get($asientoDetalle,'origen_id')) (#{{ data_get($asientoDetalle,'origen_id') }}) @endif
                   @endif
                 @endif
-                @if(!empty($asientoDetalle['moneda'])) — Moneda: {{ $asientoDetalle['moneda'] }} @endif
-                @if(!empty($asientoDetalle['tercero']))
-                  — Tercero: {{ $asientoDetalle['tercero']['razon_social'] ?? '' }} @if(!empty($asientoDetalle['tercero']['nit'])) (NIT: {{ $asientoDetalle['tercero']['nit'] }}) @endif
+                @if(data_get($asientoDetalle,'moneda')) — Moneda: {{ data_get($asientoDetalle,'moneda') }} @endif
+                @if(data_get($asientoDetalle,'tercero.razon_social'))
+                  — Tercero: {{ data_get($asientoDetalle,'tercero.razon_social') }}
+                  @if(data_get($asientoDetalle,'tercero.nit')) (NIT: {{ data_get($asientoDetalle,'tercero.nit') }}) @endif
                 @endif
               </p>
             </div>
@@ -334,14 +329,14 @@
                 <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
                   @foreach($movimientos as $m)
                     <tr class="hover:bg-gray-50 dark:hoverbg-gray-800/40">
-                      <td class="px-4 py-2 font-mono">#{{ $m['mov_id'] }}</td>
-                      <td class="px-4 py-2 font-mono">{{ $m['cuenta_id'] }}</td>
-                      <td class="px-4 py-2 font-mono">{{ $m['codigo'] }}</td>
-                      <td class="px-4 py-2">{{ $m['nombre'] }}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format($m['debito'], 2) }}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format($m['credito'], 2) }}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format($m['base_gravable'] ?? 0, 2) }}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format($m['tarifa_pct'] ?? 0, 4) }}</td>
+                      <td class="px-4 py-2 font-mono">#{{ $m['mov_id'] ?? '' }}</td>
+                      <td class="px-4 py-2 font-mono">{{ $m['cuenta_id'] ?? '' }}</td>
+                      <td class="px-4 py-2 font-mono">{{ $m['codigo'] ?? '' }}</td>
+                      <td class="px-4 py-2">{{ $m['nombre'] ?? '' }}</td>
+                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['debito'] ?? 0), 2) }}</td>
+                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['credito'] ?? 0), 2) }}</td>
+                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['base_gravable'] ?? 0), 2) }}</td>
+                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['tarifa_pct'] ?? 0), 4) }}</td>
                       <td class="px-4 py-2">
                         @if(!empty($m['impuesto_codigo']) || !empty($m['impuesto_nombre']))
                           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200" title="{{ $m['impuesto_nombre'] ?? $m['impuesto_codigo'] }}">
@@ -360,22 +355,28 @@
                           <span class="text-gray-400">—</span>
                         @endif
                       </td>
-                      <td class="px-4 py-2 text-gray-500">{{ $m['detalle'] }}</td>
+                      <td class="px-4 py-2 text-gray-500">{{ $m['detalle'] ?? '' }}</td>
                     </tr>
                   @endforeach
                 </tbody>
+                @php
+                  $mdDebe  = (float) ($modalTotalDebito ?? 0);
+                  $mdHaber = (float) ($modalTotalCredito ?? 0);
+                  $mdBase  = (float) ($modalTotalBase ?? 0);
+                  $mdImp   = (float) ($modalTotalImpuesto ?? 0);
+                  $mdDif   = round($mdDebe - $mdHaber, 2);
+                @endphp
                 <tfoot class="bg-gray-50 dark:bg-gray-800/60">
-                  @php $dif = round(($modalTotalDebito ?? 0) - ($modalTotalCredito ?? 0), 2); @endphp
                   <tr>
                     <td class="px-4 py-3 font-semibold" colspan="4">Totales movimientos</td>
-                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($modalTotalDebito, 2) }}</td>
-                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($modalTotalCredito, 2) }}</td>
-                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($modalTotalBase ?? 0, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($mdDebe, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($mdHaber, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($mdBase, 2) }}</td>
                     <td class="px-4 py-3"></td>
-                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($modalTotalImpuesto ?? 0, 2) }}</td>
+                    <td class="px-4 py-3 text-right font-semibold tabular-nums">{{ number_format($mdImp, 2) }}</td>
                     <td class="px-4 py-3" colspan="2">
-                      <span class="px-2 py-1 rounded-lg text-xs font-semibold {{ $dif == 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700' }}">
-                        Dif: {{ number_format($dif, 2) }}
+                      <span class="px-2 py-1 rounded-lg text-xs font-semibold {{ $mdDif == 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700' }}">
+                        Dif: {{ number_format($mdDif, 2) }}
                       </span>
                     </td>
                   </tr>

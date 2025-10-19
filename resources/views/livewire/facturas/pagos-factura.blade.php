@@ -1,4 +1,3 @@
-{{-- resources/views/livewire/facturas/pagos-factura.blade.php --}}
 @once
   @push('styles')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -41,39 +40,33 @@
       {{-- Cuerpo --}}
       <div class="p-5 space-y-5">
 
-        {{-- 🧾 Selector de factura (solo si no hay factura preseleccionada) --}}
-      @if(!$facturaId)
-  <div>
-    <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-      Seleccionar factura
-    </label>
-
-    <select wire:model="facturaId"
-            class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
-                   dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
-      <option value="">— Selecciona una factura —</option>
-      @foreach(\App\Models\Factura\Factura::with('socioNegocio')
-                ->where('saldo', '>', 0)
-                ->orderByDesc('id')
-                ->limit(100)
-                ->get(['id','numero','prefijo','fecha','total','saldo']) as $f)
-        <option value="{{ $f->id }}">
-          {{-- Ejemplo: FAVE001-0007 — Doblamos S.A.S — 2025-10-11 — Total: $4.500.000 — Saldo: $1.000.000 --}}
-          {{ $f->prefijo ? $f->prefijo.'-' : '' }}{{ str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT) }}
-          — {{ $f->socioNegocio?->razon_social ?? 'Sin cliente' }}
-          — {{ \Carbon\Carbon::parse($f->fecha)->format('Y-m-d') }}
-          — Total: ${{ number_format($f->total, 0, ',', '.') }}
-          — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
-        </option>
-      @endforeach
-    </select>
-
-    @error('facturaId')
-      <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
-    @enderror
-  </div>
-@endif
-
+        {{-- 🧾 Selector de factura --}}
+        @if(!$facturaId)
+          <div>
+            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+              Seleccionar factura
+            </label>
+            <select wire:model="facturaId"
+                    class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
+                           dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
+              <option value="">— Selecciona una factura —</option>
+              @foreach(\App\Models\Factura\Factura::with('socioNegocio')
+                        ->where('saldo', '>', 0)
+                        ->orderByDesc('id')
+                        ->limit(100)
+                        ->get(['id','numero','prefijo','fecha','total','saldo']) as $f)
+                <option value="{{ $f->id }}">
+                  {{ $f->prefijo ? $f->prefijo.'-' : '' }}{{ str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT) }}
+                  — {{ $f->socioNegocio?->razon_social ?? 'Sin cliente' }}
+                  — {{ \Carbon\Carbon::parse($f->fecha)->format('Y-m-d') }}
+                  — Total: ${{ number_format($f->total, 0, ',', '.') }}
+                  — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
+                </option>
+              @endforeach
+            </select>
+            @error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
+          </div>
+        @endif
 
         {{-- 🧮 Resumen de montos --}}
         <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-800/40">
@@ -91,16 +84,13 @@
 
           <div class="mt-2 grid grid-cols-3 gap-3 text-sm">
             <div class="flex justify-between">
-              <span>Total</span>
-              <strong>${{ number_format($fac_total, 2, ',', '.') }}</strong>
+              <span>Total</span><strong>${{ number_format($fac_total, 2, ',', '.') }}</strong>
             </div>
             <div class="flex justify-between">
-              <span>Pagado</span>
-              <strong>${{ number_format($fac_pagado, 2, ',', '.') }}</strong>
+              <span>Pagado</span><strong>${{ number_format($fac_pagado, 2, ',', '.') }}</strong>
             </div>
             <div class="flex justify-between">
-              <span>Saldo</span>
-              <strong class="text-emerald-600">${{ number_format($fac_saldo, 2, ',', '.') }}</strong>
+              <span>Saldo</span><strong class="text-emerald-600">${{ number_format($fac_saldo, 2, ',', '.') }}</strong>
             </div>
           </div>
         </div>
@@ -123,7 +113,6 @@
                           dark:bg-gray-800 dark:text-white px-3"
                    wire:model.defer="notas"
                    placeholder="Observaciones del pago (opcional)">
-            @error('notas') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
           </div>
         </div>
 
@@ -155,46 +144,37 @@
                                      dark:bg-gray-800 dark:text-white px-2">
                         <option value="">— Selecciona —</option>
                         @foreach($medios as $m)
-                          <option value="{{ $m->id }}">
-                            {{ $m->codigo ?? '' }}{{ $m->codigo ? ' — ' : '' }}{{ $m->nombre }}
-                          </option>
+                          <option value="{{ $m->id }}">{{ $m->codigo ? $m->codigo.' — ' : '' }}{{ $m->nombre }}</option>
                         @endforeach
                       </select>
-                      @error('items.'.$idx.'.medio_pago_id')
-                        <div class="text-rose-600 text-[11px] mt-1">{{ $message }}</div>
-                      @enderror
                     </td>
 
-                    {{-- Porcentaje --}}
+                    {{-- % --}}
                     <td class="p-3">
                       <input type="number" step="0.01" min="0" max="100"
                              wire:model.live="items.{{ $idx }}.porcentaje"
-                             class="w-full h-10 text-center rounded-lg border-2 border-gray-200 
-                                    dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
+                             class="w-full h-10 text-center rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
                     </td>
 
                     {{-- Monto --}}
                     <td class="p-3">
                       <input type="number" step="0.01" min="0.01"
                              wire:model.live="items.{{ $idx }}.monto"
-                             class="w-full h-10 text-right rounded-lg border-2 border-gray-200 
-                                    dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
+                             class="w-full h-10 text-right rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
                     </td>
 
-                    {{-- Referencia --}}
+                    {{-- Ref --}}
                     <td class="p-3">
                       <input type="text" maxlength="120"
                              wire:model.defer="items.{{ $idx }}.referencia"
-                             class="w-full h-10 rounded-lg border-2 border-gray-200 
-                                    dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2"
+                             class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2"
                              placeholder="Comprobante o #autorización">
                     </td>
 
                     {{-- Quitar --}}
                     <td class="p-3 text-center">
                       <button type="button" wire:click="removeItem({{ $idx }})"
-                              class="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200"
-                              title="Quitar fila">
+                              class="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200">
                         <i class="fa-solid fa-xmark"></i>
                       </button>
                     </td>
@@ -240,15 +220,12 @@
             Cancelar
           </button>
 
-         <button
-  class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-  wire:click="guardarPago"
-  :disabled="$wire.diff !== 0 || !['emitida','parcialmente_pagada','pagada'].includes($wire.factura?.estado ?? 'borrador')"
-  title="Solo se puede pagar una factura emitida"
->
-  <i class="fa-solid fa-check mr-2"></i> Guardar pago
-</button>
-
+          <button class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  wire:click="guardarPago"
+                  wire:loading.attr="disabled"
+                  title="Guardar el pago y actualizar factura">
+            <i class="fa-solid fa-check mr-2"></i> Guardar pago
+          </button>
         </div>
       </div>
     </div>

@@ -43,7 +43,7 @@ class Bodega extends Component
     #[On('listarBodegas')]
     public function listar(): void
     {
-        $this->bodegas = bodegas::orderBy('id','desc')->get()->toArray();
+        $this->bodegas = Bodega::orderBy('id','desc')->get()->toArray();
     }
 
     public function abrirCrear(): void
@@ -54,7 +54,7 @@ class Bodega extends Component
 
     public function abrirEditar(int $id): void
     {
-        $m = bodegas::findOrFail($id);
+        $m = Bodega::findOrFail($id);
 
         $this->bodega_id = $m->id;
         $this->nombre    = (string) $m->nombre;
@@ -68,7 +68,7 @@ class Bodega extends Component
     {
         $this->validate();
 
-        bodegas::updateOrCreate(
+        Bodega::updateOrCreate(
             ['id' => $this->bodega_id],
             [
                 'nombre'    => $this->nombre,
@@ -87,7 +87,7 @@ class Bodega extends Component
 
     public function toggleEstado(int $id): void
     {
-        $m = bodegas::findOrFail($id);
+        $m = Bodega::findOrFail($id);
         $m->activo = ! $m->activo;
         $m->save();
 
@@ -97,7 +97,7 @@ class Bodega extends Component
 
     public function eliminar(int $id): void
     {
-        bodegas::whereKey($id)->delete();
+        Bodega::whereKey($id)->delete();
         $this->dispatch('toast', type: 'success', message: 'Bodega eliminada.');
         $this->listar();
     }

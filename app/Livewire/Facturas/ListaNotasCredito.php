@@ -74,6 +74,6 @@ class ListaNotasCredito extends Component
 
         $items = $q->paginate($this->perPage);
 
-        return view('livewire.Factura.lista-notas-credito', compact('items'));
+        return view('livewire.Facturas.lista-notas-credito', compact('items'));
     }
 }

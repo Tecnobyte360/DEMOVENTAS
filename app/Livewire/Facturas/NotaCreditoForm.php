@@ -144,107 +144,122 @@ class NotaCreditoForm extends Component
         }
     }
 
-    public function render()
-    {
-        try {
-            $clientes = SocioNegocio::clientes()
-                ->orderBy('razon_social')
-                ->take(200)
-                ->get();
+  public function render()
+{
+    try {
+        $clientes = SocioNegocio::clientes()
+            ->orderBy('razon_social')
+            ->take(200)
+            ->get();
 
-            // Top de productos para el selector
-            $productos = Producto::with([
+        // Top de productos para el selector
+        $productos = Producto::with([
+            'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+            'cuentaIngreso:id,codigo,nombre',
+            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+            'cuentas.cuentaPUC:id,codigo,nombre',
+            'cuentas.tipo:id,codigo,nombre',
+        ])
+            ->where('activo', 1)
+            ->orderBy('nombre')
+            ->take(300)
+            ->get();
+
+        // Incluir productos ya cargados en líneas (aunque inactivos)
+        $idsSeleccionados = collect($this->lineas)
+            ->pluck('producto_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($idsSeleccionados->isNotEmpty()) {
+            $extra = Producto::with([
                 'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
                 'cuentaIngreso:id,codigo,nombre',
                 'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                 'cuentas.cuentaPUC:id,codigo,nombre',
                 'cuentas.tipo:id,codigo,nombre',
-            ])
-                ->where('activo', 1)
-                ->orderBy('nombre')
-                ->take(300)
-                ->get();
+            ])->whereIn('id', $idsSeleccionados)->get();
 
-            // Incluir productos ya cargados en líneas (aunque inactivos)
-            $idsSeleccionados = collect($this->lineas)
-                ->pluck('producto_id')
-                ->filter()
-                ->unique()
-                ->values();
-
-            if ($idsSeleccionados->isNotEmpty()) {
-                $extra = Producto::with([
-                    'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-                    'cuentaIngreso:id,codigo,nombre',
-                    'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-                    'cuentas.cuentaPUC:id,codigo,nombre',
-                    'cuentas.tipo:id,codigo,nombre',
-                ])->whereIn('id', $idsSeleccionados)->get();
-
-                $productos = $productos->merge($extra)->unique('id')->values();
-            }
-
-            $bodegas = Bodegas::orderBy('nombre')->get();
-
-            $cuentasIngresos = PlanCuentas::query()
-                ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
-                ->where('cuenta_activa', 1)
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre']);
-
-            $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->where('clase_cuenta', 'CXC_CLIENTES')
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre']);
-
-            $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
-
-            $impuestosVentas = Impuesto::activos()
-                ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
-                ->orderBy('prioridad')
-                ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
-
-            $condicionesPago = CondicionPago::query()
-                ->orderBy('nombre')
-                ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
-
-            return view('livewire.facturas.nota-credito-form', [
-                'clientes'         => $clientes,
-                'productos'        => $productos,
-                'bodegas'          => $bodegas,
-                'series'           => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,
-                'cuentasCXC'       => $cuentasCXC,
-                'cuentasCaja'      => $cuentasCaja,
-                'impuestosVentas'  => $impuestosVentas,
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => $condicionesPago,
-                'facturasCliente'  => collect($this->facturasCliente),
-            ]);
-        } catch (Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
-
-            return view('livewire.facturas.nota-credito-form', [
-                'clientes'         => collect(),
-                'productos'        => collect(),
-                'bodegas'          => collect(),
-                'series'           => collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => collect(),
-                'cuentasCXC'       => collect(),
-                'cuentasCaja'      => collect(),
-                'impuestosVentas'  => collect(),
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => collect(),
-                'facturasCliente'  => collect(),
-            ]);
+            $productos = $productos->merge($extra)->unique('id')->values();
         }
+
+        $bodegas = Bodegas::orderBy('nombre')->get();
+
+        $cuentasIngresos = PlanCuentas::query()
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+            ->where('cuenta_activa', 1)
+            ->orderBy('codigo')
+            ->get(['id', 'codigo', 'nombre']);
+
+        $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)
+            ->where('titulo', 0)
+            ->where('clase_cuenta', 'CXC_CLIENTES')
+            ->orderBy('codigo')
+            ->get(['id', 'codigo', 'nombre']);
+
+        $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)
+            ->where('titulo', 0)
+            ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
+            ->orderBy('codigo')
+            ->get(['id', 'codigo', 'nombre']);
+
+        $impuestosVentas = Impuesto::activos()
+            ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
+            ->orderBy('prioridad')
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
+
+        $condicionesPago = CondicionPago::orderBy('nombre')
+            ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
+
+        return view('livewire.facturas.nota-credito-form', [
+            'clientes'         => $clientes,
+            'productos'        => $productos,
+            'bodegas'          => $bodegas,
+            'series'           => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
+            'serieDefault'     => $this->serieDefault,
+            'cuentasIngresos'  => $cuentasIngresos,
+            'cuentasCXC'       => $cuentasCXC,
+            'cuentasCaja'      => $cuentasCaja,
+            'impuestosVentas'  => $impuestosVentas,
+            'bloqueada'        => $this->bloqueada,
+            'condicionesPago'  => $condicionesPago,
+            'facturasCliente'  => collect($this->facturasCliente),
+        ]);
+
+    } catch (Throwable $e) {
+        // Registrar el error completo en logs
+        report($e);
+
+        // Mostrar mensaje amigable con detalle del error
+        $mensaje = "No se pudieron cargar los datos auxiliares.";
+        if (app()->environment('local') || app()->environment('development')) {
+            // En desarrollo muestra detalle del error
+            $mensaje .= ' Detalle: ' . $e->getMessage();
+        }
+
+        PendingToast::create()
+            ->error()
+            ->message($mensaje)
+            ->duration(8000);
+
+        return view('livewire.facturas.nota-credito-form', [
+            'clientes'         => collect(),
+            'productos'        => collect(),
+            'bodegas'          => collect(),
+            'series'           => collect(),
+            'serieDefault'     => $this->serieDefault,
+            'cuentasIngresos'  => collect(),
+            'cuentasCXC'       => collect(),
+            'cuentasCaja'      => collect(),
+            'impuestosVentas'  => collect(),
+            'bloqueada'        => $this->bloqueada,
+            'condicionesPago'  => collect(),
+            'facturasCliente'  => collect(),
+        ]);
     }
+}
 
     /* ===== BLOQUEO / SOLO LECTURA ===== */
 

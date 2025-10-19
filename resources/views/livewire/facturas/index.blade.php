@@ -81,12 +81,20 @@
       </section>
 
       {{-- ====== Notas Crédito: lista ====== --}}
-      <section x-show="tab === 'nc_list'" x-transition class="space-y-4">
-        <h2 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
-          <i class="fa-solid fa-rectangle-list text-indigo-500"></i> Notas crédito generadas
-        </h2>
-     <livewire:facturas.nota-credito-form />
-      </section>
+     <section 
+    x-show="tab === 'nc_list'" 
+    x-transition 
+    class="space-y-4"
+>
+  <h2 class="text-xl font-bold text-gray-800 dark:text-white flex items-center gap-2">
+    <i class="fa-solid fa-rectangle-list text-indigo-500"></i> 
+    Notas crédito generadas
+  </h2>
+
+  {{-- Lista de notas crédito --}}
+  <livewire:facturas.lista-notas-credito />
+</section>
+
 
       {{-- ====== 💰 Turno de Caja ====== --}}
       <section x-show="tab === 'caja'" x-transition class="space-y-4">

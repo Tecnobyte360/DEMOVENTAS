@@ -30,6 +30,14 @@
 
   {{-- ====== Si HAY turno abierto ====== --}}
   @else
+    @php
+      // Datos dinámicos que dejó el cierre:
+      $porTipo  = (array) data_get($turno, 'resumen.por_tipo', []);
+      $porMedio = (array) data_get($turno, 'resumen.por_medio', []);
+      // Formateador que evita "-$0"
+      $fmt = function($v){ $v = abs((float)$v) < 0.005 ? 0 : (float)$v; return number_format($v, 0, ',', '.'); };
+    @endphp
+
     <div class="space-y-8">
 
       {{-- ====== RESUMEN DEL TURNO ====== --}}
@@ -44,6 +52,7 @@
           </span>
         </header>
 
+        {{-- Cabecera: inicio / base / total ventas --}}
         <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-700 dark:text-gray-200">
           <div class="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
             <span class="block text-xs text-gray-500 dark:text-gray-400">Inicio</span>
@@ -52,24 +61,61 @@
 
           <div class="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
             <span class="block text-xs text-gray-500 dark:text-gray-400">Base inicial</span>
-            <span class="font-semibold">${{ number_format($turno->base_inicial, 0, ',', '.') }}</span>
+            <span class="font-semibold">${{ $fmt($turno->base_inicial) }}</span>
           </div>
 
           <div class="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">
             <span class="block text-xs text-gray-500 dark:text-gray-400">Total ventas</span>
-            <span class="font-semibold text-indigo-600 dark:text-indigo-400">${{ number_format($turno->total_ventas, 0, ',', '.') }}</span>
+            <span class="font-semibold text-indigo-600 dark:text-indigo-400">${{ $fmt($turno->total_ventas) }}</span>
           </div>
+        </div>
 
-          <div class="col-span-full border-t border-gray-200 dark:border-gray-700 my-2"></div>
+        <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
 
-          <div class="flex justify-between"><span>Efectivo</span><span>${{ number_format($turno->ventas_efectivo,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Débito</span><span>${{ number_format($turno->ventas_debito,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Crédito</span><span>${{ number_format($turno->ventas_credito_tarjeta,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Transferencias</span><span>${{ number_format($turno->ventas_transferencias,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Ventas a crédito</span><span>${{ number_format($turno->ventas_a_credito,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Devoluciones</span><span>${{ number_format($turno->devoluciones,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Ingresos</span><span>${{ number_format($turno->ingresos_efectivo,0,',','.') }}</span></div>
-          <div class="flex justify-between"><span>Retiros</span><span class="text-red-600 dark:text-red-400">-${{ number_format($turno->retiros_efectivo,0,',','.') }}</span></div>
+        {{-- Bloque dinámico: totales por TIPO de medio de pago --}}
+        <div class="space-y-2">
+          <h4 class="text-xs uppercase tracking-wider text-gray-500">Por tipo de medio</h4>
+          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 text-sm">
+            @forelse($porTipo as $tipo => $total)
+              <div class="flex items-center justify-between px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                <span class="text-gray-600 dark:text-gray-300">{{ ucfirst(strtolower($tipo)) }}</span>
+                <span class="font-semibold">${{ $fmt($total) }}</span>
+              </div>
+            @empty
+              <div class="col-span-full text-gray-500">Sin movimientos aún…</div>
+            @endforelse
+          </div>
+        </div>
+
+        {{-- Bloque dinámico: totales por MEDIO configurado --}}
+        <div class="space-y-2 mt-5">
+          <h4 class="text-xs uppercase tracking-wider text-gray-500">Por medio de pago</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+            @forelse(collect($porMedio)->sortBy('nombre') as $m)
+              <div class="flex items-center justify-between px-3 py-2 rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+                <div class="truncate">
+                  <div class="font-medium text-gray-700 dark:text-gray-200">
+                    {{ $m['nombre'] ?? ($m['codigo'] ?? 'Sin nombre') }}
+                  </div>
+                  <div class="text-xs text-gray-400">Tipo: {{ ucfirst(strtolower($m['tipo'] ?? 'OTRO')) }}</div>
+                </div>
+                <div class="font-semibold whitespace-nowrap">
+                  ${{ $fmt($m['total'] ?? 0) }}
+                </div>
+              </div>
+            @empty
+              <div class="text-gray-500">Aún no hay pagos por medio.</div>
+            @endforelse
+          </div>
+        </div>
+
+        {{-- Totales operativos (compatibles con tus columnas clásicas) --}}
+        <div class="border-t border-gray-200 dark:border-gray-700 my-4"></div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+          <div class="flex justify-between"><span>Ventas a crédito</span><span class="font-semibold">${{ $fmt($turno->ventas_a_credito) }}</span></div>
+          <div class="flex justify-between"><span>Devoluciones</span><span class="font-semibold">${{ $fmt($turno->devoluciones) }}</span></div>
+          <div class="flex justify-between"><span>Ingresos</span><span class="font-semibold">${{ $fmt($turno->ingresos_efectivo) }}</span></div>
+          <div class="flex justify-between"><span>Retiros</span><span class="font-semibold text-red-600 dark:text-red-400">-${{ $fmt($turno->retiros_efectivo) }}</span></div>
         </div>
       </section>
 

@@ -27,11 +27,18 @@ class MediosPagos extends Component
     public bool $showModal = false;
     public ?int $editingId = null;
 
-    /** Campos del formulario */
+    /** Campos del formulario (básicos) */
     public string $codigo = '';
     public string $nombre = '';
     public bool $activo   = true;
     public int  $orden    = 1;
+
+    /** ===== Campos dinámicos de caja ===== */
+    public bool $requiere_turno   = false;
+    public bool $crear_movimiento = false;
+    public string $tipo_movimiento = 'INGRESO'; // o 'EGRESO'
+    public bool $contar_en_total  = true;
+    public ?string $clave_turno   = null;
 
     /** Cuenta contable asociada (1–1) */
     public ?int $plan_cuentas_id = null;
@@ -105,6 +112,14 @@ class MediosPagos extends Component
             'nombre' => ['required','string','max:100'],
             'orden'  => ['integer','min:1'],
             'activo' => ['boolean'],
+
+            // ===== Dinámicos de caja =====
+            'requiere_turno'   => ['boolean'],
+            'crear_movimiento' => ['boolean'],
+            'tipo_movimiento'  => ['required','in:INGRESO,EGRESO'],
+            'contar_en_total'  => ['boolean'],
+            'clave_turno'      => ['nullable','string','max:50'],
+
             // La cuenta puede ser opcional; si la quieres obligatoria, cambia a 'required|exists:plan_cuentas,id'
             'plan_cuentas_id' => ['nullable','exists:plan_cuentas,id'],
         ];
@@ -125,11 +140,20 @@ class MediosPagos extends Component
             $row = MedioPagos::with('cuenta')->findOrFail($id);
 
             $this->editingId       = $row->id;
-            $this->codigo          = $row->codigo;
-            $this->nombre          = $row->nombre;
-            $this->activo          = (bool)$row->activo;
-            $this->orden           = (int)$row->orden;
-            $this->plan_cuentas_id = $row->cuenta?->plan_cuentas_id; 
+            $this->codigo          = (string) $row->codigo;
+            $this->nombre          = (string) $row->nombre;
+            $this->activo          = (bool) $row->activo;
+            $this->orden           = (int) $row->orden;
+
+            // Dinámicos
+            $this->requiere_turno   = (bool) $row->requiere_turno;
+            $this->crear_movimiento = (bool) $row->crear_movimiento;
+            $this->tipo_movimiento  = $row->tipo_movimiento ?: 'INGRESO';
+            $this->contar_en_total  = (bool) $row->contar_en_total;
+            $this->clave_turno      = $row->clave_turno;
+
+            // Cuenta asociada
+            $this->plan_cuentas_id = $row->cuenta?->plan_cuentas_id;
 
             $this->showModal = true;
         } catch (Throwable $e) {
@@ -148,6 +172,13 @@ class MediosPagos extends Component
                     'nombre' => $this->nombre,
                     'activo' => $this->activo,
                     'orden'  => $this->orden,
+
+                    // Dinámicos de caja
+                    'requiere_turno'   => $this->requiere_turno,
+                    'crear_movimiento' => $this->crear_movimiento,
+                    'tipo_movimiento'  => $this->tipo_movimiento,
+                    'contar_en_total'  => $this->contar_en_total,
+                    'clave_turno'      => $this->clave_turno,
                 ];
 
                 if ($this->editingId) {
@@ -170,14 +201,14 @@ class MediosPagos extends Component
                 }
             });
 
-            $msg = $this->editingId ? 'Medio de pago guardado.' : 'Medio de pago creado.';
-            PendingToast::create()->success()->message($msg)->duration(3000);
+            PendingToast::create()->success()
+                ->message($this->editingId ? 'Medio de pago guardado.' : 'Medio de pago creado.')
+                ->duration(3000);
 
             $this->showModal = false;
             $this->resetForm();
 
         } catch (ValidationException $e) {
-            // Deja que Livewire muestre los errores de validación por campo
             throw $e;
         } catch (Throwable $e) {
             $this->handleException($e, 'Error al guardar el medio de pago.');
@@ -226,15 +257,22 @@ class MediosPagos extends Component
     private function resetForm(): void
     {
         $this->reset([
-            'editingId','codigo','nombre','activo','orden','plan_cuentas_id'
+            'editingId','codigo','nombre','activo','orden','plan_cuentas_id',
+            'requiere_turno','crear_movimiento','tipo_movimiento','contar_en_total','clave_turno',
         ]);
+
+        // Defaults
         $this->activo = true;
         $this->orden  = 1;
+
+        $this->requiere_turno   = false;
+        $this->crear_movimiento = false;
+        $this->tipo_movimiento  = 'INGRESO';
+        $this->contar_en_total  = true;
+        $this->clave_turno      = null;
     }
 
-    /**
-     * Log centralizado + toast de error.
-     */
+    /** Log centralizado + toast de error. */
     private function handleException(Throwable $e, string $userMessage, array $context = []): void
     {
         Log::error($userMessage, array_merge($context, [
@@ -245,8 +283,5 @@ class MediosPagos extends Component
         ]));
 
         PendingToast::create()->danger()->message($userMessage)->duration(3500);
-
-        // También puedes mostrar un error no asociado a campo:
-        // $this->addError('general', $userMessage);
     }
 }

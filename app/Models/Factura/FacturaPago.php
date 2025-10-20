@@ -19,7 +19,7 @@ class FacturaPago extends Model
         'monto',
         'notas',
         'medio_pago_id',
-        'turno_id', // 👈 NUEVO: amarra el pago al turno
+        'turno_id', 
     ];
 
     protected $casts = [

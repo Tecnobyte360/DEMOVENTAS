@@ -13,23 +13,30 @@ class MedioPagos extends Model
         'nombre',
         'activo',
         'orden',
+
+        // Config dinámica:
+        'requiere_turno',
+        'crear_movimiento',
+        'tipo_movimiento',
+        'contar_en_total',
+        'clave_turno',
     ];
 
     protected $casts = [
-        'activo' => 'boolean',
-        'orden'  => 'integer',
+        'activo'           => 'boolean',
+        'orden'            => 'integer',
+        'requiere_turno'   => 'boolean',
+        'crear_movimiento' => 'boolean',
+        'contar_en_total'  => 'boolean',
     ];
 
-    /**
-     * Relación 1–1: cuenta contable asociada al medio de pago.
-     * (tabla: medio_pago_cuentas, FK: medio_pago_id)
-     */
+    /** Relación 1–1: cuenta contable asociada */
     public function cuenta()
     {
         return $this->hasOne(MedioPagoCuenta::class, 'medio_pago_id');
     }
 
-    /* Scopes útiles (opcionales) */
+    /* Scopes */
     public function scopeActivos($q, bool $solo = true)
     {
         return $solo ? $q->where('activo', true) : $q;
@@ -39,5 +46,4 @@ class MedioPagos extends Model
     {
         return $q->orderBy('orden')->orderBy('id');
     }
-    
 }

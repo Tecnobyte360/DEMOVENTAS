@@ -41,7 +41,7 @@
           ? 'bg-indigo-600 text-white shadow'
           : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
         class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
-        <i class="fa-solid fa-rectangle-list"></i> Notas crédito
+        <i class="fa-solid fa-rectangle-list"></i> Notas crédito generadas
       </button>
 
       <!-- 💰 Turno de Caja -->

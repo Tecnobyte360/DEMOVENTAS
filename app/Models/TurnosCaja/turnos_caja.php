@@ -12,7 +12,7 @@ class turnos_caja extends Model
     protected $table = 'turnos_caja';
 
     protected $fillable = [
-        'user_id','bodega_id','fecha_inicio','fecha_cierre','base_inicial',
+        'user_id','fecha_inicio','fecha_cierre','base_inicial',
         'total_ventas','ventas_efectivo','ventas_debito','ventas_credito_tarjeta',
         'ventas_transferencias','ventas_a_credito','devoluciones',
         'ingresos_efectivo','retiros_efectivo','estado','resumen'
@@ -24,12 +24,19 @@ class turnos_caja extends Model
         'resumen'      => AsArrayObject::class,
     ];
 
-    public function pagos(): HasMany    { return $this->hasMany(FacturaPago::class, 'turno_id'); }
-    public function movimientos(): HasMany { return $this->hasMany(CajaMovimiento::class, 'turno_id'); }
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(FacturaPago::class, 'turno_id');
+    }
 
-    public function scopeAbiertoDe($q, int $userId, ?int $bodegaId = null) {
-        $q->where('user_id',$userId)->where('estado','abierto');
-        if ($bodegaId) $q->where('bodega_id',$bodegaId);
-        return $q;
+    public function movimientos(): HasMany
+    {
+        return $this->hasMany(CajaMovimiento::class, 'turno_id');
+    }
+
+    /** Turnos abiertos por usuario (sin bodega) */
+    public function scopeAbiertoDe($q, int $userId)
+    {
+        return $q->where('user_id', $userId)->where('estado', 'abierto');
     }
 }

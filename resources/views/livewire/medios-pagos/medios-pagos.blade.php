@@ -137,6 +137,22 @@
                       Sin cuenta
                     @endif
                   </span>
+
+                  {{-- Badges dinámicos --}}
+                  <span class="px-2 py-0.5 rounded-full {{ $it->requiere_turno ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-gray-100 text-gray-600' }}">
+                    Turno: {{ $it->requiere_turno ? 'Sí' : 'No' }}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full {{ $it->crear_movimiento ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600' }}">
+                    Mov.: {{ $it->crear_movimiento ? ($it->tipo_movimiento ?? 'INGRESO') : 'No' }}
+                  </span>
+                  <span class="px-2 py-0.5 rounded-full {{ $it->contar_en_total ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600' }}">
+                    Total: {{ $it->contar_en_total ? 'Sí' : 'No' }}
+                  </span>
+                  @if($it->clave_turno)
+                    <span class="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                      Col.: {{ $it->clave_turno }}
+                    </span>
+                  @endif
                 </div>
 
                 @if($cu)
@@ -181,6 +197,10 @@
               <th class="p-3 text-left">Nombre</th>
               <th class="p-3 text-left">Código</th>
               <th class="p-3 text-left">Cuenta PUC</th>
+              <th class="p-3 text-center">Turno</th>
+              <th class="p-3 text-center">Movimiento</th>
+              <th class="p-3 text-center">Contar total</th>
+              <th class="p-3 text-left">Columna turno</th>
               <th class="p-3 text-center">Estado</th>
               <th class="p-3 text-right">Orden</th>
               <th class="p-3 text-center">Acciones</th>
@@ -202,6 +222,32 @@
                     </span>
                   @else
                     <span class="text-gray-400 italic text-xs">Sin cuenta</span>
+                  @endif
+                </td>
+                <td class="p-3 text-center">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] {{ $it->requiere_turno ? 'bg-fuchsia-100 text-fuchsia-700' : 'bg-gray-100 text-gray-600' }}">
+                    {{ $it->requiere_turno ? 'Sí' : 'No' }}
+                  </span>
+                </td>
+                <td class="p-3 text-center">
+                  @if($it->crear_movimiento)
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] {{ $it->tipo_movimiento === 'EGRESO' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700' }}">
+                      {{ $it->tipo_movimiento ?? 'INGRESO' }}
+                    </span>
+                  @else
+                    <span class="text-xs text-gray-500 italic">No</span>
+                  @endif
+                </td>
+                <td class="p-3 text-center">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] {{ $it->contar_en_total ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600' }}">
+                    {{ $it->contar_en_total ? 'Sí' : 'No' }}
+                  </span>
+                </td>
+                <td class="p-3">
+                  @if($it->clave_turno)
+                    <code class="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">{{ $it->clave_turno }}</code>
+                  @else
+                    <span class="text-xs text-gray-400 italic">—</span>
                   @endif
                 </td>
                 <td class="p-3 text-center">
@@ -229,7 +275,7 @@
               </tr>
             @empty
               <tr>
-                <td colspan="6" class="p-6 text-center text-gray-500 dark:text-gray-400">No hay medios de pago.</td>
+                <td colspan="10" class="p-6 text-center text-gray-500 dark:text-gray-400">No hay medios de pago.</td>
               </tr>
             @endforelse
           </tbody>
@@ -277,7 +323,7 @@
             <input
               type="text"
               wire:model.defer="codigo"
-              placeholder="EFECTIVO"
+              placeholder="EFECTIVO / NEQUI / TRANSF_BBVA ..."
               class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('codigo') border-red-500 focus:ring-red-300 @enderror"
             />
             @error('codigo') <div class="text-xs text-red-600 mt-1">{{ $message }}</div> @enderror
@@ -302,6 +348,74 @@
             @error('orden') <div class="text-xs text-red-600 mt-1">{{ $message }}</div> @enderror
           </div>
 
+          {{-- ======== BLOQUE DINÁMICO: Comportamiento en caja ======== --}}
+          <div class="md:col-span-12">
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 p-4">
+              <div class="flex items-center gap-2 mb-3">
+                <i class="fa-solid fa-cash-register text-violet-600"></i>
+                <span class="font-semibold">Comportamiento en caja</span>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                {{-- Requiere turno --}}
+                <div class="md:col-span-4 flex items-center">
+                  <label class="inline-flex items-center gap-2">
+                    <input type="checkbox" wire:model="requiere_turno" class="rounded">
+                    <span class="text-sm">Requiere turno abierto</span>
+                  </label>
+                </div>
+
+                {{-- Crear movimiento --}}
+                <div class="md:col-span-4 flex items-center">
+                  <label class="inline-flex items-center gap-2">
+                    <input type="checkbox" wire:model="crear_movimiento" class="rounded">
+                    <span class="text-sm">Crear movimiento de caja</span>
+                  </label>
+                </div>
+
+                {{-- Tipo movimiento --}}
+                <div class="md:col-span-4">
+                  <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Tipo de movimiento</label>
+                  <select
+  wire:model.defer="tipo_movimiento"
+  class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('tipo_movimiento') border-red-500 focus:ring-red-300 @enderror"
+  @disabled(!$crear_movimiento)
+>
+  <option value="INGRESO">INGRESO</option>
+  <option value="EGRESO">EGRESO</option>
+</select>
+
+                  @error('tipo_movimiento') <div class="text-xs text-red-600 mt-1">{{ $message }}</div> @enderror
+                </div>
+
+                {{-- Contar en total --}}
+                <div class="md:col-span-4 flex items-center">
+                  <label class="inline-flex items-center gap-2">
+                    <input type="checkbox" wire:model="contar_en_total" class="rounded">
+                    <span class="text-sm">Suma en total de ventas</span>
+                  </label>
+                </div>
+
+                {{-- Clave turno --}}
+                <div class="md:col-span-8">
+                  <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                    Columna en turnos_caja (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    wire:model.defer="clave_turno"
+                    placeholder="ventas_efectivo / ventas_transferencias / ventas_pse …"
+                    class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('clave_turno') border-red-500 focus:ring-red-300 @enderror"
+                  />
+                  @error('clave_turno') <div class="text-xs text-red-600 mt-1">{{ $message }}</div> @enderror
+                  <p class="text-[11px] text-gray-500 mt-1">
+                    Si existe esa columna en la tabla <code>turnos_caja</code>, se incrementará automáticamente.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {{-- Cuenta contable asociada (1–1) --}}
           <div class="md:col-span-12">
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
@@ -317,7 +431,6 @@
               @endforeach
             </select>
             @error('plan_cuentas_id') <div class="text-xs text-red-600 mt-1">{{ $message }}</div> @enderror
-           
           </div>
         </div>
 
@@ -365,6 +478,4 @@
       </div>
     </div>
   </div>
-
-  
 </div>

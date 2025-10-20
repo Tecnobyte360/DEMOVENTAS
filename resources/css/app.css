@@ -2,57 +2,146 @@
 @import './additional-styles/flatpickr.css';
 @import './additional-styles/utility-patterns.css' layer(components);
 
+/* Plugins / variantes */
 @plugin "@tailwindcss/forms" { strategy: base; }
 @custom-variant dark (&:is(.dark *));
 @custom-variant sidebar-expanded (&:is(.sidebar-expanded *));
 
-/* ====== COMPACT GLOBAL ====== */
+/* =========================================================
+   BASE COMPACT GLOBAL + ACCESIBILIDAD
+   ======================================================= */
 @layer base {
-  /* Fuente base más pequeña en todo el sitio */
-  html { font-size: 14px; }              /* (16px → 14px ~ -12.5%) */
+  :root {
+    /* Escala de densidad (puedes ajustarla) */
+    --ui-font-size: 14px;
+    --ui-font-size-xl: 13px;  /* >= 1536px */
+    --ui-radius: 1rem;        /* ≈ rounded-2xl */
+    --ui-gap: 1rem;           /* base gap */
+    --ui-gap-compact: .5rem;  /* gap en compacto */
+  }
+
+  html { font-size: var(--ui-font-size); }
   @media (min-width: 1536px) {
-    html { font-size: 13px; }            /* aún más denso en pantallas muy grandes */
+    html { font-size: var(--ui-font-size-xl); }
+  }
+
+  /* Mejor foco por accesibilidad */
+  :focus-visible {
+    outline: 2px solid theme('colors.indigo.500');
+    outline-offset: 2px;
+  }
+  .dark :focus-visible {
+    outline-color: theme('colors.indigo.400');
+  }
+
+  /* Respeto por usuarios con reducción de movimiento */
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
   }
 }
 
+/* =========================================================
+   UTILIDADES UI-COMPACT Y COZY
+   ======================================================= */
 @layer utilities {
-  /* Inputs, selects, textareas, TomSelect, etc. */
+  /* ---------- Toggle de densidad ---------- */
+  .ui-compact { --ui-gap: var(--ui-gap-compact); }
+  .ui-cozy    { --ui-gap: 1.25rem; } /* una opción más aireada */
+
+  /* ---------- Inputs / selects / textareas / TomSelect ---------- */
   .ui-compact :is(input, select, textarea, [role="combobox"], .ts-control) {
     @apply h-9 text-sm;
+    border-radius: calc(var(--ui-radius) - .5rem);
   }
+  .ui-compact :is(input, select, textarea) {
+    @apply py-2 px-2;
+  }
+  /* TomSelect */
+  .ui-compact .ts-control {
+    @apply min-h-0 py-1.5 px-2 text-sm;
+    border-radius: calc(var(--ui-radius) - .5rem);
+  }
+  .ui-compact .ts-dropdown .option { @apply py-1.5 px-2 text-sm; }
 
-  /* Botones generales */
+  /* ---------- Botones ---------- */
   .ui-compact :is(button,.btn,[type="button"],[type="submit"]) {
     @apply h-9 px-3 text-sm;
+    border-radius: calc(var(--ui-radius) - .5rem);
   }
 
-  /* Tablas más densas */
-  .ui-compact table :is(th, td) {
-    @apply py-2 px-2 text-sm;
-  }
+  /* ---------- Tablas densas ---------- */
+  .ui-compact table :is(th, td) { @apply py-2 px-2 text-sm; }
+  .ui-compact table thead th    { @apply font-semibold; }
 
-  /* Cards / secciones con menos padding (sobrescribe p-6/p-8 comunes) */
-  .ui-compact .p-6, 
-  .ui-compact .p-8,
-  .ui-compact .py-6, 
-  .ui-compact .py-8,
-  .ui-compact .px-6, 
-  .ui-compact .px-8 {
-    @apply p-4;
-  }
-
-  /* Encabezados/hero más comprimidos */
-  .ui-compact .hero,
-  .ui-compact [data-hero] {
-    @apply py-5;
-  }
-
-  /* Grids con menos espacios */
-  .ui-compact .gap-6 { @apply gap-3; }
-  .ui-compact .gap-4 { @apply gap-2; }
-
-  /* Contenedores con bordes/paddings clásicos (útil para tus cards) */
+  /* ---------- Cards / secciones ---------- */
   .ui-compact .card {
     @apply rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow;
+    border-radius: var(--ui-radius);
   }
+
+  /* Sobrescribe padding comunes p-6/p-8 → p-4 (y variantes x/y) */
+  .ui-compact :is(.p-6,.p-8,.py-6,.py-8,.px-6,.px-8) { @apply p-4; }
+
+  /* ---------- Encabezados / hero ---------- */
+  .ui-compact :is(.hero, [data-hero]) { @apply py-5; }
+
+  /* ---------- Grids con menos espacios ---------- */
+  .ui-compact .gap-6 { gap: var(--ui-gap); }
+  .ui-compact .gap-4 { gap: calc(var(--ui-gap) * .75); }
+
+  /* ---------- Listas, chips, badges densos ---------- */
+  .ui-compact .badge { @apply text-xs py-1 px-2 rounded-lg; }
+  .ui-compact .chip  { @apply text-xs py-1 px-2 rounded-lg; }
+
+  /* ---------- Toolbars / headers de sección ---------- */
+  .ui-compact .section-header {
+    @apply flex items-center justify-between;
+    @apply py-3;
+  }
+
+  /* ---------- Altura de selects “nativos” en forms plugin ---------- */
+  .ui-compact select {
+    @apply leading-none;
+  }
+}
+
+/* =========================================================
+   COMPONENTES OPCIONALES (layer: components)
+   ======================================================= */
+@layer components {
+  /* Botón primario coherente en ambos modos */
+  .btn-primary {
+    @apply inline-flex items-center justify-center font-semibold;
+    @apply bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800;
+    @apply disabled:opacity-60 disabled:cursor-not-allowed;
+    border-radius: var(--ui-radius);
+    min-height: 2.5rem; /* fallback si no hay h-* */
+    padding-inline: .875rem;
+  }
+  .dark .btn-primary {
+    @apply bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700;
+  }
+
+  /* Card estándar */
+  .card {
+    @apply rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow;
+    border-radius: var(--ui-radius);
+  }
+
+  /* Header de card compacto */
+  .card-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800;
+  }
+  .card-body   { @apply p-4; }
+  .card-footer { @apply px-4 py-3 border-t border-gray-100 dark:border-gray-800; }
+}
+
+/* =========================================================
+   LAYOUTS ESPECIALES
+   ======================================================= */
+@layer utilities {
+  /* Sidebar expanded variant ya declarada con @custom-variant
+     aquí puedes ajustar medidas cuando el layout expande el aside */
+  .sidebar-expanded .sidebar-width        { width: 18rem; }
+  .sidebar-expanded .main-with-sidebar    { margin-left: 18rem; }
 }

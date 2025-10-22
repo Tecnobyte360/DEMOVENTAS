@@ -32,15 +32,15 @@
      x-cloak
      class="fixed inset-0 z-[100] flex items-center justify-center p-4">
 
-  {{-- Backdrop Premium --}}
-  <div class="absolute inset-0 bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 backdrop-blur-md" 
+  {{-- Backdrop --}}
+  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" 
        @click="$wire.cerrar()"></div>
 
-  {{-- Dialog Premium --}}
-  <div class="mapa-modal relative z-10 w-full max-w-7xl rounded-2xl bg-white dark:bg-slate-900 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
+  {{-- Dialog --}}
+  <div class="mapa-modal relative z-10 w-full max-w-7xl rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
     
-    {{-- Header Corporativo --}}
-    <div class="relative bg-gradient-to-r from-slate-50 via-white to-slate-50 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800 border-b border-slate-200 dark:border-slate-700">
+    {{-- Header --}}
+    <div class="relative bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
       <div class="px-8 py-5 flex items-center justify-between">
         <div class="flex items-center gap-4">
           <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30">
@@ -75,39 +75,39 @@
         </div>
       </div>
 
-      {{-- Leyenda Premium --}}
-      <div class="px-8 py-4 bg-slate-50/50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
+      {{-- Leyenda --}}
+      <div class="px-8 py-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
         <div class="flex items-center gap-6">
           <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipos de documento:</span>
           
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 shadow-sm"></div>
+              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-blue-400 to-blue-600"></div>
               <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Factura</span>
             </div>
             
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-sm"></div>
+              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600"></div>
               <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Pago</span>
             </div>
             
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 shadow-sm"></div>
+              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-amber-600"></div>
               <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Nota crédito</span>
             </div>
             
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-sky-400 to-sky-600 shadow-sm"></div>
+              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-sky-400 to-sky-600"></div>
               <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Entrega</span>
             </div>
             
             <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600 shadow-sm"></div>
+              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600"></div>
               <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Orden</span>
             </div>
             
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 shadow-sm"></div>
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm">
+              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-slate-300 to-slate-500"></div>
               <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Cliente</span>
             </div>
           </div>
@@ -115,12 +115,12 @@
       </div>
     </div>
 
-    {{-- Canvas Premium --}}
-    <div class="p-8 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
-      <div x-ref="cy" class="h-[70vh] w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 shadow-inner"></div>
+    {{-- Canvas --}}
+    <div class="p-8 bg-white dark:bg-slate-900">
+      <div x-ref="cy" class="h-[70vh] w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"></div>
     </div>
 
-    {{-- Footer Info --}}
+    {{-- Footer --}}
     <div class="px-8 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
       <div class="flex items-center gap-6 text-xs text-slate-500 dark:text-slate-400">
         <div class="flex items-center gap-2">
@@ -133,7 +133,7 @@
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
           </svg>
-          <span>Arrastra para mover el canvas</span>
+          <span>Arrastra para mover</span>
         </div>
       </div>
       
@@ -150,141 +150,114 @@
     let cy = null;
 
     const style = [
-      // Nodos estilo SAP - Ultra profesional
+      // Nodos estilo "Post-it" SAP
       {
         selector: 'node',
         style: {
-          'shape': 'roundrectangle',
-          'background-color': '#ffffff',
+          'shape': 'rectangle',
+          'background-color': '#F5F5DC',
           'background-opacity': 1,
-          'border-width': 2,
-          'border-color': '#CBD5E1',
-          'border-opacity': 1,
-          'padding': '18px',
+          'border-width': 1,
+          'border-color': '#999999',
+          'border-style': 'solid',
+          'padding': '8px',
           'label': 'data(label)',
           'text-wrap': 'wrap',
-          'text-max-width': '160px',
-          'text-valign': 'center',
-          'text-halign': 'center',
-          'font-size': 13,
-          'font-weight': 600,
-          'font-family': '"Inter", "Segoe UI", system-ui, -apple-system, sans-serif',
-          'color': '#1e293b',
-          'width': 180,
-          'height': 85,
+          'text-max-width': '140px',
+          'text-valign': 'top',
+          'text-halign': 'left',
+          'font-size': 11,
+          'font-weight': 'bold',
+          'font-family': 'Arial, sans-serif',
+          'color': '#333333',
+          'width': 160,
+          'height': 90,
+          'text-margin-y': 8,
+          'text-margin-x': 8,
           'overlay-opacity': 0,
-          'shadow-blur': 16,
-          'shadow-color': '#00000012',
-          'shadow-offset-x': 0,
-          'shadow-offset-y': 4
+          'shadow-blur': 8,
+          'shadow-color': '#00000040',
+          'shadow-offset-x': 3,
+          'shadow-offset-y': 3
         }
       },
-      // Hover universal
-      {
-        selector: 'node:active',
-        style: {
-          'shadow-blur': 24,
-          'shadow-color': '#00000025',
-          'border-width': 3,
-          'overlay-opacity': 0
-        }
-      },
-      // FACTURA - Azul corporativo
+      // FACTURA - Fondo beige/crema
       {
         selector: 'node[type="factura"]',
         style: {
-          'background-color': '#EFF6FF',
-          'border-color': '#3B82F6',
-          'border-width': 3,
-          'color': '#1E40AF',
-          'background-gradient-stop-colors': '#EFF6FF #DBEAFE'
+          'background-color': '#FFFACD',
+          'border-color': '#DAA520',
+          'border-width': 2
         }
       },
-      // PAGO - Verde éxito
+      // PAGO - Fondo verde claro
       {
         selector: 'node[type="pago"]',
         style: {
-          'background-color': '#ECFDF5',
-          'border-color': '#10B981',
-          'border-width': 3,
-          'color': '#047857'
+          'background-color': '#E6F4EA',
+          'border-color': '#34A853',
+          'border-width': 2
         }
       },
-      // NOTA CRÉDITO - Ámbar advertencia
+      // NOTA CRÉDITO - Fondo naranja claro
       {
         selector: 'node[type="nc"]',
         style: {
-          'background-color': '#FFFBEB',
-          'border-color': '#F59E0B',
-          'border-width': 3,
-          'color': '#B45309'
+          'background-color': '#FFF4E6',
+          'border-color': '#FF8C00',
+          'border-width': 2
         }
       },
-      // ENTREGA - Celeste
+      // ENTREGA - Fondo celeste
       {
         selector: 'node[type="entrega"]',
         style: {
-          'background-color': '#F0F9FF',
-          'border-color': '#0EA5E9',
-          'border-width': 3,
-          'color': '#0369A1'
+          'background-color': '#E3F2FD',
+          'border-color': '#4285F4',
+          'border-width': 2
         }
       },
-      // ORDEN - Amarillo
+      // ORDEN - Fondo amarillo
       {
         selector: 'node[type="orden"]',
         style: {
-          'background-color': '#FEFCE8',
-          'border-color': '#EAB308',
-          'border-width': 3,
-          'color': '#A16207'
+          'background-color': '#FFFDE7',
+          'border-color': '#FBC02D',
+          'border-width': 2
         }
       },
-      // CLIENTE - Gris neutro
+      // CLIENTE - Fondo gris claro
       {
         selector: 'node[type="cliente"]',
         style: {
-          'background-color': '#F8FAFC',
-          'border-color': '#64748B',
-          'border-width': 3,
-          'color': '#334155'
+          'background-color': '#F5F5F5',
+          'border-color': '#666666',
+          'border-width': 2
         }
       },
-      // Aristas estilo SAP
+      // Aristas tipo SAP - líneas azules con flecha
       {
         selector: 'edge',
         style: {
           'curve-style': 'bezier',
-          'width': 2.5,
-          'line-color': '#94A3B8',
-          'line-opacity': 0.6,
+          'width': 2,
+          'line-color': '#6699CC',
+          'line-opacity': 0.8,
           'target-arrow-shape': 'triangle',
-          'target-arrow-color': '#94A3B8',
-          'arrow-scale': 1.4,
-          'label': 'data(label)',
-          'font-size': 11,
-          'font-weight': 600,
-          'font-family': '"Inter", "Segoe UI", system-ui, sans-serif',
-          'color': '#475569',
-          'text-background-color': '#ffffff',
-          'text-background-opacity': 0.95,
-          'text-background-padding': 5,
-          'text-background-shape': 'roundrectangle',
-          'text-border-color': '#E2E8F0',
-          'text-border-width': 1.5,
-          'text-border-opacity': 1,
-          'edge-text-rotation': 'autorotate',
-          'text-margin-y': -8
+          'target-arrow-color': '#6699CC',
+          'arrow-scale': 1.2,
+          'label': '',
+          'overlay-opacity': 0
         }
       },
       // Hover en aristas
       {
         selector: 'edge:active',
         style: {
-          'line-color': '#64748B',
-          'target-arrow-color': '#64748B',
-          'width': 3.5,
-          'line-opacity': 0.9
+          'line-color': '#3366CC',
+          'target-arrow-color': '#3366CC',
+          'width': 3,
+          'line-opacity': 1
         }
       }
     ];
@@ -293,10 +266,24 @@
       const els = [];
       (graph?.nodes || []).forEach(n => {
         const data = { ...(n.data ?? n) };
-        if (data.sub) {
-          data.label = data.label + '\n' + data.sub;
-          delete data.sub;
+        
+        // Formatear el label estilo SAP (título en bold + detalles)
+        let lines = [];
+        const originalLabel = data.label || '';
+        const sub = data.sub || '';
+        
+        // Dividir label original si tiene saltos de línea
+        const labelParts = originalLabel.split('\n');
+        lines = [...labelParts];
+        
+        // Agregar sub si existe
+        if (sub) {
+          lines.push(sub);
         }
+        
+        data.label = lines.join('\n');
+        delete data.sub;
+        
         els.push({ data });
       });
       (graph?.edges || []).forEach(e => els.push({ data: e.data ?? e }));
@@ -320,65 +307,33 @@
         layout: {
           name: 'dagre',
           rankDir: 'LR',
-          nodeSep: 80,
-          edgeSep: 40,
-          rankSep: 140,
-          padding: 50,
-          animate: true,
-          animationDuration: 400,
-          animationEasing: 'ease-out-cubic'
+          nodeSep: 70,
+          edgeSep: 30,
+          rankSep: 120,
+          padding: 40,
+          animate: false
         },
-        wheelSensitivity: 0.12,
-        minZoom: 0.3,
+        wheelSensitivity: 0.15,
+        minZoom: 0.4,
         maxZoom: 2.5
       });
 
-      setTimeout(() => cy.fit(null, 60), 100);
+      setTimeout(() => cy.fit(null, 50), 100);
 
-      // Interacciones premium
+      // Hover efectos sutiles
       cy.on('mouseover', 'node', (e) => {
         e.target.style({
-          'shadow-blur': 24,
-          'shadow-color': '#00000025',
-          'border-width': 3
-        });
-        e.target.connectedEdges().style({
-          'line-color': '#3B82F6',
-          'target-arrow-color': '#3B82F6',
-          'width': 3.5,
-          'line-opacity': 0.9
+          'shadow-blur': 12,
+          'shadow-offset-x': 4,
+          'shadow-offset-y': 4
         });
       });
 
       cy.on('mouseout', 'node', (e) => {
         e.target.style({
-          'shadow-blur': 16,
-          'shadow-color': '#00000012',
-          'border-width': 3
-        });
-        e.target.connectedEdges().style({
-          'line-color': '#94A3B8',
-          'target-arrow-color': '#94A3B8',
-          'width': 2.5,
-          'line-opacity': 0.6
-        });
-      });
-
-      cy.on('mouseover', 'edge', (e) => {
-        e.target.style({
-          'line-color': '#3B82F6',
-          'target-arrow-color': '#3B82F6',
-          'width': 3.5,
-          'line-opacity': 0.9
-        });
-      });
-
-      cy.on('mouseout', 'edge', (e) => {
-        e.target.style({
-          'line-color': '#94A3B8',
-          'target-arrow-color': '#94A3B8',
-          'width': 2.5,
-          'line-opacity': 0.6
+          'shadow-blur': 8,
+          'shadow-offset-x': 3,
+          'shadow-offset-y': 3
         });
       });
     }
@@ -415,7 +370,7 @@
       resetView() {
         if (cy) {
           cy.animate({
-            fit: { padding: 60 },
+            fit: { padding: 50 },
             duration: 400,
             easing: 'ease-out-cubic'
           });

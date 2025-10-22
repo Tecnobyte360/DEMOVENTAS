@@ -68,6 +68,28 @@ class PlanCuentas extends Component
         $this->expandidos = Cuenta::whereNull('padre_id')->pluck('id')->all();
     }
 
+    /* ===== Helper de orden compatible con cualquier motor ===== */
+    /**
+     * Devuelve la expresión SQL para ordenar por codigo jerárquico.
+     * Soporta: mysql/mariadb, pgsql, sqlsrv, sqlite. Fallback: sin padding.
+     */
+    protected function ordenCodigoExpr(int $padLen = 12): string
+    {
+        $col = "REPLACE(codigo, '.', '')";
+        switch (DB::getDriverName()) {
+            case 'sqlsrv': // SQL Server
+                return "RIGHT(REPLICATE('0', {$padLen}) + CAST($col AS VARCHAR(64)), {$padLen})";
+            case 'pgsql':  // PostgreSQL
+            case 'mysql':  // MySQL/MariaDB
+                return "LPAD($col, {$padLen}, '0')";
+            case 'sqlite': // SQLite
+                $zeros = str_repeat('0', $padLen);
+                return "substr('{$zeros}' || $col, -{$padLen})";
+            default:       // Evita romper si es un driver exótico
+                return $col;
+        }
+    }
+
     /* ========== Validación ========== */
     protected function rules(): array
     {
@@ -172,8 +194,7 @@ class PlanCuentas extends Component
                 $t = trim($this->q);
                 $q->where(fn($qq) => $qq->where('codigo','like',"%{$t}%")->orWhere('nombre','like',"%{$t}%"));
             })
-            // ⬇️ Orden compatible con MySQL (equivalente a tu intención original)
-            ->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')")
+            ->orderByRaw($this->ordenCodigoExpr().' ASC')
             ->get()
             ->groupBy('padre_id');
 
@@ -282,9 +303,9 @@ class PlanCuentas extends Component
         $padre = Cuenta::find($padreId);
         if (!$padre) return $this->codigo;
 
-        // hijos ordenados por el mismo criterio MySQL
+        // hijos ordenados por criterio portable
         $hijos = Cuenta::where('padre_id', $padreId)
-            ->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')")
+            ->orderByRaw($this->ordenCodigoExpr().' ASC')
             ->pluck('codigo')->all();
 
         if (empty($hijos)) return rtrim($padre->codigo) . '01';
@@ -490,14 +511,14 @@ class PlanCuentas extends Component
             return $row;
         });
 
-        // Posibles padres (para modal) — orden MySQL consistente
+        // Posibles padres (para modal) — orden portable
         $posiblesPadres = Cuenta::query()
             ->when($this->editingId, function ($q) {
                 $q->where('id', '!=', $this->editingId);
                 $desc = $this->descendantIdsOf($this->editingId);
                 if (!empty($desc)) $q->whereNotIn('id', $desc);
             })
-            ->orderByRaw("LPAD(REPLACE(codigo, '.', ''), 12, '0')")
+            ->orderByRaw($this->ordenCodigoExpr().' ASC')
             ->get(['id','codigo','nombre']);
 
         $nivelMax = $this->nivelMax;

@@ -3,11 +3,26 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class NotaCredito extends Model
 {
-       protected $table = 'nota_creditos';
+    protected $table = 'nota_creditos';
     protected $guarded = [];
+
+    protected $casts = [
+        'fecha'               => 'date',
+        'vencimiento'         => 'date',
+        'subtotal'            => 'decimal:2',
+        'impuestos'           => 'decimal:2',
+        'total'               => 'decimal:2',
+        'reponer_inventario'  => 'boolean',  
+    ];
+
+    // Si quieres un default
+    protected $attributes = [
+        'reponer_inventario' => 1, // 1 = true
+    ];
 
     public function detalles()      { return $this->hasMany(NotaCreditoDetalle::class); }
     public function factura()       { return $this->belongsTo(\App\Models\Factura\Factura::class); }
@@ -26,9 +41,14 @@ class NotaCredito extends Model
             $sub += $base;
             $imp += $base * max(0, (float)$d->impuesto_pct) / 100;
         }
-        $this->subtotal = round($sub, 2);
+        $this->subtotal  = round($sub, 2);
         $this->impuestos = round($imp, 2);
-        $this->total = round($sub + $imp, 2);
+        $this->total     = round($sub + $imp, 2);
         return $this;
     }
+    public function notasCredito(): HasMany
+{
+    // tabla: nota_creditos, FK: factura_id
+    return $this->hasMany(\App\Models\NotaCredito::class, 'factura_id');
+}
 }

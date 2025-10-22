@@ -136,6 +136,10 @@
                 <i class="fa-solid fa-receipt"></i>
                 <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-emerald-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Imprimir</span>
               </button>
+           <button wire:click="abrirMapa({{ $f->id }})" class="px-2 py-1.5 bg-amber-500 text-white rounded-md">
+  <i class="fa-solid fa-diagram-project"></i>
+</button>
+
             </div>
           </td>
         </tr>
@@ -153,6 +157,7 @@
 
   {{-- Modal de Envío --}}
   <livewire:facturas.enviar-factura />
+  <livewire:mapa-relacion.mapa-relaciones />
 </div>
 
 @once

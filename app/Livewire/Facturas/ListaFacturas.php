@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Facturas;
 
+use App\Livewire\MapaRelacion\MapaRelaciones;
 use App\Models\Factura\Factura;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -20,8 +21,8 @@ class ListaFacturas extends Component
     protected $queryString = ['q','estado','page','perPage'];
     protected $listeners = ['refrescar-lista-facturas' => '$refresh'];
 
-    public function updatingQ(){ $this->resetPage(); }
-    public function updatingEstado(){ $this->resetPage(); }
+    public function updatingQ()      { $this->resetPage(); }
+    public function updatingEstado() { $this->resetPage(); }
     public function updatingPerPage(){ $this->resetPage(); }
 
     public function abrir(int $id): void
@@ -47,11 +48,17 @@ class ListaFacturas extends Component
         $this->reset(['showPreview','previewId']);
     }
 
-    // ✅ NUEVO: Abrir modal de pago desde lista de facturas
     public function registrarPago(int $id): void
     {
         $this->dispatch('abrir-modal-pago', facturaId: $id)
              ->to(\App\Livewire\Facturas\PagosFactura::class);
+    }
+
+    // ✅ enviar la clave 'facturaId' (coincide con el argumento del listener)
+    public function abrirMapa(int $id): void
+    {
+        $this->dispatch('abrir-mapa', facturaId: $id)
+             ->to(MapaRelaciones::class);
     }
 
     public function render()
@@ -62,11 +69,9 @@ class ListaFacturas extends Component
             $s = '%'.trim($this->q).'%';
             $q->where(function($qq) use ($s){
                 $qq->where('numero','like',$s)
-                   ->orWhere('prefijo','like',$s)
-                   ->orWhere('estado','like',$s)
-                   ->orWhereHas('cliente', function($c) use ($s){
-                       $c->where('razon_social','like',$s)->orWhere('nit','like',$s);
-                   });
+                  ->orWhere('prefijo','like',$s)
+                  ->orWhere('estado','like',$s)
+                  ->orWhereHas('cliente', fn($c) => $c->where('razon_social','like',$s)->orWhere('nit','like',$s));
             });
         }
 

@@ -123,4 +123,63 @@ class InventarioService
             }
         });
     }
+        /**
+     * Repone el inventario según los detalles de una Nota Crédito.
+     * Suma las cantidades devueltas al stock de cada bodega.
+     */
+    public static function reponerPorNotaCredito(\App\Models\NotaCredito $nota): void
+    {
+        DB::transaction(function () use ($nota) {
+            $nota->loadMissing('detalles');
+
+            foreach ($nota->detalles as $d) {
+                if (!$d->producto_id || !$d->bodega_id) continue;
+
+                $pb = ProductoBodega::query()
+                    ->where('producto_id', $d->producto_id)
+                    ->where('bodega_id', $d->bodega_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$pb) {
+                    $pb = new ProductoBodega([
+                        'producto_id' => $d->producto_id,
+                        'bodega_id'   => $d->bodega_id,
+                        'stock'       => 0,
+                    ]);
+                }
+
+                $pb->stock = (float) $pb->stock + (float) $d->cantidad;
+                $pb->save();
+            }
+        });
+    }
+
+    /**
+     * Revierte una reposición de inventario por Nota Crédito (por ejemplo, si se anula).
+     * Resta las cantidades previamente sumadas.
+     */
+    public static function revertirReposicionPorNotaCredito(\App\Models\NotaCredito $nota): void
+    {
+        DB::transaction(function () use ($nota) {
+            $nota->loadMissing('detalles');
+
+            foreach ($nota->detalles as $d) {
+                if (!$d->producto_id || !$d->bodega_id) continue;
+
+                $pb = ProductoBodega::query()
+                    ->where('producto_id', $d->producto_id)
+                    ->where('bodega_id', $d->bodega_id)
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$pb) continue; // Si no existe, no hay nada que revertir
+
+                $nuevo = (float) $pb->stock - (float) $d->cantidad;
+                $pb->stock = max(0, $nuevo); // evita negativos
+                $pb->save();
+            }
+        });
+    }
+
 }

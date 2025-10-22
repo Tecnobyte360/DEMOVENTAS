@@ -2,13 +2,14 @@
 
 namespace App\Livewire\Inventario;
 
+use App\Models\Bodega;
 use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\Inventario\EntradaMercancia;
 use App\Models\Inventario\EntradaDetalle;
 use App\Models\Productos\Producto;
 use App\Models\SocioNegocio\SocioNegocio;
-use App\Models\bodegas;
+
 use Illuminate\Support\Facades\DB;
 use Masmerise\Toaster\PendingToast;
 use Carbon\Carbon;
@@ -56,7 +57,7 @@ class EntradasMercancia extends Component
     public function mount()
     {
         $this->productos = Producto::where('activo', true)->orderBy('nombre')->get();
-        $this->bodegas   = bodegas::where('activo', true)->orderBy('nombre')->get();
+        $this->bodegas   = Bodega::where('activo', true)->orderBy('nombre')->get();
         $this->socios    = SocioNegocio::orderBy('razon_social')->get();
 
         // Fila inicial del detalle

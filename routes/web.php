@@ -268,7 +268,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::post('/facturas/{factura}/print-pos', [FacturaPosPrintController::class, 'print'])
         ->name('facturas.print-pos');
     Route::get('/normas-reparto', NormasReparto::class)->name('normas-reparto.index');
-      Route::get('/Listas-precios', list::class)->name('Listas-precios');
+    
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
     Route::get('Factura-compras',IndexFacturas::class)->name('Factura-compras');

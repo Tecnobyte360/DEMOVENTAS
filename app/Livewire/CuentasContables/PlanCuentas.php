@@ -16,6 +16,11 @@ class PlanCuentas extends Component
     public array $expandidos = [];
     public ?int $selectedId = null;
 
+    /* ====== Mejoras UI ====== */
+    public bool $soloTitulos = false; // solo cuentas título
+    public bool $verSaldos   = false; // mostrar/ocultar columna de saldos
+    public array $visibleIds = [];    // soporte a navegación con teclado
+
     /* ====== Filtro por factura ====== */
     public bool $soloCuentasMovidas = false;
     public ?int $factura_id = null;
@@ -69,10 +74,6 @@ class PlanCuentas extends Component
     }
 
     /* ===== Helper de orden compatible con cualquier motor ===== */
-    /**
-     * Devuelve la expresión SQL para ordenar por codigo jerárquico.
-     * Soporta: mysql/mariadb, pgsql, sqlsrv, sqlite. Fallback: sin padding.
-     */
     protected function ordenCodigoExpr(int $padLen = 12): string
     {
         $col = "REPLACE(codigo, '.', '')";
@@ -85,7 +86,7 @@ class PlanCuentas extends Component
             case 'sqlite': // SQLite
                 $zeros = str_repeat('0', $padLen);
                 return "substr('{$zeros}' || $col, -{$padLen})";
-            default:       // Evita romper si es un driver exótico
+            default:
                 return $col;
         }
     }
@@ -186,10 +187,13 @@ class PlanCuentas extends Component
             ->pluck('id')->all();
     }
 
+    /* ======= Árbol (con withCount y filtros de UI) ======= */
     protected function buildFlatTree()
     {
         $base = Cuenta::query()
+            ->withCount('hijos') // para badge sin N+1
             ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza', $this->naturaleza))
+            ->when($this->soloTitulos, fn($q) => $q->where('titulo', true))
             ->when($this->q !== '', function ($q) {
                 $t = trim($this->q);
                 $q->where(fn($qq) => $qq->where('codigo','like',"%{$t}%")->orWhere('nombre','like',"%{$t}%"));
@@ -211,6 +215,7 @@ class PlanCuentas extends Component
         return collect($flat);
     }
 
+    /* ===== Selección fila ===== */
     public function select(int $id): void
     {
         $this->selectedId = $id;
@@ -235,7 +240,6 @@ class PlanCuentas extends Component
         $this->resetForm();
         $this->padre_id = $padreId;
 
-        // Sugerir datos si hay padre
         if ($padreId) {
             $padre = Cuenta::find($padreId);
             if ($padre) {
@@ -244,7 +248,6 @@ class PlanCuentas extends Component
                 $this->codigo = $this->sugerirCodigoPara($padreId);
             }
         }
-
         $this->showModal = true;
     }
 
@@ -285,14 +288,12 @@ class PlanCuentas extends Component
     {
         $nuevoPadre = $val ? (int)$val : null;
 
-        if (!$this->editingId) {
-            if ($nuevoPadre) {
-                $p = Cuenta::find($nuevoPadre);
-                if ($p) {
-                    $this->codigo = $this->sugerirCodigoPara($nuevoPadre);
-                    $this->naturaleza_form = $p->naturaleza ?: $this->naturaleza_form;
-                    $this->moneda = $p->moneda ?: $this->moneda;
-                }
+        if (!$this->editingId && $nuevoPadre) {
+            $p = Cuenta::find($nuevoPadre);
+            if ($p) {
+                $this->codigo = $this->sugerirCodigoPara($nuevoPadre);
+                $this->naturaleza_form = $p->naturaleza ?: $this->naturaleza_form;
+                $this->moneda = $p->moneda ?: $this->moneda;
             }
         }
     }
@@ -303,7 +304,6 @@ class PlanCuentas extends Component
         $padre = Cuenta::find($padreId);
         if (!$padre) return $this->codigo;
 
-        // hijos ordenados por criterio portable
         $hijos = Cuenta::where('padre_id', $padreId)
             ->orderByRaw($this->ordenCodigoExpr().' ASC')
             ->pluck('codigo')->all();
@@ -312,8 +312,7 @@ class PlanCuentas extends Component
 
         $ultimo = end($hijos);
         if (preg_match('/^(.*?)(\d+)$/', $ultimo, $m)) {
-            $pref = $m[1];
-            $num  = $m[2];
+            $pref = $m[1]; $num  = $m[2];
             $next = str_pad((string)((int)$num + 1), strlen($num), '0', STR_PAD_LEFT);
             return $pref . $next;
         }
@@ -375,20 +374,14 @@ class PlanCuentas extends Component
         DB::transaction(function () use ($data, $old) {
             if ($this->editingId) {
                 $cuenta = Cuenta::findOrFail($this->editingId);
-
                 $padreCambio = $old?->padre_id !== $this->padre_id;
                 $cuenta->update($data);
-
-                if ($padreCambio) {
-                    $this->relevelSubtree($cuenta->id, $data['nivel']);
-                }
-
+                if ($padreCambio) $this->relevelSubtree($cuenta->id, $data['nivel']);
                 $idFinal = $cuenta->id;
                 $this->expandPathAndSelect($idFinal);
             } else {
                 $cuenta = Cuenta::create($data);
-                $idFinal = $cuenta->id;
-                $this->expandPathAndSelect($idFinal);
+                $this->expandPathAndSelect($cuenta->id);
             }
         });
 
@@ -486,6 +479,52 @@ class PlanCuentas extends Component
         $this->factura_numero = null;
     }
 
+    /* ======== Controles extra de árbol (slider/teclado/breadcrumbs) ======== */
+    public function expandToLevel(int $level): void
+    {
+        $level = max(1, min(10, $level));
+        $ids = Cuenta::query()
+            ->where('nivel', '<', $level)
+            ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza',$this->naturaleza))
+            ->pluck('id')->all();
+        $this->expandidos = array_values(array_unique($ids));
+    }
+
+    public function toggleSelectedByKey(bool $expand): void
+    {
+        if (!$this->selectedId) return;
+        $isOpen = in_array($this->selectedId, $this->expandidos);
+        if ($expand && !$isOpen) $this->expandidos[] = $this->selectedId;
+        if (!$expand && $isOpen) $this->expandidos = array_values(array_diff($this->expandidos, [$this->selectedId]));
+    }
+
+    public function selectNext(): void
+    {
+        if (empty($this->visibleIds)) return;
+        $idx = array_search($this->selectedId, $this->visibleIds, true);
+        $next = $this->visibleIds[min(($idx===false? -1 : $idx)+1, count($this->visibleIds)-1)];
+        $this->select($next);
+        $this->dispatch('pc-scroll-to-selected', id: $next);
+    }
+
+    public function selectPrev(): void
+    {
+        if (empty($this->visibleIds)) return;
+        $idx = array_search($this->selectedId, $this->visibleIds, true);
+        $prev = $this->visibleIds[max(($idx===false? 1 : $idx)-1, 0)];
+        $this->select($prev);
+        $this->dispatch('pc-scroll-to-selected', id: $prev);
+    }
+
+    protected function rutaSeleccionadaArray(?int $id): array
+    {
+        if (!$id) return [];
+        $ruta = [];
+        $n = Cuenta::with('padre')->find($id);
+        while ($n) { $ruta[] = ['id'=>$n->id, 'codigo'=>$n->codigo, 'nombre'=>$n->nombre]; $n = $n->padre; }
+        return array_reverse($ruta);
+    }
+
     /* ========== Render ========== */
     public function render()
     {
@@ -511,7 +550,10 @@ class PlanCuentas extends Component
             return $row;
         });
 
-        // Posibles padres (para modal) — orden portable
+        // visibilidad para navegación con teclado
+        $this->visibleIds = $items->pluck('id')->all();
+
+        // posibles padres (modal) — orden portable
         $posiblesPadres = Cuenta::query()
             ->when($this->editingId, function ($q) {
                 $q->where('id', '!=', $this->editingId);
@@ -522,6 +564,8 @@ class PlanCuentas extends Component
             ->get(['id','codigo','nombre']);
 
         $nivelMax = $this->nivelMax;
-        return view('livewire.cuentas-contables.plan-cuentas', compact('items','nivelMax','posiblesPadres'));
+        $rutaSeleccionada = $this->rutaSeleccionadaArray($this->selectedId);
+
+        return view('livewire.cuentas-contables.plan-cuentas', compact('items','nivelMax','posiblesPadres','rutaSeleccionada'));
     }
 }

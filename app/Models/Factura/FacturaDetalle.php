@@ -2,6 +2,7 @@
 
 namespace App\Models\Factura;
 
+use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -41,7 +42,7 @@ class FacturaDetalle extends Model
     public function bodega(): BelongsTo
     {
         // según tu código usas App\Models\bodegas
-        return $this->belongsTo(\App\Models\bodegas::class, 'bodega_id')->withDefault();
+        return $this->belongsTo(Bodega::class, 'bodega_id')->withDefault();
     }
 
     // Cálculo de importes

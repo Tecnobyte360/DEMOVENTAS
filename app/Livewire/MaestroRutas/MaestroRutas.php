@@ -2,13 +2,14 @@
 
 namespace App\Livewire\MaestroRutas;
 
+use App\Models\Bodega;
 use Livewire\Component;
 use App\Models\User;
 use App\Models\Ruta\Ruta;
 use App\Models\Vehiculo\Vehiculo;
 use App\Models\Productos\Producto;
 use App\Models\Productos\ProductoBodega;
-use App\Models\bodegas;
+
 use App\Models\InventarioRuta\InventarioRuta;
 use Illuminate\Support\Facades\DB;
 use Livewire\WithPagination;
@@ -46,7 +47,7 @@ class MaestroRutas extends Component
         $this->vehiculos   = Vehiculo::where('estado', 'activo')->get();
         $this->conductores = User::all();
         $this->productos   = Producto::all();
-        $this->bodegas     = bodegas::all();
+        $this->bodegas     = Bodega::all();
         $this->setDefaultBodegaIfEmpty();
 
         $this->cargarRutas();
@@ -414,7 +415,7 @@ class MaestroRutas extends Component
             }
 
             $producto = Producto::find($this->producto_id);
-            $bodega = bodegas::find($this->bodega_id);
+            $bodega = Bodega::find($this->bodega_id);
 
             if (!$producto || !$bodega) {
                 PendingToast::create()

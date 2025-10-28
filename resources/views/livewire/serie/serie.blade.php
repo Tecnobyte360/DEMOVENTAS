@@ -6,62 +6,59 @@
 
 <div class="p-10 bg-gradient-to-br from-violet-200 via-white to-purple-100 dark:from-gray-900 dark:via-gray-800 dark:to-black rounded-3xl shadow-2xl space-y-12">
 
- 
-
   {{-- ============= FILTROS / ACCIONES ============= --}}
- <section class="backdrop-blur bg-white/80 dark:bg-gray-900/80 rounded-3xl shadow-2xl border border-gray-200/60 dark:border-gray-800 p-6 md:p-8">
-  <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-    {{-- Título --}}
-    <div>
-      <h3 class="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Series</h3>
-      <p class="text-sm md:text-base text-gray-600 dark:text-gray-300">Prefijos, rangos y numeración por documento.</p>
-    </div>
-
-    {{-- Filtros --}}
-    <div class="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-      {{-- Buscador grande con icono --}}
-      <div class="relative flex-1 min-w-[240px]">
-        <i class="fa fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
-        <input
-          type="text"
-          wire:model.live="search"
-          placeholder="Buscar (nombre, prefijo, resolución)…"
-          class="w-full h-12 md:h-14 pl-11 pr-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 text-base md:text-lg
-                 bg-white dark:bg-gray-800 dark:text-white shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-300/50"
-        />
+  <section class="backdrop-blur bg-white/80 dark:bg-gray-900/80 rounded-3xl shadow-2xl border border-gray-200/60 dark:border-gray-800 p-6 md:p-8">
+    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+      {{-- Título --}}
+      <div>
+        <h3 class="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Series</h3>
+        <p class="text-sm md:text-base text-gray-600 dark:text-gray-300">Prefijos, rangos y numeración por tipo de documento.</p>
       </div>
 
-      {{-- Per Page grande --}}
-      <div class="relative">
-        <i class="fa fa-list-ol absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
-        <select
-          wire:model.live="perPage"
-          class="appearance-none w-full h-12 md:h-14 pl-11 pr-12 rounded-2xl border-2 border-gray-200 dark:border-gray-700
-                 text-base md:text-lg bg-white dark:bg-gray-800 dark:text-white shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-300/50"
+      {{-- Filtros --}}
+      <div class="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        {{-- Buscador grande con icono --}}
+        <div class="relative flex-1 min-w-[240px]">
+          <i class="fa fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+          <input
+            type="text"
+            wire:model.live="search"
+            placeholder="Buscar (tipo, nombre, prefijo, resolución)…"
+            class="w-full h-12 md:h-14 pl-11 pr-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 text-base md:text-lg
+                   bg-white dark:bg-gray-800 dark:text-white shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-300/50"
+          />
+        </div>
+
+        {{-- Per Page grande --}}
+        <div class="relative">
+          <i class="fa fa-list-ol absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+          <select
+            wire:model.live="perPage"
+            class="appearance-none w-full h-12 md:h-14 pl-11 pr-12 rounded-2xl border-2 border-gray-200 dark:border-gray-700
+                   text-base md:text-lg bg-white dark:bg-gray-800 dark:text-white shadow-sm focus:outline-none focus:ring-4 focus:ring-indigo-300/50"
+          >
+            <option value="10">10 por página</option>
+            <option value="20">20 por página</option>
+            <option value="50">50 por página</option>
+          </select>
+          <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <i class="fa fa-chevron-down"></i>
+          </span>
+        </div>
+
+        {{-- Botón prominente --}}
+        <button
+          wire:click="create"
+          class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600
+                 px-5 md:px-7 h-12 md:h-14 text-base md:text-lg text-white font-semibold shadow-lg hover:from-indigo-700 hover:to-violet-700
+                 focus:outline-none focus:ring-4 focus:ring-indigo-300/50"
         >
-          <option value="10">10 por página</option>
-          <option value="20">20 por página</option>
-          <option value="50">50 por página</option>
-        </select>
-        <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
-          <i class="fa fa-chevron-down"></i>
-        </span>
+          <i class="fa fa-plus"></i>
+          Nueva serie
+        </button>
       </div>
-
-      {{-- Botón prominente --}}
-      <button
-        wire:click="create"
-        class="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600
-               px-5 md:px-7 h-12 md:h-14 text-base md:text-lg text-white font-semibold shadow-lg hover:from-indigo-700 hover:to-violet-700
-               focus:outline-none focus:ring-4 focus:ring-indigo-300/50"
-      >
-        <i class="fa fa-plus"></i>
-        Nueva serie
-      </button>
     </div>
-  </div>
-</section>
-
+  </section>
 
   {{-- ============= TABLA ============= --}}
   <section class="space-y-4">
@@ -69,7 +66,7 @@
       <table class="min-w-full text-sm">
         <thead class="bg-gray-100 dark:bg-gray-800/60 text-gray-700 dark:text-gray-300 uppercase text-xs">
           <tr>
-            <th class="px-3 py-3 text-left">Documento</th>
+            <th class="px-3 py-3 text-left">Tipo</th>
             <th class="px-3 py-3 text-left">Nombre</th>
             <th class="px-3 py-3 text-left">Prefijo</th>
             <th class="px-3 py-3 text-left">Rango</th>
@@ -90,7 +87,15 @@
               $proximoFmt = ($row->prefijo ? "{$row->prefijo}-" : '').$num;
             @endphp
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40 transition">
-              <td class="px-3 py-2">{{ strtoupper($row->documento ?? 'factura') }}</td>
+              <td class="px-3 py-2">
+                {{-- Muestra nombre y código del tipo si existen --}}
+                @if($row->tipo)
+                  <span class="font-medium text-gray-800 dark:text-gray-100">{{ $row->tipo->nombre }}</span>
+                  <span class="text-[11px] text-gray-500 ml-1">({{ strtoupper($row->tipo->codigo) }})</span>
+                @else
+                  —
+                @endif
+              </td>
               <td class="px-3 py-2 font-medium text-gray-800 dark:text-gray-100">{{ $row->nombre }}</td>
               <td class="px-3 py-2">{{ $row->prefijo ?: '—' }}</td>
               <td class="px-3 py-2">{{ number_format($row->desde) }}–{{ number_format($row->hasta) }}</td>
@@ -165,16 +170,16 @@
 
           {{-- FORM --}}
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+
+            {{-- Tipo de documento (reemplaza al select "Documento") --}}
             <div>
-              <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Documento</label>
-              <select wire:model.defer="documento" class="w-full px-3 py-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white">
-                <option value="factura">Factura</option>
-                <option value="oferta">Oferta</option>
-                <option value="pedido">Pedido</option>
-                <option value="nota_credito">Nota crédito</option>
-                <option value="otro">Otro</option>
+              <label class="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Tipo de documento</label>
+              <select wire:model.defer="tipo_documento_id" class="w-full px-3 py-2 rounded-xl border dark:border-gray-700 dark:bg-gray-800 dark:text-white">
+                @foreach($tipos as $t)
+                  <option value="{{ $t['id'] }}">{{ $t['nombre'] }}</option>
+                @endforeach
               </select>
-              @error('documento') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+              @error('tipo_documento_id') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
             </div>
 
             <div>

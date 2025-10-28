@@ -4,7 +4,7 @@ namespace App\Models\Inventario;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Inventario\EntradaDetalle; // <-- ESTE USE FALTABA
+use App\Models\Inventario\EntradaDetalle; 
 use App\Models\SocioNegocio\SocioNegocio;
 
 class EntradaMercancia extends Model

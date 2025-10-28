@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Bodegas;
 
-use App\Models\bodegas;
+use App\Models\Bodegas;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Illuminate\Validation\Rule;

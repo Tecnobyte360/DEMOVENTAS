@@ -102,6 +102,103 @@
 
                     <!-- E-Commerce (Inventario) -->
                     @if(auth()->user()->hasRole('administrador'))
+                    <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['community'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['community']) ? 1 : 0 }} }">
+                        <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['community'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['community']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
+                                        <path d="M12 1a1 1 0 1 0-2 0v2a3 3 0 0 0 3 3h2a1 1 0 1 0 0-2h-2a1 1 0 0 1-1-1V1ZM1 10a1 1 0 1 0 0 2h2a1 1 0 0 1 1 1v2a1 1 0 1 0 2 0v-2a3 3 0 0 0-3-3H1ZM5 0a1 1 0 0 1 1 1v2a3 3 0 0 1-3 3H1a1 1 0 0 1 0-2h2a1 1 0 0 0 1-1V1a1 1 0 0 1 1-1ZM12 13a1 1 0 0 1 1-1h2a1 1 0 1 0 0-2h-2a3 3 0 0 0-3 3v2a1 1 0 1 0 2 0v-2Z" />
+                                    </svg>
+                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Ventas</span>
+                                </div>
+                                <div class="flex shrink-0 ml-2">
+                                    <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
+                                        <path d="M5.9 11.4L.5 6l1.4-1.4 4 4 4-4L11.3 6z" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
+                                        <span class="text-sm font-medium ml-4">Cotizaciones</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
+                                        <span class="text-sm font-medium ml-4">Ordenes de venta</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('Facturacion')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Facturacion') }}">
+                                        <span class="text-sm font-medium ml-4">Factura de venta</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                         <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('notascreditoclientes')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('notascreditoclientes') }}">
+                                        <span class="text-sm font-medium ml-4">Notas credito de ventas</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                          <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('notascreditoclientes')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('notascreditoclientes') }}">
+                                        <span class="text-sm font-medium ml-4">Listas de precios</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+
+                        
+                      
+                    </li>
+                    <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['community'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['community']) ? 1 : 0 }} }">
+                        <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['community'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['community']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
+                                        <path d="M12 1a1 1 0 1 0-2 0v2a3 3 0 0 0 3 3h2a1 1 0 1 0 0-2h-2a1 1 0 0 1-1-1V1ZM1 10a1 1 0 1 0 0 2h2a1 1 0 0 1 1 1v2a1 1 0 1 0 2 0v-2a3 3 0 0 0-3-3H1ZM5 0a1 1 0 0 1 1 1v2a3 3 0 0 1-3 3H1a1 1 0 0 1 0-2h2a1 1 0 0 0 1-1V1a1 1 0 0 1 1-1ZM12 13a1 1 0 0 1 1-1h2a1 1 0 1 0 0-2h-2a3 3 0 0 0-3 3v2a1 1 0 1 0 2 0v-2Z" />
+                                    </svg>
+                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Compras</span>
+                                </div>
+                                <div class="flex shrink-0 ml-2">
+                                    <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
+                                        <path d="M5.9 11.4L.5 6l1.4-1.4 4 4 4-4L11.3 6z" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('Factura-compras')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Factura-compras') }}">
+                                        <span class="text-sm font-medium ml-4">Factura de compra</span>
+                                    </a>
+                                </li>
+                                  <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('Factura-compras')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Factura-compras') }}">
+                                        <span class="text-sm font-medium ml-4">Nota credito de compras</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                       
+                    </li>
                     <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['ecommerce'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['ecommerce']) ? 1 : 0 }} }">
                         <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
                             <div class="flex items-center justify-between">
@@ -148,12 +245,22 @@
                                   <span class="text-sm font-medium ml-4">Categorías Artículos</span>
                                 </a>
                               </li>
+                               <li class="mb-1 last:mb-0">
+                                <a class="block transition truncate @if(Route::is('subcategorias.index')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('subcategorias.index') }}">
+                                  <span class="text-sm font-medium ml-4">SubCategorias de articulos</span>
+                                </a>
+                              </li>
+                              <li class="mb-1 last:mb-0">
+                                <a class="block transition truncate @if(Route::is('productos.index')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('productos.index') }}">
+                                  <span class="text-sm font-medium ml-4">productos inventariables</span>
+                                </a>
+                              </li>
                             </ul>
                         </div>
                     </li>
                     @endif
 
-                    {{-- Ingresos (Ventas) --}}
+                    
                     <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['community'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['community']) ? 1 : 0 }} }">
                         <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
                             <div class="flex items-center justify-between">
@@ -161,80 +268,7 @@
                                     <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['community'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['community']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
                                         <path d="M12 1a1 1 0 1 0-2 0v2a3 3 0 0 0 3 3h2a1 1 0 1 0 0-2h-2a1 1 0 0 1-1-1V1ZM1 10a1 1 0 1 0 0 2h2a1 1 0 0 1 1 1v2a1 1 0 1 0 2 0v-2a3 3 0 0 0-3-3H1ZM5 0a1 1 0 0 1 1 1v2a3 3 0 0 1-3 3H1a1 1 0 0 1 0-2h2a1 1 0 0 0 1-1V1a1 1 0 0 1 1-1ZM12 13a1 1 0 0 1 1-1h2a1 1 0 1 0 0-2h-2a3 3 0 0 0-3 3v2a1 1 0 1 0 2 0v-2Z" />
                                     </svg>
-                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Ingresos</span>
-                                </div>
-                                <div class="flex shrink-0 ml-2">
-                                    <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
-                                        <path d="M5.9 11.4L.5 6l1.4-1.4 4 4 4-4L11.3 6z" />
-                                    </svg>
-                                </div>
-                            </div>
-                        </a>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('Facturacion')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Facturacion') }}">
-                                        <span class="text-sm font-medium ml-4">Factura de venta</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('PagosRecibidos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('PagosRecibidos') }}">
-                                        <span class="text-sm font-medium ml-4">Pagos recibidos</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
-                                        <span class="text-sm font-medium ml-4">Devoluciones en ventas</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('notascreditoclientes')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('notascreditoclientes') }}">
-                                        <span class="text-sm font-medium ml-4">Notas credito clientes</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
-                                        <span class="text-sm font-medium ml-4">Cotizaciones</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
-                                        <span class="text-sm font-medium ml-4">Ordenes de venta</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </li>
-
-                    <!-- Socios de negocio -->
-                    <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['community'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['community']) ? 1 : 0 }} }">
-                        <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['community'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['community']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
-                                        <path d="M12 1a1 1 0 1 0-2 0v2a3 3 0 0 0 3 3h2a1 1 0 1 0 0-2h-2a1 1 0 0 1-1-1V1ZM1 10a1 1 0 1 0 0 2h2a1 1 0 0 1 1 1v2a1 1 0 1 0 2 0v-2a3 3 0 0 0-3-3H1ZM5 0a1 1 0 0 1 1 1v2a3 3 0 0 1-3 3H1a1 1 0 0 1 0-2h2a1 1 0 0 0 1-1V1a1 1 0 0 1 1-1ZM12 13a1 1 0 0 1 1-1h2a1 1 0 1 0 0-2h-2a3 3 0 0 0-3 3v2a1 1 0 1 0 2 0v-2Z" />
-                                    </svg>
-                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Socios de negocio</span>
+                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Terceros</span>
                                 </div>
                                 <div class="flex shrink-0 ml-2">
                                     <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
@@ -247,84 +281,14 @@
                             <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
                                 <li class="mb-1 last:mb-0">
                                     <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
-                                        <span class="text-sm font-medium ml-4">Creación de socio</span>
+                                        <span class="text-sm font-medium ml-4">Maestro de terceros</span>
                                     </a>
                                 </li>
                             </ul>
                         </div>
                     </li>
 
-                    <!-- Cotizaciones -->
-                    <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['community'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['community']) ? 1 : 0 }} }">
-                        <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['community'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['community']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
-                                        <path d="M12 1a1 1 0 1 0-2 0v2a3 3 0 0 0 3 3h2a1 1 0 1 0 0-2h-2a1 1 0 0 1-1-1V1ZM1 10a1 1 0 1 0 0 2h2a1 1 0 0 1 1 1v2a1 1 0 1 0 2 0v-2a3 3 0 0 0-3-3H1ZM5 0a1 1 0 0 1 1 1v2a3 3 0 0 1-3 3H1a1 1 0 0 1 0-2h2a1 1 0 0 0 1-1V1a1 1 0 0 1 1-1ZM12 13a1 1 0 0 1 1-1h2a1 1 0 1 0 0-2h-2a3 3 0 0 0-3 3v2a1 1 0 1 0 2 0v-2Z" />
-                                    </svg>
-                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Cotizaciones</span>
-                                </div>
-                                <div class="flex shrink-0 ml-2">
-                                    <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
-                                        <path d="M5.9 11.4L.5 6l1.4-1.4 4 4 4-4L11.3 6z" />
-                                    </svg>
-                                </div>
-                            </div>
-                        </a>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('Cotizaciones')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Cotizaciones') }}">
-                                        <span class="text-sm font-medium ml-4">Ofertas de ventas</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['community'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('SociosNegocio')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('SociosNegocio') }}">
-                                        <span class="text-sm font-medium ml-4">Orden de venta</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </li>
-
-                    <!-- Maestro de rutas -->
-                    <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['finance'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['finance']) ? 1 : 0 }} }">
-                        <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center">
-                                    <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['finance'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['finance']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
-                                        <path d="M6 0a6 6 0 0 0-6 6c0 1.077.304 2.062.78 2.912a1 1 0 1 0 1.745-.976A3.945 3.945 0 0 1 2 6a4 4 0 0 1 4-4c.693 0 1.344.194 1.936.525A1 1 0 1 0 8.912.779 5.944 5.944 0 0 0 6 0Z" />
-                                        <path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm-4 6a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" />
-                                    </svg>
-                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Maestro de rutas</span>
-                                </div>
-                                <div class="flex shrink-0 ml-2">
-                                    <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
-                                        <path d="M5.9 11.4L.5 6l1.4-1.4 4 4 4-4L11.3 6z" />
-                                    </svg>
-                                </div>
-                            </div>
-                        </a>
-                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['finance'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('Maestro-Rutas')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Maestro-Rutas') }}">
-                                        <span class="text-sm font-medium ml-4">Control de ruta</span>
-                                    </a>
-                                </li>
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('Vehiculos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Vehiculos') }}">
-                                        <span class="text-sm font-medium ml-4">Vehiculos</span>
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                    </li>
-
+                  
                     @if(auth()->user()->hasRole('administrador')  || auth()->user()->hasRole('rutas') )
                     <!-- Rutas Disponibles -->
                     <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['finance'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['finance']) ? 1 : 0 }} }">
@@ -335,7 +299,7 @@
                                         <path d="M6 0a6 6 0 0 0-6 6c0 1.077.304 2.062.78 2.912a1 1 0 1 0 1.745-.976A3.945 3.945 0 0 1 2 6a4 4 0 0 1 4-4c.693 0 1.344.194 1.936.525A1 1 0 1 0 8.912.779 5.944 5.944 0 0 0 6 0Z" />
                                         <path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm-4 6a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" />
                                     </svg>
-                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Rutas Disponibles</span>
+                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Logistica</span>
                                 </div>
                                 <div class="flex shrink-0 ml-2">
                                     <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
@@ -348,12 +312,23 @@
                             <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['finance'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
                                 <li class="mb-1 last:mb-0">
                                     <a class="block transition truncate @if(Route::is('RutasDisponibles')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('RutasDisponibles') }}">
-                                        <span class="text-sm font-medium ml-4">Iniciar</span>
+                                        <span class="text-sm font-medium ml-4">Ruta del dia</span>
+                                    </a>
+                                </li>
+                                 <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('Maestro-Rutas')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Maestro-Rutas') }}">
+                                        <span class="text-sm font-medium ml-4">Control de ruta</span>
+                                    </a>
+                                </li>
+                                <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('Vehiculos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Vehiculos') }}">
+                                        <span class="text-sm font-medium ml-4">Vehiculos</span>
                                     </a>
                                 </li>
                             </ul>
                         </div>
                     </li>
+                    
                     @endif
 
                     @if(auth()->user()->hasRole('administrador') )
@@ -383,26 +358,54 @@
                                 </li>
                             </ul>
                             <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['finance'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
+                               
+                                 <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('PagosRecibidos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('PagosRecibidos') }}">
+                                        <span class="text-sm font-medium ml-4">Recibos de caja</span>
+                                    </a>
+                                </li>
+                               
                                 <li class="mb-1 last:mb-0">
                                     <a class="block transition truncate @if(Route::is('Gastos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Gastos') }}">
                                         <span class="text-sm font-medium ml-4">Gastos</span>
                                     </a>
                                 </li>
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('tiposGastos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('tiposGastos') }}">
-                                        <span class="text-sm font-medium ml-4">Tipos Gastos</span>
-                                    </a>
-                                </li>
+                              
+                             
+                               
+                            </ul>
+                        </div>
+                    </li>
+                     <li class="pl-4 pr-3 py-2 rounded-lg mb-0.5 last:mb-0 bg-linear-to-r @if(in_array(Request::segment(1), ['finance'])){{ 'from-violet-500/[0.12] dark:from-violet-500/[0.24] to-violet-500/[0.04]' }}@endif" x-data="{ open: {{ in_array(Request::segment(1), ['finance']) ? 1 : 0 }} }">
+                        <a class="block truncate transition hover:text-[color:var(--sidebar-fg)] text-[color:var(--sidebar-fg)]" href="#0" @click.prevent="open = !open; sidebarExpanded = true">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <svg class="shrink-0" :class="@json(in_array(Request::segment(1), ['finance'])) ? 'fill-violet-400' : ''" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" :style="!(@json(in_array(Request::segment(1), ['finance']))) ? 'fill: var(--sidebar-fg-muted)' : ''">
+                                        <path d="M6 0a6 6 0 0 0-6 6c0 1.077.304 2.062.78 2.912a1 1 0 1 0 1.745-.976A3.945 3.945 0 0 1 2 6a4 4 0 0 1 4-4c.693 0 1.344.194 1.936.525A1 1 0 1 0 8.912.779 5.944 5.944 0 0 0 6 0Z" />
+                                        <path d="M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12Zm-4 6a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" />
+                                    </svg>
+                                    <span class="text-sm font-medium ml-4 text-[color:var(--sidebar-fg)]">Informes</span>
+                                </div>
+                                <div class="flex shrink-0 ml-2">
+                                    <svg class="w-3 h-3 shrink-0 ml-1" :style="`fill: ${open ? 'var(--sidebar-fg)' : 'var(--sidebar-fg-muted)'}`" :class="open ? 'rotate-180' : 'rotate-0'" viewBox="0 0 12 12">
+                                        <path d="M5.9 11.4L.5 6l1.4-1.4 4 4 4-4L11.3 6z" />
+                                    </svg>
+                                </div>
+                            </div>
+                        </a>
+                        <div class="lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            <ul class="pl-8 mt-1 @if(!in_array(Request::segment(1), ['finance'])){{ 'hidden' }}@endif" :class="open ? 'block!' : 'hidden'">
                                 <li class="mb-1 last:mb-0">
                                     <a class="block transition truncate @if(Route::is('asientos.index')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('asientos.index') }}">
-                                        <span class="text-sm font-medium ml-4">Asientos contables</span>
+                                        <span class="text-sm font-medium ml-4">Informe diario contable</span>
                                     </a>
                                 </li>
-                                <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('notascreditoclientes')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('notascreditoclientes') }}">
-                                        <span class="text-sm font-medium ml-4">Notas credito clientes</span>
+                                  <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('asientos.index')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('asientos.index') }}">
+                                        <span class="text-sm font-medium ml-4">Informe de venta</span>
                                     </a>
                                 </li>
+                               
                             </ul>
                         </div>
                     </li>
@@ -498,12 +501,27 @@
                                         <span class="text-sm font-medium ml-4">Medios de pago</span>
                                     </a>
                                 </li>
+                                  <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('TipoDocumentos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" 
+                                    href="{{ route('TipoDocumentos') }}">
+                                        <span class="text-sm font-medium ml-4">Tipo Documentos</span>
+                                    </a>
+                                </li>
+                                  <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('tiposGastos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('tiposGastos') }}">
+                                        <span class="text-sm font-medium ml-4">Tipos Gastos</span>
+                                    </a>
+                                </li>
+
+
+                                
                             </ul>
                         </div>
                     </li>
                     @endif
                 </ul>
             </div>
+            
         </div>
 
         <!-- Expand / collapse button -->

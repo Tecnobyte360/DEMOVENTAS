@@ -2,9 +2,11 @@
 
 namespace App\Models\Serie;
 
-use App\Models\Factura\factura;
+use App\Models\Factura\Factura;
+use App\Models\TiposDocumento\TipoDocumento;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
@@ -15,7 +17,7 @@ class Serie extends Model
 
     protected $fillable = [
         'nombre','prefijo',
-        'documento','es_default',
+        'tipo_documento_id','es_default',
         'desde','hasta','proximo',
         'longitud',
         'resolucion','resolucion_fecha',
@@ -24,6 +26,7 @@ class Serie extends Model
     ];
 
     protected $casts = [
+        'tipo_documento_id' => 'integer',
         'desde'            => 'integer',
         'hasta'            => 'integer',
         'proximo'          => 'integer',
@@ -35,21 +38,52 @@ class Serie extends Model
         'activa'           => 'boolean',
     ];
 
-    public function facturas(): HasMany { return $this->hasMany(factura::class, 'serie_id'); }
+    public function tipo(): BelongsTo
+    {
+        return $this->belongsTo(TipoDocumento::class, 'tipo_documento_id');
+    }
+
+    public function facturas(): HasMany
+    {
+        return $this->hasMany(Factura::class, 'serie_id');
+    }
 
     public function scopeActiva(Builder $q): Builder
     {
         $today = now()->toDateString();
+
         return $q->where('activa', true)
-                 ->where(fn($s)=>$s->whereNull('vigente_desde')->orWhere('vigente_desde','<=',$today))
-                 ->where(fn($s)=>$s->whereNull('vigente_hasta')->orWhere('vigente_hasta','>=',$today));
+            ->where(fn($s) => $s->whereNull('vigente_desde')->orWhere('vigente_desde', '<=', $today))
+            ->where(fn($s) => $s->whereNull('vigente_hasta')->orWhere('vigente_hasta', '>=', $today));
     }
 
-    public function scopeDeDocumento(Builder $q, string $doc): Builder { return $q->where('documento',$doc); }
-    public function scopeDefault(Builder $q): Builder { return $q->where('es_default', true); }
+    public function scopeDeTipo(Builder $q, int $tipoId): Builder
+    {
+        return $q->where('tipo_documento_id', $tipoId);
+    }
 
-    public static function defaultPara(string $doc): ?self
-    { return static::activa()->deDocumento($doc)->default()->first(); }
+    public function scopeDefault(Builder $q): Builder
+    {
+        return $q->where('es_default', true);
+    }
+
+    /** Default por código de tipo (case-insensitive, ej: 'facturacompra' / 'FACTURACOMPRA') */
+    public static function defaultParaCodigo(string $codigo): ?self
+    {
+        $tipo = TipoDocumento::whereRaw('LOWER(codigo) = ?', [strtolower($codigo)])->first();
+        if (!$tipo) return null;
+
+        return static::activa()
+            ->deTipo((int) $tipo->id)
+            ->default()
+            ->first();
+    }
+
+    /** Default por id de tipo */
+    public static function defaultParaTipo(int $tipoId): ?self
+    {
+        return static::activa()->deTipo($tipoId)->default()->first();
+    }
 
     /** Toma el siguiente consecutivo en transacción (FOR UPDATE). */
     public function tomarConsecutivo(): int
@@ -57,12 +91,14 @@ class Serie extends Model
         return DB::transaction(function () {
             $row = self::whereKey($this->getKey())->lockForUpdate()->firstOrFail();
 
-            if ($row->proximo < (int)$row->desde) $row->proximo = (int)$row->desde;
-            if ($row->proximo > (int)$row->hasta) {
+            if ($row->proximo < (int) $row->desde) {
+                $row->proximo = (int) $row->desde;
+            }
+            if ($row->proximo > (int) $row->hasta) {
                 throw new RuntimeException('La serie ha agotado su rango de numeración.');
             }
 
-            $n = (int)$row->proximo;
+            $n = (int) $row->proximo;
             $row->proximo = $n + 1;
             $row->save();
 

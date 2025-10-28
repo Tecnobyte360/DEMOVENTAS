@@ -2,6 +2,7 @@
 
 namespace App\Models\Productos;
 
+use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -26,7 +27,7 @@ class ProductoBodega extends Model
 
     public function bodega()
     {
-        return $this->belongsTo(\App\Models\bodegas::class);
+        return $this->belongsTo(Bodega::class);
     }
     public function scopeFila($query, int $productoId, int $bodegaId)
 {

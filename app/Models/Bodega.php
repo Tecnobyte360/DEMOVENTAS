@@ -16,7 +16,7 @@ class Bodega extends Model
     {
         return $this->belongsToMany(Producto::class, 'producto_bodega')
                     ->withPivot('stock', 'stock_minimo', 'stock_maximo')
-                    ->withTimestamps(); // 👈 También aquí
+                    ->withTimestamps();
     }
     
 }

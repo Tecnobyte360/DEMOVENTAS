@@ -2,11 +2,11 @@
 
 namespace App\Livewire\Productos;
 
+use App\Models\Bodega;
 use Livewire\Component;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
-use App\Models\bodegas;
 use App\Models\Productos\Producto;
 use App\Models\Categorias\Subcategoria;
 use App\Models\Impuestos\Impuesto as ImpuestoModel;
@@ -23,7 +23,7 @@ class Productos extends Component
     /** Catálogos dinámicos para cuentas */
     public $tiposCuenta;
     public $cuentasPUC;
-
+    public bool $es_inventariable = true;
     /** Selección de cuentas por tipo_id: [tipo_id => plan_cuentas_id] */
     public array $cuentasPorTipo = [];
 
@@ -60,8 +60,8 @@ class Productos extends Component
     {
         $this->productos     = collect();
         $this->subcategorias = Subcategoria::where('activo', true)->orderBy('nombre')->get();
-        $this->bodegas       = bodegas::where('activo', true)->orderBy('nombre')->get();
-
+        $this->bodegas       = Bodega::where('activo', true)->orderBy('nombre')->get();
+        $this->es_inventariable = true;
         $this->impuestos = ImpuestoModel::with('tipo')
             ->where('activo', true)
             ->orderBy('prioridad')->orderBy('nombre')
@@ -69,16 +69,16 @@ class Productos extends Component
 
         $this->tiposCuenta = ProductoCuentaTipo::activos()
             ->orderBy('orden')->orderBy('id')
-            ->get(['id','codigo','nombre','obligatorio','orden']);
+            ->get(['id', 'codigo', 'nombre', 'obligatorio', 'orden']);
 
         $this->cuentasPUC = PlanCuentas::imputables()
             ->where('nivel', 5)
             ->ordenCodigo()
-            ->get(['id','codigo','nombre']);
+            ->get(['id', 'codigo', 'nombre']);
 
         $this->unidades = UnidadesMedida::where('activo', true)
             ->orderBy('nombre')
-            ->get(['id','nombre','simbolo','codigo']);
+            ->get(['id', 'nombre', 'simbolo', 'codigo']);
 
         foreach ($this->tiposCuenta as $t) {
             $this->cuentasPorTipo[$t->id] = null;
@@ -90,8 +90,12 @@ class Productos extends Component
     public function render()
     {
         $query = Producto::with([
-            'subcategoria','bodegas','impuesto',
-            'cuentas.tipo','cuentas.cuentaPUC','unidadMedida',
+            'subcategoria',
+            'bodegas',
+            'impuesto',
+            'cuentas.tipo',
+            'cuentas.cuentaPUC',
+            'unidadMedida',
         ]);
 
         if ($this->search) {
@@ -125,7 +129,7 @@ class Productos extends Component
     public function edit(int $id): void
     {
         try {
-            $producto = Producto::with(['bodegas','cuentas'])->findOrFail($id);
+            $producto = Producto::with(['bodegas', 'cuentas'])->findOrFail($id);
 
             $this->producto_id        = $producto->id;
             $this->nombre             = $producto->nombre;
@@ -156,12 +160,12 @@ class Productos extends Component
                 ];
             }
         } catch (\Throwable $e) {
-            Log::error('Error al cargar producto para edición', ['id'=>$id, 'msg'=>$e->getMessage()]);
+            Log::error('Error al cargar producto para edición', ['id' => $id, 'msg' => $e->getMessage()]);
             PendingToast::create()->error()->message('Error al cargar el producto.')->duration(7000);
         }
     }
 
-    /** ===== Modal Cuentas ===== */
+
     public function abrirModalCuentas(): void
     {
         if (empty($this->cuentasPorTipo)) {
@@ -169,7 +173,10 @@ class Productos extends Component
         }
         $this->showCuentasModal = true;
     }
-    public function cerrarModalCuentas(): void { $this->showCuentasModal = false; }
+    public function cerrarModalCuentas(): void
+    {
+        $this->showCuentasModal = false;
+    }
 
     public function setMovContableSegun(string $valor): void
     {
@@ -208,21 +215,28 @@ class Productos extends Component
     }
 
     /** ===== Bodegas UI ===== */
-    public function agregarBodega()
-    {
-        if (!$this->bodegaSeleccionada) {
-            PendingToast::create()->error()->message('Selecciona una bodega primero.')->duration(4000);
-            return;
-        }
-        $this->stocksPorBodega[$this->bodegaSeleccionada] = [
-            'stock_minimo' => $this->stockMinimo,
-            'stock_maximo' => $this->stockMaximo,
-        ];
-        $this->bodegaSeleccionada = '';
-        $this->stockMinimo = 0;
-        $this->stockMaximo = null;
+   public function agregarBodega()
+{
+    if (!$this->es_inventariable) {
+        PendingToast::create()->error()->message('Los servicios no gestionan stock por bodega.')->duration(4000);
+        return;
     }
-    public function eliminarBodega($id) { unset($this->stocksPorBodega[$id]); }
+    if (!$this->bodegaSeleccionada) {
+        PendingToast::create()->error()->message('Selecciona una bodega primero.')->duration(4000);
+        return;
+    }
+    $this->stocksPorBodega[$this->bodegaSeleccionada] = [
+        'stock_minimo' => $this->stockMinimo,
+        'stock_maximo' => $this->stockMaximo,
+    ];
+    $this->bodegaSeleccionada = '';
+    $this->stockMinimo = 0;
+    $this->stockMaximo = null;
+}
+    public function eliminarBodega($id)
+    {
+        unset($this->stocksPorBodega[$id]);
+    }
 
     /* =======================================
      * Validar imagen Base64 (sin storage)
@@ -291,8 +305,9 @@ class Productos extends Component
                 'subcategoria_id'    => $this->subcategoria_id,
                 'impuesto_id'        => $this->impuesto_id,
                 'unidad_medida_id'   => $this->unidad_medida_id,
-                'imagen_path'        => $this->imagen_base64, // Base64 directo a BD
+                'imagen_path'        => $this->imagen_base64,
                 'mov_contable_segun' => $this->mov_contable_segun,
+                'es_inventariable'   => $this->es_inventariable,
             ]);
 
             if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
@@ -305,17 +320,18 @@ class Productos extends Component
                 }
             }
 
-            foreach ($this->stocksPorBodega as $bodegaId => $stockData) {
-                $producto->bodegas()->attach($bodegaId, [
-                    'stock'        => 0,
-                    'stock_minimo' => $stockData['stock_minimo'] ?? 0,
-                    'stock_maximo' => $stockData['stock_maximo'] ?? null,
-                ]);
+            if ($this->es_inventariable) {
+                foreach ($this->stocksPorBodega as $bodegaId => $stockData) {
+                    $producto->bodegas()->attach($bodegaId, [
+                        'stock'        => 0,
+                        'stock_minimo' => $stockData['stock_minimo'] ?? 0,
+                        'stock_maximo' => $stockData['stock_maximo'] ?? null,
+                    ]);
+                }
             }
 
             $this->resetInput();
             PendingToast::create()->success()->message('Producto creado exitosamente.')->duration(5000);
-
         } catch (\Throwable $e) {
             Log::error('Error al guardar producto', ['message' => $e->getMessage()]);
             PendingToast::create()->error()->message('Error al guardar el producto: ' . Str::limit($e->getMessage(), 220))->duration(9000);
@@ -354,6 +370,7 @@ class Productos extends Component
                 'impuesto_id'        => $this->impuesto_id,
                 'unidad_medida_id'   => $this->unidad_medida_id,
                 'mov_contable_segun' => $this->mov_contable_segun,
+                 'es_inventariable'   => $this->es_inventariable,
             ];
 
             if (!empty($this->imagen_base64)) {
@@ -385,10 +402,10 @@ class Productos extends Component
 
             $this->resetInput();
             PendingToast::create()->success()->message('Producto actualizado exitosamente.')->duration(5000);
-
         } catch (\Throwable $e) {
             Log::error('Error al actualizar producto', [
-                'id' => $this->producto_id, 'msg' => $e->getMessage(),
+                'id' => $this->producto_id,
+                'msg' => $e->getMessage(),
             ]);
             PendingToast::create()->error()->message('Error al actualizar el producto: ' . Str::limit($e->getMessage(), 220))->duration(12000);
         }
@@ -437,10 +454,24 @@ class Productos extends Component
     private function resetInput()
     {
         $this->reset([
-            'nombre','descripcion','precio','costo','activo','subcategoria_id','impuesto_id',
-            'unidad_medida_id','imagen_base64',
-            'producto_id','isEdit','bodegaSeleccionada','stockMinimo','stockMaximo',
-            'stocksPorBodega','stockMinimoGlobal','stockMaximoGlobal',
+            'nombre',
+            'descripcion',
+            'precio',
+            'costo',
+            'activo',
+            'subcategoria_id',
+            'impuesto_id',
+            'unidad_medida_id',
+            'imagen_base64',
+            'producto_id',
+            'isEdit',
+            'bodegaSeleccionada',
+            'stockMinimo',
+            'stockMaximo',
+            'stocksPorBodega',
+            'stockMinimoGlobal',
+            'stockMaximoGlobal',
+              'es_inventariable',
         ]);
 
         $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
@@ -471,6 +502,4 @@ class Productos extends Component
         if (!is_null($imp->monto_fijo)) return round($base + (float)$imp->monto_fijo, 2);
         return round($base, 2);
     }
-
-    
 }

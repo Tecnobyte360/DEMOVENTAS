@@ -2,10 +2,11 @@
 
 namespace App\Models\Productos;
 
+use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Categorias\Subcategoria;
-use App\Models\bodegas;
+
 use App\Models\UnidadesMedida;
 
 class Producto extends Model
@@ -30,15 +31,21 @@ class Producto extends Model
         'cuenta_ingreso_id',
         'mov_contable_segun',
         'unidad_medida_id',
-        // Base64 en BD:
+     
         'imagen_path',
+         'es_inventariable'
     ];
 
     protected $casts = [
         'activo' => 'boolean',
+         'es_inventariable' => 'boolean',
     ];
+     public function getEsServicioAttribute(): bool
+    {
+        return !$this->es_inventariable;
+    }
 
-    // Para exponer helpers en ->toArray() / JSON
+  
     protected $appends = [
         'precio_con_iva',
         'imagen_url',
@@ -53,7 +60,7 @@ class Producto extends Model
 
     public function bodegas()
     {
-        return $this->belongsToMany(bodegas::class, 'producto_bodega', 'producto_id', 'bodega_id')
+        return $this->belongsToMany(Bodega::class, 'producto_bodega', 'producto_id', 'bodega_id')
             ->withPivot('stock', 'stock_minimo', 'stock_maximo')
             ->withTimestamps();
     }

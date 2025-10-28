@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Cotizaciones;
 
+use App\Models\Bodega;
 use Livewire\Component;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\DB;
@@ -9,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Throwable;
 
-use App\Models\bodegas;
+
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 use App\Models\Productos\PrecioProducto;
@@ -57,7 +58,7 @@ class Cotizacion extends Component
 
     public function render()
     {
-        $bodegas   = bodegas::orderBy('nombre')->get();
+        $bodegas   = Bodega::orderBy('nombre')->get();
         $clientes  = SocioNegocio::clientes()->orderBy('razon_social')->take(100)->get();
         $productos = Producto::where('activo',1)->orderBy('nombre')->take(200)->get();
 

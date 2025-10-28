@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Inventario;
 
-use App\Models\bodegas;
+use App\Models\Bodega;
 use App\Models\Inventario\SalidaMercancia;
 use App\Models\Inventario\SalidaMercanciaDetalle;
 use App\Models\Productos\Producto;
@@ -129,7 +129,7 @@ class Salidas extends Component
         }
 
         $producto = Producto::find($this->producto_id);
-        $bodega   = bodegas::find($this->bodega_id);
+        $bodega   =Bodega::find($this->bodega_id);
 
         $this->items[] = [
             'producto_id'     => $this->producto_id,
@@ -231,7 +231,7 @@ class Salidas extends Component
             'rutas'     => Ruta::all(),
             'socios'    => SocioNegocio::all(),
             'productos' => Producto::all(),
-            'bodegas'   => bodegas::all(),
+            'bodegas'   => Bodega::all(),
         ]);
     }
 }

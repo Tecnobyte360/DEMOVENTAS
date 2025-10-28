@@ -19,7 +19,8 @@ class FacturaPago extends Model
         'monto',
         'notas',
         'medio_pago_id',
-        'turno_id', 
+        'turno_id',
+        'estado',
     ];
 
     protected $casts = [
@@ -27,19 +28,16 @@ class FacturaPago extends Model
         'monto' => 'decimal:2',
     ];
 
-    /** Pago pertenece a una factura */
     public function factura(): BelongsTo
     {
         return $this->belongsTo(Factura::class, 'factura_id');
     }
 
-    /** Medio de pago usado */
     public function medioPago(): BelongsTo
     {
         return $this->belongsTo(MedioPagos::class, 'medio_pago_id');
     }
 
-    /** Turno de caja al que se registró el pago */
     public function turno(): BelongsTo
     {
         return $this->belongsTo(turnos_caja::class, 'turno_id');

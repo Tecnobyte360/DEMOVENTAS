@@ -37,15 +37,18 @@
       <section>
         <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Serie (NC)</label>
         <div class="flex items-center gap-3">
-          <select
-            wire:model.number="serie_id"
-            class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60"
-          >
-            <option value="">— Seleccione —</option>
-            @foreach($series as $s)
-              <option value="{{ $s->id }}">{{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} → {{ $s->hasta }})</option>
-            @endforeach
-          </select>
+         <select
+  wire:model.number="serie_id"
+  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 ..."
+>
+
+  @foreach($series as $s)
+    <option value="{{ $s->id }}">
+      {{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} → {{ $s->hasta }})
+    </option>
+  @endforeach
+</select>
+
 
           @if($serieDefault)
             <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 text-xs">
@@ -558,15 +561,7 @@
             </template>
 
             <div class="flex flex-wrap justify-end gap-2">
-              <button type="button"
-                      class="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
-                      :class="isNext('aplicar') ? 'ring-4 ring-emerald-300 animate-pulse' : ''"
-                      wire:click="abrirAplicacion" wire:loading.attr="disabled" wire:target="abrirAplicacion,guardar,emitir"
-                      x-data="{e:@entangle('estado')}" :disabled="['anulada','cerrado'].includes(e)">
-                <i class="fa-solid fa-arrow-rotate-left mr-2"></i>
-                <span>Aplicación</span>
-              </button>
-
+            
               <button type="button"
                       class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
                       wire:click="guardar" wire:loading.attr="disabled" wire:target="guardar,emitir"

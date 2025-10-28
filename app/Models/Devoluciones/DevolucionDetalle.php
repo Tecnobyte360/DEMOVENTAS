@@ -2,7 +2,7 @@
 
 namespace App\Models\Devoluciones;
 
-use App\Models\bodegas;
+use App\Models\Bodega;
 use App\Models\Productos\Producto;
 use App\Models\Productos\PrecioProducto;
 use Illuminate\Database\Eloquent\Model;
@@ -36,7 +36,7 @@ class DevolucionDetalle extends Model
 
     public function bodega()
     {
-        return $this->belongsTo(bodegas::class);
+        return $this->belongsTo(Bodega::class);
     }
 
     /**

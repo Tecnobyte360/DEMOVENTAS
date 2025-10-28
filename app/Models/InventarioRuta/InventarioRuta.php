@@ -2,7 +2,7 @@
 
 namespace App\Models\InventarioRuta;
 
-use App\Models\bodegas;
+use App\Models\Bodega;
 use App\Models\Productos\Producto;
 use Illuminate\Database\Eloquent\Model;
 
@@ -25,6 +25,6 @@ protected $fillable = ['ruta_id', 'producto_id', 'bodega_id', 'cantidad', 'canti
 
     public function bodega()
     {
-        return $this->belongsTo(bodegas::class);
+        return $this->belongsTo(Bodega::class);
     }
 }

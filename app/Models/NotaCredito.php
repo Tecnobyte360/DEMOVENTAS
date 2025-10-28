@@ -51,4 +51,6 @@ class NotaCredito extends Model
     // tabla: nota_creditos, FK: factura_id
     return $this->hasMany(\App\Models\NotaCredito::class, 'factura_id');
 }
+
+
 }

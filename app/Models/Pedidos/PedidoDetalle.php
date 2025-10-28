@@ -2,7 +2,7 @@
 
 namespace App\Models\Pedidos;
 
-use App\Models\bodegas;
+use App\Models\Bodega;
 use App\Models\Productos\PrecioProducto;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -53,7 +53,7 @@ class PedidoDetalle extends Model
      */
     public function bodega()
     {
-        return $this->belongsTo(bodegas::class);
+        return $this->belongsTo(Bodega::class);
     }
 
     /**

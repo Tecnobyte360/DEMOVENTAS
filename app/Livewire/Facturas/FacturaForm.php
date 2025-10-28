@@ -14,7 +14,7 @@ use Throwable;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
-use App\Models\bodegas;
+
 use App\Models\CondicionPago\CondicionPago;
 use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Factura\Factura;
@@ -23,11 +23,14 @@ use App\Services\ContabilidadService;
 use Masmerise\Toaster\PendingToast;
 use App\Models\Impuestos\Impuesto;
 use App\Services\InventarioService;
+use App\Models\TiposDocumento\TipoDocumento;
+
 
 class FacturaForm extends Component
 {
     public ?Factura $factura = null;
     public string $documento = 'factura';
+    public string $modo = 'venta'; 
     public ?Serie $serieDefault = null;
 
     public ?int $serie_id = null;
@@ -101,58 +104,63 @@ class FacturaForm extends Component
     {
         $this->cargarFactura($id);
     }
-
-   public function mount(?int $id = null): void
+public function mount(?int $id = null): void
 {
     try {
-        $this->fecha        = now()->toDateString();
-        $this->serieDefault = Serie::defaultPara($this->documento);
+        
+        $this->fecha = now()->toDateString();
+
+        // 👇 Detectar serie según modo
+     $this->documento = $this->modo === 'compra' ? 'facturacompra' : 'factura';
+        $this->serieDefault = Serie::defaultParaCodigo($this->documento);
 
         if ($id) {
-            // Editar / reabrir una factura existente
+            // Cargar factura existente
             $this->cargarFactura($id);
 
+            // Asignar serie si no tiene
             if (!$this->factura->serie_id && $this->serieDefault) {
                 $this->serie_id = $this->serieDefault->id;
             }
 
-            // Ajusta vencimiento y (nuevo) el flag de auto-emitir según tipo pago
+            // Aplicar forma de pago actual
             $this->aplicarFormaPago($this->tipo_pago);
 
+            // Definir términos si no existen
             if (empty($this->terminos_pago)) {
                 $this->terminos_pago = $this->tipo_pago === 'credito'
                     ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
                     : 'Contado';
             }
 
-            // 🔽 asegura que el flag quede acorde al tipo actual
             $this->autoEmitirContado = ($this->tipo_pago === 'contado');
         } else {
             // Nueva factura
             $this->addLinea();
-            $this->aplicarFormaPago('contado');  // también setea $autoEmitirContado = true
+            $this->aplicarFormaPago('contado');
             $this->terminos_pago = 'Contado';
             $this->serie_id      = $this->serieDefault?->id;
 
-            // Por si quieres forzar explícito (no es necesario si aplicarFormaPago ya lo hace)
-            $this->autoEmitirContado = true;
+            // 👇 En modo compra NO autoemitimos
+            $this->autoEmitirContado = $this->modo === 'venta';
 
+            // Si ya viene socio seleccionado
             if ($this->socio_negocio_id) {
-                // Esto podría cambiar tipo a 'credito' y vuelve a llamar aplicarFormaPago internamente
                 $this->setPagoDesdeCliente((int)$this->socio_negocio_id);
 
-                $socio = SocioNegocio::with('condicionPago')->find((int)$this->socio_negocio_id);
+                $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')->find((int)$this->socio_negocio_id);
                 $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
-                // tras setPagoDesdeCliente, $autoEmitirContado ya quedó alineado al tipo resultante
             }
         }
 
+        // 👇 Según el modo usa cuenta por cobrar (CxC) o por pagar (CxP)
         $this->setCuentaCobroPorDefecto();
 
-    } catch (Throwable $e) {
+    } catch (\Throwable $e) {
         report($e);
-        PendingToast::create()
-            ->error()->message('No se pudo inicializar el formulario de factura.')
+        \Masmerise\Toaster\PendingToast::create()
+            ->error()
+            ->message('No se pudo inicializar el formulario de factura.')
             ->duration(7000);
     }
 }

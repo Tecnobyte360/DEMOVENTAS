@@ -124,7 +124,7 @@ class NotaCreditoForm extends Component
     {
         try {
             $this->fecha = now()->toDateString();
-            $this->serieDefault = Serie::defaultPara($this->documento);
+          $this->serieDefault = Serie::defaultParaCodigo($this->documento);
             $this->serie_id = $this->serieDefault?->id;
 
             if ($id) {
@@ -154,106 +154,127 @@ class NotaCreditoForm extends Component
         }
     }
 
-    public function render()
-    {
-        try {
-            $clientes = SocioNegocio::clientes()
-                ->orderBy('razon_social')
-                ->take(200)
-                ->get();
+ public function render()
+{
+    try {
+        $clientes = SocioNegocio::clientes()
+            ->orderBy('razon_social')
+            ->take(200)
+            ->get();
 
-            $productos = Producto::with([
+        $productos = Producto::with([
+            'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+            'cuentaIngreso:id,codigo,nombre',
+            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+            'cuentas.cuentaPUC:id,codigo,nombre',
+            'cuentas.tipo:id,codigo,nombre',
+        ])
+        ->where('activo', 1)
+        ->orderBy('nombre')
+        ->take(300)
+        ->get();
+
+        $idsSeleccionados = collect($this->lineas)->pluck('producto_id')->filter()->unique()->values();
+        if ($idsSeleccionados->isNotEmpty()) {
+            $extra = Producto::with([
                 'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
                 'cuentaIngreso:id,codigo,nombre',
                 'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                 'cuentas.cuentaPUC:id,codigo,nombre',
                 'cuentas.tipo:id,codigo,nombre',
-            ])
-            ->where('activo', 1)
-            ->orderBy('nombre')
-            ->take(300)
-            ->get();
+            ])->whereIn('id', $idsSeleccionados)->get();
 
-            $idsSeleccionados = collect($this->lineas)->pluck('producto_id')->filter()->unique()->values();
-            if ($idsSeleccionados->isNotEmpty()) {
-                $extra = Producto::with([
-                    'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-                    'cuentaIngreso:id,codigo,nombre',
-                    'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-                    'cuentas.cuentaPUC:id,codigo,nombre',
-                    'cuentas.tipo:id,codigo,nombre',
-                ])->whereIn('id', $idsSeleccionados)->get();
-
-                $productos = $productos->merge($extra)->unique('id')->values();
-            }
-
-            $bodegas = Bodega::orderBy('nombre')->get();
-
-            $cuentasIngresos = PlanCuentas::query()
-                ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
-                ->where('cuenta_activa', 1)
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre']);
-
-            $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->where('clase_cuenta', 'CXC_CLIENTES')
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre']);
-
-            $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
-
-            $impuestosVentas = Impuesto::activos()
-                ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
-                ->orderBy('prioridad')
-                ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
-
-            $condicionesPago = CondicionPago::orderBy('nombre')
-                ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
-
-            return view('livewire.facturas.nota-credito-form', [
-                'clientes'         => $clientes,
-                'productos'        => $productos,
-                'bodegas'          => $bodegas,
-                'series'           => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,
-                'cuentasCXC'       => $cuentasCXC,
-                'cuentasCaja'      => $cuentasCaja,
-                'impuestosVentas'  => $impuestosVentas,
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => $condicionesPago,
-                'facturasCliente'  => collect($this->facturasCliente),
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('NotaCreditoForm render() fallo', [
-                'msg'   => $e->getMessage(),
-                'code'  => $e->getCode(),
-                'file'  => $e->getFile(),
-                'line'  => $e->getLine(),
-                'trace' => substr($e->getTraceAsString(), 0, 2000),
-            ]);
-
-            PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
-
-            return view('livewire.facturas.nota-credito-form', [
-                'clientes'         => collect(),
-                'productos'        => collect(),
-                'bodegas'          => collect(),
-                'series'           => collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => collect(),
-                'cuentasCXC'       => collect(),
-                'cuentasCaja'      => collect(),
-                'impuestosVentas'  => collect(),
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => collect(),
-                'facturasCliente'  => collect(),
-            ]);
+            $productos = $productos->merge($extra)->unique('id')->values();
         }
+
+        $bodegas = Bodega::orderBy('nombre')->get();
+
+        $cuentasIngresos = PlanCuentas::query()
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+            ->where('cuenta_activa', 1)
+            ->orderBy('codigo')
+            ->get(['id', 'codigo', 'nombre']);
+
+        $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
+            ->where('clase_cuenta', 'CXC_CLIENTES')
+            ->orderBy('codigo')
+            ->get(['id', 'codigo', 'nombre']);
+
+        $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
+            ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
+            ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
+
+        $impuestosVentas = Impuesto::activos()
+            ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
+            ->orderBy('prioridad')
+            ->orderBy('nombre')
+            ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
+
+        $condicionesPago = CondicionPago::orderBy('nombre')
+            ->get(['id', 'nombre', 'tipo', 'plazo_dias']);
+
+        /* ===== SERIES (tipo: nota_credito) ===== */
+        $tipoIdNota = \App\Models\TiposDocumento\TipoDocumento::whereRaw('LOWER(codigo)=?', [strtolower($this->documento)])
+            ->value('id');
+
+        $series = Serie::query()
+            ->when($tipoIdNota, fn($q) => $q->where('tipo_documento_id', $tipoIdNota))
+            ->orderBy('nombre')
+            ->get(['id','nombre','prefijo','desde','hasta','proximo','longitud','es_default','activa']);
+
+        // Incluir la serie actualmente seleccionada si no está en el listado (p.ej. inactiva)
+        $serieActualId = (int) ($this->serie_id ?? $this->nota?->serie_id ?? 0);
+        if ($serieActualId && !$series->contains('id', $serieActualId)) {
+            if ($sel = Serie::find($serieActualId)) {
+                $series->prepend($sel);
+            }
+        }
+
+        // Evitar duplicados y poner la default al inicio
+        $series = $series->unique('id')->sortByDesc('es_default')->values();
+
+        return view('livewire.facturas.nota-credito-form', [
+            'clientes'         => $clientes,
+            'productos'        => $productos,
+            'bodegas'          => $bodegas,
+            'series'           => $series,
+            'serieDefault'     => $this->serieDefault,
+            'cuentasIngresos'  => $cuentasIngresos,
+            'cuentasCXC'       => $cuentasCXC,
+            'cuentasCaja'      => $cuentasCaja,
+            'impuestosVentas'  => $impuestosVentas,
+            'bloqueada'        => $this->bloqueada,
+            'condicionesPago'  => $condicionesPago,
+            'facturasCliente'  => collect($this->facturasCliente),
+        ]);
+    } catch (\Throwable $e) {
+        Log::error('NotaCreditoForm render() fallo', [
+            'msg'   => $e->getMessage(),
+            'code'  => $e->getCode(),
+            'file'  => $e->getFile(),
+            'line'  => $e->getLine(),
+            'trace' => substr($e->getTraceAsString(), 0, 2000),
+        ]);
+
+        PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
+
+        return view('livewire.facturas.nota-credito-form', [
+            'clientes'         => collect(),
+            'productos'        => collect(),
+            'bodegas'          => collect(),
+            'series'           => collect(),
+            'serieDefault'     => $this->serieDefault,
+            'cuentasIngresos'  => collect(),
+            'cuentasCXC'       => collect(),
+            'cuentasCaja'      => collect(),
+            'impuestosVentas'  => collect(),
+            'bloqueada'        => $this->bloqueada,
+            'condicionesPago'  => collect(),
+            'facturasCliente'  => collect(),
+        ]);
     }
+}
+
 
     /* ===== BLOQUEO / SOLO LECTURA ===== */
 
@@ -930,7 +951,8 @@ class NotaCreditoForm extends Component
 
             if (!$this->nota) $this->nota = new NotaCredito();
 
-            $serieId = $this->nota->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
+        $serieId = $this->serie_id ?? ($this->serieDefault?->id ?? $this->nota?->serie_id);
+
 
             $dataCab = [
                 'serie_id'          => $serieId,

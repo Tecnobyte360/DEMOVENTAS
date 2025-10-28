@@ -25,6 +25,8 @@ use App\Livewire\ConfiguracionEmpresas\Empresas;
 use App\Livewire\Contabilidad\Asientos;
 use App\Livewire\Cotizaciones\Cotizacion;
 use App\Livewire\CuentasContables\PlanCuentas;
+use App\Livewire\Facturas\FacturaCompra\FacturaCompra;
+use App\Livewire\Facturas\FacturaCompra\IndexFacturas;
 use App\Livewire\Facturas\FacturaForm;
 use App\Livewire\Facturas\Index;
 use App\Livewire\Facturas\Listapagosrecibidos;
@@ -35,6 +37,7 @@ use App\Livewire\Finanzas\TiposGasto;
 use App\Livewire\Impuesto\Impuesto;
 use App\Livewire\Inventario\DevolucionesMercancia;
 use App\Livewire\Inventario\EntradasMercancia;
+use App\Livewire\Inventario\Indexentradas;
 use App\Livewire\Inventario\Salidas;
 use App\Livewire\MaestroRutas\MaestroRutas;
 use App\Livewire\MediosPagos\MediosPagos;
@@ -50,6 +53,7 @@ use App\Livewire\Seguridad\Roles\IndexP;
 use App\Livewire\Serie\Serie;
 use App\Livewire\SocioNegocio\SocioNegocios;
 use App\Livewire\SubCategorias\SubCategorias;
+use App\Livewire\TipoDocumentos\Tiposdocumento;
 use App\Livewire\Vehiculos\Vehiculo;
 use App\Models\cotizaciones\cotizacione;
 use App\Models\Devoluciones\Devolucion;
@@ -239,7 +243,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
 
     //Inventario
-
+   Route::get('Entradas', Indexentradas::class)->name('Entradas');
     Route::get('/EntradasMercancia', EntradasMercancia::class)->name('entradas.mercancia');
     Route::get('/Operaciones-stock', OperacionesStock::class)->name('Operaciones-stock');
     Route::get('/Maestro-Rutas', MaestroRutas::class)->name('Maestro-Rutas');
@@ -264,11 +268,18 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::post('/facturas/{factura}/print-pos', [FacturaPosPrintController::class, 'print'])
         ->name('facturas.print-pos');
     Route::get('/normas-reparto', NormasReparto::class)->name('normas-reparto.index');
+      Route::get('/Listas-precios', list::class)->name('Listas-precios');
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
+    Route::get('Factura-compras',IndexFacturas::class)->name('Factura-compras');
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
     // Route::get('/catalogos/ciiu', CiiuActividades::class)
     //     ->name('catalogos.ciiu');
+
+
+    Route::get('/TipoDocumentos', Tiposdocumento::class)
+        ->name('TipoDocumentos');
+
 
     Route::get('/contabilidad/asientos', Asientos::class)
         ->name('asientos.index');

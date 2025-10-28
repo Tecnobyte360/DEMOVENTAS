@@ -319,7 +319,7 @@
                     <th class="px-4 py-3 text-left">Cuenta</th>
                     <th class="px-4 py-3 text-right">Débito</th>
                     <th class="px-4 py-3 text-right">Crédito</th>
-                    <th class="px-4 py-3 text-right">Base</th>
+                    {{-- <th class="px-4 py-3 text-right">Base</th> --}}
                     <th class="px-4 py-3 text-right">Tarifa %</th>
                     <th class="px-4 py-3 text-left">Impuesto</th>
                     <th class="px-4 py-3 text-left">Tercero</th>
@@ -335,17 +335,22 @@
                       <td class="px-4 py-2">{{ $m['nombre'] ?? '' }}</td>
                       <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['debito'] ?? 0), 2) }}</td>
                       <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['credito'] ?? 0), 2) }}</td>
-                      <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['base_gravable'] ?? 0), 2) }}</td>
+                      {{-- <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['base_gravable'] ?? 0), 2) }}</td> --}}
                       <td class="px-4 py-2 text-right tabular-nums">{{ number_format((float)($m['tarifa_pct'] ?? 0), 4) }}</td>
-                      <td class="px-4 py-2">
-                        @if(!empty($m['impuesto_codigo']) || !empty($m['impuesto_nombre']))
-                          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200" title="{{ $m['impuesto_nombre'] ?? $m['impuesto_codigo'] }}">
-                            {{ $m['impuesto_codigo'] ?? $m['impuesto_nombre'] }}
-                          </span>
-                        @else
-                          <span class="text-gray-400">—</span>
-                        @endif
-                      </td>
+                      <td class="px-4 py-2 text-right tabular-nums">
+  @php $impVal = (float)($m['valor_impuesto'] ?? 0); @endphp
+  @if($impVal > 0)
+    {{ number_format($impVal, 2) }}
+  @elseif(!empty($m['impuesto_codigo']) || !empty($m['impuesto_nombre']))
+    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200"
+          title="{{ $m['impuesto_nombre'] ?? $m['impuesto_codigo'] }}">
+      {{ $m['impuesto_codigo'] ?? $m['impuesto_nombre'] }}
+    </span>
+  @else
+    <span class="text-gray-400">—</span>
+  @endif
+</td>
+
                       <td class="px-4 py-2">
                         @if(!empty($m['tercero_nombre']))
                           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200" title="{{ !empty($m['tercero_nit']) ? 'NIT: '.$m['tercero_nit'] : '' }}">

@@ -2,11 +2,11 @@
 
 namespace App\Models\Inventario;
 
+use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Inventario\EntradaMercancia;
 use App\Models\Productos\Producto;
-use App\Models\bodegas;
 
 class EntradaDetalle extends Model
 {
@@ -34,6 +34,6 @@ class EntradaDetalle extends Model
 
     public function bodega()
     {
-        return $this->belongsTo(bodegas::class);
+        return $this->belongsTo(Bodega::class);
     }
 }

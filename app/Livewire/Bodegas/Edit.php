@@ -2,7 +2,8 @@
 
 namespace App\Livewire\Bodegas;
 
-use App\Models\bodegas;
+use App\Models\Bodega;
+
 use Livewire\Component;
 
 class Edit extends Component
@@ -24,7 +25,7 @@ class Edit extends Component
         if (!$bodegaId) return;
 
         $this->bodegaId = $bodegaId;
-        $bodega = bodegas::find($bodegaId);
+        $bodega = Bodega::find($bodegaId);
 
         if ($bodega) {
             $this->nombre = $bodega->nombre;
@@ -41,7 +42,7 @@ class Edit extends Component
             'activo' => 'boolean',
         ]);
 
-        bodegas::updateOrCreate(
+       Bodega::updateOrCreate(
             ['id' => $this->bodegaId],
             [
                 'nombre' => $this->nombre,

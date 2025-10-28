@@ -16,7 +16,8 @@ class Pago extends Model
         'fecha',
         'metodo_pago',
         'observaciones',
-        'user_id'
+        'user_id',
+        'estado', 
     ];
 
     protected $casts = [
@@ -33,9 +34,9 @@ class Pago extends Model
     {
         return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class);
     }
-    public function usuario()
-{
-    return $this->belongsTo(User::class, 'user_id');
-}
 
+    public function usuario()
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 }

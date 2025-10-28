@@ -3,7 +3,7 @@
 namespace App\Models\cotizaciones;
 
 use App\Livewire\Cotizaciones\Cotizacion;
-use App\Models\bodegas;
+use App\Models\Bodega;
 use App\Models\Productos\PrecioProducto;
 use App\Models\Productos\Producto;
 use Illuminate\Database\Eloquent\Model;
@@ -31,7 +31,7 @@ class cotizacion_detalle extends Model
 }
 
     public function producto()   { return $this->belongsTo(Producto::class); }
-    public function bodega()     { return $this->belongsTo(bodegas::class, 'bodega_id'); }
+    public function bodega()     { return $this->belongsTo(Bodega::class, 'bodega_id'); }
     public function precioLista(){ return $this->belongsTo(PrecioProducto::class, 'precio_lista_id'); }
 
     public function recalcularImporte(): void {

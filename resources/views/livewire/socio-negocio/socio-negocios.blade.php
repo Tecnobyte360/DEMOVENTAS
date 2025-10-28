@@ -367,7 +367,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           @php
             $campos = [
-              ['prop'=>'cuenta_cxc_id',        'label'=>'CxC (Clientes)'],
+              ['prop'=>'cuenta_cxc_id',        'label'=>'CxC (Clientes) CxP (Proveedores)'],
               ['prop'=>'cuenta_anticipos_id',  'label'=>'Anticipos'],
               ['prop'=>'cuenta_descuentos_id', 'label'=>'Descuentos'],
               ['prop'=>'cuenta_ret_fuente_id', 'label'=>'Retención en la fuente'],

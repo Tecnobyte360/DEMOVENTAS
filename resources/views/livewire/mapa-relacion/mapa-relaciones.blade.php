@@ -10,19 +10,51 @@
     }
   </script>
   <style>
+    :root{
+      --grad-1: linear-gradient(135deg,#111827 0%,#0b1020 35%,#141a33 70%,#0f172a 100%);
+      --panel-grad: linear-gradient(180deg, rgba(255,255,255,.85) 0%, rgba(255,255,255,.75) 100%);
+      --panel-grad-dark: linear-gradient(180deg, rgba(2,6,23,.7) 0%, rgba(2,6,23,.6) 100%);
+    }
+    @keyframes floaty {
+      0% { transform: translateY(0) translateX(0) scale(1); opacity: .5; }
+      50% { transform: translateY(-14px) translateX(6px) scale(1.03); opacity: .8; }
+      100% { transform: translateY(0) translateX(0) scale(1); opacity: .5; }
+    }
     @keyframes fadeInScale {
-      from {
-        opacity: 0;
-        transform: scale(0.95);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
+      from { opacity:0; transform: scale(.98) translateY(8px) }
+      to   { opacity:1; transform: scale(1) translateY(0) }
     }
-    .mapa-modal {
-      animation: fadeInScale 0.2s ease-out;
+    .mapa-modal { animation: fadeInScale .3s ease-out; }
+    .glass {
+      background: var(--panel-grad);
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
     }
+    .dark .glass{
+      background: var(--panel-grad-dark);
+      border-color: rgba(255,255,255,.06) !important;
+    }
+    .legend-chip { transition: transform .15s ease, box-shadow .15s ease }
+    .legend-chip:hover { transform: translateY(-1px) scale(1.02) }
+    .vignette:before{
+      content:""; position:absolute; inset:-20%;
+      pointer-events:none;
+      background:
+        radial-gradient(60% 60% at 50% 50%, rgba(255,255,255,.08) 0%, transparent 60%),
+        radial-gradient(120% 90% at 60% -10%, rgba(99,102,241,.12) 0%, transparent 60%),
+        radial-gradient(100% 100% at -10% 60%, rgba(236,72,153,.12) 0%, transparent 60%);
+      filter: blur(20px);
+      animation: floaty 10s ease-in-out infinite;
+    }
+    .vignette:after{
+      content:""; position:absolute; inset:0;
+      background: radial-gradient(80% 80% at 50% 50%, transparent 60%, rgba(0,0,0,.45) 100%);
+      pointer-events:none;
+    }
+    .toolbar-btn{
+      @apply px-3 py-2 rounded-xl text-sm font-semibold shadow-md border border-white/20 transition;
+    }
+    .toolbar-btn:hover{ transform: translateY(-1px); }
   </style>
 @endassets
 
@@ -30,117 +62,88 @@
      x-init="init($wire.open, @js($graph))"
      x-show="$wire.open"
      x-cloak
-     class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+     class="fixed inset-0 z-[100]">
 
-  {{-- Backdrop --}}
-  <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" 
-       @click="$wire.cerrar()"></div>
+  {{-- Backdrop con viñeta y blobs --}}
+  <div class="absolute inset-0 vignette" style="background: var(--grad-1);" @click="$wire.cerrar()"></div>
 
   {{-- Dialog --}}
-  <div class="mapa-modal relative z-10 w-full max-w-7xl rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden border border-slate-200/50 dark:border-slate-700/50">
-    
+  <div class="relative z-10 w-full max-w-[95vw] h-[95vh] mx-auto mt-[2.5vh] rounded-3xl overflow-hidden mapa-modal border border-white/10">
+    <div class="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 dark:from-white/5 dark:to-white/0 pointer-events-none"></div>
+
     {{-- Header --}}
-    <div class="relative bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
-      <div class="px-8 py-5 flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <div class="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/30">
-            <svg class="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          <div>
-            <h3 class="text-xl font-bold text-slate-900 dark:text-white tracking-tight">Mapa de Relaciones</h3>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Vista de documentos y dependencias</p>
-          </div>
-        </div>
-        
-        <div class="flex items-center gap-3">
-          <button 
-            @click="resetView()"
-            class="group px-4 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 transition-all duration-200 flex items-center gap-2">
-            <svg class="w-4 h-4 text-slate-600 dark:text-slate-300 group-hover:rotate-180 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span class="text-sm font-medium text-slate-700 dark:text-slate-200">Recentrar</span>
-          </button>
-          
-          <button 
-            @click="$wire.cerrar()"
-            class="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 text-sm font-semibold transition-all duration-200 shadow-lg hover:shadow-xl flex items-center gap-2">
-            <span>Cerrar</span>
-            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <div class="px-8 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 border-b border-white/20 flex items-center justify-between">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shadow-lg">🗺️</div>
+        <div>
+          <h3 class="text-xl font-black text-white tracking-tight">Mapa de Relaciones</h3>
+          <p class="text-sm text-indigo-100 font-medium mt-0.5">Red de documentos vinculados</p>
         </div>
       </div>
-
-      {{-- Leyenda --}}
-      <div class="px-8 py-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-        <div class="flex items-center gap-6">
-          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipos de documento:</span>
-          
-          <div class="flex items-center gap-3">
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-blue-400 to-blue-600"></div>
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Factura</span>
-            </div>
-            
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600"></div>
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Pago</span>
-            </div>
-            
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-amber-400 to-amber-600"></div>
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Nota crédito</span>
-            </div>
-            
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-sky-200 dark:border-sky-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-sky-400 to-sky-600"></div>
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Entrega</span>
-            </div>
-            
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-800 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-yellow-400 to-yellow-600"></div>
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Orden</span>
-            </div>
-            
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 shadow-sm">
-              <div class="w-3 h-3 rounded-full bg-gradient-to-br from-slate-300 to-slate-500"></div>
-              <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Cliente</span>
-            </div>
-          </div>
+      <div class="flex items-center gap-3">
+        <div class="hidden md:flex items-center gap-2 glass border border-slate-200/60 dark:border-slate-700/60 px-3 py-2 rounded-xl">
+          <input x-model="state.searchTerm" @keydown.enter.prevent="searchNumber()" type="text"
+                 placeholder="Buscar por número…"
+                 class="bg-transparent placeholder-white/70 text-white text-sm focus:outline-none w-44">
+          <button @click="searchNumber()"
+                  class="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-semibold">Buscar</button>
         </div>
+        <button class="px-6 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-sm font-bold text-white transition-all shadow-lg border border-white/30"
+                @click="$wire.cerrar()">✕ Cerrar</button>
       </div>
     </div>
 
-    {{-- Canvas --}}
-    <div class="p-8 bg-white dark:bg-slate-900">
-      <div x-ref="cy" class="h-[70vh] w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950"></div>
+    {{-- Leyenda + Filtros --}}
+    <div class="px-6 py-3 glass border-b border-slate-200/50 dark:border-slate-700/50">
+      <div class="flex items-center gap-2 flex-wrap text-xs font-bold">
+        <span class="text-slate-700 dark:text-slate-200 mr-2 text-sm">📚 TIPOS</span>
+
+        <template x-for="chip in legend" :key="chip.type">
+          <button
+            class="legend-chip px-3 py-1.5 rounded-xl text-white shadow"
+            :class="chip.active ? 'ring-2 ring-white/70' : 'opacity-70'"
+            :style="`background: linear-gradient(135deg, ${chip.bg[0]}, ${chip.bg[1]});`"
+            @click="toggleType(chip.type)">
+            <span class="inline-flex items-center gap-2 text-[12px]">
+              <span x-text="chip.icon" class="text-base"></span>
+              <span x-text="chip.label"></span>
+            </span>
+          </button>
+        </template>
+
+        <button @click="resetFilters()" class="ml-2 px-3 py-1.5 rounded-xl bg-slate-800/80 text-white text-[12px] border border-white/10">Mostrar todo</button>
+      </div>
+    </div>
+
+    {{-- Canvas Cytoscape --}}
+    <div class="p-6 h-[calc(95vh-220px)] bg-gradient-to-br from-white/70 to-slate-50/70 dark:from-slate-950/60 dark:to-slate-900/60">
+      <div class="relative h-full">
+        {{-- Grid decorativo --}}
+        <div class="absolute inset-0 rounded-2xl opacity-25 dark:opacity-15"
+             style="background-image: radial-gradient(circle, #94a3b8 1px, transparent 1px); background-size: 38px 38px;"></div>
+
+        {{-- Toolbar flotante --}}
+        <div class="absolute top-4 right-4 z-20 flex gap-2 glass border border-white/20 p-2 rounded-2xl shadow-xl">
+          <button class="toolbar-btn bg-white/30 text-white hover:bg-white/40" @click="zoomIn()">＋</button>
+          <button class="toolbar-btn bg-white/30 text-white hover:bg-white/40" @click="zoomOut()">－</button>
+          <button class="toolbar-btn bg-indigo-600 text-white hover:bg-indigo-700" @click="resetView()">🎯</button>
+          <button class="toolbar-btn bg-purple-600 text-white hover:bg-purple-700" @click="toggleLayout()">↕︎ Layout</button>
+          <button class="toolbar-btn bg-emerald-600 text-white hover:bg-emerald-700" @click="downloadPNG()">⬇ PNG</button>
+        </div>
+
+        <div x-ref="cy"
+             class="relative h-full w-full rounded-2xl border-2 border-white/40 dark:border-white/10 bg-gradient-to-br from-white to-slate-50 dark:from-slate-950 dark:to-slate-900 shadow-2xl overflow-hidden"></div>
+      </div>
     </div>
 
     {{-- Footer --}}
-    <div class="px-8 py-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-      <div class="flex items-center gap-6 text-xs text-slate-500 dark:text-slate-400">
-        <div class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>Usa <kbd class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px]">Scroll</kbd> para zoom</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-          </svg>
-          <span>Arrastra para mover</span>
-        </div>
+    <div class="px-8 py-4 glass border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+      <div class="flex items-center gap-6 text-sm text-slate-700 dark:text-slate-300 font-medium">
+        <div class="flex items-center gap-2"><span class="text-lg">🖱️</span><span>Scroll para zoom</span></div>
+        <div class="flex items-center gap-2"><span class="text-lg">✋</span><span>Arrastra para mover</span></div>
+        <div class="flex items-center gap-2"><span class="text-lg">👆</span><span>Click en documentos</span></div>
       </div>
-      
-      <div class="flex items-center gap-2 text-xs">
-        <span class="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 font-medium" x-text="nodeCount + ' documentos'"></span>
-        <span class="px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium" x-text="edgeCount + ' relaciones'"></span>
-      </div>
+      <div class="text-xs text-slate-500 dark:text-slate-400">Tip: usa el buscador para resaltar un número específico</div>
     </div>
   </div>
 </div>
@@ -148,234 +151,281 @@
 <script>
   function mapaRelaciones() {
     let cy = null;
+    let currentLayout = 'dagre';
 
     const style = [
-      // Nodos estilo "Post-it" SAP
+      /* ====== Base de nodos (tarjeta “glass”) ====== */
       {
         selector: 'node',
         style: {
-          'shape': 'rectangle',
-          'background-color': '#F5F5DC',
-          'background-opacity': 1,
-          'border-width': 1,
-          'border-color': '#999999',
-          'border-style': 'solid',
-          'padding': '8px',
-          'label': 'data(label)',
+          'shape': 'round-rectangle',
+          'background-color': '#ffffff',
+          'background-opacity': 0.9,
+          'border-width': 2,
+          'border-color': '#e5e7eb',
+          'padding': '24px',
+          'label': ele => {
+            const icon  = ele.data('icon')   ?? '';
+            const tipo  = ele.data('tipo')   ?? '';
+            const num   = ele.data('numero') ?? '';
+            const monto = ele.data('monto')  ?? '';
+            const fecha = ele.data('fecha')  ?? '';
+            let label = `${icon}\n\n${(tipo||'').toUpperCase()}`;
+            if (num)   label += `\n━━━━━━━━━\n${num}`;
+            if (monto) label += `\n${monto}`;
+            if (fecha) label += `\n📅 ${fecha}`;
+            return label;
+          },
           'text-wrap': 'wrap',
-          'text-max-width': '140px',
-          'text-valign': 'top',
-          'text-halign': 'left',
+          'text-max-width': '220px',
+          'text-valign': 'center',
+          'text-halign': 'center',
           'font-size': 11,
-          'font-weight': 'bold',
-          'font-family': 'Arial, sans-serif',
-          'color': '#333333',
-          'width': 160,
-          'height': 90,
-          'text-margin-y': 8,
-          'text-margin-x': 8,
+          'font-weight': 800,
+          'font-family': 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto',
+          'color': '#0f172a',
+          'width': '240px',
+          'height': '300px',
+          'text-margin-y': 0,
           'overlay-opacity': 0,
-          'shadow-blur': 8,
-          'shadow-color': '#00000040',
-          'shadow-offset-x': 3,
-          'shadow-offset-y': 3
+          'shadow-blur': 28,
+          'shadow-color': '#00000030',
+          'shadow-offset-x': 0,
+          'shadow-offset-y': 14,
+          'transition-property': 'shadow-blur, shadow-offset-y, background-color, border-color, width, height',
+          'transition-duration': '400ms',
+          /* brillo superior sutil */
+          'background-gradient-stop-colors': '#ffffff #f8fafc #ffffff',
+          'background-gradient-stop-positions': '0% 92% 100%',
         }
       },
-      // FACTURA - Fondo beige/crema
-      {
-        selector: 'node[type="factura"]',
+      { selector: 'node:selected',
+        style: { 'border-color': '#6366f1', 'border-width': 4, 'shadow-blur': 40, 'shadow-color':'#6366f155' } },
+      { selector: 'node:active',
+        style: { 'shadow-blur': 46, 'shadow-color': '#00000045', 'shadow-offset-y': 4 } },
+
+      /* ====== Estilos por tipo ====== */
+      { selector: 'node[type="factura"]',
         style: {
-          'background-color': '#FFFACD',
-          'border-color': '#DAA520',
-          'border-width': 2
-        }
-      },
-      // PAGO - Fondo verde claro
-      {
-        selector: 'node[type="pago"]',
-        style: {
-          'background-color': '#E6F4EA',
-          'border-color': '#34A853',
-          'border-width': 2
-        }
-      },
-      // NOTA CRÉDITO - Fondo naranja claro
-      {
-        selector: 'node[type="nc"]',
-        style: {
-          'background-color': '#FFF4E6',
-          'border-color': '#FF8C00',
-          'border-width': 2
-        }
-      },
-      // ENTREGA - Fondo celeste
-      {
-        selector: 'node[type="entrega"]',
-        style: {
-          'background-color': '#E3F2FD',
-          'border-color': '#4285F4',
-          'border-width': 2
-        }
-      },
-      // ORDEN - Fondo amarillo
-      {
-        selector: 'node[type="orden"]',
-        style: {
-          'background-color': '#FFFDE7',
-          'border-color': '#FBC02D',
-          'border-width': 2
-        }
-      },
-      // CLIENTE - Fondo gris claro
-      {
-        selector: 'node[type="cliente"]',
-        style: {
-          'background-color': '#F5F5F5',
-          'border-color': '#666666',
-          'border-width': 2
-        }
-      },
-      // Aristas tipo SAP - líneas azules con flecha
+          'background-gradient-stop-colors': '#eef2ff #e0e7ff #eef2ff',
+          'border-color': '#6366f1','border-width': 8,'font-size': 12,'font-weight': 900,
+          'color': '#111827','shadow-color': '#6366f14f','width':'252px','height':'312px'
+        }},
+      { selector: 'node[type="pago"]',
+        style: {'background-gradient-stop-colors': '#ecfdf5 #d1fae5 #ecfdf5','border-color':'#10b981','border-width':6,'color':'#064e3b'}},
+      { selector: 'node[type="nc"]',
+        style: {'background-gradient-stop-colors': '#fffbeb #fef3c7 #fffbeb','border-color':'#f59e0b','border-width':6,'color':'#78350f'}},
+      { selector: 'node[type="entrega"]',
+        style: {'background-gradient-stop-colors': '#f0f9ff #e0f2fe #f0f9ff','border-color':'#0ea5e9','border-width':6,'color':'#0c4a6e'}},
+      { selector: 'node[type="orden"]',
+        style: {'background-gradient-stop-colors': '#fefce8 #fef9c3 #fefce8','border-color':'#eab308','border-width':6,'color':'#713f12'}},
+      { selector: 'node[type="cliente"]',
+        style: { 'shape':'ellipse','width':'210px','height':'210px',
+                 'background-gradient-stop-colors':'#f9fafb #f3f4f6 #f9fafb',
+                 'border-color':'#6b7280','border-width':6,'color':'#111827'}},
+
+      /* ====== Aristas con gradiente y etiquetas ====== */
       {
         selector: 'edge',
         style: {
-          'curve-style': 'bezier',
-          'width': 2,
-          'line-color': '#6699CC',
-          'line-opacity': 0.8,
+          'curve-style': 'unbundled-bezier',
+          'control-point-distances': [50, -50],
+          'control-point-weights': [0.2, 0.8],
+          'width': 4,
+          'line-color': '#94a3b8',
+          'line-opacity': 0.9,
+          'line-gradient-stop-colors': '#94a3b8 #64748b',
+          'line-gradient-stop-positions': '0 100%',
           'target-arrow-shape': 'triangle',
-          'target-arrow-color': '#6699CC',
-          'arrow-scale': 1.2,
-          'label': '',
-          'overlay-opacity': 0
+          'target-arrow-color': '#64748b',
+          'arrow-scale': 2.2,
+          'label': 'data(label)',
+          'font-size': 11,
+          'font-weight': 900,
+          'color': '#0f172a',
+          'text-background-color': '#ffffff',
+          'text-background-opacity': 0.96,
+          'text-background-padding': 8,
+          'text-background-shape': 'round-rectangle',
+          'text-border-color': '#cbd5e1',
+          'text-border-width': 2,
+          'text-border-opacity': 1,
+          'edge-text-rotation': 'autorotate',
+          'text-margin-y': -10,
         }
       },
-      // Hover en aristas
-      {
-        selector: 'edge:active',
-        style: {
-          'line-color': '#3366CC',
-          'target-arrow-color': '#3366CC',
-          'width': 3,
-          'line-opacity': 1
-        }
-      }
+      { selector: 'edge:active',
+        style: { 'line-color': '#334155', 'target-arrow-color': '#334155', 'width': 6 } },
+
+      /* Atenuar (para filtros) */
+      { selector: '.dim', style: { 'opacity': 0.18 } }
     ];
+
+    const legend = [
+      { type:'factura', label:'Factura',   icon:'📄', bg:['#6366f1','#8b5cf6'], active:true },
+      { type:'pago',    label:'Pago',      icon:'💰', bg:['#10b981','#34d399'], active:true },
+      { type:'nc',      label:'Nota Crédito', icon:'🔄', bg:['#f59e0b','#fbbf24'], active:true },
+      { type:'entrega', label:'Entrega',   icon:'📦', bg:['#0ea5e9','#38bdf8'], active:true },
+      { type:'orden',   label:'Orden',     icon:'📋', bg:['#eab308','#fde047'], active:true },
+      { type:'cliente', label:'Cliente',   icon:'👤', bg:['#6b7280','#9ca3af'], active:true },
+    ];
+
+    const state = {
+      searchTerm: '',
+      activeTypes: new Set(legend.map(l => l.type)),
+    };
 
     function toElements(graph) {
       const els = [];
-      (graph?.nodes || []).forEach(n => {
-        const data = { ...(n.data ?? n) };
-        
-        // Formatear el label estilo SAP (título en bold + detalles)
-        let lines = [];
-        const originalLabel = data.label || '';
-        const sub = data.sub || '';
-        
-        // Dividir label original si tiene saltos de línea
-        const labelParts = originalLabel.split('\n');
-        lines = [...labelParts];
-        
-        // Agregar sub si existe
-        if (sub) {
-          lines.push(sub);
-        }
-        
-        data.label = lines.join('\n');
-        delete data.sub;
-        
-        els.push({ data });
-      });
+      (graph?.nodes || []).forEach(n => els.push({ data: n.data ?? n }));
       (graph?.edges || []).forEach(e => els.push({ data: e.data ?? e }));
       return els;
     }
 
-    function doRender(el, graph) {
-      if (!window.cytoscape || !el) return;
-      if (!graph?.nodes || graph.nodes.length === 0) return;
-
-      if (cy) {
-        try { cy.destroy(); } catch (e) {}
+    function layoutConfig(name){
+      if(name === 'dagre'){
+        return {
+          name: 'dagre',
+          rankDir: 'TB', nodeSep: 120, edgeSep: 60, rankSep: 180,
+          padding: 80, animate: true, animationDuration: 600, animationEasing: 'ease-out-cubic'
+        }
       }
+      // alternativo “concentric” para explorar
+      return {
+        name: 'concentric',
+        concentric: node => node.indegree()+node.outdegree(),
+        levelWidth: () => 2,
+        minNodeSpacing: 100,
+        padding: 80,
+        animate: true,
+        animationDuration: 600,
+        animationEasing: 'ease-out-cubic'
+      }
+    }
 
-      const elements = toElements(graph);
-      
+    function doRender(el, graph) {
+      if (!window.cytoscape || !el || !graph?.nodes?.length) return;
+
+      if (cy) { try { cy.destroy(); } catch (e) {} }
+
       cy = cytoscape({
         container: el,
-        elements,
+        elements: toElements(graph),
         style,
-        layout: {
-          name: 'dagre',
-          rankDir: 'LR',
-          nodeSep: 70,
-          edgeSep: 30,
-          rankSep: 120,
-          padding: 40,
-          animate: false
-        },
+        layout: layoutConfig(currentLayout),
         wheelSensitivity: 0.15,
-        minZoom: 0.4,
-        maxZoom: 2.5
+        minZoom: 0.2,
+        maxZoom: 2.6
       });
 
-      setTimeout(() => cy.fit(null, 50), 100);
-
-      // Hover efectos sutiles
-      cy.on('mouseover', 'node', (e) => {
-        e.target.style({
-          'shadow-blur': 12,
-          'shadow-offset-x': 4,
-          'shadow-offset-y': 4
-        });
+      // Animación de entrada
+      cy.nodes().forEach((node, i) => {
+        node.style('opacity', 0);
+        setTimeout(() => node.animate({ style: { opacity: 1 }, duration: 450, easing: 'ease-out' }), i * 90);
       });
+      setTimeout(() => cy.fit(null, 90), 220);
 
-      cy.on('mouseout', 'node', (e) => {
-        e.target.style({
-          'shadow-blur': 8,
-          'shadow-offset-x': 3,
-          'shadow-offset-y': 3
-        });
+      // Interacción
+      cy.on('mouseover', 'node', e => {
+        const node = e.target;
+        node.style({ 'shadow-blur': 46, 'shadow-offset-y': 6 });
+        node.neighborhood('edge').animate({ style: { 'width': 6, 'line-color': '#475569','target-arrow-color':'#334155' }, duration: 180 });
+      });
+      cy.on('mouseout', 'node', e => {
+        const node = e.target;
+        node.style({ 'shadow-blur': 28, 'shadow-offset-y': 14 });
+        node.neighborhood('edge').animate({ style: { 'width': 4, 'line-color': '#94a3b8','target-arrow-color':'#64748b' }, duration: 180 });
+      });
+      cy.on('tap', 'node', e => {
+        const node = e.target;
+        // pulso sutil
+        node.animate({ style: { 'shadow-blur': 60, 'shadow-offset-y': 0 }, duration: 140, complete: () => {
+          node.animate({ style: { 'shadow-blur': 28, 'shadow-offset-y': 14 }, duration: 160 });
+        }});
+        // Puedes abrir detalle aquí si quieres:
+        // Livewire.emit('abrirDocumento', node.data());
+        console.log('Documento:', node.data());
       });
     }
 
-    return {
-      nodeCount: 0,
-      edgeCount: 0,
-      
-      init(open, graph) {
-        this.nodeCount = graph?.nodes?.length || 0;
-        this.edgeCount = graph?.edges?.length || 0;
+    function applyFilters(){
+      if(!cy) return;
+      const active = state.activeTypes;
+      cy.nodes().forEach(n => {
+        const type = n.data('type') || n.data('tipo') || n.data('Tipo');
+        if(!type) return;
+        if(active.has(type)){ n.removeClass('dim'); }
+        else { n.addClass('dim'); }
+      });
+      // atenúa edges cuya fuente o destino esté atenuado
+      cy.edges().forEach(e => {
+        const dim = e.source().hasClass('dim') || e.target().hasClass('dim');
+        e.toggleClass('dim', dim);
+      });
+    }
 
+    function highlightByNumber(term){
+      if(!cy) return;
+      const t = (term||'').toString().trim().toLowerCase();
+      cy.nodes().removeClass('selected');
+      if(!t){ cy.fit(null, 90); return; }
+
+      // resaltar por data('numero')
+      const matches = cy.nodes().filter(n => (n.data('numero')||'').toString().toLowerCase().includes(t));
+      if(matches.length){
+        matches.select();
+        cy.animate({ fit: { eles: matches, padding: 120 }, duration: 500 });
+      }
+    }
+
+    return {
+      legend,
+      state,
+
+      init(open, graph) {
         if (open) {
           this.$nextTick(() => doRender(this.$refs.cy, graph));
         }
-
-        this.$watch('$wire.open', (isOpen) => {
+        this.$watch('$wire.open', isOpen => {
           if (isOpen) {
-            this.$nextTick(() => {
-              const g = this.$wire.graph;
-              this.nodeCount = g?.nodes?.length || 0;
-              this.edgeCount = g?.edges?.length || 0;
-              doRender(this.$refs.cy, g);
-            });
+            this.$nextTick(() => doRender(this.$refs.cy, this.$wire.graph));
           } else {
-            if (cy) {
-              try { cy.destroy(); } catch (e) {}
-              cy = null;
-            }
+            if (cy) { try { cy.destroy(); } catch(e){} cy = null; }
           }
         });
       },
-      
-      resetView() {
-        if (cy) {
-          cy.animate({
-            fit: { padding: 50 },
-            duration: 400,
-            easing: 'ease-out-cubic'
-          });
-        }
-      }
+
+      /* Toolbar actions */
+      zoomIn(){ if(cy) cy.zoom({ level: cy.zoom()*1.15, renderedPosition: {x: cy.width()/2, y: cy.height()/2} }); },
+      zoomOut(){ if(cy) cy.zoom({ level: cy.zoom()/1.15, renderedPosition: {x: cy.width()/2, y: cy.height()/2} }); },
+      resetView(){ if(cy) cy.animate({ fit: { padding: 90 }, duration: 600, easing: 'easeInOutCubic' }); },
+      toggleLayout(){
+        if(!cy) return;
+        currentLayout = currentLayout === 'dagre' ? 'concentric' : 'dagre';
+        cy.layout(layoutConfig(currentLayout)).run();
+        setTimeout(() => cy.fit(null, 90), 250);
+      },
+      downloadPNG(){
+        if(!cy) return;
+        const png = cy.png({ bg: '#ffffff', full: true, maxWidth: 4000, maxHeight: 4000, scale: 2 });
+        const a = document.createElement('a');
+        a.href = png; a.download = `mapa-relaciones-${Date.now()}.png`; a.click();
+      },
+
+      /* Legend filters */
+      toggleType(type){
+        const chip = this.legend.find(c => c.type === type);
+        chip.active = !chip.active;
+        if(chip.active) state.activeTypes.add(type); else state.activeTypes.delete(type);
+        applyFilters();
+      },
+      resetFilters(){
+        this.legend.forEach(c => { c.active = true; state.activeTypes.add(c.type); });
+        applyFilters();
+      },
+
+      /* Search */
+      searchNumber(){ highlightByNumber(this.state.searchTerm); },
     };
   }
 </script>

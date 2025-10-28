@@ -28,7 +28,7 @@
           <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/70 dark:bg-gray-700/60 backdrop-blur">
             <i class="fa-solid fa-wallet text-2xl text-gray-700 dark:text-gray-200"></i>
           </span>
-          Pagos recibidos
+         Recibos de caja
         </h1>
         <p class="text-sm text-gray-600 dark:text-gray-400">
           Consulta, filtra y analiza todos los pagos asociados a facturas emitidas.
@@ -153,6 +153,7 @@
               <th class="p-3 text-left">Método</th>
               <th class="p-3 text-left">Medio</th>
               <th class="p-3 text-left">Referencia</th>
+                      <th class="p-3 text-left">Estado</th>
               <th class="p-3 text-right">Monto</th>
             </tr>
           </thead>
@@ -165,6 +166,20 @@
                 <td class="p-3">{{ $p->metodo ?: '—' }}</td>
                 <td class="p-3">{{ $p->medioPago?->nombre ?? '—' }}</td>
                 <td class="p-3">{{ $p->referencia ?: '—' }}</td>
+               <td class="p-3">
+        @php
+          $est = strtolower((string)($p->estado ?? 'registrado'));
+          $cls = match ($est) {
+            'reversado' => 'bg-rose-100 text-rose-700',
+            'pendiente' => 'bg-amber-100 text-amber-700',
+            default     => 'bg-emerald-100 text-emerald-700', 
+          };
+        @endphp
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $cls }}">
+          {{ ucfirst($est) }}
+        </span>
+      </td>
+
                 <td class="p-3 text-right font-semibold">$ {{ number_format($p->monto,2,',','.') }}</td>
               </tr>
             @empty

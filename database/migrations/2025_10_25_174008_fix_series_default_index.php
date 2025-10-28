@@ -23,7 +23,7 @@ return new class extends Migration
                         DROP INDEX IX_series_un_default_por_tipo ON series;
                 ");
 
-                // Índice único filtrado: 1 sola serie por tipo_documento marcada como default
+                // Índice único filtrado: solo una default por tipo_documento
                 DB::statement("
                     CREATE UNIQUE INDEX IX_series_un_default_por_tipo
                     ON series (tipo_documento_id)
@@ -34,52 +34,23 @@ return new class extends Migration
             // ==================== MYSQL / MARIADB ====================
             case 'mysql':
             default:
-                // Limpia índices viejos si existieran (ignora errores)
+                // Borra índices viejos si existen (ignora error si no están)
                 try { DB::statement("DROP INDEX IX_series_default_por_documento ON series"); } catch (\Throwable $e) {}
                 try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
 
-                // Asegura columna auxiliar (normal, no generada) con el MISMO tipo que la FK
-                if (!Schema::hasColumn('series', 'default_key')) {
-                    // BIGINT UNSIGNED para empatar con foreignId()
-                    DB::statement("ALTER TABLE series ADD COLUMN default_key BIGINT UNSIGNED NULL AFTER tipo_documento_id");
-                }
-
-                // Backfill inicial
+                // 1) Asegurar que es_default sea NULLABLE (sin doctrine/dbal)
+                //    Si ya es nullable, esto no afectará.
                 DB::statement("
-                    UPDATE series
-                    SET default_key = CASE WHEN es_default = 1 THEN tipo_documento_id ELSE NULL END
+                    ALTER TABLE series
+                    MODIFY es_default TINYINT(1) NULL
                 ");
 
-                // Triggers para mantener default_key sincronizada
-                // (Elimina si ya existen para evitar errores)
-                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bi_default_key"); } catch (\Throwable $e) {}
-                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bu_default_key"); } catch (\Throwable $e) {}
-
+                // 2) Normalizar datos: es_default = NULL para los no-default
                 DB::statement("
-                    CREATE TRIGGER trg_series_bi_default_key
-                    BEFORE INSERT ON series
-                    FOR EACH ROW
-                    BEGIN
-                        SET NEW.default_key = CASE
-                            WHEN NEW.es_default = 1 THEN NEW.tipo_documento_id
-                            ELSE NULL
-                        END;
-                    END
+                    UPDATE series SET es_default = NULL WHERE es_default = 0
                 ");
 
-                DB::statement("
-                    CREATE TRIGGER trg_series_bu_default_key
-                    BEFORE UPDATE ON series
-                    FOR EACH ROW
-                    BEGIN
-                        SET NEW.default_key = CASE
-                            WHEN NEW.es_default = 1 THEN NEW.tipo_documento_id
-                            ELSE NULL
-                        END;
-                    END
-                ");
-
-                // Crear índice único si no existe
+                // 3) Crear índice único compuesto; MySQL permite múltiples NULLs
                 $exists = DB::table('information_schema.statistics')
                     ->where('table_schema', DB::getDatabaseName())
                     ->where('table_name', 'series')
@@ -87,7 +58,10 @@ return new class extends Migration
                     ->exists();
 
                 if (!$exists) {
-                    DB::statement("CREATE UNIQUE INDEX IX_series_un_default_por_tipo ON series (default_key)");
+                    DB::statement("
+                        CREATE UNIQUE INDEX IX_series_un_default_por_tipo
+                        ON series (tipo_documento_id, es_default)
+                    ");
                 }
                 break;
         }
@@ -107,16 +81,21 @@ return new class extends Migration
 
             case 'mysql':
             default:
-                // Borra índice único
+                // Quitar índice único compuesto
                 try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
 
-                // Borra triggers
-                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bi_default_key"); } catch (\Throwable $e) {}
-                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bu_default_key"); } catch (\Throwable $e) {}
-
-                // Borra columna auxiliar
-                if (Schema::hasColumn('series', 'default_key')) {
-                    DB::statement("ALTER TABLE series DROP COLUMN default_key");
+                // (Opcional) volver es_default a NOT NULL DEFAULT 0
+                // Si prefieres dejarlo nullable, elimina este bloque.
+                try {
+                    DB::statement("
+                        UPDATE series SET es_default = 0 WHERE es_default IS NULL
+                    ");
+                    DB::statement("
+                        ALTER TABLE series
+                        MODIFY es_default TINYINT(1) NOT NULL DEFAULT 0
+                    ");
+                } catch (\Throwable $e) {
+                    // Ignorar si no quieres revertir la nulabilidad
                 }
                 break;
         }

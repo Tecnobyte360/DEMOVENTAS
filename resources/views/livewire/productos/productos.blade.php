@@ -258,17 +258,17 @@
                 <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-violet-600 transition"></div>
                 <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-5"></div>
               </label>
-              <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-700 dark:text-gray-300">Articulo inventariable</span>
+            </div>
+
+            {{-- Inventariable / Servicio --}}
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-gray-700 dark:text-gray-300">Tipo de artículo</span>
               <label class="relative inline-flex items-center cursor-pointer select-none">
                 <input type="checkbox" wire:model.lazy="es_inventariable" class="sr-only peer">
                 <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-violet-600 transition"></div>
                 <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-5"></div>
               </label>
             </div>
-            </div>
-
-            
 
             {{-- Etiqueta del tipo seleccionado --}}
             <div class="sm:col-span-2 flex items-center gap-2">
@@ -306,7 +306,6 @@
                   <span class="ml-1">{{ $sel?->codigo ?? '—' }}</span>
                 </span>
               @endforeach
-          
             </div>
           @endif
 
@@ -776,5 +775,4 @@
   });
 </script>
 
-{{-- Alpine (si tu layout no lo incluye) --}}
-<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+

@@ -11,8 +11,9 @@ return new class extends Migration
         $driver = DB::getDriverName();
 
         switch ($driver) {
-            // ---------------------- SQL Server ----------------------
+            // ==================== SQL SERVER ====================
             case 'sqlsrv':
+                // Limpia índices viejos si existieran
                 DB::statement("
                     IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_series_default_por_documento' AND object_id = OBJECT_ID('series'))
                         DROP INDEX IX_series_default_por_documento ON series;
@@ -21,6 +22,8 @@ return new class extends Migration
                     IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_series_un_default_por_tipo' AND object_id = OBJECT_ID('series'))
                         DROP INDEX IX_series_un_default_por_tipo ON series;
                 ");
+
+                // Índice único filtrado: 1 sola serie por tipo_documento marcada como default
                 DB::statement("
                     CREATE UNIQUE INDEX IX_series_un_default_por_tipo
                     ON series (tipo_documento_id)
@@ -28,64 +31,63 @@ return new class extends Migration
                 ");
                 break;
 
-            // ---------------------- PostgreSQL ----------------------
-            case 'pgsql':
-                DB::statement("DROP INDEX IF EXISTS IX_series_default_por_documento;");
-                DB::statement("DROP INDEX IF EXISTS IX_series_un_default_por_tipo;");
-                DB::statement("
-                    CREATE UNIQUE INDEX IF NOT EXISTS IX_series_un_default_por_tipo
-                    ON series (tipo_documento_id)
-                    WHERE es_default = true;
-                ");
-                break;
-
-            // ---------------------- SQLite ----------------------
-            case 'sqlite':
-                DB::statement("DROP INDEX IF EXISTS IX_series_default_por_documento;");
-                DB::statement("DROP INDEX IF EXISTS IX_series_un_default_por_tipo;");
-                DB::statement("
-                    CREATE UNIQUE INDEX IF NOT EXISTS IX_series_un_default_por_tipo
-                    ON series (tipo_documento_id)
-                    WHERE es_default = 1;
-                ");
-                break;
-
-            // ---------------------- MySQL / MariaDB ----------------------
+            // ==================== MYSQL / MARIADB ====================
             case 'mysql':
             default:
-                // Limpia índices antiguos si existen
+                // Limpia índices viejos si existieran (ignora errores)
                 try { DB::statement("DROP INDEX IX_series_default_por_documento ON series"); } catch (\Throwable $e) {}
                 try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
 
-                // Desactiva checks mientras se altera (evita error 1215 al reconstruir tabla)
-                DB::statement("SET FOREIGN_KEY_CHECKS=0");
-                try {
-                    // Columna generada con MISMO tipo que la FK (foreignId = BIGINT UNSIGNED)
-                    if (!Schema::hasColumn('series', 'default_key')) {
-                        DB::statement("
-                            ALTER TABLE series
-                            ADD COLUMN default_key BIGINT UNSIGNED
-                            GENERATED ALWAYS AS (
-                                CASE WHEN es_default = 1 THEN tipo_documento_id ELSE NULL END
-                            ) STORED
-                        ");
-                    }
+                // Asegura columna auxiliar (normal, no generada) con el MISMO tipo que la FK
+                if (!Schema::hasColumn('series', 'default_key')) {
+                    // BIGINT UNSIGNED para empatar con foreignId()
+                    DB::statement("ALTER TABLE series ADD COLUMN default_key BIGINT UNSIGNED NULL AFTER tipo_documento_id");
+                }
 
-                    // Crea índice único si no existe (MySQL no acepta IF NOT EXISTS aquí)
-                    $exists = DB::table('information_schema.statistics')
-                        ->where('table_schema', DB::getDatabaseName())
-                        ->where('table_name', 'series')
-                        ->where('index_name', 'IX_series_un_default_por_tipo')
-                        ->exists();
+                // Backfill inicial
+                DB::statement("
+                    UPDATE series
+                    SET default_key = CASE WHEN es_default = 1 THEN tipo_documento_id ELSE NULL END
+                ");
 
-                    if (!$exists) {
-                        DB::statement("
-                            CREATE UNIQUE INDEX IX_series_un_default_por_tipo
-                            ON series (default_key)
-                        ");
-                    }
-                } finally {
-                    DB::statement("SET FOREIGN_KEY_CHECKS=1");
+                // Triggers para mantener default_key sincronizada
+                // (Elimina si ya existen para evitar errores)
+                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bi_default_key"); } catch (\Throwable $e) {}
+                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bu_default_key"); } catch (\Throwable $e) {}
+
+                DB::statement("
+                    CREATE TRIGGER trg_series_bi_default_key
+                    BEFORE INSERT ON series
+                    FOR EACH ROW
+                    BEGIN
+                        SET NEW.default_key = CASE
+                            WHEN NEW.es_default = 1 THEN NEW.tipo_documento_id
+                            ELSE NULL
+                        END;
+                    END
+                ");
+
+                DB::statement("
+                    CREATE TRIGGER trg_series_bu_default_key
+                    BEFORE UPDATE ON series
+                    FOR EACH ROW
+                    BEGIN
+                        SET NEW.default_key = CASE
+                            WHEN NEW.es_default = 1 THEN NEW.tipo_documento_id
+                            ELSE NULL
+                        END;
+                    END
+                ");
+
+                // Crear índice único si no existe
+                $exists = DB::table('information_schema.statistics')
+                    ->where('table_schema', DB::getDatabaseName())
+                    ->where('table_name', 'series')
+                    ->where('index_name', 'IX_series_un_default_por_tipo')
+                    ->exists();
+
+                if (!$exists) {
+                    DB::statement("CREATE UNIQUE INDEX IX_series_un_default_por_tipo ON series (default_key)");
                 }
                 break;
         }
@@ -103,24 +105,18 @@ return new class extends Migration
                 ");
                 break;
 
-            case 'pgsql':
-                DB::statement("DROP INDEX IF EXISTS IX_series_un_default_por_tipo;");
-                break;
-
-            case 'sqlite':
-                DB::statement("DROP INDEX IF EXISTS IX_series_un_default_por_tipo;");
-                break;
-
             case 'mysql':
             default:
-                DB::statement("SET FOREIGN_KEY_CHECKS=0");
-                try {
-                    try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
-                    if (Schema::hasColumn('series', 'default_key')) {
-                        DB::statement("ALTER TABLE series DROP COLUMN default_key");
-                    }
-                } finally {
-                    DB::statement("SET FOREIGN_KEY_CHECKS=1");
+                // Borra índice único
+                try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
+
+                // Borra triggers
+                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bi_default_key"); } catch (\Throwable $e) {}
+                try { DB::statement("DROP TRIGGER IF EXISTS trg_series_bu_default_key"); } catch (\Throwable $e) {}
+
+                // Borra columna auxiliar
+                if (Schema::hasColumn('series', 'default_key')) {
+                    DB::statement("ALTER TABLE series DROP COLUMN default_key");
                 }
                 break;
         }

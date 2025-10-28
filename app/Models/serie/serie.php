@@ -40,7 +40,8 @@ class Serie extends Model
 
     public function tipo(): BelongsTo
     {
-        return $this->belongsTo(TipoDocumento::class, 'tipo_documento_id');
+        // FK: tipo_documento_id, PK: id
+        return $this->belongsTo(TipoDocumento::class, 'tipo_documento_id', 'id');
     }
 
     public function facturas(): HasMany
@@ -105,4 +106,5 @@ class Serie extends Model
             return $n;
         }, 3);
     }
+  
 }

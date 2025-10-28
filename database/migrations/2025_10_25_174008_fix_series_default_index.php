@@ -10,9 +10,12 @@ return new class extends Migration
     {
         $driver = DB::getDriverName();
 
-        // --- Elimina índices previos si existen (ambos nombres posibles) ---
         switch ($driver) {
-            case 'sqlsrv': // SQL Server
+            /**
+             * 🟣 SQL Server
+             * Usa índices filtrados (WHERE es_default = 1)
+             */
+            case 'sqlsrv':
                 DB::statement("
                     IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_series_default_por_documento' AND object_id = OBJECT_ID('series'))
                         DROP INDEX IX_series_default_por_documento ON series;
@@ -21,7 +24,6 @@ return new class extends Migration
                     IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_series_un_default_por_tipo' AND object_id = OBJECT_ID('series'))
                         DROP INDEX IX_series_un_default_por_tipo ON series;
                 ");
-                // Crear índice único filtrado
                 DB::statement("
                     CREATE UNIQUE INDEX IX_series_un_default_por_tipo
                     ON series (tipo_documento_id)
@@ -29,7 +31,11 @@ return new class extends Migration
                 ");
                 break;
 
-            case 'pgsql': // PostgreSQL
+            /**
+             * 🟢 PostgreSQL
+             * Soporta índices parciales nativos
+             */
+            case 'pgsql':
                 DB::statement("DROP INDEX IF EXISTS IX_series_default_por_documento;");
                 DB::statement("DROP INDEX IF EXISTS IX_series_un_default_por_tipo;");
                 DB::statement("
@@ -39,7 +45,11 @@ return new class extends Migration
                 ");
                 break;
 
-            case 'sqlite': // SQLite 3.8+ soporta índices parciales
+            /**
+             * 🟡 SQLite
+             * También soporta índices parciales desde 3.8+
+             */
+            case 'sqlite':
                 DB::statement("DROP INDEX IF EXISTS IX_series_default_por_documento;");
                 DB::statement("DROP INDEX IF EXISTS IX_series_un_default_por_tipo;");
                 DB::statement("
@@ -49,13 +59,17 @@ return new class extends Migration
                 ");
                 break;
 
-            case 'mysql': // MySQL/MariaDB: usar columna generada + índice único
+            /**
+             * 🔵 MySQL / MariaDB
+             * Usa columna generada + índice único (porque no hay índices parciales)
+             */
+            case 'mysql':
             default:
-                // Borra índices si existen (ignora error si no están)
+                // Limpia índices previos si existen
                 try { DB::statement("DROP INDEX IX_series_default_por_documento ON series"); } catch (\Throwable $e) {}
                 try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
 
-                // Agrega columna generada si no existe (⚠️ sin 'NULL' antes de GENERATED)
+                // Crea columna generada (⚠️ sin 'NULL' antes de GENERATED)
                 if (!Schema::hasColumn('series', 'default_key')) {
                     DB::statement("
                         ALTER TABLE series
@@ -66,7 +80,7 @@ return new class extends Migration
                     ");
                 }
 
-                // Crea índice único sobre la columna generada (sin IF NOT EXISTS; verificamos antes)
+                // Crear índice único si no existe
                 $exists = DB::table('information_schema.statistics')
                     ->where('table_schema', DB::getDatabaseName())
                     ->where('table_name', 'series')
@@ -105,9 +119,8 @@ return new class extends Migration
 
             case 'mysql':
             default:
-                // Quita el índice único
                 try { DB::statement("DROP INDEX IX_series_un_default_por_tipo ON series"); } catch (\Throwable $e) {}
-                // Quita la columna generada si existe
+
                 if (Schema::hasColumn('series', 'default_key')) {
                     DB::statement("ALTER TABLE series DROP COLUMN default_key");
                 }

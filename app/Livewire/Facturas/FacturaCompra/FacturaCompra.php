@@ -279,18 +279,30 @@ class FacturaCompra extends Component
         return null;
     }
 
-    private function normalizeLinea(array &$l): void
-    {
-        $cant   = (float)($l['cantidad'] ?? 0);
-        $precio = (float)($l['precio_unitario'] ?? 0);
-        $desc   = (float)($l['descuento_pct'] ?? 0);
-        $iva    = (float)($l['impuesto_pct'] ?? 0);
-
-        $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
-        $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
-        $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+   private function normalizeLinea(array &$l): void
+{
+    if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
+        $l['precio_unitario'] = (float)$l['costo_unitario'];
     }
+
+    $cant   = (float)($l['cantidad'] ?? 0);
+    $precio = (float)($l['precio_unitario'] ?? 0);
+    $desc   = (float)($l['descuento_pct'] ?? 0);
+    $iva    = (float)($l['impuesto_pct'] ?? 0);
+
+    $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
+    $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
+    $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
+    $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+}
+public function normalizarPrecio(int $i): void
+{
+    if (!isset($this->lineas[$i]) || $this->bloqueada) return;
+    // asegúrate de que sea numérico y no negativo
+    $this->lineas[$i]['precio_unitario'] = max(0.0, (float)($this->lineas[$i]['precio_unitario'] ?? 0));
+    $this->normalizeLinea($this->lineas[$i]); // acá sí redondeas
+    $this->dispatch('$refresh');
+}
 
     public function updated($name, $value): void
 {
@@ -317,15 +329,15 @@ class FacturaCompra extends Component
     }
 
     // Campos numéricos
-    if (preg_match('/^lineas\.(\d+)\.(cantidad|precio_unitario|descuento_pct|impuesto_pct)$/', $name, $m)) {
-        $i = (int) $m[1];
-        $this->stockCheck = $i;
-        if (isset($this->lineas[$i])) {
-            $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
-        }
-        return;
-    }
+    if (preg_match('/^lineas\.(\d+)\.(cantidad|descuento_pct|impuesto_pct)$/', $name, $m)) {
+     $i = (int) $m[1];
+     $this->stockCheck = $i;
+     if (isset($this->lineas[$i])) {
+         $this->normalizeLinea($this->lineas[$i]);
+         $this->dispatch('$refresh');
+     }
+     return;
+ }
 }
 
     public function updatedSocioNegocioId($val): void
@@ -430,123 +442,157 @@ public function removeLinea(int $i): void
     $this->dispatch('$refresh');
 }
 
-    public function setProducto(int $i, $id): void
-    {
-        if ($this->bloqueada) return;
-
-        try {
-            if (!isset($this->lineas[$i])) return;
-
-            $prodId = $id ? (int) $id : null;
-            $this->lineas[$i]['producto_id'] = $prodId;
-
-            if (!$prodId) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
-                $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
-                return;
-            }
-
-            $p = Producto::with([
-                'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta,cuenta_id',
-                'cuentaIngreso:id',
-                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-            ])->find($prodId);
-
-            if (!$p) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
-                $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
-                return;
-            }
-
-            $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
-
-            $precioBase = (float) ($p->precio ?? $p->precio_venta ?? 0.0);
-            $ivaPct     = 0.0;
-            $impId      = null;
-
-            $imp = $p->impuesto;
-            if ($imp && (int)($imp->activo ?? 0) === 1) {
-                $aplica = strtoupper((string)($imp->aplica_sobre ?? ''));
-                $aplicaOK = in_array($aplica, $this->aplicaSobreParaImpuestos(), true);
-
-                $hoy   = now()->startOfDay();
-                $desde = $imp->vigente_desde ? Carbon::parse($imp->vigente_desde) : null;
-                $hasta = $imp->vigente_hasta ? Carbon::parse($imp->vigente_hasta) : null;
-                $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
-
-                if ($aplicaOK && $vigente) {
-                    $impId = (int)$imp->id;
-                    if (!is_null($imp->porcentaje)) {
-                        $ivaPct = (float) $imp->porcentaje;
-                        if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
-                            $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct / 100), 2) : 0.0;
-                        }
-                    } else {
-                        $ivaPct = 0.0;
-                    }
-                }
-            }
-
-            if (empty($this->lineas[$i]['descripcion'])) {
-                $this->lineas[$i]['descripcion'] = (string) $p->nombre;
-            }
-
-            $this->lineas[$i]['precio_unitario'] = $precioBase;
-            $this->lineas[$i]['impuesto_id']     = $impId;
-            $this->lineas[$i]['impuesto_pct']    = $ivaPct;
-
-            $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
-        } catch (\Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
-        }
-    }
-
-    public function setImpuesto(int $i, $impuestoId): void
-    {
-        if ($this->bloqueada) return;
+   public function setProducto(int $i, $id): void
+{
+    if ($this->bloqueada) return;
+    try {
         if (!isset($this->lineas[$i])) return;
 
-        $impId = $impuestoId ? (int)$impuestoId : null;
-        $this->lineas[$i]['impuesto_id'] = $impId;
+        $prodId = $id ? (int) $id : null;
+        $this->lineas[$i]['producto_id'] = $prodId;
 
-        if (!$impId) {
-            $this->lineas[$i]['impuesto_pct'] = 0.0;
+        if (!$prodId) {
+            $this->lineas[$i]['cuenta_ingreso_id'] = null;
+            $this->lineas[$i]['precio_unitario']   = 0.0;
+            $this->lineas[$i]['impuesto_id']       = null;
+            $this->lineas[$i]['impuesto_pct']      = 0.0;
             $this->normalizeLinea($this->lineas[$i]);
             $this->dispatch('$refresh');
             return;
         }
 
-        $imp = Impuesto::find($impId);
-        if (!$imp || !$imp->activo) {
-            $this->lineas[$i]['impuesto_pct'] = 0.0;
+        /** @var \App\Models\Productos\Producto $p */
+        $p = Producto::with([
+            'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta,cuenta_id',
+            'cuentaIngreso:id',
+            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+        ])->find($prodId);
+
+        if (!$p) {
+            $this->lineas[$i]['cuenta_ingreso_id'] = null;
+            $this->lineas[$i]['precio_unitario']   = 0.0;
+            $this->lineas[$i]['impuesto_id']       = null;
+            $this->lineas[$i]['impuesto_pct']      = 0.0;
             $this->normalizeLinea($this->lineas[$i]);
             $this->dispatch('$refresh');
             return;
         }
 
-        if (!is_null($imp->porcentaje)) {
-            if ($imp->incluido_en_precio && $imp->porcentaje > 0) {
-                $pu = (float)$this->lineas[$i]['precio_unitario'];
-                $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
+        // Cuenta sugerida para la línea (luego el service puede resolver otra mejor)
+        $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+
+        // ===================== Precio/Costeo =====================
+        $precioBase = (float)($this->lineas[$i]['precio_unitario'] ?? 0); // respeta lo ya digitado
+
+        if ($precioBase <= 0) {
+            if ($this->modo === 'compra') {
+                // En COMPRAS sugerir COSTO (último costo de esa bodega, luego promedio, luego costo global de producto)
+                $bid = (int)($this->lineas[$i]['bodega_id'] ?? 0);
+                if ($bid > 0) {
+                    $pb = \App\Models\Productos\ProductoBodega::query()
+                        ->where('producto_id', $p->id)
+                        ->where('bodega_id', $bid)
+                        ->first();
+                    if ($pb) {
+                        $precioBase = (float)($pb->ultimo_costo ?? 0.0);
+                        if ($precioBase <= 0) {
+                            $precioBase = (float)($pb->costo_promedio ?? 0.0);
+                        }
+                    }
+                }
+                if ($precioBase <= 0 && isset($p->costo)) {
+                    $precioBase = (float)$p->costo;
+                }
+            } else {
+                // En VENTAS sí usamos precio de lista
+                $precioBase = (float) ($p->precio ?? $p->precio_venta ?? 0.0);
             }
-            $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
-        } else {
-            $this->lineas[$i]['impuesto_pct'] = 0.0;
         }
+
+        // ===================== Impuesto sugerido (sin desinflar en compras) =====================
+        $ivaPct  = 0.0;
+        $impId   = null;
+        $imp     = $p->impuesto;
+
+        if ($imp && (int)($imp->activo ?? 0) === 1) {
+            $aplica   = strtoupper((string)($imp->aplica_sobre ?? ''));
+            $aplicaOK = in_array($aplica, $this->aplicaSobreParaImpuestos(), true);
+
+            $hoy   = now()->startOfDay();
+            $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
+            $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
+            $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
+
+            if ($aplicaOK && $vigente) {
+                $impId = (int)$imp->id;
+
+                if (!is_null($imp->porcentaje)) {
+                    $ivaPct = (float)$imp->porcentaje;
+
+                    // ❗ Solo desinflar si NO es compra
+                    if ($this->modo !== 'compra' && !empty($imp->incluido_en_precio) && $ivaPct > 0) {
+                        $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct / 100), 2) : 0.0;
+                    }
+                } else {
+                    $ivaPct = 0.0;
+                }
+            }
+        }
+
+        if (empty($this->lineas[$i]['descripcion'])) {
+            $this->lineas[$i]['descripcion'] = (string) $p->nombre;
+        }
+
+        $this->lineas[$i]['precio_unitario'] = $precioBase; // en compras = COSTO
+        $this->lineas[$i]['impuesto_id']     = $impId;
+        $this->lineas[$i]['impuesto_pct']    = $ivaPct;
 
         $this->normalizeLinea($this->lineas[$i]);
         $this->dispatch('$refresh');
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
     }
+}
+
+
+    public function setImpuesto(int $i, $impuestoId): void
+{
+    if ($this->bloqueada) return;
+    if (!isset($this->lineas[$i])) return;
+
+    $impId = $impuestoId ? (int)$impuestoId : null;
+    $this->lineas[$i]['impuesto_id'] = $impId;
+
+    if (!$impId) {
+        $this->lineas[$i]['impuesto_pct'] = 0.0;
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->dispatch('$refresh');
+        return;
+    }
+
+    $imp = Impuesto::find($impId);
+    if (!$imp || !$imp->activo) {
+        $this->lineas[$i]['impuesto_pct'] = 0.0;
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->dispatch('$refresh');
+        return;
+    }
+
+    if (!is_null($imp->porcentaje)) {
+        // ❗ Solo desinflar si NO es compra
+        if ($this->modo !== 'compra' && $imp->incluido_en_precio && $imp->porcentaje > 0) {
+            $pu = (float)$this->lineas[$i]['precio_unitario'];
+            $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
+        }
+        $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
+    } else {
+        $this->lineas[$i]['impuesto_pct'] = 0.0;
+    }
+
+    $this->normalizeLinea($this->lineas[$i]);
+    $this->dispatch('$refresh');
+}
 
     private function setCuentaCobroPorDefecto(): void
     {
@@ -715,7 +761,7 @@ public function removeLinea(int $i): void
                     'bodega_id'         => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
                     'descripcion'       => $l['descripcion'] ?? null,
                     'cantidad'          => (float)($l['cantidad'] ?? 1),
-                    'precio_unitario'   => (float)($l['precio_unitario'] ?? 0),
+                   'precio_unitario'   => (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
                     'descuento_pct'     => (float)($l['descuento_pct'] ?? 0),
                     'impuesto_id'       => $l['impuesto_id'] ?? null,
                     'impuesto_pct'      => (float)($l['impuesto_pct'] ?? 0),

@@ -57,67 +57,55 @@ class ContabilidadService
 
         return null;
     }
+
     /**
- * Revierte TODOS los asientos contables ligados a una factura (VENTA, COBRO, etc.)
- * - Resta los deltas aplicados a cada cuenta (invierte lo hecho por postMovimiento)
- * - Elimina movimientos y asientos
- * - No toca pagos ni inventario (eso lo manejas en sus servicios)
- */
-public static function revertirPorFactura(Factura $f): bool
-{
-    return DB::transaction(function () use ($f) {
-        // Bloqueamos asientos de la factura
-        $asientos = Asiento::where('origen', 'factura')
-            ->where('origen_id', $f->id)
-            ->lockForUpdate()
-            ->get();
+     * Revierte TODOS los asientos contables ligados a una factura (VENTA, COBRO, etc.)
+     * - Revierte saldos en PlanCuentas y elimina movimientos y asientos.
+     * - No toca pagos ni inventario (se manejan en sus propios servicios).
+     */
+    public static function revertirPorFactura(Factura $f): bool
+    {
+        return DB::transaction(function () use ($f) {
+            $asientos = Asiento::where('origen', 'factura')
+                ->where('origen_id', $f->id)
+                ->lockForUpdate()
+                ->get();
 
-        if ($asientos->isEmpty()) {
-            // Nada que revertir
-            return true;
-        }
-
-        foreach ($asientos as $asiento) {
-            // Traemos movimientos del asiento
-            $movs = Movimiento::where('asiento_id', $asiento->id)->get();
-
-            foreach ($movs as $mov) {
-                /** @var PlanCuentas $cuenta */
-                $cuenta = PlanCuentas::lockForUpdate()->find($mov->cuenta_id);
-                if (!$cuenta) {
-                    // Si la cuenta ya no existe, eliminamos el movimiento y seguimos
-                    $mov->delete();
-                    continue;
-                }
-
-                // Delta que fue aplicado cuando se posteó el movimiento
-                // (idéntico a postMovimiento, pero aquí lo INVERTIMOS)
-                $esDeudora = self::esDeudora($cuenta);
-                $deltaOriginal = $esDeudora
-                    ? ((float)$mov->debito - (float)$mov->credito)
-                    : ((float)$mov->credito - (float)$mov->debito);
-
-                // Revertimos el saldo
-                $reversa = -1 * $deltaOriginal;
-                PlanCuentas::whereKey($cuenta->id)->update([
-                    'saldo' => DB::raw('saldo + ' . number_format($reversa, 2, '.', '')),
-                ]);
-
-                // Borramos el movimiento
-                $mov->delete();
+            if ($asientos->isEmpty()) {
+                return true;
             }
 
-            // Borramos el asiento
-            $asiento->delete();
-        }
+            foreach ($asientos as $asiento) {
+                $movs = Movimiento::where('asiento_id', $asiento->id)->get();
 
-        // Opcional: puedes limpiar algún campo de la factura si lo llevas (no obligatorio)
-        // $f->update(['monto_aplicado' => 0]); // solo si tu lógica lo necesita
+                foreach ($movs as $mov) {
+                    /** @var PlanCuentas|null $cuenta */
+                    $cuenta = PlanCuentas::lockForUpdate()->find($mov->cuenta_id);
+                    if (!$cuenta) {
+                        $mov->delete();
+                        continue;
+                    }
 
-        Log::info('Asientos contables revertidos para factura', ['factura_id' => $f->id]);
-        return true;
-    });
-}
+                    $esDeudora = self::esDeudora($cuenta);
+                    $deltaOriginal = $esDeudora
+                        ? ((float)$mov->debito - (float)$mov->credito)
+                        : ((float)$mov->credito - (float)$mov->debito);
+
+                    $reversa = -1 * $deltaOriginal;
+                    PlanCuentas::whereKey($cuenta->id)->update([
+                        'saldo' => DB::raw('saldo + ' . number_format($reversa, 2, '.', '')),
+                    ]);
+
+                    $mov->delete();
+                }
+
+                $asiento->delete();
+            }
+
+            Log::info('Asientos contables revertidos para factura', ['factura_id' => $f->id]);
+            return true;
+        });
+    }
 
     protected static function cuentaInventarioProducto(?Producto $p): ?int
     {
@@ -143,7 +131,7 @@ public static function revertirPorFactura(Factura $f): bool
      *  POSTEOS
      * ============================================================ */
 
-   public static function postAumento(Asiento $asiento, int $cuentaId, float $monto, ?string $detalle = null, array $meta = []): Movimiento
+    public static function postAumento(Asiento $asiento, int $cuentaId, float $monto, ?string $detalle = null, array $meta = []): Movimiento
     {
         /** @var PlanCuentas $c */
         $c = PlanCuentas::lockForUpdate()->findOrFail($cuentaId);
@@ -157,7 +145,7 @@ public static function revertirPorFactura(Factura $f): bool
         return self::postMovimiento($asiento, $c, $debe, $haber, $detalle, $meta);
     }
 
-   public static function post(Asiento $asiento, int $cuentaId, float $debe, float $haber, ?string $detalle = null, array $meta = []): Movimiento
+    public static function post(Asiento $asiento, int $cuentaId, float $debe, float $haber, ?string $detalle = null, array $meta = []): Movimiento
     {
         /** @var PlanCuentas $c */
         $c = PlanCuentas::lockForUpdate()->findOrFail($cuentaId);
@@ -176,7 +164,7 @@ public static function revertirPorFactura(Factura $f): bool
                 'debito'     => round($debe, 2),
                 'credito'    => round($haber, 2),
 
-                // columnas legacy si existen
+                // columnas legacy si existen en tu tabla
                 'debe'       => 0.0,
                 'haber'      => 0.0,
                 'detalle'    => $detalle,
@@ -221,7 +209,7 @@ public static function revertirPorFactura(Factura $f): bool
     }
 
     /** Cuenta asociada a un medio de pago. */
-   public static function cuentaDesdeMedioPago(?MedioPagos $medio): ?int
+    public static function cuentaDesdeMedioPago(?MedioPagos $medio): ?int
     {
         if (!$medio) return null;
 
@@ -260,7 +248,7 @@ public static function revertirPorFactura(Factura $f): bool
      *  ASIENTOS DE COBRO
      * ============================================================ */
 
-    /** Asiento por **un solo** pago (sigue disponible). */
+    /** Asiento por **un solo** pago. */
     public static function asientoDesdePago(Factura $f, FacturaPago $pago): Asiento
     {
         return self::asientoDesdePagos($f, collect([$pago]), 'Cobro Factura');
@@ -285,7 +273,6 @@ public static function revertirPorFactura(Factura $f): bool
                 throw new \RuntimeException('No se encontró la cuenta 1305 ni una cuenta de cobro válida.');
             }
 
-            // Cabecera del asiento (ligada a la factura)
             $asiento = Asiento::create([
                 'fecha'       => optional($pagos->first())->fecha ?: $f->fecha,
                 'tipo'        => 'COBRO',
@@ -308,10 +295,8 @@ public static function revertirPorFactura(Factura $f): bool
             $totalHaber = 0.0;
             $totalCobro = 0.0;
 
-            // Agrupa por medio y suma
             $porMedio = $pagos->groupBy('medio_pago_id')->map(fn($rows) => round($rows->sum('monto'), 2));
 
-            // Debe: una línea por medio
             foreach ($porMedio as $medioId => $monto) {
                 if ($monto <= 0) continue;
 
@@ -338,7 +323,6 @@ public static function revertirPorFactura(Factura $f): bool
                 throw new \RuntimeException('El total de cobro es cero.');
             }
 
-            // Haber: CxC por el total
             $movHaber = self::post($asiento, (int)$ctaCxC1305, 0.0, $totalCobro, 'Aplicación a CxC 1305', $metaBase);
             $totalDebe  += $movHaber->debito;
             $totalHaber += $movHaber->credito;
@@ -355,159 +339,212 @@ public static function revertirPorFactura(Factura $f): bool
     /* ============================================================
      *  ASIENTO DESDE FACTURA (VENTA)
      * ============================================================ */
-  public static function asientoDesdeFactura(Factura $f): Asiento
-{
-    return DB::transaction(function () use ($f) {
-        if (empty($f->cuenta_cobro_id) || !PlanCuentas::whereKey($f->cuenta_cobro_id)->exists()) {
-            throw new \RuntimeException('La factura no tiene cuenta de cobro válida (cuenta_cobro_id).');
-        }
-
-        $ingresosPorCuenta   = [];
-        $ivaCuentaTarifa     = [];
-        $totalFactura        = 0.0;
-        $inventarioPorCuenta = [];
-        $costoPorCuenta      = [];
-
-        foreach ($f->detalles as $d) {
-            $base = (float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100);
-            $tPct = (float)$d->impuesto_pct;
-            $iva  = round($base * $tPct / 100, 2);
-
-            $ctaIng = (int)$d->cuenta_ingreso_id;
-            if ($ctaIng <= 0) throw new \RuntimeException("El detalle {$d->id} no tiene cuenta de ingreso.");
-            $ingresosPorCuenta[$ctaIng] = ($ingresosPorCuenta[$ctaIng] ?? 0.0) + $base;
-
-            if ($d->producto_id && $iva > 0) {
-                /** @var Producto|null $p */
-                $p = Producto::with(['cuentas','impuesto'])->find($d->producto_id);
-                $ctaIva = self::cuentaIvaParaProducto($p);
-                if (!$ctaIva) throw new \RuntimeException("No se pudo resolver la cuenta de IVA para el producto {$d->producto_id}.");
-                $impId = $p?->impuesto?->id;
-
-                $ivaCuentaTarifa[$ctaIva][$tPct]['base']        = ($ivaCuentaTarifa[$ctaIva][$tPct]['base'] ?? 0) + $base;
-                $ivaCuentaTarifa[$ctaIva][$tPct]['iva']         = ($ivaCuentaTarifa[$ctaIva][$tPct]['iva']  ?? 0) + $iva;
-                $ivaCuentaTarifa[$ctaIva][$tPct]['impuesto_id'] = $impId;
+    public static function asientoDesdeFactura(Factura $f): Asiento
+    {
+        return DB::transaction(function () use ($f) {
+            if (empty($f->cuenta_cobro_id) || !PlanCuentas::whereKey($f->cuenta_cobro_id)->exists()) {
+                throw new \RuntimeException('La factura no tiene cuenta de cobro válida (cuenta_cobro_id).');
             }
 
-            $totalFactura += ($base + $iva);
+            $ingresosPorCuenta   = [];
+            $ivaCuentaTarifa     = [];
+            $inventarioPorCuenta = [];
+            $costoPorCuenta      = [];
+            $totalFactura        = 0.0;
 
-            if ($d->producto_id && $d->cantidad > 0) {
-                $p = $p ?? Producto::with(['cuentas','impuesto'])->find($d->producto_id);
-                if ($p) {
-                    $cpu   = self::costoPromedioUnitario($p);
-                    $costo = round($cpu * (float)$d->cantidad, 2);
-                    if ($costo > 0) {
-                        $ctaInv   = self::cuentaInventarioProducto($p);
-                        $ctaCosto = self::cuentaCostoProducto($p);
-                        if (!$ctaInv)   throw new \RuntimeException("Producto {$p->id} sin cuenta de INVENTARIO.");
-                        if (!$ctaCosto) throw new \RuntimeException("Producto {$p->id} sin cuenta de COSTO.");
+            foreach ($f->detalles as $d) {
+                $base = (float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100);
+                $tPct = (float)$d->impuesto_pct;
+                $iva  = round($base * $tPct / 100, 2);
 
-                        $inventarioPorCuenta[$ctaInv] = ($inventarioPorCuenta[$ctaInv] ?? 0.0) + $costo;
-                        $costoPorCuenta[$ctaCosto]    = ($costoPorCuenta[$ctaCosto] ?? 0.0) + $costo;
+                // ===== Ingresos =====
+                $ctaIng = (int)$d->cuenta_ingreso_id;
+                if ($ctaIng <= 0) {
+                    throw new \RuntimeException("El detalle {$d->id} no tiene cuenta de ingreso.");
+                }
+                $ingresosPorCuenta[$ctaIng] = ($ingresosPorCuenta[$ctaIng] ?? 0) + $base;
+
+                // ===== IVA =====
+                if ($d->producto_id && $iva > 0) {
+                    $p = \App\Models\Productos\Producto::with(['cuentas','impuesto'])->find($d->producto_id);
+                    $ctaIva = self::cuentaIvaParaProducto($p);
+                    if (!$ctaIva) {
+                        throw new \RuntimeException("No se pudo resolver la cuenta de IVA para el producto {$d->producto_id}.");
+                    }
+                    $ivaCuentaTarifa[$ctaIva][$tPct]['base'] = ($ivaCuentaTarifa[$ctaIva][$tPct]['base'] ?? 0) + $base;
+                    $ivaCuentaTarifa[$ctaIva][$tPct]['iva']  = ($ivaCuentaTarifa[$ctaIva][$tPct]['iva']  ?? 0) + $iva;
+                }
+
+                $totalFactura += ($base + $iva);
+
+                // ===== COSTO/INVENTARIO si es inventario =====
+                if ($d->producto_id && $d->cantidad > 0) {
+                    $p = isset($p) && $p?->id === $d->producto_id
+                        ? $p
+                        : \App\Models\Productos\Producto::with('cuentas')->find($d->producto_id);
+
+                    if ($p && $p->es_inventariable) {
+                        $cpu   = self::costoPromedioParaLinea($p, $d->bodega_id ?? null);
+                        $costo = round($cpu * (float)$d->cantidad, 2);
+
+                        if ($costo > 0) {
+                            $ctaInv   = self::cuentaInventarioProducto($p); // Inventarios (Haber)
+                            $ctaCosto = self::cuentaCostoProducto($p);      // Costo de ventas (Debe)
+                            if (!$ctaInv)   throw new \RuntimeException("Producto {$p->id} sin cuenta de INVENTARIO.");
+                            if (!$ctaCosto) throw new \RuntimeException("Producto {$p->id} sin cuenta de COSTO.");
+
+                            $inventarioPorCuenta[$ctaInv] = ($inventarioPorCuenta[$ctaInv] ?? 0) + $costo;
+                            $costoPorCuenta[$ctaCosto]    = ($costoPorCuenta[$ctaCosto]    ?? 0) + $costo;
+                        }
                     }
                 }
             }
-        }
 
-        $asiento = Asiento::create([
-            'fecha'       => $f->fecha,
-            'tipo'        => 'VENTA',
-            'glosa'       => sprintf('Factura %s-%s · %s', (string)$f->prefijo, (string)$f->numero, optional($f->cliente)->razon_social),
-            'origen'      => 'factura',
-            'origen_id'   => $f->id,
-            'tercero_id'  => $f->socio_negocio_id,
-            'moneda'      => $f->moneda ?? 'COP',
-            'total_debe'  => 0,
-            'total_haber' => 0,
-        ]);
+            // ===== Cabecera del asiento =====
+            $asiento = Asiento::create([
+                'fecha'       => $f->fecha,
+                'tipo'        => 'VENTA',
+                'glosa'       => sprintf('Factura %s-%s · %s', (string)$f->prefijo, (string)$f->numero, optional($f->cliente)->razon_social),
+                'origen'      => 'factura',
+                'origen_id'   => $f->id,
+                'tercero_id'  => $f->socio_negocio_id,
+                'moneda'      => $f->moneda ?? 'COP',
+                'total_debe'  => 0,
+                'total_haber' => 0,
+            ]);
 
-        $totalDebe  = 0.0;
-        $totalHaber = 0.0;
+            $totalDebe  = 0.0;
+            $totalHaber = 0.0;
 
-        $metaBase = [
-            'factura_id' => $f->id,
-            'tercero_id' => $f->socio_negocio_id,
-        ];
+            $metaBase = [
+                'factura_id' => $f->id,
+                'tercero_id' => $f->socio_negocio_id,
+            ];
 
-        // DEBE: CxC por el total de la factura
-        $mov = self::post(
-            $asiento,
-            (int)$f->cuenta_cobro_id,
-            round($totalFactura, 2), // debe
-            0.0,                     // haber
-            'Cobro factura',
-            $metaBase + ['descripcion'=>'Cobro factura','base_gravable'=>null,'tarifa_pct'=>null,'valor_impuesto'=>null]
-        );
-        $totalDebe  += $mov->debito;
-        $totalHaber += $mov->credito;
-
-        // HABER: Ingresos (siempre crédito)
-        foreach ($ingresosPorCuenta as $cuentaId => $montoBase) {
+            // DEBE: CxC por el total de la factura
             $mov = self::post(
                 $asiento,
-                (int)$cuentaId,
-                0.0,                      // debe
-                round($montoBase, 2),     // haber
-                'Ingreso base sin IVA',
-                $metaBase + [
-                    'descripcion'     => 'Ingreso base sin IVA',
-                    'base_gravable'   => round($montoBase,2),
-                    'tarifa_pct'      => null,
-                    'valor_impuesto'  => 0.0,
-                    'impuesto_id'     => null
-                ]
+                (int)$f->cuenta_cobro_id,
+                round($totalFactura, 2),
+                0.0,
+                'Cobro factura',
+                $metaBase + ['descripcion'=>'Cobro factura','base_gravable'=>null,'tarifa_pct'=>null,'valor_impuesto'=>null]
             );
             $totalDebe  += $mov->debito;
             $totalHaber += $mov->credito;
-        }
 
-        // HABER: IVA generado (siempre crédito)
-        foreach ($ivaCuentaTarifa as $ctaIva => $porTarifa) {
-            foreach ($porTarifa as $pct => $vals) {
-                $base = round($vals['base'] ?? 0, 2);
-                $iva  = round($vals['iva']  ?? 0, 2);
-                if ($iva <= 0) continue;
-
+            // HABER: Ingresos
+            foreach ($ingresosPorCuenta as $cuentaId => $montoBase) {
                 $mov = self::post(
                     $asiento,
-                    (int)$ctaIva,
-                    0.0,          // debe
-                    $iva,         // haber
-                    'IVA ventas',
+                    (int)$cuentaId,
+                    0.0,
+                    round($montoBase, 2),
+                    'Ingreso base sin IVA',
                     $metaBase + [
-                        'descripcion'     => 'IVA generado',
-                        'impuesto_id'     => $vals['impuesto_id'] ?? null,
-                        'base_gravable'   => $base,
-                        'tarifa_pct'      => (float)$pct,
-                        'valor_impuesto'  => $iva
+                        'descripcion'     => 'Ingreso base sin IVA',
+                        'base_gravable'   => round($montoBase,2),
+                        'tarifa_pct'      => null,
+                        'valor_impuesto'  => 0.0,
+                        'impuesto_id'     => null
                     ]
                 );
                 $totalDebe  += $mov->debito;
                 $totalHaber += $mov->credito;
             }
+
+            // HABER: IVA generado
+            foreach ($ivaCuentaTarifa as $ctaIva => $porTarifa) {
+                foreach ($porTarifa as $pct => $vals) {
+                    $base = round($vals['base'] ?? 0, 2);
+                    $iva  = round($vals['iva']  ?? 0, 2);
+                    if ($iva <= 0) continue;
+
+                    $mov = self::post(
+                        $asiento,
+                        (int)$ctaIva,
+                        0.0,
+                        $iva,
+                        'IVA ventas',
+                        $metaBase + [
+                            'descripcion'     => 'IVA generado',
+                            'impuesto_id'     => $vals['impuesto_id'] ?? null,
+                            'base_gravable'   => $base,
+                            'tarifa_pct'      => (float)$pct,
+                            'valor_impuesto'  => $iva
+                        ]
+                    );
+                    $totalDebe  += $mov->debito;
+                    $totalHaber += $mov->credito;
+                }
+            }
+
+            // DEBE: Costos de venta (usa post() para afectar saldo)
+            foreach ($costoPorCuenta as $cta => $monto) {
+                $mov = self::post(
+                    $asiento,
+                    (int)$cta,
+                    round($monto, 2),
+                    0.0,
+                    'Costo de ventas por factura',
+                    $metaBase + ['descripcion'=>'Costo de ventas por factura']
+                );
+                $totalDebe  += $mov->debito;
+                $totalHaber += $mov->credito;
+            }
+
+            // HABER: Inventario (salida)
+            foreach ($inventarioPorCuenta as $cta => $monto) {
+                $mov = self::post(
+                    $asiento,
+                    (int)$cta,
+                    0.0,
+                    round($monto, 2),
+                    'Salida de inventario (costo)',
+                    $metaBase + ['descripcion'=>'Salida de inventario (costo)']
+                );
+                $totalDebe  += $mov->debito;
+                $totalHaber += $mov->credito;
+            }
+
+            $asiento->update([
+                'total_debe'  => round($totalDebe, 2),
+                'total_haber' => round($totalHaber, 2),
+            ]);
+
+            return $asiento;
+        });
+    }
+
+    /* ============================================================
+     *  COSTO PROMEDIO POR LÍNEA (por bodega)
+     * ============================================================ */
+    public static function costoPromedioParaLinea(\App\Models\Productos\Producto $p, ?int $bodegaId): float
+    {
+        try {
+            if ($bodegaId) {
+                $cpu = \App\Models\Productos\ProductoBodega::query()
+                    ->where('producto_id', $p->id)
+                    ->where('bodega_id', $bodegaId)
+                    ->value('costo_promedio');
+
+                if (is_numeric($cpu) && (float)$cpu > 0) {
+                    return round((float)$cpu, 4);
+                }
+            }
+
+            $cpuGlobal = \App\Models\Productos\ProductoBodega::query()
+                ->where('producto_id', $p->id)
+                ->avg('costo_promedio');
+
+            if (is_numeric($cpuGlobal) && (float)$cpuGlobal > 0) {
+                return round((float)$cpuGlobal, 4);
+            }
+        } catch (\Throwable $e) {
+            // si no existe la tabla/columna, pasamos a fallback
         }
 
-        // DEBE: Costos de venta
-        foreach ($costoPorCuenta as $cta => $monto) {
-            $mov = self::post($asiento, (int)$cta, round($monto, 2), 0.0, 'Costo de ventas', $metaBase + ['descripcion'=>'Costo de ventas']);
-            $totalDebe  += $mov->debito;
-            $totalHaber += $mov->credito;
-        }
-
-        // HABER: Inventario (salida)
-        foreach ($inventarioPorCuenta as $cta => $monto) {
-            $mov = self::post($asiento, (int)$cta, 0.0, round($monto, 2), 'Salida de inventario (costo)', $metaBase + ['descripcion'=>'Salida de inventario (costo)']);
-            $totalDebe  += $mov->debito;
-            $totalHaber += $mov->credito;
-        }
-
-        $asiento->update([
-            'total_debe'  => round($totalDebe, 2),
-            'total_haber' => round($totalHaber, 2),
-        ]);
-
-        return $asiento;
-    });
-}
-    
+        $fallback = $p->costo_promedio ?? $p->costo ?? 0;
+        return round((float)$fallback, 4);
+    }
 }

@@ -6,7 +6,6 @@ use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Models\Categorias\Subcategoria;
-
 use App\Models\UnidadesMedida;
 
 class Producto extends Model
@@ -31,29 +30,31 @@ class Producto extends Model
         'cuenta_ingreso_id',
         'mov_contable_segun',
         'unidad_medida_id',
-     
         'imagen_path',
-         'es_inventariable'
+        'es_inventariable',
     ];
 
     protected $casts = [
-        'activo' => 'boolean',
-         'es_inventariable' => 'boolean',
+        'activo'           => 'boolean',
+        'es_inventariable' => 'boolean',
+        'costo'            => 'decimal:6',
+        'precio'           => 'decimal:2',
     ];
-     public function getEsServicioAttribute(): bool
-    {
-        return !$this->es_inventariable;
-    }
 
-  
     protected $appends = [
         'precio_con_iva',
         'imagen_url',
     ];
 
+    /** Servicio = no inventariable */
+    public function getEsServicioAttribute(): bool
+    {
+        return !$this->es_inventariable;
+    }
+
     /* ===================== Relaciones ===================== */
 
-     public function subcategoria()
+    public function subcategoria()
     {
         return $this->belongsTo(Subcategoria::class);
     }
@@ -61,7 +62,7 @@ class Producto extends Model
     public function bodegas()
     {
         return $this->belongsToMany(Bodega::class, 'producto_bodega', 'producto_id', 'bodega_id')
-            ->withPivot('stock', 'stock_minimo', 'stock_maximo')
+            ->withPivot('stock', 'stock_minimo', 'stock_maximo', 'costo_promedio', 'ultimo_costo', 'metodo_costeo')
             ->withTimestamps();
     }
 
@@ -89,11 +90,10 @@ class Producto extends Model
     {
         return $this->belongsTo(UnidadesMedida::class, 'unidad_medida_id');
     }
+
     /* ===================== Accessors / Mutators ===================== */
 
-    /**
-     * Precio con IVA (solo lectura).
-     */
+    /** Precio con IVA (solo lectura). */
     public function getPrecioConIvaAttribute(): float
     {
         $base = (float)($this->precio ?? 0);
@@ -106,20 +106,13 @@ class Producto extends Model
         return round($base, 2);
     }
 
-    /**
-     * URL para <img src="...">. Como guardamos Base64, devolvemos tal cual.
-     */
+    /** URL para <img>. Si se guarda Base64, se devuelve tal cual. */
     public function getImagenUrlAttribute(): ?string
     {
         return $this->imagen_path ?: null;
     }
 
-    /**
-     * Mutator: Normaliza lo que se asigne a imagen_path.
-     * - Si llega vacío => null
-     * - Si llega data-uri (data:image/...;base64,xxx) => guarda tal cual
-     * - Si llega solo base64 => le antepone data-uri con image/png
-     */
+    /** Normaliza imagen_path (data-uri/base64). */
     public function setImagenPathAttribute($value): void
     {
         $v = is_string($value) ? trim($value) : null;
@@ -127,16 +120,11 @@ class Producto extends Model
             $this->attributes['imagen_path'] = null;
             return;
         }
-
-        // ¿Ya es data-uri completa?
         if (str_starts_with($v, 'data:image/')) {
             $this->attributes['imagen_path'] = $v;
             return;
         }
-
-        // ¿Parece base64 “pelado”? (sin prefijo)
-        // Nota: no validamos exhaustivamente; asumimos que ya se validó en el componente.
-        $this->attributes['imagen_path'] = 'data:image/png;base64,'.$v;
+        $this->attributes['imagen_path'] = 'data:image/png;base64,' . $v;
     }
 
     /* ===================== Helpers ===================== */
@@ -149,5 +137,25 @@ class Producto extends Model
     public function getMovSegunEsSubcategoriaAttribute(): bool
     {
         return $this->mov_contable_segun === self::MOV_SEGUN_SUBCATEGORIA;
+    }
+
+    /** Stock total (suma de pivotes) — útil en listados */
+    public function getStockTotalAttribute(): ?float
+    {
+        if (!$this->relationLoaded('bodegas')) return null;
+        return (float) $this->bodegas->sum(fn($b) => (float) ($b->pivot->stock ?? 0));
+    }
+
+    /** CPU de una bodega (si existe) o null. */
+    public function costoPromedioEnBodega(?int $bodegaId): ?float
+    {
+        if (!$bodegaId) return null;
+        $rel = $this->relationLoaded('bodegas')
+            ? $this->bodegas->firstWhere('id', $bodegaId)
+            : $this->bodegas()->where('bodega_id', $bodegaId)->first();
+
+        if (!$rel) return null;
+        $cpu = $rel->pivot?->costo_promedio;
+        return is_null($cpu) ? null : round((float)$cpu, 6);
     }
 }

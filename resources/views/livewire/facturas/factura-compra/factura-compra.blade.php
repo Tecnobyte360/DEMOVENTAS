@@ -68,7 +68,7 @@
             Proveedor <span class="text-red-500">*</span>
           </label>
           <select
-            wire:model.live="socio_negocio_id"
+            wire:model.debounce.300ms="socio_negocio_id"
             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('socio_negocio_id') border-red-500 focus:ring-red-300 @enderror"
           >
             <option value="">— Seleccione —</option>
@@ -235,8 +235,8 @@
               <th class="px-4 py-3 text-left">Descripción</th>
               <th class="px-4 py-3 text-left">Bodega</th>
               <th class="px-4 py-3 text-right">Cant.</th>
-              <th class="px-4 py-3 text-right">Precio</th>
-              <th class="px-4 py-3 text-right">Desc %</th>
+             <th class="px-4 py-3 text-right">Costo</th>
+              {{-- <th class="px-4 py-3 text-right">Desc %</th> --}}
               <th class="px-4 py-3 text-left">Impuesto</th>
               <th class="px-4 py-3 text-right">% Imp.</th>
               <th class="px-4 py-3 text-right">Imp. $</th>
@@ -249,10 +249,10 @@
             @forelse($lineas as $i => $l)
               @php
                 $cant  = max(1, (float)($l['cantidad'] ?? 1));
-                $precio= max(0, (float)($l['precio_unitario'] ?? 0));
+               $costo = max(0, (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0)); 
                 $desc  = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
                 $ivaP  = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
-                $base  = $cant * $precio * (1 - $desc/100);
+               $base   = $cant * $costo * (1 - $desc/100);
                 $ivaMonto = round($base * $ivaP / 100, 2);
                 $totalLin = round($base + $ivaMonto, 2);
 
@@ -350,19 +350,15 @@
 
                 {{-- Precio --}}
                 <td class="px-4 py-3 text-right">
-                  <input type="number" step="0.01" min="0"
-                         wire:model.live.debounce.200ms="lineas.{{ $i }}.precio_unitario"
-                         class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                </td>
+  <input type="number" step="any" min="0" inputmode="decimal"
+      wire:model.live.debounce.300ms="lineas.{{ $i }}.precio_unitario"
+      wire:blur="normalizarPrecio({{ $i }})"
+     class="w-44 h-11 text-right px-3 tabular-nums tracking-tight rounded-xl ..."
+     placeholder="0.00">
+</td>
 
-                {{-- Descuento --}}
-                <td class="px-4 py-3 text-right">
-                  <input type="number" step="0.001" min="0"
-                         wire:model.live.debounce.200ms="lineas.{{ $i }}.descuento_pct"
-                         class="w-24 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                </td>
 
-                {{-- Impuesto (selector; lo dejamos disabled si el flujo es automático) --}}
+              
                 <td class="px-4 py-3 min-w-[240px]">
                   <select
                     wire:model.live="lineas.{{ $i }}.impuesto_id"

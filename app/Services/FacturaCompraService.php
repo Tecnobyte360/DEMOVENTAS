@@ -220,33 +220,58 @@ class FacturaCompraService
      * Inventario (entrada por compra)
      * ============================ */
 
-    protected static function entrarInventarioPorFactura(Factura $f): void
-    {
-        $f->loadMissing('detalles');
+protected static function entrarInventarioPorFactura(Factura $f): void
+{
+    $f->loadMissing('detalles');
 
-        foreach ($f->detalles as $d) {
-            if (!$d->producto_id || !$d->bodega_id) {
-                throw new \RuntimeException("Cada línea debe tener producto y bodega.");
-            }
-
-            $pb = ProductoBodega::query()
-                ->where('producto_id', $d->producto_id)
-                ->where('bodega_id', $d->bodega_id)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$pb) {
-                $pb = new ProductoBodega([
-                    'producto_id' => $d->producto_id,
-                    'bodega_id'   => $d->bodega_id,
-                    'stock'       => 0,
-                ]);
-            }
-
-            $pb->stock = (float)$pb->stock + (float)$d->cantidad;
-            $pb->save();
+    foreach ($f->detalles as $d) {
+        if (!$d->producto_id || !$d->bodega_id) {
+            throw new \RuntimeException("Cada línea debe tener producto y bodega.");
         }
+
+        // costo unitario de la compra en esta línea
+        $cantidad = (float)$d->cantidad;
+        $pu       = (float)$d->precio_unitario; // si manejas costo distinto al precio_unitario, úsalo aquí
+        if ($cantidad <= 0) continue;
+
+        /** @var \App\Models\Productos\ProductoBodega $pb */
+        $pb = \App\Models\Productos\ProductoBodega::query()
+            ->where('producto_id', $d->producto_id)
+            ->where('bodega_id',   $d->bodega_id)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$pb) {
+            $pb = new \App\Models\Productos\ProductoBodega([
+                'producto_id'     => $d->producto_id,
+                'bodega_id'       => $d->bodega_id,
+                'stock'           => 0,
+                'costo_promedio'  => 0,
+                'ultimo_costo'    => null,
+            ]);
+        }
+
+        $stockAnt   = (float)$pb->stock;
+        $cpuAnt     = (float)$pb->costo_promedio;   // 0 si nunca ha tenido
+        $stockNuevo = $stockAnt + $cantidad;
+
+        // Promedio ponderado: ((stockAnt * cpuAnt) + (cantidad * pu)) / (stockNuevo)
+        $cpuNuevo = $stockNuevo > 0
+            ? round((($stockAnt * $cpuAnt) + ($cantidad * $pu)) / $stockNuevo, 4)
+            : round($pu, 4);
+
+        $pb->stock          = $stockNuevo;
+        $pb->costo_promedio = $cpuNuevo;
+        $pb->ultimo_costo   = round($pu, 4);
+        $pb->save();
+
+        // (Opcional) también refresca un CPU “global” en productos, si lo usas como fallback:
+        // \App\Models\Productos\Producto::whereKey($d->producto_id)
+        //     ->update(['costo_promedio' => $cpuNuevo]);
     }
+}
+
+
 
     protected static function revertirEntradaInventarioPorFactura(Factura $f): void
     {
@@ -273,59 +298,86 @@ class FacturaCompraService
      * Pre-flight
      * ============================ */
 
-    public static function validarFacturaCompraParaAsiento(Factura $f): array
-    {
-        $errores = [];
+public static function validarFacturaCompraParaAsiento(Factura $f): array
+{
+    $errores = [];
 
-        $cxp = self::resolveCuentaCxP($f);
-        if (!$cxp) {
-            $errores[] = 'No se pudo resolver la cuenta de CxP (factura/proveedor).';
-        }
+    $cxp = self::resolveCuentaCxP($f);
+    if (!$cxp) {
+        $errores[] = 'No se pudo resolver la cuenta de CxP (factura/proveedor).';
+    }
 
-        $f->loadMissing('detalles');
-        if ($f->detalles->isEmpty()) {
-            $errores[] = 'La factura no tiene detalles.';
-            return $errores;
-        }
-
-        foreach ($f->detalles as $idx => $d) {
-            $row = $idx + 1;
-
-            if (!$d->producto_id || !$d->bodega_id) {
-                Log::warning('COMPRA::inventario línea inválida', [
-                    'factura_id' => $f->id,
-                    'detalle_id' => $d->id ?? null,
-                    'producto_id' => $d->producto_id,
-                    'bodega_id'  => $d->bodega_id,
-                ]);
-                throw new \RuntimeException("Cada línea debe tener producto y bodega.");
-            }
-
-            /** @var Producto|null $p */
-            $p = Producto::with(['cuentas', 'impuesto'])->find($d->producto_id);
-
-            $ctaBase = self::resolveCuentaBaseCompra(
-                $d->cuenta_ingreso_id ?: null,
-                $p,
-                (int)$f->socio_negocio_id
-            );
-            if (!$ctaBase) {
-                $errores[] = "Fila #{$row}: sin cuenta base (producto/proveedor).";
-            }
-
-            $base = (float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct / 100);
-            $ivaVal = round($base * (float)$d->impuesto_pct / 100, 2);
-            if ($ivaVal > 0) {
-                $indicadorCuentaId = $p?->impuesto?->cuenta_id ?? null;
-                $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $indicadorCuentaId);
-                if (!$ctaIVA) {
-                    $errores[] = "Fila #{$row}: con IVA pero sin cuenta IVA (producto/proveedor/indicador).";
-                }
-            }
-        }
-
+    $f->loadMissing('detalles');
+    if ($f->detalles->isEmpty()) {
+        $errores[] = 'La factura no tiene detalles.';
         return $errores;
     }
+
+    foreach ($f->detalles as $idx => $d) {
+        $row = $idx + 1;
+
+        if (!$d->producto_id || !$d->bodega_id) {
+            Log::warning('COMPRA::inventario línea inválida', [
+                'factura_id'  => $f->id,
+                'detalle_id'  => $d->id ?? null,
+                'producto_id' => $d->producto_id,
+                'bodega_id'   => $d->bodega_id,
+            ]);
+            $errores[] = "Fila #{$row}: debe tener producto y bodega.";
+            // seguimos validando el resto para reportar todo
+        }
+
+        // Reglas duras para COMPRAS (evita asientos con base 0)
+        $cantidad = (float)$d->cantidad;
+        $costo    = (float)$d->precio_unitario;
+        $descPct  = (float)$d->descuento_pct;
+        $ivaPct   = (float)$d->impuesto_pct;
+
+        if ($cantidad <= 0) {
+            $errores[] = "Fila #{$row}: la cantidad debe ser mayor que 0.";
+        }
+        if ($costo <= 0) {
+            $errores[] = "Fila #{$row}: el costo unitario debe ser mayor que 0 en compras.";
+        }
+        if ($descPct < 0 || $descPct > 100) {
+            $errores[] = "Fila #{$row}: el descuento (%) debe estar entre 0 y 100.";
+        }
+        if ($ivaPct < 0 || $ivaPct > 100) {
+            $errores[] = "Fila #{$row}: el impuesto (%) debe estar entre 0 y 100.";
+        }
+
+        /** @var Producto|null $p */
+        $p = $d->producto_id ? Producto::with(['cuentas', 'impuesto'])->find($d->producto_id) : null;
+
+        $ctaBase = self::resolveCuentaBaseCompra(
+            $d->cuenta_ingreso_id ?: null,
+            $p,
+            (int)$f->socio_negocio_id
+        );
+        if (!$ctaBase) {
+            $errores[] = "Fila #{$row}: sin cuenta base (producto/proveedor).";
+        }
+
+        // Base gravable
+        $base = $cantidad * $costo * (1 - $descPct / 100);
+        if ($base <= 0) {
+            $errores[] = "Fila #{$row}: la base gravable calculada debe ser mayor que 0.";
+        }
+
+        // Si hay IVA calculado, debe poder resolverse la cuenta de IVA
+        $ivaVal = round($base * $ivaPct / 100, 2);
+        if ($ivaVal > 0) {
+            $indicadorCuentaId = $p?->impuesto?->cuenta_id ?? null;
+            $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $indicadorCuentaId);
+            if (!$ctaIVA) {
+                $errores[] = "Fila #{$row}: con IVA pero sin cuenta IVA (producto/proveedor/indicador).";
+            }
+        }
+    }
+
+    return $errores;
+}
+
 
     /* ============================
      * Asiento desde factura compra

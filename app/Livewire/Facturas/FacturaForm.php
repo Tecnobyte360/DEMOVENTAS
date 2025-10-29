@@ -286,22 +286,17 @@ public function mount(?int $id = null): void
         });
     }
 
-    private function resolveCuentaIngresoParaProducto(Producto $p): ?int
-    {
-        if (!empty($p->cuenta_ingreso_id)) {
-            return (int) $p->cuenta_ingreso_id;
-        }
-        $tipoId = $this->tipoIngresoId();
-        if ($tipoId) {
-            $cuenta = $p->relationLoaded('cuentas')
-                ? $p->cuentas->firstWhere('tipo_id', (int)$tipoId)
-                : $p->cuentas()->where('tipo_id', (int)$tipoId)->first();
-            if ($cuenta && $cuenta->plan_cuentas_id) {
-                return (int) $cuenta->plan_cuentas_id;
-            }
-        }
-        return null;
+  private function resolveCuentaIngresoParaProducto(Producto $p): ?int
+{
+    // Si el producto ya tiene cuenta_ingreso_id explícita, la respetamos siempre
+    if (!empty($p->cuenta_ingreso_id)) {
+        return (int) $p->cuenta_ingreso_id;
     }
+
+    // Usa el mismo criterio del servicio: SUBCATEGORIA -> subcat, si no -> artículo
+    // Tipo de cuenta: 'INGRESO'
+    return \App\Services\ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO');
+}
 
     private function normalizeLinea(array &$l): void
     {

@@ -24,11 +24,37 @@ class ContabilidadService
 
     protected static function tipoId(string $codigo): ?int
     {
+        $codigo = strtoupper(trim($codigo));
         return cache()->remember("pcta:tipo:$codigo", 600, function () use ($codigo) {
             return (int) (ProductoCuentaTipo::where('codigo', $codigo)->value('id') ?? 0) ?: null;
         });
     }
+protected static function cuentaDeSubcategoriaPorTipo(?int $subcategoriaId, string $tipoCodigo): ?int
+{
+    if (!$subcategoriaId) return null;
 
+    $tipoId = self::tipoId($tipoCodigo);
+    if (!$tipoId) return null;
+
+    return cache()->remember("subcat:$subcategoriaId:tipo:$tipoId", 600, function () use ($subcategoriaId, $tipoId) {
+        return (int) (DB::table('subcategoria_cuentas')
+            ->where('subcategoria_id', $subcategoriaId)
+            ->where('tipo_id', $tipoId)
+            ->value('plan_cuentas_id') ?? 0) ?: null;
+    });
+}
+public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo): ?int
+{
+    if (!$p) return null;
+
+    $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
+    if ($modo === 'SUBCATEGORIA') {
+        return self::cuentaDeSubcategoriaPorTipo($p->subcategoria_id, $tipoCodigo)
+            ?: self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+    }
+
+    return self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+}
     protected static function cuentaDeProductoPorTipo(?Producto $p, string $tipoCodigo): ?int
     {
         if (!$p) return null;
@@ -43,20 +69,21 @@ class ContabilidadService
         return $cuenta?->plan_cuentas_id ? (int) $cuenta->plan_cuentas_id : null;
     }
 
-    protected static function cuentaIvaParaProducto(?Producto $p): ?int
-    {
-        if (!$p) return null;
+   protected static function cuentaIvaParaProducto(?Producto $p): ?int
+{
+    if (!$p) return null;
 
-        $cta = self::cuentaDeProductoPorTipo($p, 'IVA');
-        if ($cta) return $cta;
+    // 1) Primero, si así se configuró, toma IVA por subcategoría (o por artículo si no hay en subcat)
+    $cta = self::cuentaSegunConfiguracion($p, 'IVA');
+    if ($cta) return $cta;
 
-        $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->with('cuenta')->first();
-        if ($imp && !empty($imp->cuenta_id)) {
-            return (int) $imp->cuenta_id;
-        }
-
-        return null;
+    // 2) Luego, el fallback que ya tenías: la cuenta propia del impuesto del producto
+    $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->with('cuenta')->first();
+    if ($imp && !empty($imp->cuenta_id)) {
+        return (int) $imp->cuenta_id;
     }
+    return null;
+}
 
     /**
      * Revierte TODOS los asientos contables ligados a una factura (VENTA, COBRO, etc.)
@@ -107,15 +134,14 @@ class ContabilidadService
         });
     }
 
-    protected static function cuentaInventarioProducto(?Producto $p): ?int
-    {
-        return self::cuentaDeProductoPorTipo($p, 'INVENTARIO');
-    }
-
-    protected static function cuentaCostoProducto(?Producto $p): ?int
-    {
-        return self::cuentaDeProductoPorTipo($p, 'COSTO');
-    }
+   protected static function cuentaInventarioProducto(?Producto $p): ?int
+{
+    return self::cuentaSegunConfiguracion($p, 'INVENTARIO');
+}
+   protected static function cuentaCostoProducto(?Producto $p): ?int
+{
+    return self::cuentaSegunConfiguracion($p, 'COSTO');
+}
 
     protected static function esDeudora(PlanCuentas $c): bool
     {

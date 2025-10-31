@@ -346,7 +346,7 @@
 
                 {{-- Cuenta contable (solo lectura) --}}
                {{-- Cuenta contable (Inventario / Gasto sugerida) --}}
-<td class="px-4 py-3 min-w-[280px]">
+<td class="px-4 py-3 min-w-[200px]">
   @php
     $cuentaSelId = (int)($l['cuenta_inventario_id'] ?? 0);
   @endphp
@@ -389,7 +389,7 @@
 
 
                 {{-- Descripción --}}
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 min-w-[200px]">
                   <input type="text" placeholder="Descripción (opcional)" wire:model.live.debounce.250ms="lineas.{{ $i }}.descripcion"
                          class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                 </td>

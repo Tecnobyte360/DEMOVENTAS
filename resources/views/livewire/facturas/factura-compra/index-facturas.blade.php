@@ -1,21 +1,4 @@
-@once
-  @push('styles')
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <style>[x-cloak]{display:none!important}</style>
-  @endpush
-@endonce
 
-@once
-  @push('scripts')
-    <script>
-      // Evita conflictos entre Alpine y Livewire
-      window.deferLoadingAlpine = (alpineInit) => {
-        document.addEventListener('livewire:init', alpineInit);
-      };
-    </script>
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  @endpush
-@endonce
 
 <div
   x-data="{

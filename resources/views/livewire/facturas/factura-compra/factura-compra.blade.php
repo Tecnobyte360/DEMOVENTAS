@@ -345,33 +345,48 @@
                 </td>
 
                 {{-- Cuenta contable (solo lectura) --}}
-                <td class="px-4 py-3 min-w-[260px]">
-                  <div class="space-y-1">
-                    <select
-                      wire:model.live.number="lineas.{{ $i }}.cuenta_ingreso_id"
-                      class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('lineas.'.$i.'.cuenta_ingreso_id') border-red-500 focus:ring-red-300 @enderror"
-                      disabled
-                    >
-                      <option value="">— Seleccione —</option>
-                      @if($prodSel && $prodSel->cuentaIngreso)
-                        <option value="{{ $prodSel->cuentaIngreso->id }}">
-                          {{ $prodSel->cuentaIngreso->codigo }} — {{ $prodSel->cuentaIngreso->nombre }} (del producto)
-                        </option>
-                      @endif
-                      @if($cuentasIngresos->count())
-                        <optgroup label="PUC · Ingresos">
-                          @foreach($cuentasIngresos as $cu)
-                            <option value="{{ $cu->id }}">{{ $cu->codigo }} — {{ $cu->nombre }}</option>
-                          @endforeach
-                        </optgroup>
-                      @endif
-                    </select>
+               {{-- Cuenta contable (Inventario / Gasto sugerida) --}}
+<td class="px-4 py-3 min-w-[280px]">
+  @php
+    $cuentaSelId = (int)($l['cuenta_inventario_id'] ?? 0);
+  @endphp
+  <div class="space-y-1">
+    <select
+      wire:model.live.number="lineas.{{ $i }}.cuenta_inventario_id"
+      class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('lineas.'.$i.'.cuenta_inventario_id') border-red-500 focus:ring-red-300 @enderror"
+      disabled
+    >
+      <option value="">— Seleccione —</option>
 
-                    @error('lineas.'.$i.'.cuenta_ingreso_id')
-                      <p class="text-xs text-red-600">{{ $message }}</p>
-                    @enderror
-                  </div>
-                </td>
+      {{-- Opción sugerida por producto/proveedor --}}
+      @if($cuentaSelId && isset($pucIndex[$cuentaSelId]))
+        @php $c = $pucIndex[$cuentaSelId]; @endphp
+        <option value="{{ $cuentaSelId }}">
+          {{ $c['codigo'] }} — {{ $c['nombre'] }} (sugerida)
+        </option>
+      @endif
+
+      {{-- Catálogo opcional para mostrar (si quieres listar) --}}
+      @if(!empty($cuentasInventario) && $cuentasInventario->count())
+        <optgroup label="PUC · Inventario / Gastos de compra">
+          @foreach($cuentasInventario as $cu)
+            <option value="{{ $cu->id }}">{{ $cu->codigo }} — {{ $cu->nombre }}</option>
+          @endforeach
+        </optgroup>
+      @endif
+    </select>
+
+    @error('lineas.'.$i.'.cuenta_inventario_id')
+      <p class="text-xs text-red-600">{{ $message }}</p>
+    @enderror
+
+    {{-- Hint visual --}}
+    @if(!$cuentaSelId)
+      <p class="text-[11px] text-slate-500">
+    @endif
+  </div>
+</td>
+
 
                 {{-- Descripción --}}
                 <td class="px-4 py-3">

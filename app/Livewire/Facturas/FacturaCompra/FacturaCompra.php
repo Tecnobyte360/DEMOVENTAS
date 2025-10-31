@@ -24,28 +24,32 @@ class FacturaCompra extends Component
 {
     public ?Factura $factura = null;
 
-    public string   $documento = '';
+    public string $documento = '';
     public ?SerieModel $serieDefault = null;
-    public ?int     $stockCheck = null;
-    public string   $modo = 'compra';
+    public ?int $stockCheck = null;
+    public string $modo = 'compra';
 
     // Cabecera
-    public ?int     $serie_id = null;
-    public ?int     $socio_negocio_id = null;
-    public string   $fecha = '';
-    public ?string  $vencimiento = null;
-    public ?string  $notas = null;
-    public string   $moneda = 'COP';
-    public string   $estado = 'borrador';
-    public ?int     $cuenta_cobro_id = null;   // CxP
+    public ?int $serie_id = null;
+    public ?int $socio_negocio_id = null;
+    public string $fecha = '';
+    public ?string $vencimiento = null;
+    public ?string $notas = null;
+    public string $moneda = 'COP';
+    public string $estado = 'borrador';
+    public ?int $cuenta_cobro_id = null;   // CxP
 
     // Condición de pago
-    public ?int     $condicion_pago_id = null;
-    public ?int     $plazo_dias = null;
+    public ?int $condicion_pago_id = null;
+    public ?int $plazo_dias = null;
 
     // Detalles
-    public array    $lineas = [];
-    public array    $stockVista = [];
+    public array $lineas = [];
+    public array $stockVista = [];
+
+    // Catálogo PUC para compras (inventario/gasto) + índice
+    public $cuentasInventario;
+    public array $pucIndex = [];
 
     protected $rules = [
         'serie_id'                       => 'required|integer|exists:series,id',
@@ -102,20 +106,44 @@ class FacturaCompra extends Component
     {
         $this->fecha = now()->toDateString();
 
+        // Catálogo PUC (1/5/6) e índice
+        $this->cuentasInventario = PlanCuentas::query()
+            ->where('cuenta_activa', 1)
+            ->where(fn($q) => $q->whereNull('titulo')->orWhere('titulo', 0))
+            ->where(function ($q) {
+                $q->where('codigo', 'like', '1%')
+                  ->orWhere('codigo', 'like', '5%')
+                  ->orWhere('codigo', 'like', '6%');
+            })
+            ->orderBy('codigo')
+            ->get(['id','codigo','nombre']);
+
+        $this->pucIndex = $this->cuentasInventario
+            ->keyBy('id')
+            ->map(fn($c) => ['codigo' => $c->codigo, 'nombre' => $c->nombre])
+            ->toArray();
+
+        // Si viene a editar: carga + retrocompatibilidad de cuenta
         if ($id) {
             $this->cargarFactura($id);
+            foreach ($this->lineas as &$l) {
+                if (empty($l['cuenta_inventario_id']) && !empty($l['cuenta_ingreso_id'])) {
+                    $l['cuenta_inventario_id'] = (int) $l['cuenta_ingreso_id'];
+                }
+            }
+            unset($l);
         }
 
         $this->documento    = $this->detectarCodigoDocumento() ?? '';
         $this->serieDefault = $this->documento ? SerieModel::defaultParaCodigo($this->documento) : null;
 
-        // monitoreamos 1ª línea por defecto
+        // Monitoreo de stock
         $this->stockCheck = 0;
 
         // CxP por defecto
         $this->setCuentaCobroPorDefecto();
 
-        // Defaults de condición de pago
+        // Condición por defecto + vencimiento
         if (!$this->condicion_pago_id) {
             $contado = CondicionPago::where('plazo_dias', 0)->value('id');
             $this->condicion_pago_id = $contado ?: optional(
@@ -129,7 +157,12 @@ class FacturaCompra extends Component
                 $this->serie_id = $this->serieDefault->id;
             }
         } else {
+            // Nueva factura
             $this->addLinea();
+            $last = array_key_last($this->lineas);
+            if ($last !== null && !array_key_exists('cuenta_inventario_id', $this->lineas[$last])) {
+                $this->lineas[$last]['cuenta_inventario_id'] = null;
+            }
             $this->serie_id = $this->serieDefault?->id;
 
             if ($this->socio_negocio_id) {
@@ -189,7 +222,7 @@ class FacturaCompra extends Component
 
             $bodegas = Bodega::orderBy('nombre')->get();
 
-            // (Nombre heredado; lista general de cuentas imputables activas)
+            // Listado de cuentas imputables (lo usas para mostrar opciones, aunque el valor se sugiere)
             $cuentasIngresos = PlanCuentas::query()
                 ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
                 ->where('cuenta_activa', 1)
@@ -224,7 +257,7 @@ class FacturaCompra extends Component
                 $cuentasProveedor = $this->obtenerCuentasProveedor((int)$this->socio_negocio_id);
             }
 
-            // Catálogo de condiciones
+            // Condiciones de pago
             $condicionesPago = CondicionPago::orderBy('nombre')
                 ->get(['id', 'nombre', DB::raw('plazo_dias as dias')]);
 
@@ -234,7 +267,7 @@ class FacturaCompra extends Component
                 'bodegas'          => $bodegas,
                 'series'           => $series,
                 'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,   // listado de cuentas imputables
+                'cuentasIngresos'  => $cuentasIngresos,
                 'impuestosVentas'  => $impuestosDocumento,
                 'bloqueada'        => $this->bloqueada,
                 'cuentasProveedor' => $cuentasProveedor,
@@ -280,7 +313,6 @@ class FacturaCompra extends Component
     /* =========================
      *  HELPERS / UTILIDADES
      * ========================= */
-
     private function tipoIngresoId(): ?int
     {
         return cache()->remember('producto_cuenta_tipo_ingreso_id', 600, fn () =>
@@ -290,16 +322,12 @@ class FacturaCompra extends Component
 
     private function resolveCuentaIngresoParaProducto(Producto $p): ?int
     {
-        // 0) Cuenta directa en el producto
-        if (!empty($p->cuenta_ingreso_id)) {
-            return (int) $p->cuenta_ingreso_id;
-        }
+        if (!empty($p->cuenta_ingreso_id)) return (int) $p->cuenta_ingreso_id;
 
-        $tipoId = $this->tipoIngresoId(); // tipo INGRESO
+        $tipoId = $this->tipoIngresoId();
         if (!$tipoId) return null;
 
-        // 1) Por ARTÍCULO → producto_cuentas
-        if ($p->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_ARTICULO) {
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
             $cuenta = $p->relationLoaded('cuentas')
                 ? $p->cuentas->firstWhere('tipo_id', (int)$tipoId)
                 : $p->cuentas()->where('tipo_id', (int)$tipoId)->first();
@@ -307,8 +335,7 @@ class FacturaCompra extends Component
             return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
         }
 
-        // 2) Por SUBCATEGORÍA → subcategoria_cuentas
-        if ($p->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA) {
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
             if (!$p->subcategoria_id) return null;
 
             if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
@@ -330,18 +357,14 @@ class FacturaCompra extends Component
     /** NUEVO: resolver cuenta INVENTARIO por artículo/subcategoría */
     private function resolveCuentaInventarioParaProducto(Producto $p): ?int
     {
-        // 0) Cuenta directa en el producto (si existe en tu esquema)
-        if (!empty($p->cuenta_inventario_id)) {
-            return (int) $p->cuenta_inventario_id;
-        }
+        if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
 
         $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
             ProductoCuentaTipo::query()->where('codigo', 'INVENTARIO')->value('id')
         );
         if (!$tipoInvId) return null;
 
-        // 1) Por ARTÍCULO → producto_cuentas (tipo INVENTARIO)
-        if ($p->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_ARTICULO) {
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
             $cuenta = $p->relationLoaded('cuentas')
                 ? $p->cuentas->firstWhere('tipo_id', (int)$tipoInvId)
                 : $p->cuentas()->where('tipo_id', (int)$tipoInvId)->first();
@@ -349,8 +372,7 @@ class FacturaCompra extends Component
             return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
         }
 
-        // 2) Por SUBCATEGORÍA → subcategoria_cuentas (tipo INVENTARIO)
-        if ($p->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA) {
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
             if (!$p->subcategoria_id) return null;
 
             if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
@@ -398,7 +420,6 @@ class FacturaCompra extends Component
     {
         if ($this->bloqueada) return;
 
-        // Producto cambiado
         if (preg_match('/^lineas\.(\d+)\.producto_id$/', $name, $m)) {
             $i = (int) $m[1];
             $this->stockCheck = $i;
@@ -410,7 +431,6 @@ class FacturaCompra extends Component
             return;
         }
 
-        // Bodega cambiada
         if (preg_match('/^lineas\.(\d+)\.bodega_id$/', $name, $m)) {
             $i = (int) $m[1];
             $this->stockCheck = $i;
@@ -418,7 +438,6 @@ class FacturaCompra extends Component
             return;
         }
 
-        // Campos numéricos
         if (preg_match('/^lineas\.(\d+)\.(cantidad|descuento_pct|impuesto_pct)$/', $name, $m)) {
             $i = (int) $m[1];
             $this->stockCheck = $i;
@@ -430,7 +449,7 @@ class FacturaCompra extends Component
         }
     }
 
-    // Al cambiar proveedor: set CxP + Condición (si tiene)
+    // Proveedor: set CxP + Condición
     public function updatedSocioNegocioId($val): void
     {
         if ($this->bloqueada) return;
@@ -451,13 +470,12 @@ class FacturaCompra extends Component
     {
         if ($this->bloqueada) return;
 
-        $keepCxP = $this->cuenta_cobro_id; // conservar lo que esté
+        $keepCxP = $this->cuenta_cobro_id;
         $this->condicion_pago_id = $val ? (int)$val : null;
         $this->syncCondicionAndDueDate();
-        $this->cuenta_cobro_id = $keepCxP; // restaurar explícitamente
+        $this->cuenta_cobro_id = $keepCxP;
     }
 
-    // Al cambiar fecha
     public function updatedFecha($val): void
     {
         if ($this->bloqueada) return;
@@ -485,7 +503,6 @@ class FacturaCompra extends Component
                 'plazo_dias',
             ]));
 
-            // sincroniza desde la condición si falta
             $this->syncCondicionAndDueDate();
 
             $this->lineas = $f->detalles->map(function ($d) {
@@ -593,10 +610,10 @@ class FacturaCompra extends Component
                 return;
             }
 
-            // === Cuenta sugerida de INVENTARIO (producto o subcategoría según mov_contable_segun)
+            // Sugerir cuenta INVENTARIO
             $this->lineas[$i]['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
 
-            // Precio/Costeo
+            // Precio base/costeo
             $precioBase = (float)($this->lineas[$i]['precio_unitario'] ?? 0);
 
             if ($precioBase <= 0) {
@@ -712,7 +729,6 @@ class FacturaCompra extends Component
             return;
         }
 
-        // Sin proveedor => no autoseleccionar nada
         $this->cuenta_cobro_id = null;
         $this->dispatch('$refresh');
     }
@@ -1110,7 +1126,6 @@ class FacturaCompra extends Component
         $this->stockVista = [];
         $this->cuenta_cobro_id = null;
 
-        // reinicia condición y vencimiento
         $contado = CondicionPago::where('plazo_dias', 0)->value('id');
         $this->condicion_pago_id = $contado ?: optional(
             CondicionPago::orderBy('plazo_dias')->first()

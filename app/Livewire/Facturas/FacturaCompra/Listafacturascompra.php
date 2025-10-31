@@ -98,6 +98,6 @@ class ListaFacturasCompra extends Component
         $items = $q->orderBy($this->sortField, $this->sortDir)
                    ->paginate($this->perPage);
 
-        return view('livewire.facturas.lista-facturas', compact('items'));
+              return view('livewire.facturas.factura-compra.lista-facturas-compra');
     }
 }

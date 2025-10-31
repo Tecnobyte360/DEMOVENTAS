@@ -36,17 +36,6 @@
     
     </nav>
 
-    {{-- ======= Contenido de pestañas ======= --}}
-    <div class="p-6 md:p-8">
-      {{-- TAB: Nueva factura de compra --}}
-      <div x-show="tab === 'form'" x-cloak>
-        <livewire:facturas.factura-compra.factura-compra
-          :modo="'compra'"
-          :key="'factura-compra-form'"
-        />
-      </div>
-
-     
-    </div>
+   
   </section>
 </div>

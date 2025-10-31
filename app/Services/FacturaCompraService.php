@@ -19,6 +19,8 @@ class FacturaCompraService
      * Helpers tipos / cuentas
      * ============================ */
 
+
+
     protected static function tipoId(string $codigo): ?int
     {
         return cache()->remember("pcta:tipo:$codigo", 600, function () use ($codigo) {

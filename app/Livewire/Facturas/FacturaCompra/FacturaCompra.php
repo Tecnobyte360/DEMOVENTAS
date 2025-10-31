@@ -11,7 +11,7 @@ use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\Serie\Serie as SerieModel;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\TiposDocumento\TipoDocumento;
-use Carbon\Carbon;
+use App\Models\CondicionPago\CondicionPago;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -24,22 +24,28 @@ class FacturaCompra extends Component
 {
     public ?Factura $factura = null;
 
-    public string $documento = '';
+    public string   $documento = '';
     public ?SerieModel $serieDefault = null;
-    public ?int $stockCheck = null;
-    public string  $modo = 'compra';
-    public ?int    $serie_id = null;
-    public ?int    $socio_negocio_id = null; 
-    public string  $fecha = '';
-    public ?string $vencimiento = null;
-    public ?string $notas = null;
-    public string  $moneda = 'COP';
+    public ?int     $stockCheck = null;
+    public string   $modo = 'compra';
 
-    public string $estado = 'borrador';
-    public array  $lineas = [];
-    public array  $stockVista = [];
+    // Cabecera
+    public ?int     $serie_id = null;
+    public ?int     $socio_negocio_id = null;
+    public string   $fecha = '';
+    public ?string  $vencimiento = null;
+    public ?string  $notas = null;
+    public string   $moneda = 'COP';
+    public string   $estado = 'borrador';
+    public ?int     $cuenta_cobro_id = null;   // CxP
 
-    public ?int $cuenta_cobro_id = null;   // CxP operativa
+    // Condición de pago
+    public ?int     $condicion_pago_id = null;
+    public ?int     $plazo_dias = null;
+
+    // Detalles
+    public array    $lineas = [];
+    public array    $stockVista = [];
 
     protected $rules = [
         'serie_id'                     => 'required|integer|exists:series,id',
@@ -48,6 +54,10 @@ class FacturaCompra extends Component
         'vencimiento'                  => 'required|date|after_or_equal:fecha',
         'moneda'                       => 'required|string|size:3',
         'cuenta_cobro_id'              => 'required|integer|exists:plan_cuentas,id',
+
+        // 👇 usa la tabla real
+        'condicion_pago_id'            => 'required|integer|exists:condicion_pagos,id',
+        'plazo_dias'                   => 'nullable|integer|min:0',
 
         'lineas'                       => 'required|array|min:1',
         'lineas.*.producto_id'         => 'required|integer|exists:productos,id',
@@ -62,20 +72,22 @@ class FacturaCompra extends Component
     ];
 
     protected array $validationAttributes = [
-        'serie_id' => 'serie',
-        'socio_negocio_id' => 'proveedor',
-        'vencimiento' => 'vencimiento',
-        'cuenta_cobro_id' => 'cuenta por pagar (CxP)',
-        'lineas' => 'líneas',
-        'lineas.*.producto_id' => 'producto',
-        'lineas.*.cuenta_ingreso_id' => 'cuenta de compra',
-        'lineas.*.bodega_id' => 'bodega',
-        'lineas.*.descripcion' => 'descripción',
-        'lineas.*.cantidad' => 'cantidad',
-        'lineas.*.precio_unitario' => 'precio unitario',
-        'lineas.*.descuento_pct' => 'descuento (%)',
-        'lineas.*.impuesto_id' => 'indicador de impuesto',
-        'lineas.*.impuesto_pct' => 'porcentaje de impuesto',
+        'serie_id'                     => 'serie',
+        'socio_negocio_id'             => 'proveedor',
+        'vencimiento'                  => 'vencimiento',
+        'cuenta_cobro_id'              => 'cuenta por pagar (CxP)',
+        'condicion_pago_id'            => 'condición de pago',
+        'plazo_dias'                   => 'plazo (días)',
+        'lineas'                       => 'líneas',
+        'lineas.*.producto_id'         => 'producto',
+        'lineas.*.cuenta_ingreso_id'   => 'cuenta de compra',
+        'lineas.*.bodega_id'           => 'bodega',
+        'lineas.*.descripcion'         => 'descripción',
+        'lineas.*.cantidad'            => 'cantidad',
+        'lineas.*.precio_unitario'     => 'precio unitario',
+        'lineas.*.descuento_pct'       => 'descuento (%)',
+        'lineas.*.impuesto_id'         => 'indicador de impuesto',
+        'lineas.*.impuesto_pct'        => 'porcentaje de impuesto',
     ];
 
     #[On('abrir-factura')]
@@ -87,37 +99,46 @@ class FacturaCompra extends Component
     /* ======================
      *  Inicialización
      * ====================== */
-   public function mount(?int $id = null): void
-{
-    $this->fecha = now()->toDateString();
+    public function mount(?int $id = null): void
+    {
+        $this->fecha = now()->toDateString();
 
-    if ($id) {
-        $this->cargarFactura($id);
-    }
-
-    $this->documento    = $this->detectarCodigoDocumento() ?? '';
-    $this->serieDefault = $this->documento ? SerieModel::defaultParaCodigo($this->documento) : null;
-
-    // por defecto monitoreamos la 1ª línea
-    $this->stockCheck = 0;
-
-    // 1) valores por defecto (no pisan si ya hay cuenta válida)
-    $this->setCuentaCobroPorDefecto();
-
-    if ($id) {
-        if (!$this->factura->serie_id && $this->serieDefault) {
-            $this->serie_id = $this->serieDefault->id;
+        if ($id) {
+            $this->cargarFactura($id);
         }
-    } else {
-        $this->addLinea();
-        $this->serie_id = $this->serieDefault?->id;
 
-        if ($this->socio_negocio_id) {
-            // 2) si hay proveedor, sí pisamos con su CxP específica
-            $this->setCuentaDesdeProveedor((int)$this->socio_negocio_id);
+        $this->documento    = $this->detectarCodigoDocumento() ?? '';
+        $this->serieDefault = $this->documento ? SerieModel::defaultParaCodigo($this->documento) : null;
+
+        // monitoreamos 1ª línea por defecto
+        $this->stockCheck = 0;
+
+        // CxP por defecto
+        $this->setCuentaCobroPorDefecto();
+
+        // ✅ Defaults de condición de pago (si no viene desde BD)
+        if (!$this->condicion_pago_id) {
+            $contado = CondicionPago::where('plazo_dias', 0)->value('id');
+            $this->condicion_pago_id = $contado ?: optional(
+                CondicionPago::orderBy('plazo_dias')->first()
+            )->id;
+        }
+        $this->syncCondicionAndDueDate();
+
+        if ($id) {
+            if (!$this->factura->serie_id && $this->serieDefault) {
+                $this->serie_id = $this->serieDefault->id;
+            }
+        } else {
+            $this->addLinea();
+            $this->serie_id = $this->serieDefault?->id;
+
+            if ($this->socio_negocio_id) {
+                $this->setCuentaDesdeProveedor((int)$this->socio_negocio_id);
+                $this->setCondicionDesdeProveedor((int)$this->socio_negocio_id);
+            }
         }
     }
-}
 
     private function detectarCodigoDocumento(): ?string
     {
@@ -129,7 +150,6 @@ class FacturaCompra extends Component
             return (string) $this->serieDefault->tipo->codigo;
         }
 
-        // slug del nombre de la clase -> MAYÚSCULAS para matchear con BD
         $base = class_basename(static::class);
         $slug = preg_replace('/[^a-z0-9]+/i', '', $base);
         if ($slug) return strtoupper($slug);
@@ -169,9 +189,7 @@ class FacturaCompra extends Component
             $bodegas = Bodega::orderBy('nombre')->get();
 
             $cuentasIngresos = PlanCuentas::query()
-                ->where(function ($q) {
-                    $q->where('titulo', 0)->orWhereNull('titulo');
-                })
+                ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
                 ->where('cuenta_activa', 1)
                 ->orderBy('codigo')
                 ->get(['id', 'codigo', 'nombre']);
@@ -198,11 +216,15 @@ class FacturaCompra extends Component
                     ?? optional($series->first())->id;
             }
 
-            // Cuentas del proveedor para la vista (CxP/IVA si aplica)
+            // Cuentas proveedor (CxP/IVA si aplica)
             $cuentasProveedor = ['todas' => collect()];
             if ($this->socio_negocio_id) {
                 $cuentasProveedor = $this->obtenerCuentasProveedor((int)$this->socio_negocio_id);
             }
+
+            // ✅ Catálogo de condiciones de pago (mapear plazo_dias como dias)
+            $condicionesPago = CondicionPago::orderBy('nombre')
+                ->get(['id', 'nombre', DB::raw('plazo_dias as dias')]);
 
             return view('livewire.facturas.factura-compra.factura-compra', [
                 'clientes'         => $clientes,
@@ -214,6 +236,7 @@ class FacturaCompra extends Component
                 'impuestosVentas'  => $impuestosDocumento,
                 'bloqueada'        => $this->bloqueada,
                 'cuentasProveedor' => $cuentasProveedor,
+                'condicionesPago'  => $condicionesPago,
             ]);
         } catch (Throwable $e) {
             report($e);
@@ -229,6 +252,7 @@ class FacturaCompra extends Component
                 'impuestosVentas'  => collect(),
                 'bloqueada'        => $this->bloqueada,
                 'cuentasProveedor' => ['todas' => collect()],
+                'condicionesPago'  => collect(),
             ]);
         }
     }
@@ -257,9 +281,9 @@ class FacturaCompra extends Component
 
     private function tipoIngresoId(): ?int
     {
-        return cache()->remember('producto_cuenta_tipo_ingreso_id', 600, function () {
-            return ProductoCuentaTipo::query()->where('codigo', 'INGRESO')->value('id');
-        });
+        return cache()->remember('producto_cuenta_tipo_ingreso_id', 600, fn () =>
+            ProductoCuentaTipo::query()->where('codigo', 'INGRESO')->value('id')
+        );
     }
 
     private function resolveCuentaIngresoParaProducto(Producto $p): ?int
@@ -279,67 +303,68 @@ class FacturaCompra extends Component
         return null;
     }
 
-   private function normalizeLinea(array &$l): void
-{
-    if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
-        $l['precio_unitario'] = (float)$l['costo_unitario'];
+    private function normalizeLinea(array &$l): void
+    {
+        if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
+            $l['precio_unitario'] = (float)$l['costo_unitario'];
+        }
+
+        $cant   = (float)($l['cantidad'] ?? 0);
+        $precio = (float)($l['precio_unitario'] ?? 0);
+        $desc   = (float)($l['descuento_pct'] ?? 0);
+        $iva    = (float)($l['impuesto_pct'] ?? 0);
+
+        $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
+        $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
+        $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
+        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
     }
 
-    $cant   = (float)($l['cantidad'] ?? 0);
-    $precio = (float)($l['precio_unitario'] ?? 0);
-    $desc   = (float)($l['descuento_pct'] ?? 0);
-    $iva    = (float)($l['impuesto_pct'] ?? 0);
-
-    $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
-    $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
-    $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-    $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
-}
-public function normalizarPrecio(int $i): void
-{
-    if (!isset($this->lineas[$i]) || $this->bloqueada) return;
-    // asegúrate de que sea numérico y no negativo
-    $this->lineas[$i]['precio_unitario'] = max(0.0, (float)($this->lineas[$i]['precio_unitario'] ?? 0));
-    $this->normalizeLinea($this->lineas[$i]); // acá sí redondeas
-    $this->dispatch('$refresh');
-}
+    public function normalizarPrecio(int $i): void
+    {
+        if (!isset($this->lineas[$i]) || $this->bloqueada) return;
+        $this->lineas[$i]['precio_unitario'] = max(0.0, (float)($this->lineas[$i]['precio_unitario'] ?? 0));
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->dispatch('$refresh');
+    }
 
     public function updated($name, $value): void
-{
-    if ($this->bloqueada) return;
+    {
+        if ($this->bloqueada) return;
 
-    // Producto cambiado
-    if (preg_match('/^lineas\.(\d+)\.producto_id$/', $name, $m)) {
-        $i = (int) $m[1];
-        $this->stockCheck = $i;
-        $this->setProducto($i, $value);
-        $this->refreshStockLinea($i);
-        $this->resetErrorBag();
-        $this->resetValidation();
-        $this->dispatch('$refresh');
-        return;
+        // Producto cambiado
+        if (preg_match('/^lineas\.(\d+)\.producto_id$/', $name, $m)) {
+            $i = (int) $m[1];
+            $this->stockCheck = $i;
+            $this->setProducto($i, $value);
+            $this->refreshStockLinea($i);
+            $this->resetErrorBag();
+            $this->resetValidation();
+            $this->dispatch('$refresh');
+            return;
+        }
+
+        // Bodega cambiada
+        if (preg_match('/^lineas\.(\d+)\.bodega_id$/', $name, $m)) {
+            $i = (int) $m[1];
+            $this->stockCheck = $i;
+            $this->refreshStockLinea($i);
+            return;
+        }
+
+        // Campos numéricos
+        if (preg_match('/^lineas\.(\d+)\.(cantidad|descuento_pct|impuesto_pct)$/', $name, $m)) {
+            $i = (int) $m[1];
+            $this->stockCheck = $i;
+            if (isset($this->lineas[$i])) {
+                $this->normalizeLinea($this->lineas[$i]);
+                $this->dispatch('$refresh');
+            }
+            return;
+        }
     }
 
-    // Bodega cambiada
-    if (preg_match('/^lineas\.(\d+)\.bodega_id$/', $name, $m)) {
-        $i = (int) $m[1];
-        $this->stockCheck = $i;
-        $this->refreshStockLinea($i);
-        return;
-    }
-
-    // Campos numéricos
-    if (preg_match('/^lineas\.(\d+)\.(cantidad|descuento_pct|impuesto_pct)$/', $name, $m)) {
-     $i = (int) $m[1];
-     $this->stockCheck = $i;
-     if (isset($this->lineas[$i])) {
-         $this->normalizeLinea($this->lineas[$i]);
-         $this->dispatch('$refresh');
-     }
-     return;
- }
-}
-
+    // Al cambiar proveedor: set CxP + Condición (si tiene)
     public function updatedSocioNegocioId($val): void
     {
         if ($this->bloqueada) return;
@@ -347,13 +372,32 @@ public function normalizarPrecio(int $i): void
         $id = (int) $val;
 
         if ($id > 0) {
-            // setea la CxP del proveedor si existe; si no, usa fallback
             $this->setCuentaDesdeProveedor($id);
+            $this->setCondicionDesdeProveedor($id);
         } else {
-            // si limpian el proveedor, limpia también la CxP
             $this->cuenta_cobro_id = null;
         }
 
+        $this->dispatch('$refresh');
+    }
+
+   
+   public function updatedCondicionPagoId($val): void
+{
+    if ($this->bloqueada) return;
+
+    $keepCxP = $this->cuenta_cobro_id; // conservar lo que esté
+    $this->condicion_pago_id = $val ? (int)$val : null;
+    $this->syncCondicionAndDueDate();
+    $this->cuenta_cobro_id = $keepCxP; // restaurar explícitamente
+}
+
+    // Al cambiar fecha
+    public function updatedFecha($val): void
+    {
+        if ($this->bloqueada) return;
+        $base = (string)$val ?: now()->toDateString();
+        $this->vencimiento = $this->calcularVencimiento($base, $this->plazo_dias);
         $this->dispatch('$refresh');
     }
 
@@ -372,7 +416,12 @@ public function normalizarPrecio(int $i): void
                 'moneda',
                 'estado',
                 'cuenta_cobro_id',
+                'condicion_pago_id',
+                'plazo_dias',
             ]));
+
+            // sincroniza desde la condición si falta
+            $this->syncCondicionAndDueDate();
 
             $this->lineas = $f->detalles->map(function ($d) {
                 $cuentaId = $d->cuenta_ingreso_id ? (int)$d->cuenta_ingreso_id : null;
@@ -405,220 +454,206 @@ public function normalizarPrecio(int $i): void
             PendingToast::create()->error()->message('No se pudo cargar la factura.')->duration(7000);
         }
     }
-public function addLinea(): void
-{
-    if ($this->bloqueada) return;
 
-    $l = [
-        'producto_id'       => null,
-        'cuenta_ingreso_id' => null,
-        'bodega_id'         => null,
-        'descripcion'       => null,
-        'cantidad'          => 1,
-        'precio_unitario'   => 0,
-        'descuento_pct'     => 0,
-        'impuesto_id'       => null,
-        'impuesto_pct'      => 0,
-    ];
-    $this->normalizeLinea($l);
-    $this->lineas[] = $l;
+    public function addLinea(): void
+    {
+        if ($this->bloqueada) return;
 
-    // monitoreamos la línea recién añadida
-    $this->stockCheck = array_key_last($this->lineas) ?? 0;
+        $l = [
+            'producto_id'       => null,
+            'cuenta_ingreso_id' => null,
+            'bodega_id'         => null,
+            'descripcion'       => null,
+            'cantidad'          => 1,
+            'precio_unitario'   => 0,
+            'descuento_pct'     => 0,
+            'impuesto_id'       => null,
+            'impuesto_pct'      => 0,
+        ];
+        $this->normalizeLinea($l);
+        $this->lineas[] = $l;
 
-    $this->dispatch('$refresh');
-}
+        $this->stockCheck = array_key_last($this->lineas) ?? 0;
 
-public function removeLinea(int $i): void
-{
-    if ($this->bloqueada) return;
-    if (!isset($this->lineas[$i])) return;
+        $this->dispatch('$refresh');
+    }
 
-    array_splice($this->lineas, $i, 1);
-
-    // ajusta índice monitoreado
-    $this->stockCheck = max(0, min((int)$this->stockCheck, count($this->lineas) - 1));
-
-    $this->dispatch('$refresh');
-}
-
-   public function setProducto(int $i, $id): void
-{
-    if ($this->bloqueada) return;
-    try {
+    public function removeLinea(int $i): void
+    {
+        if ($this->bloqueada) return;
         if (!isset($this->lineas[$i])) return;
 
-        $prodId = $id ? (int) $id : null;
-        $this->lineas[$i]['producto_id'] = $prodId;
+        array_splice($this->lineas, $i, 1);
+        $this->stockCheck = max(0, min((int)$this->stockCheck, count($this->lineas) - 1));
+        $this->dispatch('$refresh');
+    }
 
-        if (!$prodId) {
-            $this->lineas[$i]['cuenta_ingreso_id'] = null;
-            $this->lineas[$i]['precio_unitario']   = 0.0;
-            $this->lineas[$i]['impuesto_id']       = null;
-            $this->lineas[$i]['impuesto_pct']      = 0.0;
-            $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
-            return;
-        }
+    public function setProducto(int $i, $id): void
+    {
+        if ($this->bloqueada) return;
+        try {
+            if (!isset($this->lineas[$i])) return;
 
-        /** @var \App\Models\Productos\Producto $p */
-        $p = Producto::with([
-            'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta,cuenta_id',
-            'cuentaIngreso:id',
-            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-        ])->find($prodId);
+            $prodId = $id ? (int) $id : null;
+            $this->lineas[$i]['producto_id'] = $prodId;
 
-        if (!$p) {
-            $this->lineas[$i]['cuenta_ingreso_id'] = null;
-            $this->lineas[$i]['precio_unitario']   = 0.0;
-            $this->lineas[$i]['impuesto_id']       = null;
-            $this->lineas[$i]['impuesto_pct']      = 0.0;
-            $this->normalizeLinea($this->lineas[$i]);
-            $this->dispatch('$refresh');
-            return;
-        }
+            if (!$prodId) {
+                $this->lineas[$i]['cuenta_ingreso_id'] = null;
+                $this->lineas[$i]['precio_unitario']   = 0.0;
+                $this->lineas[$i]['impuesto_id']       = null;
+                $this->lineas[$i]['impuesto_pct']      = 0.0;
+                $this->normalizeLinea($this->lineas[$i]);
+                $this->dispatch('$refresh');
+                return;
+            }
 
-        // Cuenta sugerida para la línea (luego el service puede resolver otra mejor)
-        $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+            $p = Producto::with([
+                'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta,cuenta_id',
+                'cuentaIngreso:id',
+                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+            ])->find($prodId);
 
-        // ===================== Precio/Costeo =====================
-        $precioBase = (float)($this->lineas[$i]['precio_unitario'] ?? 0); // respeta lo ya digitado
+            if (!$p) {
+                $this->lineas[$i]['cuenta_ingreso_id'] = null;
+                $this->lineas[$i]['precio_unitario']   = 0.0;
+                $this->lineas[$i]['impuesto_id']       = null;
+                $this->lineas[$i]['impuesto_pct']      = 0.0;
+                $this->normalizeLinea($this->lineas[$i]);
+                $this->dispatch('$refresh');
+                return;
+            }
 
-        if ($precioBase <= 0) {
-            if ($this->modo === 'compra') {
-                // En COMPRAS sugerir COSTO (último costo de esa bodega, luego promedio, luego costo global de producto)
-                $bid = (int)($this->lineas[$i]['bodega_id'] ?? 0);
-                if ($bid > 0) {
-                    $pb = \App\Models\Productos\ProductoBodega::query()
-                        ->where('producto_id', $p->id)
-                        ->where('bodega_id', $bid)
-                        ->first();
-                    if ($pb) {
-                        $precioBase = (float)($pb->ultimo_costo ?? 0.0);
-                        if ($precioBase <= 0) {
-                            $precioBase = (float)($pb->costo_promedio ?? 0.0);
+            // Cuenta sugerida
+            $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+
+            // Precio/Costeo
+            $precioBase = (float)($this->lineas[$i]['precio_unitario'] ?? 0);
+
+            if ($precioBase <= 0) {
+                if ($this->modo === 'compra') {
+                    $bid = (int)($this->lineas[$i]['bodega_id'] ?? 0);
+                    if ($bid > 0) {
+                        $pb = \App\Models\Productos\ProductoBodega::query()
+                            ->where('producto_id', $p->id)
+                            ->where('bodega_id', $bid)
+                            ->first();
+                        if ($pb) {
+                            $precioBase = (float)($pb->ultimo_costo ?? 0.0);
+                            if ($precioBase <= 0) {
+                                $precioBase = (float)($pb->costo_promedio ?? 0.0);
+                            }
                         }
                     }
-                }
-                if ($precioBase <= 0 && isset($p->costo)) {
-                    $precioBase = (float)$p->costo;
-                }
-            } else {
-                // En VENTAS sí usamos precio de lista
-                $precioBase = (float) ($p->precio ?? $p->precio_venta ?? 0.0);
-            }
-        }
-
-        // ===================== Impuesto sugerido (sin desinflar en compras) =====================
-        $ivaPct  = 0.0;
-        $impId   = null;
-        $imp     = $p->impuesto;
-
-        if ($imp && (int)($imp->activo ?? 0) === 1) {
-            $aplica   = strtoupper((string)($imp->aplica_sobre ?? ''));
-            $aplicaOK = in_array($aplica, $this->aplicaSobreParaImpuestos(), true);
-
-            $hoy   = now()->startOfDay();
-            $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
-            $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
-            $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
-
-            if ($aplicaOK && $vigente) {
-                $impId = (int)$imp->id;
-
-                if (!is_null($imp->porcentaje)) {
-                    $ivaPct = (float)$imp->porcentaje;
-
-                    // ❗ Solo desinflar si NO es compra
-                    if ($this->modo !== 'compra' && !empty($imp->incluido_en_precio) && $ivaPct > 0) {
-                        $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct / 100), 2) : 0.0;
+                    if ($precioBase <= 0 && isset($p->costo)) {
+                        $precioBase = (float)$p->costo;
                     }
                 } else {
-                    $ivaPct = 0.0;
+                    $precioBase = (float) ($p->precio ?? $p->precio_venta ?? 0.0);
                 }
             }
+
+            // Impuesto sugerido (sin desinflar en compras)
+            $ivaPct  = 0.0;
+            $impId   = null;
+            $imp     = $p->impuesto;
+
+            if ($imp && (int)($imp->activo ?? 0) === 1) {
+                $aplica   = strtoupper((string)($imp->aplica_sobre ?? ''));
+                $aplicaOK = in_array($aplica, $this->aplicaSobreParaImpuestos(), true);
+
+                $hoy   = now()->startOfDay();
+                $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
+                $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
+                $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
+
+                if ($aplicaOK && $vigente) {
+                    $impId = (int)$imp->id;
+
+                    if (!is_null($imp->porcentaje)) {
+                        $ivaPct = (float)$imp->porcentaje;
+                        if ($this->modo !== 'compra' && !empty($imp->incluido_en_precio) && $ivaPct > 0) {
+                            $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct / 100), 2) : 0.0;
+                        }
+                    } else {
+                        $ivaPct = 0.0;
+                    }
+                }
+            }
+
+            if (empty($this->lineas[$i]['descripcion'])) {
+                $this->lineas[$i]['descripcion'] = (string) $p->nombre;
+            }
+
+            $this->lineas[$i]['precio_unitario'] = $precioBase;
+            $this->lineas[$i]['impuesto_id']     = $impId;
+            $this->lineas[$i]['impuesto_pct']    = $ivaPct;
+
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->dispatch('$refresh');
+        } catch (\Throwable $e) {
+            report($e);
+            PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
         }
-
-        if (empty($this->lineas[$i]['descripcion'])) {
-            $this->lineas[$i]['descripcion'] = (string) $p->nombre;
-        }
-
-        $this->lineas[$i]['precio_unitario'] = $precioBase; // en compras = COSTO
-        $this->lineas[$i]['impuesto_id']     = $impId;
-        $this->lineas[$i]['impuesto_pct']    = $ivaPct;
-
-        $this->normalizeLinea($this->lineas[$i]);
-        $this->dispatch('$refresh');
-    } catch (\Throwable $e) {
-        report($e);
-        PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
     }
-}
-
 
     public function setImpuesto(int $i, $impuestoId): void
-{
-    if ($this->bloqueada) return;
-    if (!isset($this->lineas[$i])) return;
+    {
+        if ($this->bloqueada) return;
+        if (!isset($this->lineas[$i])) return;
 
-    $impId = $impuestoId ? (int)$impuestoId : null;
-    $this->lineas[$i]['impuesto_id'] = $impId;
+        $impId = $impuestoId ? (int)$impuestoId : null;
+        $this->lineas[$i]['impuesto_id'] = $impId;
 
-    if (!$impId) {
-        $this->lineas[$i]['impuesto_pct'] = 0.0;
-        $this->normalizeLinea($this->lineas[$i]);
-        $this->dispatch('$refresh');
-        return;
-    }
-
-    $imp = Impuesto::find($impId);
-    if (!$imp || !$imp->activo) {
-        $this->lineas[$i]['impuesto_pct'] = 0.0;
-        $this->normalizeLinea($this->lineas[$i]);
-        $this->dispatch('$refresh');
-        return;
-    }
-
-    if (!is_null($imp->porcentaje)) {
-        // ❗ Solo desinflar si NO es compra
-        if ($this->modo !== 'compra' && $imp->incluido_en_precio && $imp->porcentaje > 0) {
-            $pu = (float)$this->lineas[$i]['precio_unitario'];
-            $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
+        if (!$impId) {
+            $this->lineas[$i]['impuesto_pct'] = 0.0;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->dispatch('$refresh');
+            return;
         }
-        $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
-    } else {
-        $this->lineas[$i]['impuesto_pct'] = 0.0;
+
+        $imp = Impuesto::find($impId);
+        if (!$imp || !$imp->activo) {
+            $this->lineas[$i]['impuesto_pct'] = 0.0;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->dispatch('$refresh');
+            return;
+        }
+
+        if (!is_null($imp->porcentaje)) {
+            if ($this->modo !== 'compra' && $imp->incluido_en_precio && $imp->porcentaje > 0) {
+                $pu = (float)$this->lineas[$i]['precio_unitario'];
+                $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
+            }
+            $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
+        } else {
+            $this->lineas[$i]['impuesto_pct'] = 0.0;
+        }
+
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->dispatch('$refresh');
     }
 
-    $this->normalizeLinea($this->lineas[$i]);
+   private function setCuentaCobroPorDefecto(): void
+{
+    if ($this->cuenta_cobro_id && PlanCuentas::whereKey($this->cuenta_cobro_id)->exists()) return;
+
+    if ($this->socio_negocio_id) {
+        $this->setCuentaDesdeProveedor((int)$this->socio_negocio_id);
+        return;
+    }
+
+    // Sin proveedor => no autoseleccionar nada
+    $this->cuenta_cobro_id = null;
     $this->dispatch('$refresh');
 }
 
-    private function setCuentaCobroPorDefecto(): void
-    {
-        if ($this->cuenta_cobro_id && PlanCuentas::whereKey($this->cuenta_cobro_id)->exists()) return;
-
-        if ($this->socio_negocio_id) {
-            $this->setCuentaDesdeProveedor((int)$this->socio_negocio_id);
-            return;
-        }
-
-        $this->cuenta_cobro_id =
-            $this->idCuentaPorClase('CXP_PROVEEDORES')
-            ?: $this->idCuentaPorClase('BANCOS')
-            ?: $this->idCuentaPorClase('CAJA_GENERAL');
-
-        $this->dispatch('$refresh');
-    }
 
     private function idCuentaPorClase(string $clase): ?int
     {
         return PlanCuentas::query()
             ->where('clase_cuenta', $clase)
             ->where('cuenta_activa', 1)
-            ->where(function ($q) {
-                $q->where('titulo', 0)->orWhereNull('titulo');
-            })
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
             ->value('id');
     }
 
@@ -635,12 +670,11 @@ public function removeLinea(int $i): void
         ];
         if (!$proveedorId) return $vacio;
 
-        $socio = \App\Models\SocioNegocio\SocioNegocio::with('cuentas')->find($proveedorId);
+        $socio = SocioNegocio::with('cuentas')->find($proveedorId);
         if (!$socio) return $vacio;
 
         $c = $socio->cuentas;
 
-        // nombres posibles, tomamos el primero que exista
         $cxp = $c?->cuenta_cxp_id ?? $c?->cuenta_cxc_id ?? null;
 
         $anticipos  = $c?->cuenta_anticipos_id   ?? null;
@@ -651,12 +685,10 @@ public function removeLinea(int $i): void
 
         $ids = collect([$cxp, $anticipos, $desc, $ret_fuente, $ret_ica, $iva])->filter()->values();
 
-        $todas = $ids->isEmpty() ? collect() : \App\Models\CuentasContables\PlanCuentas::query()
+        $todas = $ids->isEmpty() ? collect() : PlanCuentas::query()
             ->whereIn('id', $ids)
             ->where('cuenta_activa', 1)
-            ->where(function ($q) {
-                $q->where('titulo', 0)->orWhereNull('titulo');
-            })
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
             ->get(['id', 'codigo', 'nombre']);
 
         $pick = fn($id) => $id ? $todas->firstWhere('id', (int)$id) : null;
@@ -672,7 +704,6 @@ public function removeLinea(int $i): void
         ];
     }
 
-    /** setea CxP desde el proveedor (si existe); si no, busca fallback por clase */
     private function setCuentaDesdeProveedor(?int $proveedorId): void
     {
         if ($this->bloqueada || !$proveedorId) return;
@@ -690,6 +721,40 @@ public function removeLinea(int $i): void
             ?: $this->idCuentaPorClase('BANCOS')
             ?: $this->idCuentaPorClase('CAJA_GENERAL');
 
+        $this->dispatch('$refresh');
+    }
+
+    private function setCondicionDesdeProveedor(int $proveedorId): void
+    {
+        try {
+            $prov = SocioNegocio::select('id', 'condicion_pago_id')->find($proveedorId);
+            if ($prov && $prov->condicion_pago_id) {
+                $this->condicion_pago_id = (int)$prov->condicion_pago_id;
+                $this->syncCondicionAndDueDate();
+            }
+        } catch (\Throwable $e) {
+            // silencioso
+        }
+    }
+
+    private function calcularVencimiento(string $fecha, ?int $dias): string
+    {
+        $d = \Carbon\Carbon::parse($fecha ?: now()->toDateString());
+        $dias = max(0, (int)($dias ?? 0));
+        return $d->copy()->addDays($dias)->toDateString();
+    }
+
+    // ✅ usa plazo_dias real
+    private function syncCondicionAndDueDate(): void
+    {
+        $dias = 0;
+        if ($this->condicion_pago_id) {
+            $dias = (int) CondicionPago::whereKey($this->condicion_pago_id)->value('plazo_dias');
+        }
+        $this->plazo_dias = $dias;
+        $base = $this->fecha ?: now()->toDateString();
+        $this->vencimiento = $this->calcularVencimiento($base, $dias);
+        $this->resetErrorBag(['vencimiento','condicion_pago_id','plazo_dias']);
         $this->dispatch('$refresh');
     }
 
@@ -745,6 +810,8 @@ public function removeLinea(int $i): void
                 'notas'             => $this->notas,
                 'estado'            => 'borrador',
                 'cuenta_cobro_id'   => $this->cuenta_cobro_id,
+                'condicion_pago_id' => $this->condicion_pago_id,
+                'plazo_dias'        => $this->plazo_dias,
             ];
 
             \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
@@ -761,7 +828,7 @@ public function removeLinea(int $i): void
                     'bodega_id'         => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
                     'descripcion'       => $l['descripcion'] ?? null,
                     'cantidad'          => (float)($l['cantidad'] ?? 1),
-                   'precio_unitario'   => (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
+                    'precio_unitario'   => (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
                     'descuento_pct'     => (float)($l['descuento_pct'] ?? 0),
                     'impuesto_id'       => $l['impuesto_id'] ?? null,
                     'impuesto_pct'      => (float)($l['impuesto_pct'] ?? 0),
@@ -854,7 +921,6 @@ public function removeLinea(int $i): void
                     'estado'   => 'emitida',
                 ]);
 
-                // Contabiliza + inventario
                 \App\Services\FacturaCompraService::emitirFacturaCompra($this->factura);
 
                 $this->estado = $this->factura->estado;
@@ -891,12 +957,27 @@ public function removeLinea(int $i): void
         }
     }
 
-    public function onClienteChange($id): void
-    {
-        if ($this->bloqueada) return;
-        $this->socio_negocio_id = (int) $id;
-        $this->setCuentaDesdeProveedor($this->socio_negocio_id);
+   public function onClienteChange($id): void
+{
+    if ($this->bloqueada) return;
+
+    $pid = (int) $id;
+
+    $this->socio_negocio_id = $pid;
+
+    if ($pid > 0) {
+        $this->setCuentaDesdeProveedor($pid);     // ← asigna CxP sugerida del proveedor
+        $this->setCondicionDesdeProveedor($pid);  // ← asigna condición de pago del proveedor
+    } else {
+        $this->cuenta_cobro_id    = null;
+        $this->condicion_pago_id  = null;
+        $this->plazo_dias         = 0;
+        $this->syncCondicionAndDueDate();
     }
+
+    $this->dispatch('$refresh');
+}
+
 
     public function getProximoPreviewProperty(): ?string
     {
@@ -953,13 +1034,18 @@ public function removeLinea(int $i): void
 
         $this->socio_negocio_id = null;
         $this->fecha = now()->toDateString();
-        $this->vencimiento = $this->fecha;
-        $this->notas = null;
         $this->moneda = 'COP';
         $this->estado = 'borrador';
         $this->lineas = [];
         $this->stockVista = [];
         $this->cuenta_cobro_id = null;
+
+        // ✅ reinicia condición y vencimiento con plazo_dias
+        $contado = CondicionPago::where('plazo_dias', 0)->value('id');
+        $this->condicion_pago_id = $contado ?: optional(
+            CondicionPago::orderBy('plazo_dias')->first()
+        )->id;
+        $this->syncCondicionAndDueDate();
 
         $this->addLinea();
 

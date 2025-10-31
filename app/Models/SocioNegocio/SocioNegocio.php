@@ -11,16 +11,15 @@ class SocioNegocio extends Model
     protected $table = 'socio_negocios';
 
     protected $fillable = [
-        // Datos base
         'razon_social','nit','telefono_fijo','telefono_movil','direccion','correo',
         'municipio_barrio','saldo_pendiente','Tipo',
         'tipo_persona','regimen_iva','regimen_simple','municipio_id',
         'actividad_economica','direccion_medios_magneticos',
 
-        // FK nueva (opcional si ya la tienes)
+        // FK nueva (default del proveedor/cliente)
         'condicion_pago_id',
 
-        // Campos legado (si los mantienes en la tabla)
+        // Campos legado (si los mantienes)
         'condicion_pago','plazo_dias','interes_mora_pct','limite_credito',
         'tolerancia_mora_dias','dia_corte',
     ];
@@ -55,7 +54,7 @@ class SocioNegocio extends Model
 
     public function direcciones()
     {
-        return $this->hasMany(\App\Models\SocioNegocio\SocioDireccion::class, 'socio_negocio_id');
+        return $this->hasMany(SocioDireccion::class, 'socio_negocio_id');
     }
 
     public function pedidos()
@@ -70,6 +69,7 @@ class SocioNegocio extends Model
 
     public function condicionPago()
     {
+        // Si tu tabla solo tiene: id, nombre, dias
         return $this->belongsTo(CondicionPago::class, 'condicion_pago_id')->withDefault();
     }
 
@@ -79,56 +79,43 @@ class SocioNegocio extends Model
     public function scopeClientes($q){ return $q->where('Tipo','C'); }
     public function scopeProveedores($q){ return $q->where('Tipo','P'); }
 
-    /** Condiciones de pago normalizadas (prioriza la FK; cae a legado) */
+    /**
+     * Condiciones de pago normalizadas:
+     * - Prefiere FK `condicion_pago_id` (lee `dias`).
+     * - Si no hay FK, cae a los campos legado (`condicion_pago`, `plazo_dias`).
+     */
     public function getCondicionesPagoEfectivasAttribute(): array
     {
-        if ($this->condicionPago && ($this->condicion_pago_id || $this->condicionPago->nombre)) {
+        if ($this->relationLoaded('condicionPago') || $this->condicion_pago_id) {
+            $cp = $this->condicionPago; // withDefault()
             return [
-                'id'                   => $this->condicionPago->id,
-                'nombre'               => $this->condicionPago->nombre,
-                'tipo'                 => $this->condicionPago->tipo,
-                'plazo_dias'           => $this->condicionPago->plazo_dias,
-                'interes_mora_pct'     => $this->condicionPago->interes_mora_pct,
-                'limite_credito'       => $this->condicionPago->limite_credito,
-                'tolerancia_mora_dias' => $this->condicionPago->tolerancia_mora_dias,
-                'dia_corte'            => $this->condicionPago->dia_corte,
-                'notas'                => $this->condicionPago->notas,
-                'activo'               => (bool)$this->condicionPago->activo,
-                'source'               => 'fk',
+                'id'         => $cp->id,
+                'nombre'     => $cp->nombre,
+                'dias'       => (int) ($cp->dias ?? 0),
+                'tipo'       => ((int)($cp->dias ?? 0) > 0) ? 'credito' : 'contado',
+                'source'     => 'fk',
             ];
         }
 
+        // Legado
+        $dias = (int) ($this->plazo_dias ?? 0);
         return [
-            'id'                   => null,
-            'nombre'               => null,
-            'tipo'                 => $this->condicion_pago ?: 'contado',
-            'plazo_dias'           => $this->plazo_dias,
-            'interes_mora_pct'     => $this->interes_mora_pct,
-            'limite_credito'       => $this->limite_credito,
-            'tolerancia_mora_dias' => $this->tolerancia_mora_dias,
-            'dia_corte'            => $this->dia_corte,
-            'notas'                => null,
-            'activo'               => true,
-            'source'               => 'legacy',
+            'id'     => null,
+            'nombre' => $this->condicion_pago,        // puede ser 'contado'/'crédito' o texto libre
+            'dias'   => $dias,
+            'tipo'   => $dias > 0 ? 'credito' : 'contado',
+            'source' => 'legacy',
         ];
     }
 
     public function admiteCredito(): bool
     {
-        return strtolower((string) data_get($this, 'condiciones_pago_efectivas.tipo')) === 'credito';
+        return (int) data_get($this, 'condiciones_pago_efectivas.dias', 0) > 0;
     }
 
-    public function plazoEfectivo(): ?int
+    public function plazoEfectivo(): int
     {
-        return $this->admiteCredito()
-            ? (int) (data_get($this, 'condiciones_pago_efectivas.plazo_dias') ?? 30)
-            : null;
-    }
-
-    public function moraMensualPct(): ?float
-    {
-        $v = data_get($this, 'condiciones_pago_efectivas.interes_mora_pct');
-        return is_null($v) ? null : (float) $v;
+        return (int) data_get($this, 'condiciones_pago_efectivas.dias', 0);
     }
 
     /* ====== Atajos direcciones ====== */

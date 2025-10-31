@@ -43,7 +43,7 @@
   <section class="mt-6 md:mt-8 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
 
     {{-- ===== PASO 1: Datos de cabecera ===== --}}
-    <section class="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800" aria-label="Datos de la factura">
+    <section class="p-6 md:pb-2 md:px-8 border-b border-gray-100 dark:border-gray-800" aria-label="Datos de la factura">
       <header class="mb-6">
         <div class="flex items-center justify-between gap-4">
           <h2 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -55,27 +55,31 @@
           @php $preview = $this->proximoPreview; @endphp
           @if($preview)
             <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 text-xs">
-              <i class="fa-regular fa-eye"></i> Próximo: <strong>{{ $preview }}</strong>
+              <i class="fa-regular fa-eye" aria-hidden="true"></i> Próximo: <strong>{{ $preview }}</strong>
             </span>
           @endif
         </div>
       </header>
 
+      {{-- FILA 1: Proveedor / Serie / Moneda --}}
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {{-- Proveedor --}}
         <section>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
             Proveedor <span class="text-red-500">*</span>
           </label>
-          <select
-            wire:model.debounce.300ms="socio_negocio_id"
-            class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('socio_negocio_id') border-red-500 focus:ring-red-300 @enderror"
-          >
-            <option value="">— Seleccione —</option>
-            @foreach($clientes as $c)
-              <option value="{{ $c->id }}">{{ $c->razon_social }} @if($c->nit) ({{ $c->nit }}) @endif</option>
-            @endforeach
-          </select>
+         <select
+  wire:model.live.number="socio_negocio_id"
+  wire:change="onClienteChange($event.target.value)"
+  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('socio_negocio_id') border-red-500 focus:ring-red-300 @enderror"
+  aria-invalid="@error('socio_negocio_id') true @else false @enderror"
+>
+  <option value="">— Seleccione —</option>
+  @foreach($clientes as $c)
+    <option value="{{ $c->id }}">{{ $c->razon_social }} @if($c->nit) ({{ $c->nit }}) @endif</option>
+  @endforeach
+</select>
+
           @error('socio_negocio_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </section>
 
@@ -99,14 +103,23 @@
 
             @if($serieDefault)
               <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 text-xs">
-                <i class="fa fa-star"></i> {{ $serieDefault->nombre }}
+                <i class="fa fa-star" aria-hidden="true"></i> {{ $serieDefault->nombre }}
               </span>
             @endif
           </div>
         </section>
 
+        {{-- Moneda --}}
+        <section>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Moneda</label>
+          <input type="text" wire:model.live="moneda" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60" maxlength="3">
+        </section>
+      </div>
+
+      {{-- FILA 2: Fechas + Condición de pago --}}
+      <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {{-- Fechas --}}
-        <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section class="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-2">
           <div>
             <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Fecha <span class="text-red-500">*</span></label>
             <input type="date" wire:model.live="fecha" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('fecha') border-red-500 focus:ring-red-300 @enderror">
@@ -118,60 +131,97 @@
             <input type="date" wire:model.live="vencimiento" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
           </div>
         </section>
-      </div>
 
-      <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {{-- Cuenta por pagar (CxP) --}}
+        {{-- Condición de pago + plazo --}}
         <section>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
-            Cuenta por pagar (CxP)
+            Condición de pago <span class="text-red-500">*</span>
           </label>
-
-          @php
-            $selectedId = (int) ($cuenta_cobro_id ?? 0);
-            $cxpSug     = $cuentasProveedor['cxp'] ?? null;
-            $todasProv  = $cuentasProveedor['todas'] ?? collect();
-          @endphp
-
-          <select
-            wire:model.live.number="cuenta_cobro_id"
-            class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('cuenta_cobro_id') border-red-500 focus:ring-red-300 @enderror"
-          >
-            @if(!$selectedId)
+          <div class="space-y-2">
+            <select
+              wire:model.live="condicion_pago_id"
+              class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('condicion_pago_id') border-red-500 focus:ring-red-300 @enderror"
+              aria-invalid="@error('condicion_pago_id') true @else false @enderror"
+            >
               <option value="">— Seleccione —</option>
-            @endif
+              @foreach($condicionesPago as $cp)
+                <option value="{{ $cp->id }}">{{ $cp->nombre }} @if(!is_null($cp->dias)) ({{ $cp->dias }} días) @endif</option>
+              @endforeach
+            </select>
+            @error('condicion_pago_id') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
 
-            @if($cxpSug)
-              <option value="{{ $cxpSug->id }}">
-                {{ $cxpSug->codigo }} — {{ $cxpSug->nombre }}
-              </option>
-            @endif
+            <div class="flex items-center gap-3">
+              <div class="flex-1">
+                <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-1">Plazo (días)</label>
+                <input type="number" readonly
+                       value="{{ (int)($plazo_dias ?? 0) }}"
+                       class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/80 dark:text-white focus:outline-none">
+              </div>
 
-            @foreach($todasProv as $c)
-              @continue($cxpSug && (int)$c->id === (int)$cxpSug->id)
-              <option value="{{ $c->id }}">{{ $c->codigo }} — {{ $c->nombre }}</option>
-            @endforeach
-          </select>
+              <div class="mt-6">
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700 text-xs">
+                  <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                  Vence en {{ (int)($plazo_dias ?? 0) }} {{ (int)($plazo_dias ?? 0) === 1 ? 'día' : 'días' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
 
-          @error('cuenta_cobro_id')
-            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-          @enderror
+      {{-- FILA 3: CxP / Notas --}}
+      <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {{-- Cuenta por pagar (CxP) --}}
+        {{-- ==================== CUENTA POR PAGAR (CxP) ==================== --}}
+<section>
+  <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+    Cuenta por pagar (CxP)
+  </label>
 
-          @if(!$socio_negocio_id)
-            <p class="mt-2 text-xs text-slate-500">Selecciona un proveedor para sugerir automáticamente su CxP</p>
+  @php
+    // Evita errores si el array no tiene claves definidas aún
+    $cxpSug     = $cuentasProveedor['cxp']    ?? null;
+    $todasProv  = $cuentasProveedor['todas']  ?? collect();
+    $selectedId = (int) ($cuenta_cobro_id ?? 0);
+  @endphp
+
+  <select
+    wire:key="cxp-select-{{ (int)($socio_negocio_id ?? 0) }}"
+    wire:model.live.number="cuenta_cobro_id"
+    class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('cuenta_cobro_id') border-red-500 focus:ring-red-300 @enderror"
+  >
+    <option value="">— Seleccione —</option>
+
+    @if($todasProv->count())
+      @foreach($todasProv as $c)
+        <option value="{{ $c->id }}">
+          {{ $c->codigo }} — {{ $c->nombre }}
+          @if($cxpSug && (int)$cxpSug->id === (int)$c->id)
+            (sugerida)
           @endif
-        </section>
+        </option>
+      @endforeach
+    @endif
+  </select>
 
-        {{-- Moneda --}}
-        <section>
-          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Moneda</label>
-          <input type="text" wire:model.live="moneda" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-        </section>
+  @error('cuenta_cobro_id')
+    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+  @enderror
+
+  @if(!$socio_negocio_id)
+    <p class="mt-2 text-xs text-slate-500">
+      Selecciona un proveedor para sugerir automáticamente su cuenta por pagar.
+    </p>
+  @endif
+</section>
+
 
         {{-- Notas --}}
-        <section>
+        <section class="lg:col-span-2">
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Notas</label>
-          <input type="text" placeholder="Observaciones visibles en el documento" wire:model.live.debounce.400ms="notas" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+          <input type="text" placeholder="Observaciones visibles en el documento"
+                 wire:model.live.debounce.400ms="notas"
+                 class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
         </section>
       </div>
     </section>
@@ -199,7 +249,7 @@
               wire:loading.flex
               wire:target="lineas.{{ $iStock }}.producto_id, lineas.{{ $iStock }}.bodega_id"
               class="items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600">
-              <i class="fas fa-spinner fa-spin"></i>
+              <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
               <span class="text-sm italic">Consultando stock…</span>
             </div>
 
@@ -211,7 +261,7 @@
                 {{ (!$pid || !$bid) ? 'bg-gray-100 text-gray-500 border border-dashed border-gray-300 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600'
                                      : ($stock > 0 ? 'bg-green-50 text-green-700 border border-green-300'
                                                    : 'bg-red-50 text-red-700 border border-red-300') }}">
-              <i class="fas {{ (!$pid || !$bid) ? 'fa-info-circle' : ($stock > 0 ? 'fa-check-circle' : 'fa-exclamation-circle') }}"></i>
+              <i class="fas {{ (!$pid || !$bid) ? 'fa-info-circle' : ($stock > 0 ? 'fa-check-circle' : 'fa-exclamation-circle') }}" aria-hidden="true"></i>
               <span class="text-sm">
                 @if(!$pid || !$bid)
                   Selecciona <strong>producto</strong> y <strong>bodega</strong> en la línea {{ $iStock + 1 }} para consultar stock.
@@ -235,8 +285,7 @@
               <th class="px-4 py-3 text-left">Descripción</th>
               <th class="px-4 py-3 text-left">Bodega</th>
               <th class="px-4 py-3 text-right">Cant.</th>
-             <th class="px-4 py-3 text-right">Costo</th>
-              {{-- <th class="px-4 py-3 text-right">Desc %</th> --}}
+              <th class="px-4 py-3 text-right">Costo</th>
               <th class="px-4 py-3 text-left">Impuesto</th>
               <th class="px-4 py-3 text-right">% Imp.</th>
               <th class="px-4 py-3 text-right">Imp. $</th>
@@ -248,11 +297,11 @@
           <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
             @forelse($lineas as $i => $l)
               @php
-                $cant  = max(1, (float)($l['cantidad'] ?? 1));
-               $costo = max(0, (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0)); 
-                $desc  = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
-                $ivaP  = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
-               $base   = $cant * $costo * (1 - $desc/100);
+                $cant   = max(1, (float)($l['cantidad'] ?? 1));
+                $costo  = max(0, (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0));
+                $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+                $ivaP   = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
+                $base   = $cant * $costo * (1 - $desc/100);
                 $ivaMonto = round($base * $ivaP / 100, 2);
                 $totalLin = round($base + $ivaMonto, 2);
 
@@ -274,7 +323,7 @@
                       </button>
                     @else
                       <div class="h-full w-full grid place-items-center">
-                        <svg viewBox="0 0 24 24" class="h-6 w-6 text-gray-400" aria-hidden="true"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h12l2 2Zm-5-9a2 2 0 1 1-4.001-.001A2 2 0 0 1 16 10Z"/></svg>
+                        <svg viewBox="0 0 24 24" class="h-6 w-6 text-gray-400" aria-hidden="true"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h12l2 2Zm-5-9a2 2 0 1 1-4.001-.001A 2 2 0 0 1 16 10Z"/></svg>
                       </div>
                     @endif
                   </div>
@@ -348,17 +397,16 @@
                          class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                 </td>
 
-                {{-- Precio --}}
+                {{-- Costo --}}
                 <td class="px-4 py-3 text-right">
-  <input type="number" step="any" min="0" inputmode="decimal"
-      wire:model.live.debounce.300ms="lineas.{{ $i }}.precio_unitario"
-      wire:blur="normalizarPrecio({{ $i }})"
-     class="w-44 h-11 text-right px-3 tabular-nums tracking-tight rounded-xl ..."
-     placeholder="0.00">
-</td>
+                  <input type="number" step="any" min="0" inputmode="decimal"
+                         wire:model.live.debounce.300ms="lineas.{{ $i }}.precio_unitario"
+                         wire:blur="normalizarPrecio({{ $i }})"
+                         class="w-44 h-11 text-right px-3 tabular-nums tracking-tight rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+                         placeholder="0.00">
+                </td>
 
-
-              
+                {{-- Impuesto (solo lectura en compras) --}}
                 <td class="px-4 py-3 min-w-[240px]">
                   <select
                     wire:model.live="lineas.{{ $i }}.impuesto_id"
@@ -484,9 +532,7 @@
                   if (n === this.currentStep) return 'current'
                   return 'upcoming'
                 },
-                get progressPct() {
-                  return [0,50,100][this.currentStep - 1] || 0
-                }
+                get progressPct() { return [0,50,100][this.currentStep - 1] || 0 }
               }"
               class="w-full"
             >
@@ -510,7 +556,7 @@
                     <div class="hidden md:block text-xs text-slate-500">Factura Borrador</div>
                   </li>
 
-                  <li class="flex flex-col items-center textcenter">
+                  <li class="flex flex-col items-center text-center">
                     <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
                          :class="{
                            'bg-violet-600 text-white border-violet-600 shadow': stepStatus(2) !== 'upcoming',

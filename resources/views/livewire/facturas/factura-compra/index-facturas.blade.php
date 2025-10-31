@@ -1,5 +1,3 @@
-
-
 <div
   x-data="{
     tab: localStorage.getItem('tab-facturas-compra') || 'form',

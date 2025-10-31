@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Models\Asiento\Asiento;
@@ -15,10 +17,21 @@ use Illuminate\Support\Facades\Log;
 
 class FacturaCompraService
 {
-    /* ============================
-     * Helpers tipos / cuentas
-     * ============================ */
+    /* =========================================================
+     * Helpers de tipos / cuentas
+     * ========================================================= */
 
+    /**
+     * Normaliza un id numérico proveniente de string/null a ?int (respetando strict_types).
+     */
+    protected static function toIntOrNull(mixed $v): ?int
+    {
+        return is_numeric($v) ? (int)$v : null;
+    }
+
+    /**
+     * Obtiene el id del tipo de cuenta de producto por código (cacheado).
+     */
     protected static function tipoId(string $codigo): ?int
     {
         $codigo = strtoupper(trim($codigo));
@@ -27,6 +40,9 @@ class FacturaCompraService
         });
     }
 
+    /**
+     * Devuelve plan_cuentas_id asociado al producto para un tipo específico.
+     */
     protected static function cuentaDeProductoPorTipo(?Producto $p, string $tipoCodigo): ?int
     {
         if (!$p) return null;
@@ -41,6 +57,9 @@ class FacturaCompraService
         return $cuenta?->plan_cuentas_id ? (int) $cuenta->plan_cuentas_id : null;
     }
 
+    /**
+     * Resuelve una cuenta por su código PUC (cacheado), sólo si es activa e imputable.
+     */
     protected static function cuentaPorCodigo(?string $codigo): ?int
     {
         $codigo = trim((string)$codigo);
@@ -56,20 +75,26 @@ class FacturaCompraService
         });
     }
 
+    /**
+     * Determina si la cuenta es de naturaleza deudora.
+     */
     protected static function esDeudora(PlanCuentas $c): bool
     {
         $nat = strtoupper((string)$c->naturaleza);
-        if (in_array($nat, ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'])) return true;
-        if (in_array($nat, ['C','ACREEDORA','PASIVO','PASIVOS','PATRIMONIO','INGRESOS'])) return false;
+        if (in_array($nat, ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'], true)) return true;
+        if (in_array($nat, ['C','ACREEDORA','PASIVO','PASIVOS','PATRIMONIO','INGRESOS'], true)) return false;
 
         $first = substr((string)$c->codigo, 0, 1);
-        return in_array($first, ['1','5','6']); // Heurística por dígito inicial
+        return in_array($first, ['1','5','6'], true); // Heurística por dígito inicial
     }
 
-    /* ============================
-     * Cuentas por proveedor
-     * ============================ */
+    /* =========================================================
+     * Cuentas parametrizadas del proveedor
+     * ========================================================= */
 
+    /**
+     * Cuentas típicas del proveedor (CxP, gasto, inventario, IVA).
+     */
     protected static function cuentasProveedor(?int $proveedorId): array
     {
         $vacio = ['cxp' => null, 'gasto' => null, 'inventario' => null, 'iva' => null];
@@ -93,13 +118,13 @@ class FacturaCompraService
         ];
     }
 
-    /* ============================
-     * Resoluciones compras
-     * ============================ */
+    /* =========================================================
+     * Resoluciones de cuentas para compras
+     * ========================================================= */
 
     /**
-     * Cuenta base de la línea de compra (Inventario / Gasto / Costo).
-     * Prioridad: línea.cuenta_inventario_id → producto(INVENTARIO|GASTO_COMPRAS|COSTO) → proveedor(inventario|gasto) → fallback config.
+     * Cuenta base de la línea (Inventario / Gasto / Costo).
+     * Prioridad: línea.cuenta_inventario_id → producto(INVENTARIO|GASTO_COMPRAS|COSTO) → proveedor(inventario|gasto) → fallback de config.
      */
     protected static function resolveCuentaBaseCompra(?int $cuentaLinea, ?Producto $p, int $proveedorId): ?int
     {
@@ -128,7 +153,7 @@ class FacturaCompraService
 
     /**
      * Cuenta de IVA compras (descontable).
-     * Prioridad: producto(IVA_COMPRAS|IVA) → proveedor(iva) → indicador impuesto (cuenta_id) → fallback config.
+     * Prioridad: producto(IVA_COMPRAS|IVA) → proveedor(iva) → indicador impuesto (cuenta_id) → fallback de config.
      */
     protected static function resolveCuentaIvaCompra(?Producto $p, int $proveedorId, ?int $indicadorCuentaId = null): ?int
     {
@@ -158,6 +183,9 @@ class FacturaCompraService
         return $fallback ?: null;
     }
 
+    /**
+     * Cuenta por pagar principal para la factura.
+     */
     protected static function resolveCuentaCxP(Factura $f): ?int
     {
         if ($f->cuenta_cobro_id && PlanCuentas::whereKey($f->cuenta_cobro_id)->exists()) {
@@ -174,10 +202,13 @@ class FacturaCompraService
         return $fallback ?: null;
     }
 
-    /* ============================
+    /* =========================================================
      * Posteos contables
-     * ============================ */
+     * ========================================================= */
 
+    /**
+     * Inserta un movimiento contable y actualiza saldo de la cuenta.
+     */
     protected static function post(Asiento $asiento, int $cuentaId, float $debe, float $haber, ?string $detalle = null, array $meta = []): Movimiento
     {
         /** @var PlanCuentas $c */
@@ -192,7 +223,7 @@ class FacturaCompraService
                 'cuenta_id'  => $c->id,
                 'debito'     => round($debe, 2),
                 'credito'    => round($haber, 2),
-                'debe'       => 0.0,
+                'debe'       => 0.0, // compatibilidad si existen en tu modelo
                 'haber'      => 0.0,
                 'detalle'    => $detalle,
             ], $meta);
@@ -207,7 +238,7 @@ class FacturaCompraService
             throw new \RuntimeException("Error al insertar movimiento: " . $qe->getMessage(), 0, $qe);
         }
 
-        // Actualizar saldo en la cuenta (con signo por naturaleza)
+        // Actualiza saldo en la cuenta acorde a la naturaleza
         $delta = self::esDeudora($c) ? ($mov->debito - $mov->credito)
                                      : ($mov->credito - $mov->debito);
 
@@ -218,6 +249,9 @@ class FacturaCompraService
         return $mov;
     }
 
+    /**
+     * Posteo helper para aumento de saldo acorde a naturaleza.
+     */
     protected static function postAumento(Asiento $asiento, int $cuentaId, float $monto, ?string $detalle = null, array $meta = []): Movimiento
     {
         $c = PlanCuentas::lockForUpdate()->findOrFail($cuentaId);
@@ -226,10 +260,13 @@ class FacturaCompraService
         return self::post($asiento, $cuentaId, $debe, $haber, $detalle, $meta);
     }
 
-    /* ============================
-     * Inventario (entrada por compra)
-     * ============================ */
+    /* =========================================================
+     * Inventario (entrada/reversa)
+     * ========================================================= */
 
+    /**
+     * Aumenta inventario por cada línea de la factura y calcula costo promedio.
+     */
     protected static function entrarInventarioPorFactura(Factura $f): void
     {
         $f->loadMissing('detalles');
@@ -240,7 +277,7 @@ class FacturaCompraService
             }
 
             $cantidad = (float)$d->cantidad;
-            $pu       = (float)$d->precio_unitario; // si usas otro campo para costo, cámbialo aquí
+            $pu       = (float)$d->precio_unitario; // si usas otro campo para costo, ajústalo aquí
             if ($cantidad <= 0) continue;
 
             /** @var ProductoBodega $pb */
@@ -274,11 +311,14 @@ class FacturaCompraService
             $pb->ultimo_costo   = round($pu, 4);
             $pb->save();
 
-            // (Opcional) refrescar costo promedio en productos si lo manejas global
+            // (Opcional) refrescar costo global del producto
             // Producto::whereKey($d->producto_id)->update(['costo_promedio' => $cpuNuevo]);
         }
     }
 
+    /**
+     * Revierte el aumento de inventario (ajuste simple por cantidad).
+     */
     protected static function revertirEntradaInventarioPorFactura(Factura $f): void
     {
         $f->loadMissing('detalles');
@@ -300,10 +340,13 @@ class FacturaCompraService
         }
     }
 
-    /* ============================
-     * Pre-flight
-     * ============================ */
+    /* =========================================================
+     * Pre-flight de validación
+     * ========================================================= */
 
+    /**
+     * Valida que la factura esté lista para generar asiento.
+     */
     public static function validarFacturaCompraParaAsiento(Factura $f): array
     {
         $errores = [];
@@ -353,9 +396,9 @@ class FacturaCompraService
             /** @var Producto|null $p */
             $p = $d->producto_id ? Producto::with(['cuentas','impuesto'])->find($d->producto_id) : null;
 
-            // Cuenta base (usamos cuenta_inventario_id de la línea si viene)
+            // Cuenta base (prioriza cuenta_inventario_id de la línea)
             $ctaBase = self::resolveCuentaBaseCompra(
-                $d->cuenta_inventario_id ?: null,
+                 $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null,
                 $p,
                 (int)$f->socio_negocio_id
             );
@@ -368,11 +411,17 @@ class FacturaCompraService
                 $errores[] = "Fila #{$row}: la base gravable calculada debe ser mayor que 0.";
             }
 
-            // Si hay IVA, debe haber cuenta IVA
+            // Si hay IVA, debe existir la cuenta IVA
             $ivaVal = round($base * $ivaPct / 100, 2);
             if ($ivaVal > 0) {
-                $indicadorCuentaId = $p?->impuesto?->cuenta_id ?? null;
-                $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $indicadorCuentaId);
+                // ⚠️ Normaliza el indicador (puede venir como string desde BD)
+                $indicadorCuentaId = self::toIntOrNull($p?->impuesto?->cuenta_id ?? null);
+
+                $ctaIVA = self::resolveCuentaIvaCompra(
+                    $p,
+                    (int)$f->socio_negocio_id,
+                    $indicadorCuentaId
+                );
                 if (!$ctaIVA) {
                     $errores[] = "Fila #{$row}: con IVA pero sin cuenta IVA (producto/proveedor/indicador).";
                 }
@@ -382,16 +431,19 @@ class FacturaCompraService
         return $errores;
     }
 
-    /* ============================
-     * Asiento desde factura compra
-     * ============================ */
+    /* =========================================================
+     * Asiento contable desde la factura de compra
+     * ========================================================= */
 
+    /**
+     * Genera (o reutiliza) el asiento contable para la compra.
+     */
     public static function asientoDesdeFacturaCompra(Factura $f): Asiento
     {
         return DB::transaction(function () use ($f) {
             Log::info('COMPRA::asientoDesdeFacturaCompra -> start', ['factura_id' => $f->id]);
 
-            // Idempotencia
+            // Idempotencia: si ya existe, retornarlo
             $existente = Asiento::query()
                 ->where('origen', 'factura')
                 ->where('origen_id', $f->id)
@@ -414,8 +466,8 @@ class FacturaCompraService
                 throw new \RuntimeException('No se pudo resolver la cuenta por pagar del proveedor.');
             }
 
-            $porCuentaGasto = [];   // acumulado base por cuenta inventario/gasto
-            $ivaPorCuenta   = [];   // acumulado por cuenta IVA
+            $porCuentaGasto = [];   // base por cuenta inventario/gasto
+            $ivaPorCuenta   = [];   // por cuenta IVA
             $totalFactura   = 0.0;
 
             foreach ($f->detalles as $d) {
@@ -427,7 +479,11 @@ class FacturaCompraService
                 $ivaPct = (float)$d->impuesto_pct;
                 $ivaVal = round($base * $ivaPct / 100, 2);
 
-                $ctaInvOGasto = self::resolveCuentaBaseCompra($d->cuenta_inventario_id ?? null, $p, (int)$f->socio_negocio_id);
+                $ctaInvOGasto = self::resolveCuentaBaseCompra(
+                    $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null, 
+                    $p, 
+                    (int)$f->socio_negocio_id
+                );
                 if (!$ctaInvOGasto) {
                     throw new \RuntimeException('No se encontró cuenta de inventario/gasto para una línea.');
                 }
@@ -435,7 +491,15 @@ class FacturaCompraService
                 $porCuentaGasto[$ctaInvOGasto] = ($porCuentaGasto[$ctaInvOGasto] ?? 0) + $base;
 
                 if ($ivaVal > 0) {
-                    $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $p?->impuesto?->cuenta_id);
+                    // ⚠️ Normaliza el indicador (puede venir como string desde BD)
+                    $indicadorCuentaId = self::toIntOrNull($p?->impuesto?->cuenta_id ?? null);
+
+                    $ctaIVA = self::resolveCuentaIvaCompra(
+                        $p,
+                        (int)$f->socio_negocio_id,
+                        $indicadorCuentaId
+                    );
+
                     if (!$ctaIVA) {
                         throw new \RuntimeException('No se encontró cuenta de IVA compras para línea con IVA.');
                     }
@@ -493,7 +557,7 @@ class FacturaCompraService
             $mov = self::post($asiento, (int)$cxpId, 0.0, round($totalFactura, 2), 'Cuenta por pagar a proveedor', $meta);
             $totalHaber += $mov->credito;
 
-            // Cierre del asiento
+            // Cierra asiento
             $asiento->update([
                 'total_debe'  => round($totalDebe, 2),
                 'total_haber' => round($totalHaber, 2),
@@ -509,10 +573,14 @@ class FacturaCompraService
         });
     }
 
-    /* ============================
-     * Flujo público
-     * ============================ */
+    /* =========================================================
+     * Flujo público: emitir / revertir
+     * ========================================================= */
 
+    /**
+     * Emite la factura de compra: valida, genera asiento y entra inventario.
+     * Si el inventario falla, deja trazado el asiento y reporta el error.
+     */
     public static function emitirFacturaCompra(Factura $f): void
     {
         $errores = self::validarFacturaCompraParaAsiento($f);
@@ -547,6 +615,9 @@ class FacturaCompraService
         }
     }
 
+    /**
+     * Reversa contable + reversa de inventario de una factura de compra.
+     */
     public static function revertirPorFacturaCompra(Factura $f): void
     {
         DB::transaction(function () use ($f) {

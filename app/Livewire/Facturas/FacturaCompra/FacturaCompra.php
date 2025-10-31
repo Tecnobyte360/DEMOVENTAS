@@ -66,7 +66,8 @@ class FacturaCompra extends Component
         'lineas.*.producto_id'           => 'required|integer|exists:productos,id',
         'lineas.*.cuenta_inventario_id'  => 'required|integer|exists:plan_cuentas,id',
         'lineas.*.bodega_id'             => 'required|integer|exists:bodegas,id',
-        'lineas.*.descripcion'           => 'required|string|max:255',
+        // Permite que se autogenere desde el producto:
+        'lineas.*.descripcion'           => 'nullable|string|max:255',
         'lineas.*.cantidad'              => 'required|numeric|min:1',
         'lineas.*.precio_unitario'       => 'required|numeric|min:0',
         'lineas.*.descuento_pct'         => 'required|numeric|min:0|max:100',
@@ -106,14 +107,14 @@ class FacturaCompra extends Component
     {
         $this->fecha = now()->toDateString();
 
-        // Catálogo PUC (1/5/6) e índice
+        // Catálogo PUC (1/5/6) e índice (inventario/gasto/costo)
         $this->cuentasInventario = PlanCuentas::query()
             ->where('cuenta_activa', 1)
             ->where(fn($q) => $q->whereNull('titulo')->orWhere('titulo', 0))
             ->where(function ($q) {
-                $q->where('codigo', 'like', '1%')
-                  ->orWhere('codigo', 'like', '5%')
-                  ->orWhere('codigo', 'like', '6%');
+                $q->where('codigo', 'like', '1%')   // Activo (Inventarios)
+                  ->orWhere('codigo', 'like', '5%') // Gastos
+                  ->orWhere('codigo', 'like', '6%'); // Costos
             })
             ->orderBy('codigo')
             ->get(['id','codigo','nombre']);
@@ -123,7 +124,7 @@ class FacturaCompra extends Component
             ->map(fn($c) => ['codigo' => $c->codigo, 'nombre' => $c->nombre])
             ->toArray();
 
-        // Si viene a editar: carga + retrocompatibilidad de cuenta
+        // Si viene a editar: carga + retrocompatibilidad de campo
         if ($id) {
             $this->cargarFactura($id);
             foreach ($this->lineas as &$l) {
@@ -222,7 +223,7 @@ class FacturaCompra extends Component
 
             $bodegas = Bodega::orderBy('nombre')->get();
 
-            // Listado de cuentas imputables (lo usas para mostrar opciones, aunque el valor se sugiere)
+            // Listado de cuentas imputables (si necesitas mostrar más de inventario)
             $cuentasIngresos = PlanCuentas::query()
                 ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
                 ->where('cuenta_activa', 1)
@@ -262,32 +263,34 @@ class FacturaCompra extends Component
                 ->get(['id', 'nombre', DB::raw('plazo_dias as dias')]);
 
             return view('livewire.facturas.factura-compra.factura-compra', [
-                'clientes'         => $clientes,
-                'productos'        => $productos,
-                'bodegas'          => $bodegas,
-                'series'           => $series,
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,
-                'impuestosVentas'  => $impuestosDocumento,
-                'bloqueada'        => $this->bloqueada,
-                'cuentasProveedor' => $cuentasProveedor,
-                'condicionesPago'  => $condicionesPago,
+                'clientes'          => $clientes,
+                'productos'         => $productos,
+                'bodegas'           => $bodegas,
+                'series'            => $series,
+                'serieDefault'      => $this->serieDefault,
+                'cuentasIngresos'   => $cuentasIngresos,
+                'cuentasInventario' => $this->cuentasInventario,
+                'impuestosVentas'   => $impuestosDocumento,
+                'bloqueada'         => $this->bloqueada,
+                'cuentasProveedor'  => $cuentasProveedor,
+                'condicionesPago'   => $condicionesPago,
             ]);
         } catch (Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
 
             return view('livewire.facturas.factura-compra.factura-compra', [
-                'clientes'         => collect(),
-                'productos'        => collect(),
-                'bodegas'          => collect(),
-                'series'           => collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => collect(),
-                'impuestosVentas'  => collect(),
-                'bloqueada'        => $this->bloqueada,
-                'cuentasProveedor' => ['todas' => collect()],
-                'condicionesPago'  => collect(),
+                'clientes'          => collect(),
+                'productos'         => collect(),
+                'bodegas'           => collect(),
+                'series'            => collect(),
+                'serieDefault'      => $this->serieDefault,
+                'cuentasIngresos'   => collect(),
+                'cuentasInventario' => $this->cuentasInventario ?? collect(),
+                'impuestosVentas'   => collect(),
+                'bloqueada'         => $this->bloqueada,
+                'cuentasProveedor'  => ['todas' => collect()],
+                'condicionesPago'   => collect(),
             ]);
         }
     }
@@ -354,7 +357,7 @@ class FacturaCompra extends Component
         return null;
     }
 
-    /** NUEVO: resolver cuenta INVENTARIO por artículo/subcategoría */
+    /** Resolver cuenta INVENTARIO por artículo/subcategoría */
     private function resolveCuentaInventarioParaProducto(Producto $p): ?int
     {
         if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
@@ -948,6 +951,7 @@ class FacturaCompra extends Component
                 if ($p) $l['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
             }
         }
+        unset($l);
     }
 
     private function validarConToast(): bool

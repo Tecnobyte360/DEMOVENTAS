@@ -13,7 +13,7 @@ class FacturaDetalle extends Model
     protected $fillable = [
         'factura_id','producto_id','bodega_id','descripcion',
         'cantidad','precio_unitario','descuento_pct','impuesto_pct',
-        'importe_base','importe_impuesto','importe_total','cuenta_ingreso_id'
+        'importe_base','importe_impuesto','importe_total','cuenta_ingreso_id', 'cuenta_inventario_id',
     ];
 
     protected $casts = [
@@ -66,4 +66,8 @@ class FacturaDetalle extends Model
     {
         static::saving(fn (self $m) => $m->calcularImportes());
     }
+    public function cuentaInventario()
+{
+    return $this->belongsTo(\App\Models\CuentasContables\PlanCuentas::class, 'cuenta_inventario_id');
+}
 }

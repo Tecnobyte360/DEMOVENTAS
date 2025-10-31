@@ -29,32 +29,35 @@ class ContabilidadService
             return (int) (ProductoCuentaTipo::where('codigo', $codigo)->value('id') ?? 0) ?: null;
         });
     }
-protected static function cuentaDeSubcategoriaPorTipo(?int $subcategoriaId, string $tipoCodigo): ?int
-{
-    if (!$subcategoriaId) return null;
 
-    $tipoId = self::tipoId($tipoCodigo);
-    if (!$tipoId) return null;
+    protected static function cuentaDeSubcategoriaPorTipo(?int $subcategoriaId, string $tipoCodigo): ?int
+    {
+        if (!$subcategoriaId) return null;
 
-    return cache()->remember("subcat:$subcategoriaId:tipo:$tipoId", 600, function () use ($subcategoriaId, $tipoId) {
-        return (int) (DB::table('subcategoria_cuentas')
-            ->where('subcategoria_id', $subcategoriaId)
-            ->where('tipo_id', $tipoId)
-            ->value('plan_cuentas_id') ?? 0) ?: null;
-    });
-}
-public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo): ?int
-{
-    if (!$p) return null;
+        $tipoId = self::tipoId($tipoCodigo);
+        if (!$tipoId) return null;
 
-    $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
-    if ($modo === 'SUBCATEGORIA') {
-        return self::cuentaDeSubcategoriaPorTipo($p->subcategoria_id, $tipoCodigo)
-            ?: self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+        return cache()->remember("subcat:$subcategoriaId:tipo:$tipoId", 600, function () use ($subcategoriaId, $tipoId) {
+            return (int) (DB::table('subcategoria_cuentas')
+                ->where('subcategoria_id', $subcategoriaId)
+                ->where('tipo_id', $tipoId)
+                ->value('plan_cuentas_id') ?? 0) ?: null;
+        });
     }
 
-    return self::cuentaDeProductoPorTipo($p, $tipoCodigo);
-}
+    public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo): ?int
+    {
+        if (!$p) return null;
+
+        $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
+        if ($modo === 'SUBCATEGORIA') {
+            return self::cuentaDeSubcategoriaPorTipo($p->subcategoria_id, $tipoCodigo)
+                ?: self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+        }
+
+        return self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+    }
+
     protected static function cuentaDeProductoPorTipo(?Producto $p, string $tipoCodigo): ?int
     {
         if (!$p) return null;
@@ -69,21 +72,62 @@ public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo
         return $cuenta?->plan_cuentas_id ? (int) $cuenta->plan_cuentas_id : null;
     }
 
-   protected static function cuentaIvaParaProducto(?Producto $p): ?int
-{
-    if (!$p) return null;
+    /**
+     * IVA para VENTAS (tu lógica existente).
+     */
+    protected static function cuentaIvaParaProducto(?Producto $p): ?int
+    {
+        if (!$p) return null;
 
-    // 1) Primero, si así se configuró, toma IVA por subcategoría (o por artículo si no hay en subcat)
-    $cta = self::cuentaSegunConfiguracion($p, 'IVA');
-    if ($cta) return $cta;
+        // 1) Config por subcategoría/artículo (tipo 'IVA')
+        $cta = self::cuentaSegunConfiguracion($p, 'IVA');
+        if ($cta) return $cta;
 
-    // 2) Luego, el fallback que ya tenías: la cuenta propia del impuesto del producto
-    $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->with('cuenta')->first();
-    if ($imp && !empty($imp->cuenta_id)) {
-        return (int) $imp->cuenta_id;
+        // 2) Fallback: cuenta propia del impuesto del producto
+        $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->with('cuenta')->first();
+        if ($imp && !empty($imp->cuenta_id)) {
+            return (int) $imp->cuenta_id;
+        }
+        return null;
     }
-    return null;
-}
+
+    /**
+     * IVA para COMPRAS: tolera indicador de cuenta como int|string|null.
+     * Prioridad:
+     *   1) Indicador explícito ($indicadorCuentaId) si viene y es válido.
+     *   2) Configuración por subcategoría/artículo (tipo 'IVA').
+     *   3) Cuenta del impuesto asociado al producto ($p->impuesto->cuenta_id).
+     */
+    protected static function resolveCuentaIvaCompra(?Producto $p, int $proveedorId, int|string|null $indicadorCuentaId = null): ?int
+    {
+        // Normalización por si llega como string
+        if (is_string($indicadorCuentaId)) {
+            $indicadorCuentaId = trim($indicadorCuentaId) === '' ? null : (int) $indicadorCuentaId;
+        }
+
+        // 1) Override/indicador explícito
+        if (!is_null($indicadorCuentaId) && (int)$indicadorCuentaId > 0) {
+            return (int)$indicadorCuentaId;
+        }
+
+        // 2) Configuración por Subcategoría/Artículo (tipo 'IVA')
+        $cta = self::cuentaSegunConfiguracion($p, 'IVA');
+        if ($cta) return $cta;
+
+        // 3) Fallback: cuenta del impuesto del producto
+        if ($p) {
+            $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->first();
+            if ($imp && !empty($imp->cuenta_id)) {
+                return (int) $imp->cuenta_id;
+            }
+        }
+
+        return null;
+    }
+
+    /* ============================================================
+     *  REVERSIÓN
+     * ============================================================ */
 
     /**
      * Revierte TODOS los asientos contables ligados a una factura (VENTA, COBRO, etc.)
@@ -134,14 +178,19 @@ public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo
         });
     }
 
-   protected static function cuentaInventarioProducto(?Producto $p): ?int
-{
-    return self::cuentaSegunConfiguracion($p, 'INVENTARIO');
-}
-   protected static function cuentaCostoProducto(?Producto $p): ?int
-{
-    return self::cuentaSegunConfiguracion($p, 'COSTO');
-}
+    /* ============================================================
+     *  UTILIDADES: inventario / costo
+     * ============================================================ */
+
+    protected static function cuentaInventarioProducto(?Producto $p): ?int
+    {
+        return self::cuentaSegunConfiguracion($p, 'INVENTARIO');
+    }
+
+    protected static function cuentaCostoProducto(?Producto $p): ?int
+    {
+        return self::cuentaSegunConfiguracion($p, 'COSTO');
+    }
 
     protected static function esDeudora(PlanCuentas $c): bool
     {
@@ -271,7 +320,7 @@ public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo
     }
 
     /* ============================================================
-     *  ASIENTOS DE COBRO
+     *  ASIENTOS DE COBRO (ventas)
      * ============================================================ */
 
     /** Asiento por **un solo** pago. */
@@ -363,8 +412,9 @@ public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo
     }
 
     /* ============================================================
-     *  ASIENTO DESDE FACTURA (VENTA)
+     *  ASIENTO DESDE FACTURA (VENTAS)
      * ============================================================ */
+
     public static function asientoDesdeFactura(Factura $f): Asiento
     {
         return DB::transaction(function () use ($f) {
@@ -505,7 +555,7 @@ public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo
                 }
             }
 
-            // DEBE: Costos de venta (usa post() para afectar saldo)
+            // DEBE: Costos de venta
             foreach ($costoPorCuenta as $cta => $monto) {
                 $mov = self::post(
                     $asiento,
@@ -545,6 +595,7 @@ public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo
     /* ============================================================
      *  COSTO PROMEDIO POR LÍNEA (por bodega)
      * ============================================================ */
+
     public static function costoPromedioParaLinea(\App\Models\Productos\Producto $p, ?int $bodegaId): float
     {
         try {

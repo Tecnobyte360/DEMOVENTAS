@@ -48,45 +48,45 @@ class FacturaCompra extends Component
     public array    $stockVista = [];
 
     protected $rules = [
-        'serie_id'                     => 'required|integer|exists:series,id',
-        'socio_negocio_id'             => 'required|integer|exists:socio_negocios,id',
-        'fecha'                        => 'required|date',
-        'vencimiento'                  => 'required|date|after_or_equal:fecha',
-        'moneda'                       => 'required|string|size:3',
-        'cuenta_cobro_id'              => 'required|integer|exists:plan_cuentas,id',
+        'serie_id'                       => 'required|integer|exists:series,id',
+        'socio_negocio_id'               => 'required|integer|exists:socio_negocios,id',
+        'fecha'                          => 'required|date',
+        'vencimiento'                    => 'required|date|after_or_equal:fecha',
+        'moneda'                         => 'required|string|size:3',
+        'cuenta_cobro_id'                => 'required|integer|exists:plan_cuentas,id',
 
-        'condicion_pago_id'            => 'required|integer|exists:condicion_pagos,id',
-        'plazo_dias'                   => 'nullable|integer|min:0',
+        'condicion_pago_id'              => 'required|integer|exists:condicion_pagos,id',
+        'plazo_dias'                     => 'nullable|integer|min:0',
 
-        'lineas'                       => 'required|array|min:1',
-        'lineas.*.producto_id'         => 'required|integer|exists:productos,id',
-        'lineas.*.cuenta_ingreso_id'   => 'required|integer|exists:plan_cuentas,id',
-        'lineas.*.bodega_id'           => 'required|integer|exists:bodegas,id',
-        'lineas.*.descripcion'         => 'required|string|max:255',
-        'lineas.*.cantidad'            => 'required|numeric|min:1',
-        'lineas.*.precio_unitario'     => 'required|numeric|min:0',
-        'lineas.*.descuento_pct'       => 'required|numeric|min:0|max:100',
-        'lineas.*.impuesto_id'         => 'nullable|integer|exists:impuestos,id',
-        'lineas.*.impuesto_pct'        => 'required|numeric|min:0|max:100',
+        'lineas'                         => 'required|array|min:1',
+        'lineas.*.producto_id'           => 'required|integer|exists:productos,id',
+        'lineas.*.cuenta_inventario_id'  => 'required|integer|exists:plan_cuentas,id',
+        'lineas.*.bodega_id'             => 'required|integer|exists:bodegas,id',
+        'lineas.*.descripcion'           => 'required|string|max:255',
+        'lineas.*.cantidad'              => 'required|numeric|min:1',
+        'lineas.*.precio_unitario'       => 'required|numeric|min:0',
+        'lineas.*.descuento_pct'         => 'required|numeric|min:0|max:100',
+        'lineas.*.impuesto_id'           => 'nullable|integer|exists:impuestos,id',
+        'lineas.*.impuesto_pct'          => 'required|numeric|min:0|max:100',
     ];
 
     protected array $validationAttributes = [
-        'serie_id'                     => 'serie',
-        'socio_negocio_id'             => 'proveedor',
-        'vencimiento'                  => 'vencimiento',
-        'cuenta_cobro_id'              => 'cuenta por pagar (CxP)',
-        'condicion_pago_id'            => 'condición de pago',
-        'plazo_dias'                   => 'plazo (días)',
-        'lineas'                       => 'líneas',
-        'lineas.*.producto_id'         => 'producto',
-        'lineas.*.cuenta_ingreso_id'   => 'cuenta de compra',
-        'lineas.*.bodega_id'           => 'bodega',
-        'lineas.*.descripcion'         => 'descripción',
-        'lineas.*.cantidad'            => 'cantidad',
-        'lineas.*.precio_unitario'     => 'precio unitario',
-        'lineas.*.descuento_pct'       => 'descuento (%)',
-        'lineas.*.impuesto_id'         => 'indicador de impuesto',
-        'lineas.*.impuesto_pct'        => 'porcentaje de impuesto',
+        'serie_id'                       => 'serie',
+        'socio_negocio_id'               => 'proveedor',
+        'vencimiento'                    => 'vencimiento',
+        'cuenta_cobro_id'                => 'cuenta por pagar (CxP)',
+        'condicion_pago_id'              => 'condición de pago',
+        'plazo_dias'                     => 'plazo (días)',
+        'lineas'                         => 'líneas',
+        'lineas.*.producto_id'           => 'producto',
+        'lineas.*.cuenta_inventario_id'  => 'cuenta de inventario',
+        'lineas.*.bodega_id'             => 'bodega',
+        'lineas.*.descripcion'           => 'descripción',
+        'lineas.*.cantidad'              => 'cantidad',
+        'lineas.*.precio_unitario'       => 'precio unitario',
+        'lineas.*.descuento_pct'         => 'descuento (%)',
+        'lineas.*.impuesto_id'           => 'indicador de impuesto',
+        'lineas.*.impuesto_pct'          => 'porcentaje de impuesto',
     ];
 
     #[On('abrir-factura')]
@@ -189,6 +189,7 @@ class FacturaCompra extends Component
 
             $bodegas = Bodega::orderBy('nombre')->get();
 
+            // (Nombre heredado; lista general de cuentas imputables activas)
             $cuentasIngresos = PlanCuentas::query()
                 ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
                 ->where('cuenta_activa', 1)
@@ -233,7 +234,7 @@ class FacturaCompra extends Component
                 'bodegas'          => $bodegas,
                 'series'           => $series,
                 'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,
+                'cuentasIngresos'  => $cuentasIngresos,   // listado de cuentas imputables
                 'impuestosVentas'  => $impuestosDocumento,
                 'bloqueada'        => $this->bloqueada,
                 'cuentasProveedor' => $cuentasProveedor,
@@ -318,6 +319,48 @@ class FacturaCompra extends Component
             $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
                 ->where('subcategoria_id', (int)$p->subcategoria_id)
                 ->where('tipo_id', (int)$tipoId)
+                ->first();
+
+            return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+        }
+
+        return null;
+    }
+
+    /** NUEVO: resolver cuenta INVENTARIO por artículo/subcategoría */
+    private function resolveCuentaInventarioParaProducto(Producto $p): ?int
+    {
+        // 0) Cuenta directa en el producto (si existe en tu esquema)
+        if (!empty($p->cuenta_inventario_id)) {
+            return (int) $p->cuenta_inventario_id;
+        }
+
+        $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
+            ProductoCuentaTipo::query()->where('codigo', 'INVENTARIO')->value('id')
+        );
+        if (!$tipoInvId) return null;
+
+        // 1) Por ARTÍCULO → producto_cuentas (tipo INVENTARIO)
+        if ($p->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_ARTICULO) {
+            $cuenta = $p->relationLoaded('cuentas')
+                ? $p->cuentas->firstWhere('tipo_id', (int)$tipoInvId)
+                : $p->cuentas()->where('tipo_id', (int)$tipoInvId)->first();
+
+            return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
+        }
+
+        // 2) Por SUBCATEGORÍA → subcategoria_cuentas (tipo INVENTARIO)
+        if ($p->mov_contable_segun === \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA) {
+            if (!$p->subcategoria_id) return null;
+
+            if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
+                $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoInvId);
+                return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+            }
+
+            $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
+                ->where('subcategoria_id', (int)$p->subcategoria_id)
+                ->where('tipo_id', (int)$tipoInvId)
                 ->first();
 
             return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
@@ -446,27 +489,27 @@ class FacturaCompra extends Component
             $this->syncCondicionAndDueDate();
 
             $this->lineas = $f->detalles->map(function ($d) {
-                $cuentaId = $d->cuenta_ingreso_id ? (int)$d->cuenta_ingreso_id : null;
+                $cuentaId = $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null;
 
                 if (!$cuentaId && $d->producto_id) {
                     $p = Producto::with([
                         'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                         'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
                     ])->find($d->producto_id);
-                    if ($p) $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                    if ($p) $cuentaId = $this->resolveCuentaInventarioParaProducto($p);
                 }
 
                 $l = [
-                    'id'                => $d->id,
-                    'producto_id'       => $d->producto_id,
-                    'cuenta_ingreso_id' => $cuentaId,
-                    'bodega_id'         => $d->bodega_id,
-                    'descripcion'       => $d->descripcion,
-                    'cantidad'          => (float)$d->cantidad,
-                    'precio_unitario'   => (float)$d->precio_unitario,
-                    'descuento_pct'     => (float)$d->descuento_pct,
-                    'impuesto_id'       => $d->impuesto_id ?? null,
-                    'impuesto_pct'      => (float)$d->impuesto_pct,
+                    'id'                     => $d->id,
+                    'producto_id'            => $d->producto_id,
+                    'cuenta_inventario_id'   => $cuentaId,
+                    'bodega_id'              => $d->bodega_id,
+                    'descripcion'            => $d->descripcion,
+                    'cantidad'               => (float)$d->cantidad,
+                    'precio_unitario'        => (float)$d->precio_unitario,
+                    'descuento_pct'          => (float)$d->descuento_pct,
+                    'impuesto_id'            => $d->impuesto_id ?? null,
+                    'impuesto_pct'           => (float)$d->impuesto_pct,
                 ];
                 $this->normalizeLinea($l);
                 return $l;
@@ -485,15 +528,15 @@ class FacturaCompra extends Component
         if ($this->bloqueada) return;
 
         $l = [
-            'producto_id'       => null,
-            'cuenta_ingreso_id' => null,
-            'bodega_id'         => null,
-            'descripcion'       => null,
-            'cantidad'          => 1,
-            'precio_unitario'   => 0,
-            'descuento_pct'     => 0,
-            'impuesto_id'       => null,
-            'impuesto_pct'      => 0,
+            'producto_id'           => null,
+            'cuenta_inventario_id'  => null,
+            'bodega_id'             => null,
+            'descripcion'           => null,
+            'cantidad'              => 1,
+            'precio_unitario'       => 0,
+            'descuento_pct'         => 0,
+            'impuesto_id'           => null,
+            'impuesto_pct'          => 0,
         ];
         $this->normalizeLinea($l);
         $this->lineas[] = $l;
@@ -523,10 +566,10 @@ class FacturaCompra extends Component
             $this->lineas[$i]['producto_id'] = $prodId;
 
             if (!$prodId) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
+                $this->lineas[$i]['cuenta_inventario_id'] = null;
+                $this->lineas[$i]['precio_unitario']      = 0.0;
+                $this->lineas[$i]['impuesto_id']          = null;
+                $this->lineas[$i]['impuesto_pct']         = 0.0;
                 $this->normalizeLinea($this->lineas[$i]);
                 $this->dispatch('$refresh');
                 return;
@@ -541,17 +584,17 @@ class FacturaCompra extends Component
             ])->find($prodId);
 
             if (!$p) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
+                $this->lineas[$i]['cuenta_inventario_id'] = null;
+                $this->lineas[$i]['precio_unitario']      = 0.0;
+                $this->lineas[$i]['impuesto_id']          = null;
+                $this->lineas[$i]['impuesto_pct']         = 0.0;
                 $this->normalizeLinea($this->lineas[$i]);
                 $this->dispatch('$refresh');
                 return;
             }
 
-            // Cuenta sugerida (producto o subcategoría según mov_contable_segun)
-            $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+            // === Cuenta sugerida de INVENTARIO (producto o subcategoría según mov_contable_segun)
+            $this->lineas[$i]['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
 
             // Precio/Costeo
             $precioBase = (float)($this->lineas[$i]['precio_unitario'] ?? 0);
@@ -848,15 +891,15 @@ class FacturaCompra extends Component
             $detallesPayload = [];
             foreach ($this->lineas as $l) {
                 $detallesPayload[] = [
-                    'producto_id'       => $l['producto_id'] ?? null,
-                    'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int)$l['cuenta_ingreso_id'] : null,
-                    'bodega_id'         => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
-                    'descripcion'       => $l['descripcion'] ?? null,
-                    'cantidad'          => (float)($l['cantidad'] ?? 1),
-                    'precio_unitario'   => (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
-                    'descuento_pct'     => (float)($l['descuento_pct'] ?? 0),
-                    'impuesto_id'       => $l['impuesto_id'] ?? null,
-                    'impuesto_pct'      => (float)($l['impuesto_pct'] ?? 0),
+                    'producto_id'           => $l['producto_id'] ?? null,
+                    'cuenta_inventario_id'  => isset($l['cuenta_inventario_id']) ? (int)$l['cuenta_inventario_id'] : null,
+                    'bodega_id'             => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
+                    'descripcion'           => $l['descripcion'] ?? null,
+                    'cantidad'              => (float)($l['cantidad'] ?? 1),
+                    'precio_unitario'       => (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
+                    'descuento_pct'         => (float)($l['descuento_pct'] ?? 0),
+                    'impuesto_id'           => $l['impuesto_id'] ?? null,
+                    'impuesto_pct'          => (float)($l['impuesto_pct'] ?? 0),
                 ];
             }
 
@@ -881,12 +924,12 @@ class FacturaCompra extends Component
     private function ensureCuentasEnLineas(): void
     {
         foreach ($this->lineas as $i => &$l) {
-            if (empty($l['cuenta_ingreso_id']) && !empty($l['producto_id'])) {
+            if (empty($l['cuenta_inventario_id']) && !empty($l['producto_id'])) {
                 $p = Producto::with([
                     'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                     'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
                 ])->find($l['producto_id']);
-                if ($p) $l['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+                if ($p) $l['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
             }
         }
     }

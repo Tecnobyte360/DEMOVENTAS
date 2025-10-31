@@ -19,8 +19,6 @@ class FacturaCompraService
      * Helpers tipos / cuentas
      * ============================ */
 
-
-
     protected static function tipoId(string $codigo): ?int
     {
         return cache()->remember("pcta:tipo:$codigo", 600, function () use ($codigo) {
@@ -222,58 +220,56 @@ class FacturaCompraService
      * Inventario (entrada por compra)
      * ============================ */
 
-protected static function entrarInventarioPorFactura(Factura $f): void
-{
-    $f->loadMissing('detalles');
+    protected static function entrarInventarioPorFactura(Factura $f): void
+    {
+        $f->loadMissing('detalles');
 
-    foreach ($f->detalles as $d) {
-        if (!$d->producto_id || !$d->bodega_id) {
-            throw new \RuntimeException("Cada línea debe tener producto y bodega.");
+        foreach ($f->detalles as $d) {
+            if (!$d->producto_id || !$d->bodega_id) {
+                throw new \RuntimeException("Cada línea debe tener producto y bodega.");
+            }
+
+            // costo unitario de la compra en esta línea
+            $cantidad = (float)$d->cantidad;
+            $pu       = (float)$d->precio_unitario; // si manejas costo distinto al precio_unitario, úsalo aquí
+            if ($cantidad <= 0) continue;
+
+            /** @var \App\Models\Productos\ProductoBodega $pb */
+            $pb = \App\Models\Productos\ProductoBodega::query()
+                ->where('producto_id', $d->producto_id)
+                ->where('bodega_id',   $d->bodega_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$pb) {
+                $pb = new \App\Models\Productos\ProductoBodega([
+                    'producto_id'     => $d->producto_id,
+                    'bodega_id'       => $d->bodega_id,
+                    'stock'           => 0,
+                    'costo_promedio'  => 0,
+                    'ultimo_costo'    => null,
+                ]);
+            }
+
+            $stockAnt   = (float)$pb->stock;
+            $cpuAnt     = (float)$pb->costo_promedio;   // 0 si nunca ha tenido
+            $stockNuevo = $stockAnt + $cantidad;
+
+            // Promedio ponderado: ((stockAnt * cpuAnt) + (cantidad * pu)) / (stockNuevo)
+            $cpuNuevo = $stockNuevo > 0
+                ? round((($stockAnt * $cpuAnt) + ($cantidad * $pu)) / $stockNuevo, 4)
+                : round($pu, 4);
+
+            $pb->stock          = $stockNuevo;
+            $pb->costo_promedio = $cpuNuevo;
+            $pb->ultimo_costo   = round($pu, 4);
+            $pb->save();
+
+            // (Opcional) también refresca un CPU “global” en productos, si lo usas como fallback:
+            // \App\Models\Productos\Producto::whereKey($d->producto_id)
+            //     ->update(['costo_promedio' => $cpuNuevo]);
         }
-
-        // costo unitario de la compra en esta línea
-        $cantidad = (float)$d->cantidad;
-        $pu       = (float)$d->precio_unitario; // si manejas costo distinto al precio_unitario, úsalo aquí
-        if ($cantidad <= 0) continue;
-
-        /** @var \App\Models\Productos\ProductoBodega $pb */
-        $pb = \App\Models\Productos\ProductoBodega::query()
-            ->where('producto_id', $d->producto_id)
-            ->where('bodega_id',   $d->bodega_id)
-            ->lockForUpdate()
-            ->first();
-
-        if (!$pb) {
-            $pb = new \App\Models\Productos\ProductoBodega([
-                'producto_id'     => $d->producto_id,
-                'bodega_id'       => $d->bodega_id,
-                'stock'           => 0,
-                'costo_promedio'  => 0,
-                'ultimo_costo'    => null,
-            ]);
-        }
-
-        $stockAnt   = (float)$pb->stock;
-        $cpuAnt     = (float)$pb->costo_promedio;   // 0 si nunca ha tenido
-        $stockNuevo = $stockAnt + $cantidad;
-
-        // Promedio ponderado: ((stockAnt * cpuAnt) + (cantidad * pu)) / (stockNuevo)
-        $cpuNuevo = $stockNuevo > 0
-            ? round((($stockAnt * $cpuAnt) + ($cantidad * $pu)) / $stockNuevo, 4)
-            : round($pu, 4);
-
-        $pb->stock          = $stockNuevo;
-        $pb->costo_promedio = $cpuNuevo;
-        $pb->ultimo_costo   = round($pu, 4);
-        $pb->save();
-
-        // (Opcional) también refresca un CPU “global” en productos, si lo usas como fallback:
-        // \App\Models\Productos\Producto::whereKey($d->producto_id)
-        //     ->update(['costo_promedio' => $cpuNuevo]);
     }
-}
-
-
 
     protected static function revertirEntradaInventarioPorFactura(Factura $f): void
     {
@@ -300,214 +296,213 @@ protected static function entrarInventarioPorFactura(Factura $f): void
      * Pre-flight
      * ============================ */
 
-public static function validarFacturaCompraParaAsiento(Factura $f): array
-{
-    $errores = [];
+    public static function validarFacturaCompraParaAsiento(Factura $f): array
+    {
+        $errores = [];
 
-    $cxp = self::resolveCuentaCxP($f);
-    if (!$cxp) {
-        $errores[] = 'No se pudo resolver la cuenta de CxP (factura/proveedor).';
-    }
-
-    $f->loadMissing('detalles');
-    if ($f->detalles->isEmpty()) {
-        $errores[] = 'La factura no tiene detalles.';
-        return $errores;
-    }
-
-    foreach ($f->detalles as $idx => $d) {
-        $row = $idx + 1;
-
-        if (!$d->producto_id || !$d->bodega_id) {
-            Log::warning('COMPRA::inventario línea inválida', [
-                'factura_id'  => $f->id,
-                'detalle_id'  => $d->id ?? null,
-                'producto_id' => $d->producto_id,
-                'bodega_id'   => $d->bodega_id,
-            ]);
-            $errores[] = "Fila #{$row}: debe tener producto y bodega.";
-            // seguimos validando el resto para reportar todo
+        $cxp = self::resolveCuentaCxP($f);
+        if (!$cxp) {
+            $errores[] = 'No se pudo resolver la cuenta de CxP (factura/proveedor).';
         }
 
-        // Reglas duras para COMPRAS (evita asientos con base 0)
-        $cantidad = (float)$d->cantidad;
-        $costo    = (float)$d->precio_unitario;
-        $descPct  = (float)$d->descuento_pct;
-        $ivaPct   = (float)$d->impuesto_pct;
-
-        if ($cantidad <= 0) {
-            $errores[] = "Fila #{$row}: la cantidad debe ser mayor que 0.";
-        }
-        if ($costo <= 0) {
-            $errores[] = "Fila #{$row}: el costo unitario debe ser mayor que 0 en compras.";
-        }
-        if ($descPct < 0 || $descPct > 100) {
-            $errores[] = "Fila #{$row}: el descuento (%) debe estar entre 0 y 100.";
-        }
-        if ($ivaPct < 0 || $ivaPct > 100) {
-            $errores[] = "Fila #{$row}: el impuesto (%) debe estar entre 0 y 100.";
+        $f->loadMissing('detalles');
+        if ($f->detalles->isEmpty()) {
+            $errores[] = 'La factura no tiene detalles.';
+            return $errores;
         }
 
-        /** @var Producto|null $p */
-        $p = $d->producto_id ? Producto::with(['cuentas', 'impuesto'])->find($d->producto_id) : null;
+        foreach ($f->detalles as $idx => $d) {
+            $row = $idx + 1;
 
-        $ctaBase = self::resolveCuentaBaseCompra(
-            $d->cuenta_ingreso_id ?: null,
-            $p,
-            (int)$f->socio_negocio_id
-        );
-        if (!$ctaBase) {
-            $errores[] = "Fila #{$row}: sin cuenta base (producto/proveedor).";
-        }
+            if (!$d->producto_id || !$d->bodega_id) {
+                Log::warning('COMPRA::inventario línea inválida', [
+                    'factura_id'  => $f->id,
+                    'detalle_id'  => $d->id ?? null,
+                    'producto_id' => $d->producto_id,
+                    'bodega_id'   => $d->bodega_id,
+                ]);
+                $errores[] = "Fila #{$row}: debe tener producto y bodega.";
+                // seguimos validando el resto para reportar todo
+            }
 
-        // Base gravable
-        $base = $cantidad * $costo * (1 - $descPct / 100);
-        if ($base <= 0) {
-            $errores[] = "Fila #{$row}: la base gravable calculada debe ser mayor que 0.";
-        }
+            // Reglas duras para COMPRAS (evita asientos con base 0)
+            $cantidad = (float)$d->cantidad;
+            $costo    = (float)$d->precio_unitario;
+            $descPct  = (float)$d->descuento_pct;
+            $ivaPct   = (float)$d->impuesto_pct;
 
-        // Si hay IVA calculado, debe poder resolverse la cuenta de IVA
-        $ivaVal = round($base * $ivaPct / 100, 2);
-        if ($ivaVal > 0) {
-            $indicadorCuentaId = $p?->impuesto?->cuenta_id ?? null;
-            $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $indicadorCuentaId);
-            if (!$ctaIVA) {
-                $errores[] = "Fila #{$row}: con IVA pero sin cuenta IVA (producto/proveedor/indicador).";
+            if ($cantidad <= 0) {
+                $errores[] = "Fila #{$row}: la cantidad debe ser mayor que 0.";
+            }
+            if ($costo <= 0) {
+                $errores[] = "Fila #{$row}: el costo unitario debe ser mayor que 0 en compras.";
+            }
+            if ($descPct < 0 || $descPct > 100) {
+                $errores[] = "Fila #{$row}: el descuento (%) debe estar entre 0 y 100.";
+            }
+            if ($ivaPct < 0 || $ivaPct > 100) {
+                $errores[] = "Fila #{$row}: el impuesto (%) debe estar entre 0 y 100.";
+            }
+
+            /** @var Producto|null $p */
+            $p = $d->producto_id ? Producto::with(['cuentas', 'impuesto'])->find($d->producto_id) : null;
+
+            $ctaBase = self::resolveCuentaBaseCompra(
+                $d->cuenta_inventario_id ?: null,
+                $p,
+                (int)$f->socio_negocio_id
+            );
+            if (!$ctaBase) {
+                $errores[] = "Fila #{$row}: sin cuenta base (producto/proveedor).";
+            }
+
+            // Base gravable
+            $base = $cantidad * $costo * (1 - $descPct / 100);
+            if ($base <= 0) {
+                $errores[] = "Fila #{$row}: la base gravable calculada debe ser mayor que 0.";
+            }
+
+            // Si hay IVA calculado, debe poder resolverse la cuenta de IVA
+            $ivaVal = round($base * $ivaPct / 100, 2);
+            if ($ivaVal > 0) {
+                $indicadorCuentaId = $p?->impuesto?->cuenta_id ?? null;
+                $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $indicadorCuentaId);
+                if (!$ctaIVA) {
+                    $errores[] = "Fila #{$row}: con IVA pero sin cuenta IVA (producto/proveedor/indicador).";
+                }
             }
         }
+
+        return $errores;
     }
-
-    return $errores;
-}
-
 
     /* ============================
      * Asiento desde factura compra
      * ============================ */
 
     public static function asientoDesdeFacturaCompra(Factura $f): Asiento
-{
-    return DB::transaction(function () use ($f) {
-        Log::info('COMPRA::asientoDesdeFacturaCompra -> start', ['factura_id' => $f->id]);
+    {
+        return DB::transaction(function () use ($f) {
+            Log::info('COMPRA::asientoDesdeFacturaCompra -> start', ['factura_id' => $f->id]);
 
-        // Idempotencia (si ya existe)
-        $existente = Asiento::query()
-            ->where('origen', 'factura')
-            ->where('origen_id', $f->id)
-            ->where('tipo', 'COMPRA')
-            ->first();
-        if ($existente) {
-            Log::info('COMPRA::asiento ya existía', ['asiento_id' => $existente->id]);
-            return $existente;
-        }
-
-        // Validación previa
-        $errores = self::validarFacturaCompraParaAsiento($f);
-        if (!empty($errores)) {
-            throw new \RuntimeException(implode(' | ', $errores));
-        }
-
-        $f->loadMissing(['detalles','socioNegocio']);
-        $cxpId = self::resolveCuentaCxP($f); // cuenta pasivo (22xx)
-        if (!$cxpId) {
-            throw new \RuntimeException('No se pudo resolver la cuenta por pagar del proveedor.');
-        }
-
-        $porCuentaGasto = [];   // acumulado base por cuenta gasto/inventario
-        $ivaPorCuenta   = [];   // acumulado por cuenta IVA
-        $totalFactura   = 0.0;
-
-        foreach ($f->detalles as $d) {
-            /** @var Producto|null $p */
-            $p = $d->producto_id ? Producto::with(['cuentas','impuesto'])->find($d->producto_id) : null;
-
-            $base = (float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct / 100);
-            $ivaPct = (float)$d->impuesto_pct;
-            $ivaVal = round($base * $ivaPct / 100, 2);
-
-            // Cuenta de gasto o inventario
-            $ctaGasto = self::resolveCuentaBaseCompra($d->cuenta_ingreso_id ?? null, $p, (int)$f->socio_negocio_id);
-            if (!$ctaGasto) {
-                throw new \RuntimeException('No se encontró cuenta de gasto/inventario para una línea.');
+            // Idempotencia (si ya existe)
+            $existente = Asiento::query()
+                ->where('origen', 'factura')
+                ->where('origen_id', $f->id)
+                ->where('tipo', 'COMPRA')
+                ->first();
+            if ($existente) {
+                Log::info('COMPRA::asiento ya existía', ['asiento_id' => $existente->id]);
+                return $existente;
             }
 
-            // Acumula base
-            $porCuentaGasto[$ctaGasto] = ($porCuentaGasto[$ctaGasto] ?? 0) + $base;
+            // Validación previa
+            $errores = self::validarFacturaCompraParaAsiento($f);
+            if (!empty($errores)) {
+                throw new \RuntimeException(implode(' | ', $errores));
+            }
 
-            // IVA
-            if ($ivaVal > 0) {
-                $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $p?->impuesto?->cuenta_id);
-                if (!$ctaIVA) {
-                    throw new \RuntimeException('No se encontró cuenta de IVA compras para línea con IVA.');
+            $f->loadMissing(['detalles','socioNegocio']);
+            $cxpId = self::resolveCuentaCxP($f); // cuenta pasivo (22xx)
+            if (!$cxpId) {
+                throw new \RuntimeException('No se pudo resolver la cuenta por pagar del proveedor.');
+            }
+
+            $porCuentaGasto = [];   // acumulado base por cuenta inventario/gasto
+            $ivaPorCuenta   = [];   // acumulado por cuenta IVA
+            $totalFactura   = 0.0;
+
+            foreach ($f->detalles as $d) {
+                /** @var Producto|null $p */
+                $p = $d->producto_id ? Producto::with(['cuentas','impuesto'])->find($d->producto_id) : null;
+
+                $base  = (float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct / 100);
+                $ivaPct = (float)$d->impuesto_pct;
+                $ivaVal = round($base * $ivaPct / 100, 2);
+
+                // Cuenta de inventario (o gasto si aplica reglas)
+                $ctaInvOGasto = self::resolveCuentaBaseCompra($d->cuenta_inventario_id ?? null, $p, (int)$f->socio_negocio_id);
+                if (!$ctaInvOGasto) {
+                    throw new \RuntimeException('No se encontró cuenta de inventario/gasto para una línea.');
                 }
-                $ivaPorCuenta[$ctaIVA][] = [
-                    'base'  => $base,
-                    'tarifa'=> $ivaPct,
-                    'valor' => $ivaVal,
-                ];
+
+                // Acumula base
+                $porCuentaGasto[$ctaInvOGasto] = ($porCuentaGasto[$ctaInvOGasto] ?? 0) + $base;
+
+                // IVA
+                if ($ivaVal > 0) {
+                    $ctaIVA = self::resolveCuentaIvaCompra($p, (int)$f->socio_negocio_id, $p?->impuesto?->cuenta_id);
+                    if (!$ctaIVA) {
+                        throw new \RuntimeException('No se encontró cuenta de IVA compras para línea con IVA.');
+                    }
+                    $ivaPorCuenta[$ctaIVA][] = [
+                        'base'  => $base,
+                        'tarifa'=> $ivaPct,
+                        'valor' => $ivaVal,
+                    ];
+                }
+
+                $totalFactura += $base + $ivaVal;
             }
 
-            $totalFactura += $base + $ivaVal;
-        }
-
-        // Crear asiento
-        $asiento = Asiento::create([
-            'fecha'       => $f->fecha,
-            'tipo'        => 'COMPRA',
-            'glosa'       => sprintf('Factura Compra %s-%s', (string)$f->prefijo, (string)$f->numero),
-            'origen'      => 'factura',
-            'origen_id'   => $f->id,
-            'tercero_id'  => $f->socio_negocio_id,
-            'moneda'      => $f->moneda ?? 'COP',
-            'total_debe'  => 0,
-            'total_haber' => 0,
-        ]);
-
-        $meta = ['factura_id' => $f->id, 'tercero_id' => $f->socio_negocio_id];
-        $totalDebe = 0.0;
-        $totalHaber = 0.0;
-
-        // === DEBE: Gasto / Inventario ===
-        foreach ($porCuentaGasto as $cta => $monto) {
-            $mov = self::post($asiento, (int)$cta, $monto, 0.0, 'Gasto / Inventario', $meta + [
-                'descripcion'   => 'Base de compra',
-                'base_gravable' => $monto,
+            // Crear asiento
+            $asiento = Asiento::create([
+                'fecha'       => $f->fecha,
+                'tipo'        => 'COMPRA',
+                'glosa'       => sprintf('Factura Compra %s-%s', (string)$f->prefijo, (string)$f->numero),
+                'origen'      => 'factura',
+                'origen_id'   => $f->id,
+                'tercero_id'  => $f->socio_negocio_id,
+                'moneda'      => $f->moneda ?? 'COP',
+                'total_debe'  => 0,
+                'total_haber' => 0,
             ]);
-            $totalDebe  += $mov->debito;
-        }
 
-        // === DEBE: IVA descontable ===
-        foreach ($ivaPorCuenta as $ctaIVA => $items) {
-            foreach ($items as $item) {
-                $mov = self::post($asiento, (int)$ctaIVA, $item['valor'], 0.0, 'IVA descontable en compras', $meta + [
-                    'descripcion'    => 'IVA compras',
-                    'base_gravable'  => $item['base'],
-                    'tarifa_pct'     => $item['tarifa'],
-                    'valor_impuesto' => $item['valor'],
+            $meta = ['factura_id' => $f->id, 'tercero_id' => $f->socio_negocio_id];
+            $totalDebe = 0.0;
+            $totalHaber = 0.0;
+
+            // === DEBE: Inventario / Gasto ===
+            foreach ($porCuentaGasto as $cta => $monto) {
+                $mov = self::post($asiento, (int)$cta, $monto, 0.0, 'Inventario / Gasto (base compra)', $meta + [
+                    'descripcion'   => 'Base de compra',
+                    'base_gravable' => $monto,
                 ]);
                 $totalDebe  += $mov->debito;
             }
-        }
 
-        // === HABER: CxP Proveedor ===
-        $mov = self::post($asiento, (int)$cxpId, 0.0, round($totalFactura, 2), 'Cuenta por pagar a proveedor', $meta);
-        $totalHaber += $mov->credito;
+            // === DEBE: IVA descontable ===
+            foreach ($ivaPorCuenta as $ctaIVA => $items) {
+                foreach ($items as $item) {
+                    $mov = self::post($asiento, (int)$ctaIVA, $item['valor'], 0.0, 'IVA descontable en compras', $meta + [
+                        'descripcion'    => 'IVA compras',
+                        'base_gravable'  => $item['base'],
+                        'tarifa_pct'     => $item['tarifa'],
+                        'valor_impuesto' => $item['valor'],
+                    ]);
+                    $totalDebe  += $mov->debito;
+                }
+            }
 
-        // Cierre del asiento
-        $asiento->update([
-            'total_debe'  => round($totalDebe, 2),
-            'total_haber' => round($totalHaber, 2),
-        ]);
+            // === HABER: CxP Proveedor ===
+            $mov = self::post($asiento, (int)$cxpId, 0.0, round($totalFactura, 2), 'Cuenta por pagar a proveedor', $meta);
+            $totalHaber += $mov->credito;
 
-        Log::info('COMPRA::asiento cerrado correctamente', [
-            'asiento_id' => $asiento->id,
-            'debe'       => $asiento->total_debe,
-            'haber'      => $asiento->total_haber,
-        ]);
+            // Cierre del asiento
+            $asiento->update([
+                'total_debe'  => round($totalDebe, 2),
+                'total_haber' => round($totalHaber, 2),
+            ]);
 
-        return $asiento;
-    });
-}
+            Log::info('COMPRA::asiento cerrado correctamente', [
+                'asiento_id' => $asiento->id,
+                'debe'       => $asiento->total_debe,
+                'haber'      => $asiento->total_haber,
+            ]);
+
+            return $asiento;
+        });
+    }
 
     /* ============================
      * Flujo público

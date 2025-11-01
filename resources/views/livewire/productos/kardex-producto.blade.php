@@ -107,13 +107,19 @@
         </thead>
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           @if(!$producto_id)
-            <tr><td colspan="10" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">Selecciona un producto para ver su Kardex.</td></tr>
+            <tr>
+              <td colspan="10" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
+                Selecciona un producto para ver su Kardex.
+              </td>
+            </tr>
           @else
-            {{-- Fila referencial de saldo inicial (solo en primera página) --}}
+            {{-- Fila de saldo inicial (solo en primera página) --}}
             @if($filas->currentPage() === 1)
               <tr class="bg-gray-50 dark:bg-gray-700/50">
                 <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">—</td>
-                <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">{{ $bodega_id ? ($bodegas->firstWhere('id',$bodega_id)->nombre ?? '—') : 'Todas' }}</td>
+                <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">
+                  {{ $bodega_id ? ($bodegas->firstWhere('id',$bodega_id)->nombre ?? '—') : 'Todas' }}
+                </td>
                 <td class="px-3 py-2 font-medium">Saldo inicial</td>
                 <td class="px-3 py-2 text-center">—</td>
                 <td class="px-3 py-2 text-right">—</td>
@@ -152,7 +158,9 @@
               </tr>
             @empty
               <tr>
-                <td colspan="10" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">Sin movimientos en el rango.</td>
+                <td colspan="10" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
+                  Sin movimientos en el rango.
+                </td>
               </tr>
             @endforelse
           @endif

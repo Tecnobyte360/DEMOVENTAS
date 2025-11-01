@@ -105,7 +105,7 @@ class Productos extends Component
     // Cargar productos
     $this->productos = $query->get()->map(function (Producto $p) {
         // Adjuntamos costos por bodega y promedio global
-        $p->setAttribute('costos_por_bodega', $p->costosPorBodega());
+      $p->setAttribute('costos_por_bodega', $p->costos_por_bodega);
         $p->setAttribute('costo_promedio_global', $p->costo_promedio_global);
         return $p;
     });

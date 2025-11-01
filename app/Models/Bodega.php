@@ -12,11 +12,12 @@ class Bodega extends Model
 
     protected $fillable = ['nombre', 'ubicacion', 'activo'];
 
-    public function productos()
-    {
-        return $this->belongsToMany(Producto::class, 'producto_bodega')
-                    ->withPivot('stock', 'stock_minimo', 'stock_maximo')
-                    ->withTimestamps();
-    }
+ public function productos()
+{
+    return $this->belongsToMany(\App\Models\Productos\Producto::class, 'producto_bodega')
+        ->withPivot('stock', 'stock_minimo', 'stock_maximo', 'costo_promedio', 'ultimo_costo', 'metodo_costeo')
+        ->withTimestamps();
+}
+
     
 }

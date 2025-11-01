@@ -49,14 +49,14 @@ class KardexProducto extends Component
 
     public function mount(?int $productoId = null): void
     {
-        $this->productos = Producto::orderBy('nombre')->get(['id','nombre']);
-        $this->bodegas   = Bodega::orderBy('nombre')->get(['id','nombre']);
+        $this->productos = Producto::orderBy('nombre')->get(['id', 'nombre']);
+        $this->bodegas   = Bodega::orderBy('nombre')->get(['id', 'nombre']);
 
         $this->producto_id = $productoId ?: $this->producto_id;
         $this->desde = $this->desde ?: Carbon::now()->subDays(90)->toDateString();
         $this->hasta = $this->hasta ?: Carbon::now()->toDateString();
 
-        $this->resolveColumns(); // detectar columnas existentes una vez
+        $this->resolveColumns();
     }
 
     public function updating($prop): void
@@ -90,7 +90,6 @@ class KardexProducto extends Component
     {
         $table = (new Movimiento)->getTable(); // normalmente 'movimientos'
 
-        // ¡OJO!: el use($table) va antes del tipo de retorno
         $pick = function (array $cands) use ($table): ?string {
             foreach ($cands as $c) {
                 if (Schema::hasColumn($table, $c)) return $c;
@@ -98,7 +97,7 @@ class KardexProducto extends Component
             return null;
         };
 
-        // Asegura que TODAS las claves existen en el array
+        // Asegura que TODAS las claves existan
         $this->cols = array_merge([
             'fecha'    => null,
             'producto' => null,
@@ -119,7 +118,7 @@ class KardexProducto extends Component
             'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
             'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
             'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
-            'signo'     => $pick(['signo','direction']), // 1 / -1
+            'signo'     => $pick(['signo','direction']),
             'total'     => $pick(['total','valor_total','monto','importe_total']),
             'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
             'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
@@ -139,7 +138,7 @@ class KardexProducto extends Component
             return $fallback ?? match ($k) {
                 'fecha'    => 'created_at',
                 'producto' => 'producto_id',
-                default    => $k, // última salida
+                default    => $k,
             };
         }
         return $this->cols[$k];
@@ -148,7 +147,6 @@ class KardexProducto extends Component
     /* =======================================================
      * CÁLCULOS
      * ======================================================= */
-
     private function calcularSaldoInicial(): void
     {
         $hasta = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
@@ -156,28 +154,28 @@ class KardexProducto extends Component
         $q = Movimiento::query()
             ->where($this->col('producto'), $this->producto_id);
 
-        if ($this->bodega_id && $this->cols['bodega']) $q->where($this->col('bodega'), $this->bodega_id);
-        if ($hasta) $q->where($this->col('fecha'), '<', $hasta);
+        if ($this->bodega_id && $this->cols['bodega']) {
+            $q->where($this->col('bodega'), $this->bodega_id);
+        }
+        if ($hasta) {
+            $q->where($this->col('fecha'), '<', $hasta);
+        }
 
-        // Selección solo de columnas existentes
         $select = array_filter([
-            $this->cols['entrada'] ? $this->col('entrada') : null,
-            $this->cols['salida']  ? $this->col('salida')  : null,
-            $this->cols['cantidad']? $this->col('cantidad'): null,
-            $this->cols['signo']   ? $this->col('signo')   : null,
-            $this->cols['total']   ? $this->col('total')   : null,
-            $this->cols['cu']      ? $this->col('cu')      : null,
+            $this->cols['entrada']  ? $this->col('entrada')  : null,
+            $this->cols['salida']   ? $this->col('salida')   : null,
+            $this->cols['cantidad'] ? $this->col('cantidad') : null,
+            $this->cols['signo']    ? $this->col('signo')    : null,
+            $this->cols['total']    ? $this->col('total')    : null,
+            $this->cols['cu']       ? $this->col('cu')       : null,
         ]);
-        if (empty($select)) $select = ['id'];
+        if (!$select) $select = ['id'];
 
         $movs = $q->get($select);
 
-        $cant = 0.0;
-        $val  = 0.0;
-
+        $cant = 0.0; $val = 0.0;
         foreach ($movs as $m) {
             [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
-
             if ($tipo === 'ENTRADA') {
                 $cant += $c; $val += $t;
             } else {
@@ -214,7 +212,6 @@ class KardexProducto extends Component
 
         $q->orderBy($this->col('fecha'))->orderBy('id');
 
-        // Selecciona solamente columnas existentes
         $select = array_values(array_filter([
             'id',
             $this->col('fecha'),
@@ -231,7 +228,7 @@ class KardexProducto extends Component
         ]));
         $paginator = $q->paginate($this->perPage, $select);
 
-        // IDs completos para “replay” previo y CPU correcto al entrar en una página intermedia
+        // IDs para “replay” (CPU correcto en páginas intermedias)
         $idsOrdenados  = (clone $q)->pluck('id');
         $firstModel    = $paginator->items()[0] ?? null;
         $firstIdPagina = $firstModel->id ?? null;
@@ -293,12 +290,10 @@ class KardexProducto extends Component
 
             $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
 
-            // bodega
             $bodegaNombre = $bodCol
                 ? optional($this->bodegas->firstWhere('id', $m->{$bodCol}))->nombre
                 : null;
 
-            // doc/ref
             $doc = trim(
                 ($this->cols['doc_tipo'] && $m->{$this->col('doc_tipo')} ? $m->{$this->col('doc_tipo')} : '') .
                 ' ' .
@@ -309,7 +304,6 @@ class KardexProducto extends Component
             }
             $doc = trim($doc) ?: '—';
 
-            // fecha
             $fechaVal = $m->{$fechaCol};
             $fechaStr = $fechaVal instanceof \Illuminate\Support\Carbon || $fechaVal instanceof Carbon
                 ? $fechaVal->format('Y-m-d H:i')
@@ -323,15 +317,14 @@ class KardexProducto extends Component
                 'doc'        => $doc,
                 'entrada'    => $entrada,
                 'salida'     => $salida,
-                // Para SALIDA mostramos el CPU vigente; para ENTRADA, el costo de la fila si existe
                 'costo_unit' => $tipo === 'SALIDA' ? $cpu : ($cu ?: null),
                 'saldo_cant' => round($saldoCant, 6),
                 'saldo_val'  => round($saldoVal, 2),
-                'saldo_cpu'  => $saldoCant > 0 ? round($saldoVal / max($saldoCant,1e-9), 6) : null,
+                'saldo_cpu'  => $saldoCant > 0 ? round($saldoVal / max($saldoCant, 1e-9), 6) : null,
             ];
         });
 
-        // Saldos finales (solo si hay ítems en la última página)
+        // Saldos finales en última página
         if ($paginator->currentPage() === $paginator->lastPage() && $items->count()) {
             $last = $items->last();
             $this->saldoFinalCant = (float) $last['saldo_cant'];
@@ -356,36 +349,30 @@ class KardexProducto extends Component
      */
     private function extractMovimiento($m): array
     {
-        $entrada = $this->cols['entrada'] ? (float) ($m->{$this->col('entrada')} ?? 0) : null;
-        $salida  = $this->cols['salida']  ? (float) ($m->{$this->col('salida')}  ?? 0) : null;
-        $cantidad= $this->cols['cantidad']? (float) ($m->{$this->col('cantidad')} ?? 0) : null;
-        $signo   = $this->cols['signo']   ? (float) ($m->{$this->col('signo')}    ?? 0) : null;
+        $entrada  = $this->cols['entrada']  ? (float) ($m->{$this->col('entrada')}  ?? 0) : null;
+        $salida   = $this->cols['salida']   ? (float) ($m->{$this->col('salida')}   ?? 0) : null;
+        $cantidad = $this->cols['cantidad'] ? (float) ($m->{$this->col('cantidad')} ?? 0) : null;
+        $signo    = $this->cols['signo']    ? (float) ($m->{$this->col('signo')}    ?? 0) : null;
 
-        // 1) Entrada/Salida separadas
         if (!is_null($entrada) || !is_null($salida)) {
             $entrada = max(0.0, (float) $entrada);
             $salida  = max(0.0, (float) $salida);
 
-            if ($entrada > 0 && $salida == 0) {
-                $tipo = 'ENTRADA'; $c = $entrada;
-            } elseif ($salida > 0 && $entrada == 0) {
-                $tipo = 'SALIDA';  $c = $salida;
-            } else {
+            if ($entrada > 0 && $salida == 0) { $tipo = 'ENTRADA'; $c = $entrada; }
+            elseif ($salida > 0 && $entrada == 0) { $tipo = 'SALIDA'; $c = $salida; }
+            else { // si ambos, prioriza el mayor
                 if ($entrada >= $salida) { $tipo = 'ENTRADA'; $c = $entrada; }
                 else { $tipo = 'SALIDA'; $c = $salida; }
             }
         }
-        // 2) Cantidad + signo
         elseif (!is_null($cantidad) && !is_null($signo)) {
-            $tipo = ((int)$signo >= 0) ? 'ENTRADA' : 'SALIDA';
+            $tipo = ((int) $signo >= 0) ? 'ENTRADA' : 'SALIDA';
             $c    = abs($cantidad);
         }
-        // 3) Solo cantidad
         elseif (!is_null($cantidad)) {
             $tipo = ($cantidad >= 0) ? 'ENTRADA' : 'SALIDA';
             $c    = abs($cantidad);
         }
-        // 4) Sin datos → no mueve
         else {
             $tipo = 'ENTRADA'; $c = 0.0;
         }

@@ -7,6 +7,31 @@
     </div>
   </header>
 
+  {{-- Selector de fuente de datos --}}
+  <section class="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
+    <label class="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2 block">Fuente de movimientos</label>
+    <div class="flex flex-wrap gap-3">
+      <label class="flex items-center cursor-pointer">
+        <input type="radio" wire:model.live="fuenteDatos" value="kardex" class="w-4 h-4 text-violet-600 focus:ring-violet-500">
+        <span class="ml-2 text-sm text-gray-700 dark:text-gray-200">
+          Solo Kardex <span class="text-xs text-gray-500">(tabla kardex_movimientos)</span>
+        </span>
+      </label>
+      <label class="flex items-center cursor-pointer">
+        <input type="radio" wire:model.live="fuenteDatos" value="costos" class="w-4 h-4 text-violet-600 focus:ring-violet-500">
+        <span class="ml-2 text-sm text-gray-700 dark:text-gray-200">
+          Solo Costos <span class="text-xs text-gray-500">(tabla producto_costo_movimientos)</span>
+        </span>
+      </label>
+      <label class="flex items-center cursor-pointer">
+        <input type="radio" wire:model.live="fuenteDatos" value="ambas" class="w-4 h-4 text-violet-600 focus:ring-violet-500">
+        <span class="ml-2 text-sm text-gray-700 dark:text-gray-200">
+          Ambas tablas <span class="text-xs text-gray-500">(combinadas)</span>
+        </span>
+      </label>
+    </div>
+  </section>
+
   {{-- Filtros --}}
   <section class="grid grid-cols-1 md:grid-cols-5 gap-4">
     <div>
@@ -50,20 +75,6 @@
     </div>
   </section>
 
-  {{-- Toggle para ver costos históricos --}}
-  @if($producto_id)
-    <section class="flex items-center gap-3">
-      <label class="relative inline-flex items-center cursor-pointer">
-        <input type="checkbox" wire:model.live="verCostosHistoricos" class="sr-only peer">
-        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-violet-300 dark:peer-focus:ring-violet-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-violet-600"></div>
-        <span class="ms-3 text-sm font-medium text-gray-900 dark:text-gray-300">Ver datos de costos históricos</span>
-      </label>
-      @if($verCostosHistoricos)
-        <span class="text-xs text-gray-500 dark:text-gray-400 italic">(Se mostrarán columnas adicionales)</span>
-      @endif
-    </section>
-  @endif
-
   {{-- Resumen saldos --}}
   @if($producto_id)
     <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -104,9 +115,10 @@
     </div>
 
     <div class="overflow-x-auto">
-      <table class="min-w-[1200px] w-full text-sm bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
+      <table class="min-w-[1400px] w-full text-sm bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
         <thead class="bg-violet-600 text-white">
           <tr>
+            <th class="px-3 py-2 text-left">Fuente</th>
             <th class="px-3 py-2 text-left">Fecha</th>
             <th class="px-3 py-2 text-left">Bodega</th>
             <th class="px-3 py-2 text-left">Doc/Ref</th>
@@ -117,7 +129,7 @@
             <th class="px-3 py-2 text-right">Saldo cant.</th>
             <th class="px-3 py-2 text-right">Saldo valor</th>
             <th class="px-3 py-2 text-right">CPU saldo</th>
-            @if($verCostosHistoricos)
+            @if(in_array($fuenteDatos, ['costos', 'ambas']))
               <th class="px-3 py-2 text-center bg-violet-700">Método</th>
               <th class="px-3 py-2 text-right bg-violet-700">CPU Ant.</th>
               <th class="px-3 py-2 text-right bg-violet-700">CPU Nuevo</th>
@@ -130,7 +142,7 @@
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           @if(!$producto_id)
             <tr>
-              <td colspan="{{ $verCostosHistoricos ? 16 : 10 }}" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
+              <td colspan="{{ in_array($fuenteDatos, ['costos', 'ambas']) ? 17 : 11 }}" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
                 Selecciona un producto para ver su Kardex.
               </td>
             </tr>
@@ -138,6 +150,11 @@
             {{-- Fila de saldo inicial (solo en primera página) --}}
             @if($filas->currentPage() === 1)
               <tr class="bg-gray-50 dark:bg-gray-700/50">
+                <td class="px-3 py-2">
+                  <span class="text-xs px-2 py-1 rounded-full bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200">
+                    INICIAL
+                  </span>
+                </td>
                 <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">—</td>
                 <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">
                   {{ $bodega_id ? ($bodegas->firstWhere('id',$bodega_id)->nombre ?? '—') : 'Todas' }}
@@ -153,22 +170,32 @@
                 <td class="px-3 py-2 text-right">{{ number_format($saldoInicialCant, 6) }}</td>
                 <td class="px-3 py-2 text-right">{{ number_format($saldoInicialVal, 2) }}</td>
                 <td class="px-3 py-2 text-right">{{ $cpuIni !== null ? number_format($cpuIni, 6) : '—' }}</td>
-                @if($verCostosHistoricos)
+                @if(in_array($fuenteDatos, ['costos', 'ambas']))
                   <td colspan="6" class="px-3 py-2 text-center text-gray-400 italic bg-gray-100 dark:bg-gray-800">—</td>
                 @endif
               </tr>
             @endif
 
             @forelse($filas as $r)
-              <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 {{ $r['costo_historico'] ? 'border-l-4 border-l-violet-500' : '' }}">
-                <td class="px-3 py-2">{{ $r['fecha'] }}</td>
-                <td class="px-3 py-2">{{ $r['bodega'] ?? '—' }}</td>
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 
+                {{ $r['fuente'] === 'costos' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500' }}">
+                
+                {{-- Columna de fuente --}}
                 <td class="px-3 py-2">
-                  {{ $r['doc'] }}
-                  @if($r['costo_historico'])
-                    <span class="ml-1 text-xs text-violet-600 dark:text-violet-400" title="Tiene datos de costos históricos">●</span>
+                  @if($r['fuente'] === 'kardex')
+                    <span class="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 font-medium">
+                      KARDEX
+                    </span>
+                  @else
+                    <span class="text-xs px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-medium">
+                      COSTOS
+                    </span>
                   @endif
                 </td>
+
+                <td class="px-3 py-2">{{ $r['fecha'] }}</td>
+                <td class="px-3 py-2">{{ $r['bodega'] ?? '—' }}</td>
+                <td class="px-3 py-2">{{ $r['doc'] }}</td>
                 <td class="px-3 py-2 text-center">
                   <span class="px-2 py-0.5 rounded-full text-xs font-semibold
                     @class([
@@ -186,38 +213,38 @@
                 <td class="px-3 py-2 text-right">{{ number_format($r['saldo_val'], 2) }}</td>
                 <td class="px-3 py-2 text-right">{{ $r['saldo_cpu'] !== null ? number_format($r['saldo_cpu'], 6) : '—' }}</td>
                 
-                @if($verCostosHistoricos)
+                @if(in_array($fuenteDatos, ['costos', 'ambas']))
                   @if($r['costo_historico'])
-                    <td class="px-3 py-2 text-center bg-violet-50 dark:bg-gray-800">
-                      <span class="text-xs px-2 py-1 rounded-full bg-violet-200 dark:bg-violet-900 text-violet-800 dark:text-violet-200">
+                    <td class="px-3 py-2 text-center bg-blue-50 dark:bg-gray-800">
+                      <span class="text-xs px-2 py-1 rounded-full bg-blue-200 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
                         {{ $r['costo_historico']['metodo_costeo'] ?? '—' }}
                       </span>
                     </td>
-                    <td class="px-3 py-2 text-right bg-violet-50 dark:bg-gray-800">
+                    <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800">
                       {{ $r['costo_historico']['costo_prom_anterior'] ? number_format($r['costo_historico']['costo_prom_anterior'], 6) : '—' }}
                     </td>
-                    <td class="px-3 py-2 text-right bg-violet-50 dark:bg-gray-800 font-semibold">
+                    <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800 font-semibold">
                       {{ $r['costo_historico']['costo_prom_nuevo'] ? number_format($r['costo_historico']['costo_prom_nuevo'], 6) : '—' }}
                     </td>
-                    <td class="px-3 py-2 text-right bg-violet-50 dark:bg-gray-800">
+                    <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800">
                       {{ $r['costo_historico']['ultimo_costo_anterior'] ? number_format($r['costo_historico']['ultimo_costo_anterior'], 6) : '—' }}
                     </td>
-                    <td class="px-3 py-2 text-right bg-violet-50 dark:bg-gray-800 font-semibold">
+                    <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800 font-semibold">
                       {{ $r['costo_historico']['ultimo_costo_nuevo'] ? number_format($r['costo_historico']['ultimo_costo_nuevo'], 6) : '—' }}
                     </td>
-                    <td class="px-3 py-2 text-center bg-violet-50 dark:bg-gray-800">
+                    <td class="px-3 py-2 text-center bg-blue-50 dark:bg-gray-800">
                       <span class="text-xs text-gray-600 dark:text-gray-300">{{ $r['costo_historico']['tipo_evento'] ?? '—' }}</span>
                     </td>
                   @else
                     <td colspan="6" class="px-3 py-2 text-center text-gray-400 italic bg-gray-50 dark:bg-gray-800">
-                      Sin datos históricos
+                      —
                     </td>
                   @endif
                 @endif
               </tr>
             @empty
               <tr>
-                <td colspan="{{ $verCostosHistoricos ? 16 : 10 }}" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
+                <td colspan="{{ in_array($fuenteDatos, ['costos', 'ambas']) ? 17 : 11 }}" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
                   Sin movimientos en el rango.
                 </td>
               </tr>
@@ -232,16 +259,24 @@
     </div>
   </section>
 
-  {{-- Leyenda para costos históricos --}}
-  @if($producto_id && $verCostosHistoricos)
-    <section class="bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 rounded-xl p-4">
-      <h4 class="text-sm font-semibold text-violet-900 dark:text-violet-200 mb-2">📊 Información de Costos Históricos</h4>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-violet-800 dark:text-violet-300">
-        <div><strong>Método:</strong> Sistema de costeo aplicado (Promedio, PEPS, etc.)</div>
-        <div><strong>CPU Ant./Nuevo:</strong> Costo promedio unitario antes y después del movimiento</div>
-        <div><strong>Último Ant./Nuevo:</strong> Último costo de compra antes y después del movimiento</div>
-        <div><strong>Evento:</strong> Tipo de evento que generó el registro</div>
-        <div class="md:col-span-2"><strong>Indicador ●:</strong> Marca filas con datos históricos registrados</div>
+  {{-- Leyenda --}}
+  @if($producto_id)
+    <section class="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
+      <h4 class="text-sm font-semibold text-gray-900 dark:text-gray-200 mb-2">📊 Leyenda</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 text-xs font-medium">KARDEX</span>
+          <span class="text-gray-700 dark:text-gray-300">Movimientos desde tabla kardex_movimientos (borde verde)</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="px-2 py-1 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 text-xs font-medium">COSTOS</span>
+          <span class="text-gray-700 dark:text-gray-300">Movimientos desde tabla producto_costo_movimientos (borde azul)</span>
+        </div>
+        @if(in_array($fuenteDatos, ['costos', 'ambas']))
+          <div class="md:col-span-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <p class="text-gray-700 dark:text-gray-300"><strong>Columnas de costos históricos:</strong> Se muestran solo para movimientos de la tabla producto_costo_movimientos, donde se registran los cambios en costos promedio y último costo.</p>
+          </div>
+        @endif
       </div>
     </section>
   @endif

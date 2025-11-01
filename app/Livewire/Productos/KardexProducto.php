@@ -26,8 +26,8 @@ class KardexProducto extends Component
     public string $buscarDoc = '';
     public int $perPage      = 25;
     
-    /** ==== Opción para ver costos históricos ==== */
-    public bool $verCostosHistoricos = false;
+    /** ==== Opciones de vista ==== */
+    public string $fuenteDatos = 'kardex'; // 'kardex' | 'costos' | 'ambas'
 
     /** ==== Saldos ==== */
     public float $saldoInicialCant = 0.0;
@@ -46,7 +46,7 @@ class KardexProducto extends Component
         'hasta'       => ['except' => null],
         'buscarDoc'   => ['except' => ''],
         'perPage'     => ['except' => 25],
-        'verCostosHistoricos' => ['except' => false],
+        'fuenteDatos' => ['except' => 'kardex'],
     ];
 
     public function mount(?int $productoId = null): void
@@ -90,24 +90,74 @@ class KardexProducto extends Component
     {
         $hasta = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
 
-        $q = KardexMovimiento::query()
-            ->where('producto_id', $this->producto_id);
+        // Usamos ambas tablas para calcular el saldo inicial
+        $movimientos = collect();
 
-        if ($this->bodega_id) $q->where('bodega_id', $this->bodega_id);
-        if ($hasta)           $q->where('fecha', '<', $hasta);
+        // Movimientos de KardexMovimiento
+        if (in_array($this->fuenteDatos, ['kardex', 'ambas'])) {
+            $qKardex = KardexMovimiento::query()
+                ->where('producto_id', $this->producto_id);
 
-        $movs = $q->orderBy('fecha')->orderBy('id')
-            ->get(['entrada','salida','cantidad','signo','costo_unitario','total']);
+            if ($this->bodega_id) $qKardex->where('bodega_id', $this->bodega_id);
+            if ($hasta)           $qKardex->where('fecha', '<', $hasta);
+
+            $kardexMovs = $qKardex->orderBy('fecha')->orderBy('id')
+                ->get(['id','fecha','entrada','salida','cantidad','signo','costo_unitario','total'])
+                ->map(function($m) {
+                    return [
+                        'id' => 'k_'.$m->id,
+                        'fecha' => $m->fecha,
+                        'entrada' => (float)($m->entrada ?? 0),
+                        'salida' => (float)($m->salida ?? 0),
+                        'cantidad' => (float)($m->cantidad ?? 0),
+                        'signo' => (int)($m->signo ?? 0),
+                        'costo_unitario' => (float)($m->costo_unitario ?? 0),
+                        'fuente' => 'kardex'
+                    ];
+                });
+
+            $movimientos = $movimientos->merge($kardexMovs);
+        }
+
+        // Movimientos de ProductoCostoMovimiento
+        if (in_array($this->fuenteDatos, ['costos', 'ambas'])) {
+            $qCostos = ProductoCostoMovimiento::query()
+                ->where('producto_id', $this->producto_id);
+
+            if ($this->bodega_id) $qCostos->where('bodega_id', $this->bodega_id);
+            if ($hasta)           $qCostos->where('fecha', '<', $hasta);
+
+            $costosMovs = $qCostos->orderBy('fecha')->orderBy('id')
+                ->get(['id','fecha','cantidad','costo_unit_mov'])
+                ->map(function($m) {
+                    $cant = (float)($m->cantidad ?? 0);
+                    return [
+                        'id' => 'c_'.$m->id,
+                        'fecha' => $m->fecha,
+                        'entrada' => $cant > 0 ? $cant : 0,
+                        'salida' => $cant < 0 ? abs($cant) : 0,
+                        'cantidad' => $cant,
+                        'signo' => $cant >= 0 ? 1 : -1,
+                        'costo_unitario' => (float)($m->costo_unit_mov ?? 0),
+                        'fuente' => 'costos'
+                    ];
+                });
+
+            $movimientos = $movimientos->merge($costosMovs);
+        }
+
+        // Ordenar todos los movimientos por fecha
+        $movimientos = $movimientos->sortBy('fecha')->values();
 
         $cant = 0.0; $val = 0.0;
-        foreach ($movs as $m) {
-            $entrada = (float)($m->entrada ?? 0);
-            $salida  = (float)($m->salida  ?? 0);
-            $tipo    = $entrada > 0 ? 'ENTRADA' : ($salida > 0 ? 'SALIDA' : ((int)$m->signo >= 0 ? 'ENTRADA' : 'SALIDA'));
-            $c       = $tipo === 'ENTRADA' ? max($entrada, abs((float)$m->cantidad)) : max($salida,  abs((float)$m->cantidad));
+        foreach ($movimientos as $m) {
+            $entrada = $m['entrada'];
+            $salida  = $m['salida'];
+            $tipo    = $entrada > 0 ? 'ENTRADA' : ($salida > 0 ? 'SALIDA' : ($m['signo'] >= 0 ? 'ENTRADA' : 'SALIDA'));
+            $c       = $tipo === 'ENTRADA' ? max($entrada, abs($m['cantidad'])) : max($salida, abs($m['cantidad']));
 
             if ($tipo === 'ENTRADA') {
-                $cu  = (float)($m->costo_unitario ?? 0);
+                $cu  = $m['costo_unitario'];
                 $val += $c * $cu;
                 $cant += $c;
             } else {
@@ -122,59 +172,136 @@ class KardexProducto extends Component
         $this->saldoInicialVal  = round($val, 2);
     }
 
-    /** Lista movimientos del rango y calcula saldos corridos por página. */
+    /** Lista movimientos del rango de AMBAS tablas y calcula saldos corridos. */
     private function kardexEnRangoPaginado(): LengthAwarePaginator
     {
         $desde = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
         $hasta = $this->hasta ? Carbon::parse($this->hasta)->endOfDay()   : null;
 
-        $q = KardexMovimiento::query()
-            ->with('tipoDocumento:id,codigo,nombre')
-            ->where('producto_id', $this->producto_id);
+        // Colección unificada de movimientos
+        $movimientos = collect();
 
-        if ($this->bodega_id) $q->where('bodega_id', $this->bodega_id);
-        if ($desde)           $q->where('fecha', '>=', $desde);
-        if ($hasta)           $q->where('fecha', '<=', $hasta);
+        // 1. Obtener movimientos de KardexMovimiento
+        if (in_array($this->fuenteDatos, ['kardex', 'ambas'])) {
+            $qKardex = KardexMovimiento::query()
+                ->with('tipoDocumento:id,codigo,nombre')
+                ->where('producto_id', $this->producto_id);
 
-        if (trim($this->buscarDoc) !== '') {
-            $txt = '%' . Str::of($this->buscarDoc)->trim() . '%';
-            $q->where(function ($x) use ($txt) {
-                $x->orWhere('doc_id', 'like', $txt)
-                  ->orWhere('ref', 'like', $txt)
-                  ->orWhereHas('tipoDocumento', fn($q)=>$q->where('nombre','like',$txt)->orWhere('codigo','like',$txt));
-            });
+            if ($this->bodega_id) $qKardex->where('bodega_id', $this->bodega_id);
+            if ($desde)           $qKardex->where('fecha', '>=', $desde);
+            if ($hasta)           $qKardex->where('fecha', '<=', $hasta);
+
+            if (trim($this->buscarDoc) !== '') {
+                $txt = '%' . Str::of($this->buscarDoc)->trim() . '%';
+                $qKardex->where(function ($x) use ($txt) {
+                    $x->orWhere('doc_id', 'like', $txt)
+                      ->orWhere('ref', 'like', $txt)
+                      ->orWhereHas('tipoDocumento', fn($q)=>$q->where('nombre','like',$txt)->orWhere('codigo','like',$txt));
+                });
+            }
+
+            $kardexMovs = $qKardex->orderBy('fecha')->orderBy('id')
+                ->get()
+                ->map(function($m) {
+                    return [
+                        'id' => 'k_'.$m->id,
+                        'model_id' => $m->id,
+                        'fecha' => $m->fecha,
+                        'bodega_id' => $m->bodega_id,
+                        'tipo_documento_id' => $m->tipo_documento_id,
+                        'doc_id' => $m->doc_id,
+                        'ref' => $m->ref,
+                        'tipo_documento' => $m->tipoDocumento,
+                        'entrada' => (float)($m->entrada ?? 0),
+                        'salida' => (float)($m->salida ?? 0),
+                        'cantidad' => (float)($m->cantidad ?? 0),
+                        'signo' => (int)($m->signo ?? 0),
+                        'costo_unitario' => (float)($m->costo_unitario ?? 0),
+                        'fuente' => 'kardex',
+                        'raw' => $m
+                    ];
+                });
+
+            $movimientos = $movimientos->merge($kardexMovs);
         }
 
-        $q->orderBy('fecha')->orderBy('id');
+        // 2. Obtener movimientos de ProductoCostoMovimiento
+        if (in_array($this->fuenteDatos, ['costos', 'ambas'])) {
+            $qCostos = ProductoCostoMovimiento::query()
+                ->with('tipoDocumento:id,codigo,nombre')
+                ->where('producto_id', $this->producto_id);
 
-        $paginator = $q->paginate(
-            $this->perPage,
-            ['id','fecha','producto_id','bodega_id','tipo_documento_id','entrada','salida','cantidad','signo','costo_unitario','total','doc_id','ref']
-        );
+            if ($this->bodega_id) $qCostos->where('bodega_id', $this->bodega_id);
+            if ($desde)           $qCostos->where('fecha', '>=', $desde);
+            if ($hasta)           $qCostos->where('fecha', '<=', $hasta);
 
-        // Para saldos corridos correctos por página:
-        $idsOrdenados  = (clone $q)->pluck('id');
-        $firstModel    = $paginator->items()[0] ?? null;
-        $firstIdPagina = $firstModel->id ?? null;
-        $idxInicio     = $firstIdPagina ? $idsOrdenados->search($firstIdPagina) : 0;
-        $idsPrev       = $idxInicio > 0 ? $idsOrdenados->slice(0, $idxInicio)->values() : collect();
+            if (trim($this->buscarDoc) !== '') {
+                $txt = '%' . Str::of($this->buscarDoc)->trim() . '%';
+                $qCostos->where(function ($x) use ($txt) {
+                    $x->orWhere('doc_id', 'like', $txt)
+                      ->orWhere('ref', 'like', $txt)
+                      ->orWhereHas('tipoDocumento', fn($q)=>$q->where('nombre','like',$txt)->orWhere('codigo','like',$txt));
+                });
+            }
 
+            $costosMovs = $qCostos->orderBy('fecha')->orderBy('id')
+                ->get()
+                ->map(function($m) {
+                    $cant = (float)($m->cantidad ?? 0);
+                    return [
+                        'id' => 'c_'.$m->id,
+                        'model_id' => $m->id,
+                        'fecha' => $m->fecha,
+                        'bodega_id' => $m->bodega_id,
+                        'tipo_documento_id' => $m->tipo_documento_id,
+                        'doc_id' => $m->doc_id,
+                        'ref' => $m->ref,
+                        'tipo_documento' => $m->tipoDocumento,
+                        'entrada' => $cant > 0 ? $cant : 0,
+                        'salida' => $cant < 0 ? abs($cant) : 0,
+                        'cantidad' => $cant,
+                        'signo' => $cant >= 0 ? 1 : -1,
+                        'costo_unitario' => (float)($m->costo_unit_mov ?? 0),
+                        'fuente' => 'costos',
+                        'metodo_costeo' => $m->metodo_costeo,
+                        'costo_prom_anterior' => $m->costo_prom_anterior,
+                        'costo_prom_nuevo' => $m->costo_prom_nuevo,
+                        'ultimo_costo_anterior' => $m->ultimo_costo_anterior,
+                        'ultimo_costo_nuevo' => $m->ultimo_costo_nuevo,
+                        'tipo_evento' => $m->tipo_evento,
+                        'valor_mov' => $m->valor_mov,
+                        'raw' => $m
+                    ];
+                });
+
+            $movimientos = $movimientos->merge($costosMovs);
+        }
+
+        // 3. Ordenar todos los movimientos por fecha e id
+        $movimientos = $movimientos->sortBy([
+            ['fecha', 'asc'],
+            ['id', 'asc']
+        ])->values();
+
+        // 4. Paginar manualmente
+        $total = $movimientos->count();
+        $currentPage = $this->getPage();
+        $offset = ($currentPage - 1) * $this->perPage;
+        $itemsPagina = $movimientos->slice($offset, $this->perPage)->values();
+
+        // 5. Calcular saldos corridos desde el inicio de la página
         [$saldoCant, $saldoVal] = [$this->saldoInicialCant, $this->saldoInicialVal];
 
-        if ($idsPrev->isNotEmpty()) {
-            $prevMovs = KardexMovimiento::whereIn('id', $idsPrev)
-                ->orderBy('fecha')->orderBy('id')
-                ->get(['id','entrada','salida','cantidad','signo','costo_unitario','total']);
-
+        // Recorrer movimientos ANTES de la página actual
+        if ($offset > 0) {
+            $prevMovs = $movimientos->slice(0, $offset);
             foreach ($prevMovs as $m) {
-                $entrada = (float)($m->entrada ?? 0);
-                $salida  = (float)($m->salida  ?? 0);
-                $tipo    = $entrada > 0 ? 'ENTRADA' : ($salida > 0 ? 'SALIDA' : ((int)$m->signo >= 0 ? 'ENTRADA' : 'SALIDA'));
-                $c       = $tipo === 'ENTRADA' ? max($entrada, abs((float)$m->cantidad)) : max($salida,  abs((float)$m->cantidad));
+                $tipo = $m['entrada'] > 0 ? 'ENTRADA' : 'SALIDA';
+                $c    = $tipo === 'ENTRADA' ? $m['entrada'] : $m['salida'];
 
                 if ($tipo === 'ENTRADA') {
-                    $cu  = (float)($m->costo_unitario ?? 0);
-                    $saldoVal += $c * $cu;
+                    $cu = $m['costo_unitario'];
+                    $saldoVal  += $c * $cu;
                     $saldoCant += $c;
                 } else {
                     $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
@@ -185,39 +312,14 @@ class KardexProducto extends Component
             }
         }
 
-        // Obtener datos de costo histórico si está activado
-        $costosHistoricos = collect();
-        if ($this->verCostosHistoricos && $paginator->items()) {
-            $kardexIds = collect($paginator->items())->pluck('id');
-            
-            // Buscar en ProductoCostoMovimiento por los mismos criterios
-            $costosQuery = ProductoCostoMovimiento::query()
-                ->where('producto_id', $this->producto_id);
-            
-            if ($this->bodega_id) $costosQuery->where('bodega_id', $this->bodega_id);
-            if ($desde)           $costosQuery->where('fecha', '>=', $desde);
-            if ($hasta)           $costosQuery->where('fecha', '<=', $hasta);
-            
-            // Agrupar por doc_id + tipo_documento_id para hacer match
-            $costosHistoricos = $costosQuery
-                ->orderBy('fecha')
-                ->get()
-                ->keyBy(function($item) {
-                    return $item->tipo_documento_id . '_' . $item->doc_id;
-                });
-        }
+        // 6. Construir items de la página con saldos
+        $items = $itemsPagina->map(function ($m) use (&$saldoCant, &$saldoVal) {
+            $tipo = $m['entrada'] > 0 ? 'ENTRADA' : 'SALIDA';
+            $c    = $tipo === 'ENTRADA' ? $m['entrada'] : $m['salida'];
 
-        // Construye items de la página con saldos corridos
-        $items = collect($paginator->items())->map(function (KardexMovimiento $m) use (&$saldoCant, &$saldoVal, $costosHistoricos) {
-            $entrada = (float)($m->entrada ?? 0);
-            $salida  = (float)($m->salida  ?? 0);
-            $tipo    = $entrada > 0 ? 'ENTRADA' : ($salida > 0 ? 'SALIDA' : ((int)$m->signo >= 0 ? 'ENTRADA' : 'SALIDA'));
-            $c       = $tipo === 'ENTRADA' ? max($entrada, abs((float)$m->cantidad)) : max($salida,  abs((float)$m->cantidad));
-
-            // Calcular costo promedio antes de aplicar el movimiento
             $cpu = null;
             if ($tipo === 'ENTRADA') {
-                $cu = (float)($m->costo_unitario ?? 0);
+                $cu = $m['costo_unitario'];
                 $saldoVal  += $c * $cu;
                 $saldoCant += $c;
             } else {
@@ -229,64 +331,59 @@ class KardexProducto extends Component
 
             $cpuSaldo = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : null;
 
-            $bodegaNombre = optional($this->bodegas->firstWhere('id', $m->bodega_id))->nombre;
+            $bodegaNombre = optional($this->bodegas->firstWhere('id', $m['bodega_id']))->nombre;
             $docText = trim(
-                ($m->tipoDocumento?->codigo ?? $m->tipoDocumento?->nombre ?? '') . ' ' .
-                ($m->doc_id ? '#'.$m->doc_id : '')
+                ($m['tipo_documento']?->codigo ?? $m['tipo_documento']?->nombre ?? '') . ' ' .
+                ($m['doc_id'] ? '#'.$m['doc_id'] : '')
             );
-            if ($m->ref) $docText .= ' ('.$m->ref.')';
+            if ($m['ref']) $docText .= ' ('.$m['ref'].')';
             $docText = $docText ?: '—';
 
-            // Buscar datos de costo histórico
-            $costoHistorico = null;
-            if ($this->verCostosHistoricos && $costosHistoricos->isNotEmpty()) {
-                $key = $m->tipo_documento_id . '_' . $m->doc_id;
-                $costoHistorico = $costosHistoricos->get($key);
-            }
-
-            return [
-                'id'         => $m->id,
-                'fecha'      => ($m->fecha instanceof Carbon ? $m->fecha->format('Y-m-d H:i') : (string)$m->fecha),
+            $item = [
+                'id'         => $m['id'],
+                'fecha'      => ($m['fecha'] instanceof Carbon ? $m['fecha']->format('Y-m-d H:i') : (string)$m['fecha']),
                 'bodega'     => $bodegaNombre ?: '—',
                 'doc'        => $docText,
                 'tipo'       => $tipo,
                 'entrada'    => $tipo === 'ENTRADA' ? $c : null,
                 'salida'     => $tipo === 'SALIDA'  ? $c : null,
-                'costo_unit' => $tipo === 'ENTRADA'
-                                ? (float)($m->costo_unitario ?? 0)
-                                : ($cpu ?? 0.0),
+                'costo_unit' => $tipo === 'ENTRADA' ? $m['costo_unitario'] : ($cpu ?? 0.0),
                 'saldo_cant' => round($saldoCant, 6),
                 'saldo_val'  => round($saldoVal, 2),
                 'saldo_cpu'  => $cpuSaldo !== null ? round($cpuSaldo, 6) : null,
-                // Datos adicionales de costo histórico
-                'costo_historico' => $costoHistorico ? [
-                    'metodo_costeo' => $costoHistorico->metodo_costeo,
-                    'costo_prom_anterior' => $costoHistorico->costo_prom_anterior,
-                    'costo_prom_nuevo' => $costoHistorico->costo_prom_nuevo,
-                    'ultimo_costo_anterior' => $costoHistorico->ultimo_costo_anterior,
-                    'ultimo_costo_nuevo' => $costoHistorico->ultimo_costo_nuevo,
-                    'tipo_evento' => $costoHistorico->tipo_evento,
-                    'valor_mov' => $costoHistorico->valor_mov,
-                    'costo_unit_mov' => $costoHistorico->costo_unit_mov,
-                ] : null,
+                'fuente'     => $m['fuente'],
             ];
+
+            // Agregar datos de costos si vienen de ProductoCostoMovimiento
+            if ($m['fuente'] === 'costos') {
+                $item['costo_historico'] = [
+                    'metodo_costeo' => $m['metodo_costeo'] ?? null,
+                    'costo_prom_anterior' => $m['costo_prom_anterior'] ?? null,
+                    'costo_prom_nuevo' => $m['costo_prom_nuevo'] ?? null,
+                    'ultimo_costo_anterior' => $m['ultimo_costo_anterior'] ?? null,
+                    'ultimo_costo_nuevo' => $m['ultimo_costo_nuevo'] ?? null,
+                    'tipo_evento' => $m['tipo_evento'] ?? null,
+                    'valor_mov' => $m['valor_mov'] ?? null,
+                ];
+            } else {
+                $item['costo_historico'] = null;
+            }
+
+            return $item;
         });
 
-        // Saldos finales (solo si es la última página)
-        if ($paginator->currentPage() === $paginator->lastPage() && $items->count()) {
+        // 7. Saldos finales
+        if ($currentPage === (int)ceil($total / $this->perPage) && $items->count()) {
             $last = $items->last();
             $this->saldoFinalCant = (float) $last['saldo_cant'];
             $this->saldoFinalVal  = (float) $last['saldo_val'];
-        } else {
-            $this->saldoFinalCant = 0.0;
-            $this->saldoFinalVal  = 0.0;
         }
 
         return new LengthAwarePaginator(
             $items,
-            $paginator->total(),
-            $paginator->perPage(),
-            $paginator->currentPage(),
+            $total,
+            $this->perPage,
+            $currentPage,
             ['path' => request()->url(), 'query' => request()->query()]
         );
     }

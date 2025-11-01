@@ -77,18 +77,16 @@ class KardexProducto extends Component
     $this->saldoFinalCant   = 0.0;
     $this->saldoFinalVal    = 0.0;
 
-    // Sanitiza perPage por si viene raro desde la UI
+    // Sanitiza perPage
     $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
 
     // ---------------------------------------------------------
     // 1) Obtener movimientos paginados (o paginator vacío)
     // ---------------------------------------------------------
     if ($this->producto_id) {
-        // Tus métodos existentes
         $this->calcularSaldoInicial();
-        $filas = $this->kardexEnRangoPaginado(); // Debe devolver LengthAwarePaginator
+        $filas = $this->kardexEnRangoPaginado();
     } else {
-        // Paginador vacío para mantener {{ $filas->links() }} y estructura
         $filas = new LengthAwarePaginator(
             collect(),
             0,
@@ -99,37 +97,30 @@ class KardexProducto extends Component
     }
 
     // ---------------------------------------------------------
-    // 2) Construir grupos por documento para el acordeón
+    // 2) Construir grupos por documento (para el acordeón)
     // ---------------------------------------------------------
-    // Asegúrate que cada ítem del paginator sea un array (o conviértelo).
     $items = collect($filas->items() ?? [])
         ->map(function ($r) {
-            // Normaliza a array si viene como objeto
-            return is_array($r) ? $r : (is_object($r) ? (array)$r : []);
+            return is_array($r) ? $r : (array)$r;
         });
 
     $grupos = $items
-        ->groupBy(function (array $r) {
-            // Intento 1: doc_tipo + doc_id (lo ideal para un ID estable)
+        ->groupBy(function ($r) {
             $docTipo = trim((string)($r['doc_tipo'] ?? ''));
-            $docId   = trim((string)($r['doc_id']   ?? ''));
+            $docId   = trim((string)($r['doc_id'] ?? ''));
             $uid     = trim($docTipo . '-' . $docId, '- ');
-
-            if ($uid !== '') {
-                return $uid;
-            }
-
-            // Intento 2: hash estable basado en doc + fecha (fallback)
-            $doc   = (string)($r['doc']   ?? 'Documento');
-            $fecha = (string)($r['fecha'] ?? '—');
-            return md5($doc . '|' . $fecha);
+            return $uid !== ''
+                ? $uid
+                : md5(($r['doc'] ?? 'Documento') . '|' . ($r['fecha'] ?? ''));
         })
-        ->map(function (Collection $rows) {
+        ->map(function ($rows) {
+            // ✅ Elimina tipado estricto de Eloquent\Collection
+            $rows = collect($rows); // asegura que sea una Support\Collection
+
             $h = (array)$rows->first();
 
-            // Recalcular uid para tenerlo disponible en la vista
             $docTipo = trim((string)($h['doc_tipo'] ?? ''));
-            $docId   = trim((string)($h['doc_id']   ?? ''));
+            $docId   = trim((string)($h['doc_id'] ?? ''));
             $uid     = trim($docTipo . '-' . $docId, '- ');
             if ($uid === '') {
                 $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
@@ -140,29 +131,21 @@ class KardexProducto extends Component
                 'doc'           => (string)($h['doc']   ?? 'Documento'),
                 'fecha'         => (string)($h['fecha'] ?? '—'),
                 'bodega'        => (string)($h['bodega'] ?? '—'),
-                'entrada_total' => (float)$rows->sum(fn($x) => (float) ((array)$x)['entrada'] ?? 0),
-                'salida_total'  => (float)$rows->sum(fn($x) => (float) ((array)$x)['salida']  ?? 0),
-                'rows'          => $rows->values()->map(fn($x) => (array)$x), // líneas del documento
+                'entrada_total' => (float)$rows->sum(fn($x) => (float)($x['entrada'] ?? 0)),
+                'salida_total'  => (float)$rows->sum(fn($x) => (float)($x['salida']  ?? 0)),
+                'rows'          => $rows->values()->map(fn($x) => (array)$x),
             ];
         })
         ->values();
 
     // ---------------------------------------------------------
-    // 3) (Opcional) Actualiza saldos finales si procede aquí
-    // ---------------------------------------------------------
-    // Si tus métodos ya devuelven estos valores, deja esto comentado.
-    // $this->saldoFinalCant = ...;
-    // $this->saldoFinalVal  = ...;
-
-    // ---------------------------------------------------------
-    // 4) Retornar a la vista
+    // 3) Retornar vista
     // ---------------------------------------------------------
     return view('livewire.productos.kardex-producto', [
-        'filas'  => $filas,   // paginator original (para links)
-        'grupos' => $grupos,  // grupos por documento (para el acordeón)
+        'filas'  => $filas,
+        'grupos' => $grupos,
     ]);
 }
-
     /* =======================================================
      * CÁLCULOS
      * ======================================================= */

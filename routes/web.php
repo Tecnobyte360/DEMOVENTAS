@@ -45,6 +45,7 @@ use App\Livewire\MediosPagos\MediosPagos;
 use App\Livewire\NormasReparto\NormasReparto;
 use App\Livewire\NotasCredito\NotaCreditoCompraForm as NotasCreditoNotaCreditoCompraForm;
 use App\Livewire\OperacionesStock\OperacionesStock;
+use App\Livewire\Productos\KardexProducto;
 use App\Livewire\Productos\Productos;
 use App\Livewire\RutaDisponiblesConductor\RutasDisponiblesConductor;
 use App\Livewire\Usuarios\Usuarios;
@@ -245,7 +246,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
 
     //Inventario
-   Route::get('Entradas', Indexentradas::class)->name('Entradas');
+    Route::get('Entradas', Indexentradas::class)->name('Entradas');
     Route::get('/EntradasMercancia', EntradasMercancia::class)->name('entradas.mercancia');
     Route::get('/Operaciones-stock', OperacionesStock::class)->name('Operaciones-stock');
     Route::get('/Maestro-Rutas', MaestroRutas::class)->name('Maestro-Rutas');
@@ -263,11 +264,11 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/Cotizaciones', Cotizacion::class)->name('Cotizaciones');
     Route::get('/Facturacion', Index::class)->name('Facturacion');
     Route::get('/Notas-credito-clientes', NotaCreditoForm::class)->name('notascreditoclientes');
-  Route::get('/Notas-credito-compra', NotasCreditoNotaCreditoCompraForm::class)->name('Notascreditocompra');
+    Route::get('/Notas-credito-compra', NotasCreditoNotaCreditoCompraForm::class)->name('Notascreditocompra');
+   Route::get('/Kardex', KardexProducto::class)->name('cardexinventario');
 
 
 
-    
     Route::get('/SeriesDocumentos', Serie::class)->name('SeriesDocumentos');
     Route::get('/facturas/{factura}/ticket', [FacturaTicketController::class, 'show'])
         ->whereNumber('factura')
@@ -275,10 +276,10 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::post('/facturas/{factura}/print-pos', [FacturaPosPrintController::class, 'print'])
         ->name('facturas.print-pos');
     Route::get('/normas-reparto', NormasReparto::class)->name('normas-reparto.index');
-    
+
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
-    Route::get('Factura-compras',IndexFacturas::class)->name('Factura-compras');
+    Route::get('Factura-compras', IndexFacturas::class)->name('Factura-compras');
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
     // Route::get('/catalogos/ciiu', CiiuActividades::class)
     //     ->name('catalogos.ciiu');
@@ -298,6 +299,6 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('/medios-pagos', MediosPagos::class)
         ->name('Mediospagos');
-       Route::get('/Pagos-recibidos', Listapagosrecibidos::class)
-        ->name('PagosRecibidos');  
+    Route::get('/Pagos-recibidos', Listapagosrecibidos::class)
+        ->name('PagosRecibidos');
 });

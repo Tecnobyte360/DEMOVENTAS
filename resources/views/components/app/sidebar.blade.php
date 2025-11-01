@@ -255,6 +255,13 @@
                                   <span class="text-sm font-medium ml-4">productos inventariables</span>
                                 </a>
                               </li>
+                                <li class="mb-1 last:mb-0">
+                                <a class="block transition truncate @if(Route::is('cardexinventario')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('cardexinventario') }}">
+                                  <span class="text-sm font-medium ml-4">Kardex</span>
+                                </a>
+                              </li>
+
+                              
                             </ul>
                         </div>
                     </li>

@@ -17,6 +17,9 @@ class KardexProducto extends Component
 {
     use WithPagination;
 
+    /** Si usas Tailwind para los links() */
+    protected string $paginationTheme = 'tailwind';
+
     /** ==== Filtros ==== */
     public ?int $producto_id = null;
     public ?int $bodega_id   = null;
@@ -89,7 +92,7 @@ class KardexProducto extends Component
     {
         $table = (new Movimiento)->getTable(); // normalmente 'movimientos'
 
-        $pick = function(array $cands): ?string use ($table) {
+        $pick = function(array $cands) use ($table): ?string {
             foreach ($cands as $c) {
                 if (Schema::hasColumn($table, $c)) return $c;
             }
@@ -113,7 +116,7 @@ class KardexProducto extends Component
         ];
 
         // Mínimos indispensables
-        if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at'; // fallback seguro
+        if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at';
         if (!$this->cols['producto']) $this->cols['producto'] = 'producto_id';
     }
 
@@ -140,10 +143,7 @@ class KardexProducto extends Component
             $this->cols['total'],
             $this->cols['cu'],
         ]);
-        if (empty($select)) {
-            // último recurso: al menos id para iterar sin reventar
-            $select = ['id'];
-        }
+        if (empty($select)) $select = ['id']; // último recurso
 
         $movs = $q->get($select);
 
@@ -151,12 +151,11 @@ class KardexProducto extends Component
         $val  = 0.0;
 
         foreach ($movs as $m) {
-            [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
+            [$tipo, $c, $t] = $this->extractMovimiento($m);
 
             if ($tipo === 'ENTRADA') {
                 $cant += $c; $val += $t;
             } else { // SALIDA
-                // descuenta a costo promedio vigente
                 $cpu = $cant > 0 ? ($val / max($cant, 1e-9)) : 0.0;
                 $cant -= $c; $val -= $c * $cpu;
                 if ($cant < 1e-9) { $cant = 0.0; $val = 0.0; }
@@ -190,7 +189,7 @@ class KardexProducto extends Component
 
         $q->orderBy($this->cols['fecha'])->orderBy('id');
 
-        // Selecciona solamente columnas existentes
+        // Selección segura
         $select = array_values(array_filter([
             'id',
             $this->cols['fecha'],
@@ -207,7 +206,7 @@ class KardexProducto extends Component
         ]));
         $paginator = $q->paginate($this->perPage, $select);
 
-        // IDs completos para replay previo (CPU correcto en página N)
+        // Para CPU correcto en páginas > 1: “replay” previo
         $idsOrdenados  = (clone $q)->pluck('id');
         $firstModel    = $paginator->items()[0] ?? null;
         $firstIdPagina = $firstModel->id ?? null;
@@ -232,7 +231,7 @@ class KardexProducto extends Component
                 ->get($prevSelect);
 
             foreach ($prevMovs as $m) {
-                [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
+                [$tipo, $c, $t] = $this->extractMovimiento($m);
 
                 if ($tipo === 'ENTRADA') {
                     $saldoCant += $c; $saldoVal += $t;
@@ -256,10 +255,10 @@ class KardexProducto extends Component
                 $saldoCant += $c;
                 $saldoVal  += $t;
             } else {
-                $salida     = $c;
-                $valorSalida= $c * $cpu;
-                $saldoCant -= $c;
-                $saldoVal  -= $valorSalida;
+                $salida      = $c;
+                $valorSalida = $c * $cpu;
+                $saldoCant  -= $c;
+                $saldoVal   -= $valorSalida;
                 if ($saldoCant < 1e-9) { $saldoCant = 0.0; $saldoVal = 0.0; }
             }
 
@@ -279,9 +278,16 @@ class KardexProducto extends Component
             }
             $doc = trim($doc) ?: '—';
 
+            $fechaStr = $m->{$this->cols['fecha']};
+            if ($fechaStr instanceof \DateTimeInterface) {
+                $fechaStr = $fechaStr->format('Y-m-d H:i');
+            } else {
+                $fechaStr = (string) $fechaStr;
+            }
+
             return [
                 'id'         => $m->id,
-                'fecha'      => optional($m->{$this->cols['fecha']})->format('Y-m-d H:i') ?? (string) $m->{$this->cols['fecha']},
+                'fecha'      => $fechaStr,
                 'bodega'     => $bodegaNombre,
                 'tipo'       => $tipo,               // ENTRADA | SALIDA
                 'doc'        => $doc,

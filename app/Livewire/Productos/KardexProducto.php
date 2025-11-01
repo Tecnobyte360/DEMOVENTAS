@@ -88,37 +88,51 @@ class KardexProducto extends Component
     /* =======================================================
      * RESOLUCIÓN DE COLUMNAS (dinámica)
      * ======================================================= */
-    private function resolveColumns(): void
-    {
-        $table = (new Movimiento)->getTable(); // normalmente 'movimientos'
+   private function resolveColumns(): void
+{
+    $table = (new Movimiento)->getTable();
 
-        $pick = function(array $cands) use ($table): ?string {
-            foreach ($cands as $c) {
-                if (Schema::hasColumn($table, $c)) return $c;
-            }
-            return null;
-        };
+    // OJO: el "use ($table)" va ANTES del tipo de retorno
+    $pick = function (array $cands) use ($table): ?string {
+        foreach ($cands as $c) {
+            if (Schema::hasColumn($table, $c)) return $c;
+        }
+        return null;
+    };
 
-        $this->cols = [
-            'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
-            'producto'  => $pick(['producto_id','item_id']),
-            'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id']),
-            // cantidad (1 campo) o entrada/salida (2 campos)
-            'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
-            'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
-            'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
-            'signo'     => $pick(['signo','direction']), // 1 / -1
-            'total'     => $pick(['total','valor_total','monto','importe_total']),
-            'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
-            'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
-            'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
-            'ref'       => $pick(['ref','referencia','observacion','detalle']),
-        ];
+    // Asegura TODAS las claves (aunque sea null)
+    $this->cols = array_merge([
+        'fecha'    => null,
+        'producto' => null,
+        'bodega'   => null,
+        'cantidad' => null,
+        'entrada'  => null,
+        'salida'   => null,
+        'signo'    => null,
+        'total'    => null,
+        'cu'       => null,
+        'doc_tipo' => null,
+        'doc_id'   => null,
+        'ref'      => null,
+    ], [
+        'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
+        'producto'  => $pick(['producto_id','item_id']),
+        'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id']),
+        'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
+        'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
+        'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
+        'signo'     => $pick(['signo','direction']),
+        'total'     => $pick(['total','valor_total','monto','importe_total']),
+        'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
+        'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
+        'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
+        'ref'       => $pick(['ref','referencia','observacion','detalle']),
+    ]);
 
-        // Mínimos indispensables
-        if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at';
-        if (!$this->cols['producto']) $this->cols['producto'] = 'producto_id';
-    }
+    // Fallbacks obligatorios
+    if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at';
+    if (!$this->cols['producto']) $this->cols['producto'] = 'producto_id';
+}
 
     /* =======================================================
      * CÁLCULOS
@@ -364,4 +378,19 @@ class KardexProducto extends Component
 
         return [$tipo, $c, $t, $cu];
     }
+
+ 
+
+/** Getter seguro para columnas (con fallback adicional opcional) */
+private function col(string $k, ?string $fallback = null): string
+{
+    if (!array_key_exists($k, $this->cols) || !$this->cols[$k]) {
+        return $fallback ?? match ($k) {
+            'fecha'    => 'created_at',
+            'producto' => 'producto_id',
+            default    => $k, // última salida: devuelve lo pedido
+        };
+    }
+    return $this->cols[$k];
+}
 }

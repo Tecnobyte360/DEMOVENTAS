@@ -80,7 +80,7 @@
     <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div class="rounded-xl p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
         <p class="text-sm text-gray-500 dark:text-gray-300">Saldo inicial (cant)</p>
-        <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ number_format($saldoInicialCant, 6) }}</p>
+        <p class="text-2xl font-semibold text-gray-900 dark:text-white">{{ number_format($saldoInicialCant, 2) }}</p>
       </div>
       <div class="rounded-xl p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
         <p class="text-sm text-gray-500 dark:text-gray-300">Saldo inicial (valor)</p>
@@ -89,7 +89,7 @@
       <div class="rounded-xl p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
         <p class="text-sm text-gray-500 dark:text-gray-300">Saldo final (cant)</p>
         <p class="text-2xl font-semibold text-gray-900 dark:text-white">
-          {{ $saldoFinalCant > 0 ? number_format($saldoFinalCant, 6) : '—' }}
+          {{ $saldoFinalCant > 0 ? number_format($saldoFinalCant, 2) : '—' }}
         </p>
       </div>
       <div class="rounded-xl p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
@@ -165,11 +165,11 @@
                 <td class="px-3 py-2 text-right">—</td>
                 <td class="px-3 py-2 text-right">
                   @php $cpuIni = $saldoInicialCant>0 ? $saldoInicialVal/max($saldoInicialCant,1e-9) : null; @endphp
-                  {{ $cpuIni !== null ? number_format($cpuIni, 6) : '—' }}
+                  {{ $cpuIni !== null ? number_format($cpuIni, 2) : '—' }}
                 </td>
-                <td class="px-3 py-2 text-right">{{ number_format($saldoInicialCant, 6) }}</td>
+                <td class="px-3 py-2 text-right">{{ number_format($saldoInicialCant, 2) }}</td>
                 <td class="px-3 py-2 text-right">{{ number_format($saldoInicialVal, 2) }}</td>
-                <td class="px-3 py-2 text-right">{{ $cpuIni !== null ? number_format($cpuIni, 6) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $cpuIni !== null ? number_format($cpuIni, 2) : '—' }}</td>
                 @if(in_array($fuenteDatos, ['costos', 'ambas']))
                   <td colspan="6" class="px-3 py-2 text-center text-gray-400 italic bg-gray-100 dark:bg-gray-800">—</td>
                 @endif
@@ -206,12 +206,12 @@
                     {{ $r['tipo'] }}
                   </span>
                 </td>
-                <td class="px-3 py-2 text-right">{{ $r['entrada'] !== null && $r['entrada'] > 0 ? number_format($r['entrada'], 6) : '—' }}</td>
-                <td class="px-3 py-2 text-right">{{ $r['salida'] !== null && $r['salida'] > 0 ? number_format($r['salida'], 6) : '—' }}</td>
-                <td class="px-3 py-2 text-right">{{ $r['costo_unit'] !== null && $r['costo_unit'] > 0 ? number_format($r['costo_unit'], 6) : '—' }}</td>
-                <td class="px-3 py-2 text-right">{{ $r['saldo_cant'] > 0 ? number_format($r['saldo_cant'], 6) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $r['entrada'] !== null && $r['entrada'] > 0 ? number_format($r['entrada'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $r['salida'] !== null && $r['salida'] > 0 ? number_format($r['salida'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $r['costo_unit'] !== null && $r['costo_unit'] > 0 ? number_format($r['costo_unit'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $r['saldo_cant'] > 0 ? number_format($r['saldo_cant'], 2) : '—' }}</td>
                 <td class="px-3 py-2 text-right">{{ abs($r['saldo_val']) > 0.01 ? number_format($r['saldo_val'], 2) : '—' }}</td>
-                <td class="px-3 py-2 text-right">{{ $r['saldo_cpu'] !== null && $r['saldo_cpu'] > 0 ? number_format($r['saldo_cpu'], 6) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $r['saldo_cpu'] !== null && $r['saldo_cpu'] > 0 ? number_format($r['saldo_cpu'], 2) : '—' }}</td>
                 
                 @if(in_array($fuenteDatos, ['costos', 'ambas']))
                   @if($r['costo_historico'])
@@ -221,16 +221,16 @@
                       </span>
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800">
-                      {{ $r['costo_historico']['costo_prom_anterior'] !== null && (float)$r['costo_historico']['costo_prom_anterior'] > 0 ? number_format((float)$r['costo_historico']['costo_prom_anterior'], 6) : '—' }}
+                      {{ $r['costo_historico']['costo_prom_anterior'] !== null && (float)$r['costo_historico']['costo_prom_anterior'] > 0 ? number_format((float)$r['costo_historico']['costo_prom_anterior'], 2) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800 font-semibold">
-                      {{ $r['costo_historico']['costo_prom_nuevo'] !== null && (float)$r['costo_historico']['costo_prom_nuevo'] > 0 ? number_format((float)$r['costo_historico']['costo_prom_nuevo'], 6) : '—' }}
+                      {{ $r['costo_historico']['costo_prom_nuevo'] !== null && (float)$r['costo_historico']['costo_prom_nuevo'] > 0 ? number_format((float)$r['costo_historico']['costo_prom_nuevo'], 2) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800">
-                      {{ $r['costo_historico']['ultimo_costo_anterior'] !== null && (float)$r['costo_historico']['ultimo_costo_anterior'] > 0 ? number_format((float)$r['costo_historico']['ultimo_costo_anterior'], 6) : '—' }}
+                      {{ $r['costo_historico']['ultimo_costo_anterior'] !== null && (float)$r['costo_historico']['ultimo_costo_anterior'] > 0 ? number_format((float)$r['costo_historico']['ultimo_costo_anterior'], 2) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800 font-semibold">
-                      {{ $r['costo_historico']['ultimo_costo_nuevo'] !== null && (float)$r['costo_historico']['ultimo_costo_nuevo'] > 0 ? number_format((float)$r['costo_historico']['ultimo_costo_nuevo'], 6) : '—' }}
+                      {{ $r['costo_historico']['ultimo_costo_nuevo'] !== null && (float)$r['costo_historico']['ultimo_costo_nuevo'] > 0 ? number_format((float)$r['costo_historico']['ultimo_costo_nuevo'], 2) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-center bg-blue-50 dark:bg-gray-800">
                       <span class="text-xs text-gray-600 dark:text-gray-300">{{ $r['costo_historico']['tipo_evento'] ?? '—' }}</span>

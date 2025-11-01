@@ -69,40 +69,24 @@ class KardexProducto extends Component
 
    public function render()
 {
-    // ---------------------------------------------------------
-    // 0) Reset de saldos
-    // ---------------------------------------------------------
-    $this->saldoInicialCant = 0.0;
-    $this->saldoInicialVal  = 0.0;
-    $this->saldoFinalCant   = 0.0;
-    $this->saldoFinalVal    = 0.0;
+    $this->saldoInicialCant = $this->saldoInicialVal = 0.0;
+    $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
 
-    // Sanitiza perPage
-    $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
+    $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true)
+        ? (int)$this->perPage : 10;
 
-    // ---------------------------------------------------------
-    // 1) Obtener movimientos paginados (o paginator vacío)
-    // ---------------------------------------------------------
     if ($this->producto_id) {
         $this->calcularSaldoInicial();
         $filas = $this->kardexEnRangoPaginado();
     } else {
-        $filas = new LengthAwarePaginator(
-            collect(),
-            0,
-            $this->perPage,
-            1,
+        $filas = new \Illuminate\Pagination\LengthAwarePaginator(
+            collect(), 0, $this->perPage, 1,
             ['path' => request()->url(), 'query' => request()->query()]
         );
     }
 
-    // ---------------------------------------------------------
-    // 2) Construir grupos por documento (para el acordeón)
-    // ---------------------------------------------------------
     $items = collect($filas->items() ?? [])
-        ->map(function ($r) {
-            return is_array($r) ? $r : (array)$r;
-        });
+        ->map(fn($r) => is_array($r) ? $r : (array)$r);
 
     $grupos = $items
         ->groupBy(function ($r) {
@@ -114,16 +98,11 @@ class KardexProducto extends Component
                 : md5(($r['doc'] ?? 'Documento') . '|' . ($r['fecha'] ?? ''));
         })
         ->map(function ($rows) {
-            // ✅ Elimina tipado estricto de Eloquent\Collection
-            $rows = collect($rows); // asegura que sea una Support\Collection
-
+            $rows = collect($rows);
             $h = (array)$rows->first();
-
-            $docTipo = trim((string)($h['doc_tipo'] ?? ''));
-            $docId   = trim((string)($h['doc_id'] ?? ''));
-            $uid     = trim($docTipo . '-' . $docId, '- ');
+            $uid = trim(($h['doc_tipo'] ?? '') . '-' . ($h['doc_id'] ?? ''), '- ');
             if ($uid === '') {
-                $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
+                $uid = md5(($h['doc'] ?? 'Documento') . '|' . ($h['fecha'] ?? '—'));
             }
 
             return [
@@ -138,14 +117,12 @@ class KardexProducto extends Component
         })
         ->values();
 
-    // ---------------------------------------------------------
-    // 3) Retornar vista
-    // ---------------------------------------------------------
     return view('livewire.productos.kardex-producto', [
         'filas'  => $filas,
         'grupos' => $grupos,
     ]);
 }
+
     /* =======================================================
      * CÁLCULOS
      * ======================================================= */

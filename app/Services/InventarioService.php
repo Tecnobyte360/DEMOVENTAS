@@ -45,7 +45,11 @@ class InventarioService
             }
         }
     }
-
+  public static function aumentarPorFacturaCompra(Factura $factura): void
+    {
+        // Si ya tienes la lógica en aplicarCompraYCosteo(), reúsala:
+        static::aplicarCompraYCosteo($factura);
+    }
     /* =========================================================
      * DESCUENTO POR FACTURA (VENTA)
      * ========================================================= */

@@ -41,8 +41,8 @@ class KardexProducto extends Component
     public $productos;
     public $bodegas;
 
-    /** ==== Estado acordeones (por uid de doc) ==== */
-    public array $openGroups = [];
+    /** ==== Estado del acordeón ==== */
+    public array $openGroups = []; // uid => bool
 
     protected $queryString = [
         'producto_id' => ['except' => null],
@@ -67,56 +67,70 @@ class KardexProducto extends Component
     public function updating($prop): void
     {
         $this->resetPage();
+        // al cambiar filtros, cerramos acordeones
+        if (in_array($prop, ['producto_id','bodega_id','desde','hasta','buscarDoc','fuenteDatos'])) {
+            $this->openGroups = [];
+        }
     }
 
-    /* ===========================
-     *  Acordeones (Livewire)
-     * =========================== */
+    /* =======================
+     * Métodos acordeón
+     * ======================= */
     public function toggleGrupo(string $uid): void
     {
         $this->openGroups[$uid] = !($this->openGroups[$uid] ?? false);
     }
 
-    public function isOpen(string $uid): bool
+    public function expandirTodo(array $uids = []): void
     {
-        return (bool)($this->openGroups[$uid] ?? false);
+        foreach ($uids as $u) {
+            $this->openGroups[$u] = true;
+        }
     }
 
-    /* ===========================
-     *  Render
-     * =========================== */
+    public function contraerTodo(): void
+    {
+        $this->openGroups = [];
+    }
+
     public function render()
     {
-        // Reset saldos
+        // 0) Reset de saldos
         $this->saldoInicialCant = 0.0;
         $this->saldoInicialVal  = 0.0;
         $this->saldoFinalCant   = 0.0;
         $this->saldoFinalVal    = 0.0;
 
         // Sanitiza perPage
-        $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 25;
+        $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
 
-        // Movimientos
+        // 1) Movimientos (o paginator vacío)
         if ($this->producto_id) {
             $this->calcularSaldoInicial();
             $filas = $this->kardexEnRangoPaginado();
         } else {
             $filas = new LengthAwarePaginator(
-                collect(), 0, $this->perPage, 1,
+                collect(),
+                0,
+                $this->perPage,
+                1,
                 ['path' => request()->url(), 'query' => request()->query()]
             );
         }
 
-        // Agrupar por documento para el acordeón
-        $items = collect($filas->items() ?? [])->map(fn($r) => (array)$r);
+        // 2) Grupos por documento (para acordeón)
+        $items = collect($filas->items() ?? [])
+            ->map(fn($r) => is_array($r) ? $r : (array)$r);
 
         $grupos = $items
             ->groupBy(function ($r) {
-                // uid estable por doc_tipo + doc_id; fallback por hash de doc+fecha
+                // Usamos doc_tipo + doc_id si existen; si no, hash estable por doc+fecha
                 $docTipo = trim((string)($r['doc_tipo'] ?? ''));
                 $docId   = trim((string)($r['doc_id'] ?? ''));
-                $uid     = trim($docTipo.'-'.$docId, '- ');
-                return $uid !== '' ? $uid : md5(($r['doc'] ?? 'Documento').'|'.($r['fecha'] ?? ''));
+                $uid     = trim($docTipo . '-' . $docId, '- ');
+                return $uid !== ''
+                    ? $uid
+                    : md5(($r['doc'] ?? 'Documento') . '|' . ($r['fecha'] ?? ''));
             })
             ->map(function ($rows) {
                 $rows = collect($rows);
@@ -124,32 +138,45 @@ class KardexProducto extends Component
 
                 $docTipo = trim((string)($h['doc_tipo'] ?? ''));
                 $docId   = trim((string)($h['doc_id'] ?? ''));
-                $uid     = trim($docTipo.'-'.$docId, '- ');
+                $uid     = trim($docTipo . '-' . $docId, '- ');
                 if ($uid === '') {
-                    $uid = md5(((string)($h['doc'] ?? 'Documento')).'|'.((string)($h['fecha'] ?? '—')));
+                    $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
                 }
+
+                // Totales y saldos al cierre del documento (para mostrar en la cabecera RESUMEN)
+                $entradaTotal = (float)$rows->sum(fn($x) => (float)($x['entrada'] ?? 0));
+                $salidaTotal  = (float)$rows->sum(fn($x) => (float)($x['salida']  ?? 0));
+
+                $ultimo = (array) $rows->last();
+                $saldoCantGrupo = (float)($ultimo['saldo_cant'] ?? 0);
+                $saldoValGrupo  = (float)($ultimo['saldo_val']  ?? 0);
+                $cpuGrupo       = $saldoCantGrupo > 0 ? ($saldoValGrupo / max($saldoCantGrupo, 1e-9)) : null;
 
                 return [
                     'uid'           => $uid,
                     'doc'           => (string)($h['doc']   ?? 'Documento'),
                     'fecha'         => (string)($h['fecha'] ?? '—'),
                     'bodega'        => (string)($h['bodega'] ?? '—'),
-                    'entrada_total' => (float)$rows->sum(fn($x) => (float)($x['entrada'] ?? 0)),
-                    'salida_total'  => (float)$rows->sum(fn($x) => (float)($x['salida']  ?? 0)),
+                    'entrada_total' => $entradaTotal,
+                    'salida_total'  => $salidaTotal,
+                    'saldo_cant'    => $saldoCantGrupo,
+                    'saldo_val'     => $saldoValGrupo,
+                    'saldo_cpu'     => $cpuGrupo,
                     'rows'          => $rows->values()->map(fn($x) => (array)$x),
                 ];
             })
             ->values();
 
+        // 3) Vista
         return view('livewire.productos.kardex-producto', [
             'filas'  => $filas,
             'grupos' => $grupos,
         ]);
     }
 
-    /* ===========================
-     *  Cálculos
-     * =========================== */
+    /* =======================================================
+     * CÁLCULOS
+     * ======================================================= */
 
     /** Suma entradas/salidas antes del rango (costo promedio móvil). */
     private function calcularSaldoInicial(): void

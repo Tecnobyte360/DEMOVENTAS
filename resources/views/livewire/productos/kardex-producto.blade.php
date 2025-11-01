@@ -106,6 +106,20 @@
     <div class="flex items-center justify-between">
       <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Movimientos</h3>
       <div class="flex items-center gap-2">
+        {{-- Botones expandir / contraer --}}
+        @if($producto_id && isset($grupos) && count($grupos))
+          <button type="button"
+                  class="px-3 py-1.5 rounded-lg border text-sm bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700"
+                  wire:click="expandirTodo({{ $grupos->pluck('uid')->map(fn($u) => "'$u'")->join(',') }})">
+            Expandir todo
+          </button>
+          <button type="button"
+                  class="px-3 py-1.5 rounded-lg border text-sm bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700"
+                  wire:click="contraerTodo">
+            Contraer todo
+          </button>
+        @endif>
+
         <select wire:model.live="perPage" class="rounded-xl border bg-white dark:bg-gray-800 dark:text-white">
           @foreach([10,25,50,100] as $n)
             <option value="{{ $n }}">{{ $n }}/página</option>
@@ -141,7 +155,6 @@
         </thead>
 
         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-          {{-- Sin producto --}}
           @if(!$producto_id)
             <tr>
               <td colspan="{{ in_array($fuenteDatos, ['costos','ambas']) ? 17 : 11 }}"
@@ -179,49 +192,48 @@
               </tr>
             @endif
 
-            {{-- Acordeones por documento --}}
+            {{-- Acordeón por documento --}}
             @forelse($grupos as $g)
-              {{-- Cabecera del grupo --}}
+              {{-- Cabecera del grupo (RESUMEN) --}}
               <tr wire:click="toggleGrupo('{{ $g['uid'] }}')"
-                  class="cursor-pointer bg-violet-50/70 dark:bg-gray-800/40 hover:bg-violet-100 dark:hover:bg-gray-700 transition">
+                  class="cursor-pointer bg-gray-50/70 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-700/60">
                 <td class="px-3 py-2">
-                  <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-200 font-semibold">
+                  <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-200">
                     DOC
+                    <svg class="w-3 h-3 transition-transform {{ ($openGroups[$g['uid']] ?? false) ? 'rotate-90' : '' }}"
+                         viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M6.293 7.293a1 1 0 011.414 0L12 11.586l-4.293 4.293a1 1 0 01-1.414-1.414L9.586 12 6.293 8.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                    </svg>
                   </span>
                 </td>
-                <td class="px-3 py-2 font-medium">{{ $g['fecha'] }}</td>
+                <td class="px-3 py-2">{{ $g['fecha'] }}</td>
                 <td class="px-3 py-2">{{ $g['bodega'] }}</td>
-                <td class="px-3 py-2 font-semibold text-violet-700 dark:text-violet-300">{{ $g['doc'] }}</td>
-                <td class="px-3 py-2 text-center text-amber-600 font-semibold">RESUMEN</td>
+                <td class="px-3 py-2 font-medium">{{ $g['doc'] }}</td>
+                <td class="px-3 py-2 text-center">RESUMEN</td>
                 <td class="px-3 py-2 text-right">{{ $g['entrada_total'] > 0 ? number_format($g['entrada_total'], 2) : '—' }}</td>
                 <td class="px-3 py-2 text-right">{{ $g['salida_total']  > 0 ? number_format($g['salida_total'], 2)  : '—' }}</td>
                 <td class="px-3 py-2 text-right">—</td>
-                <td class="px-3 py-2 text-right">—</td>
-                <td class="px-3 py-2 text-right">—</td>
-                <td class="px-3 py-2 text-right">—</td>
+                {{-- Saldos al cierre del documento --}}
+                <td class="px-3 py-2 text-right">{{ $g['saldo_cant'] > 0 ? number_format($g['saldo_cant'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ abs($g['saldo_val']) > 0.01 ? number_format($g['saldo_val'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">
+                  {{ isset($g['saldo_cpu']) && $g['saldo_cpu']>0 ? number_format($g['saldo_cpu'], 2) : '—' }}
+                </td>
                 @if(in_array($fuenteDatos, ['costos','ambas']))
                   <td class="px-3 py-2 text-center bg-violet-700 text-white">—</td>
                   <td class="px-3 py-2 text-right bg-violet-700 text-white">—</td>
                   <td class="px-3 py-2 text-right bg-violet-700 text-white">—</td>
                   <td class="px-3 py-2 text-right bg-violet-700 text-white">—</td>
                   <td class="px-3 py-2 text-right bg-violet-700 text-white">—</td>
-                  <td class="px-3 py-2 text-center bg-violet-700 text-white">
-                    {{ $this->isOpen($g['uid']) ? '▲ Ocultar' : '▼ Mostrar' }}
-                  </td>
-                @else
-                  <td class="px-3 py-2 text-center" colspan="0">
-                    <span class="text-violet-700 dark:text-violet-300 text-xs">
-                      {{ $this->isOpen($g['uid']) ? '▲ Ocultar' : '▼ Mostrar' }}
-                    </span>
-                  </td>
+                  <td class="px-3 py-2 text-center bg-violet-700 text-white">—</td>
                 @endif
               </tr>
 
-              {{-- Detalle del grupo --}}
-              @if($this->isOpen($g['uid']))
+              {{-- Detalle del grupo (solo si está abierto) --}}
+              @if($openGroups[$g['uid']] ?? false)
                 @foreach($g['rows'] as $r)
                   <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50
-                      {{ ($r['fuente'] ?? 'kardex') === 'costos' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500' }}">
+                    {{ ($r['fuente'] ?? 'kardex') === 'costos' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500' }}">
                     <td class="px-3 py-2">
                       @if(($r['fuente'] ?? 'kardex') === 'kardex')
                         <span class="text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 font-medium">KARDEX</span>

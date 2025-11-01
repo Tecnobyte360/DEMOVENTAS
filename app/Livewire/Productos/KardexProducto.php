@@ -41,6 +41,9 @@ class KardexProducto extends Component
     public $productos;
     public $bodegas;
 
+    /** ==== Estado acordeones (por uid de doc) ==== */
+    public array $openGroups = [];
+
     protected $queryString = [
         'producto_id' => ['except' => null],
         'bodega_id'   => ['except' => null],
@@ -66,44 +69,54 @@ class KardexProducto extends Component
         $this->resetPage();
     }
 
+    /* ===========================
+     *  Acordeones (Livewire)
+     * =========================== */
+    public function toggleGrupo(string $uid): void
+    {
+        $this->openGroups[$uid] = !($this->openGroups[$uid] ?? false);
+    }
+
+    public function isOpen(string $uid): bool
+    {
+        return (bool)($this->openGroups[$uid] ?? false);
+    }
+
+    /* ===========================
+     *  Render
+     * =========================== */
     public function render()
     {
-        // 0) Reset de saldos
+        // Reset saldos
         $this->saldoInicialCant = 0.0;
         $this->saldoInicialVal  = 0.0;
         $this->saldoFinalCant   = 0.0;
         $this->saldoFinalVal    = 0.0;
 
         // Sanitiza perPage
-        $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
+        $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 25;
 
-        // 1) Movimientos (o paginator vacío)
+        // Movimientos
         if ($this->producto_id) {
             $this->calcularSaldoInicial();
             $filas = $this->kardexEnRangoPaginado();
         } else {
             $filas = new LengthAwarePaginator(
-                collect(),
-                0,
-                $this->perPage,
-                1,
+                collect(), 0, $this->perPage, 1,
                 ['path' => request()->url(), 'query' => request()->query()]
             );
         }
 
-        // 2) Grupos por documento (para acordeón)
-        $items = collect($filas->items() ?? [])
-            ->map(fn($r) => is_array($r) ? $r : (array)$r);
+        // Agrupar por documento para el acordeón
+        $items = collect($filas->items() ?? [])->map(fn($r) => (array)$r);
 
         $grupos = $items
             ->groupBy(function ($r) {
-                // Usamos doc_tipo + doc_id si existen; si no, hash estable por doc+fecha
+                // uid estable por doc_tipo + doc_id; fallback por hash de doc+fecha
                 $docTipo = trim((string)($r['doc_tipo'] ?? ''));
                 $docId   = trim((string)($r['doc_id'] ?? ''));
-                $uid     = trim($docTipo . '-' . $docId, '- ');
-                return $uid !== ''
-                    ? $uid
-                    : md5(($r['doc'] ?? 'Documento') . '|' . ($r['fecha'] ?? ''));
+                $uid     = trim($docTipo.'-'.$docId, '- ');
+                return $uid !== '' ? $uid : md5(($r['doc'] ?? 'Documento').'|'.($r['fecha'] ?? ''));
             })
             ->map(function ($rows) {
                 $rows = collect($rows);
@@ -111,9 +124,9 @@ class KardexProducto extends Component
 
                 $docTipo = trim((string)($h['doc_tipo'] ?? ''));
                 $docId   = trim((string)($h['doc_id'] ?? ''));
-                $uid     = trim($docTipo . '-' . $docId, '- ');
+                $uid     = trim($docTipo.'-'.$docId, '- ');
                 if ($uid === '') {
-                    $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
+                    $uid = md5(((string)($h['doc'] ?? 'Documento')).'|'.((string)($h['fecha'] ?? '—')));
                 }
 
                 return [
@@ -128,16 +141,15 @@ class KardexProducto extends Component
             })
             ->values();
 
-        // 3) Vista
         return view('livewire.productos.kardex-producto', [
             'filas'  => $filas,
             'grupos' => $grupos,
         ]);
     }
 
-    /* =======================================================
-     * CÁLCULOS
-     * ======================================================= */
+    /* ===========================
+     *  Cálculos
+     * =========================== */
 
     /** Suma entradas/salidas antes del rango (costo promedio móvil). */
     private function calcularSaldoInicial(): void
@@ -267,7 +279,7 @@ class KardexProducto extends Component
                         'tipo_documento_id' => $m->tipo_documento_id,
                         'doc_id' => $m->doc_id,
                         'ref' => $m->ref,
-                        'tipo_documento' => $m->tipoDocumento, // relación cargada
+                        'tipo_documento' => $m->tipoDocumento,
                         'entrada' => (float)($m->entrada ?? 0),
                         'salida' => (float)($m->salida ?? 0),
                         'cantidad' => (float)($m->cantidad ?? 0),
@@ -315,7 +327,7 @@ class KardexProducto extends Component
                         'tipo_documento_id' => $m->tipo_documento_id,
                         'doc_id' => $m->doc_id,
                         'ref' => $m->ref,
-                        'tipo_documento' => $m->tipoDocumento, // relación cargada
+                        'tipo_documento' => $m->tipoDocumento,
                         'entrada' => $cant > 0 ? $cant : 0,
                         'salida' => $cant < 0 ? abs($cant) : 0,
                         'cantidad' => $cant,
@@ -408,8 +420,8 @@ class KardexProducto extends Component
                 'fecha'      => ($m['fecha'] instanceof Carbon ? $m['fecha']->format('Y-m-d H:i') : (string)$m['fecha']),
                 'bodega'     => $bodegaNombre ?: '—',
                 'doc'        => $docText,
-                'doc_tipo'   => $tipoDocCodigoONombre,     // <-- para agrupar
-                'doc_id'     => $m['doc_id'],              // <-- para agrupar
+                'doc_tipo'   => $tipoDocCodigoONombre,     // para agrupar
+                'doc_id'     => $m['doc_id'],              // para agrupar
                 'tipo'       => $tipo,
                 'entrada'    => $tipo === 'ENTRADA' ? $c : null,
                 'salida'     => $tipo === 'SALIDA'  ? $c : null,
@@ -453,5 +465,3 @@ class KardexProducto extends Component
         );
     }
 }
-
-

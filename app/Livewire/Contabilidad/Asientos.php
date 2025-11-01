@@ -66,14 +66,21 @@ class Asientos extends Component
                 ->when($this->desde, fn($q) => $q->whereDate('fecha', '>=', $this->desde))
                 ->when($this->hasta, fn($q) => $q->whereDate('fecha', '<=', $this->hasta))
                 ->when($this->origen, fn($q) => $q->where('origen', $this->origen))
+                // Filtro por tercero (razón social o NIT)
+                ->when($this->tercero, function ($q) {
+                    $t = "%{$this->tercero}%";
+                    $q->whereHas('tercero', function ($qt) use ($t) {
+                        $qt->where('razon_social', 'like', $t)
+                           ->orWhere('nit', 'like', $t);
+                    });
+                })
 
-                // ====== ORDEN "LA ÚLTIMA PRIMERO" ======
-                // Para facturas: número de origen más alto primero
+                // ====== ORDEN "LA ÚLTIMA PRIMERO" POR FECHA ======
+                // Si el origen es factura, el mayor 'origen_id' primero (útil cuando varias comparten la misma fecha)
                 ->when($this->origen === 'factura', fn($q) => $q->orderByDesc('origen_id'))
-                // Recientes por fecha primero y, de empate, por id descendente
-                ->orderByDesc('fecha')
-                ->orderByDesc('id')
-                // =======================================
+                ->orderByDesc('fecha')  // ← FECHA más reciente primero
+                ->orderByDesc('id')     // ← desempate estable dentro del mismo día
+                // ==================================================
                 ->paginate($this->perPage);
 
             return view('livewire.contabilidad.asientos', compact('asientos'));

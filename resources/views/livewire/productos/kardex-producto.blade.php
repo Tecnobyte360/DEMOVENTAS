@@ -221,16 +221,16 @@
                       </span>
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800">
-                      {{ $r['costo_historico']['costo_prom_anterior'] ? number_format($r['costo_historico']['costo_prom_anterior'], 6) : '—' }}
+                      {{ $r['costo_historico']['costo_prom_anterior'] !== null ? number_format((float)$r['costo_historico']['costo_prom_anterior'], 6) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800 font-semibold">
-                      {{ $r['costo_historico']['costo_prom_nuevo'] ? number_format($r['costo_historico']['costo_prom_nuevo'], 6) : '—' }}
+                      {{ $r['costo_historico']['costo_prom_nuevo'] !== null ? number_format((float)$r['costo_historico']['costo_prom_nuevo'], 6) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800">
-                      {{ $r['costo_historico']['ultimo_costo_anterior'] ? number_format($r['costo_historico']['ultimo_costo_anterior'], 6) : '—' }}
+                      {{ $r['costo_historico']['ultimo_costo_anterior'] !== null ? number_format((float)$r['costo_historico']['ultimo_costo_anterior'], 6) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-right bg-blue-50 dark:bg-gray-800 font-semibold">
-                      {{ $r['costo_historico']['ultimo_costo_nuevo'] ? number_format($r['costo_historico']['ultimo_costo_nuevo'], 6) : '—' }}
+                      {{ $r['costo_historico']['ultimo_costo_nuevo'] !== null ? number_format((float)$r['costo_historico']['ultimo_costo_nuevo'], 6) : '—' }}
                     </td>
                     <td class="px-3 py-2 text-center bg-blue-50 dark:bg-gray-800">
                       <span class="text-xs text-gray-600 dark:text-gray-300">{{ $r['costo_historico']['tipo_evento'] ?? '—' }}</span>

@@ -453,3 +453,5 @@ class KardexProducto extends Component
         );
     }
 }
+
+

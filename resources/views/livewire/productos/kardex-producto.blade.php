@@ -7,9 +7,13 @@
 @once
   @push('scripts')
     <script>
-      // Alpine después de Livewire para evitar bloqueos de eventos
-      window.deferLoadingAlpine = (alpineInit) => {
-        document.addEventListener('livewire:init', alpineInit);
+      // Carga Alpine después de Livewire (v2) y con fallback si no existe el evento
+      window.deferLoadingAlpine = (init) => {
+        if (window.Livewire) {
+          document.addEventListener('livewire:init', init);
+        } else {
+          init();
+        }
       };
     </script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
@@ -30,7 +34,7 @@
         <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Producto</label>
         <select
           class="mt-1 w-full rounded-xl border bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600"
-          wire:model.live="producto_id"
+          wire:model="producto_id"
           wire:loading.attr="disabled"
         >
           <option value="">— Selecciona —</option>
@@ -44,7 +48,7 @@
         <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Bodega</label>
         <select
           class="mt-1 w-full rounded-xl border bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600"
-          wire:model.live="bodega_id"
+          wire:model="bodega_id"
           wire:loading.attr="disabled"
         >
           <option value="">— Todas —</option>
@@ -56,45 +60,53 @@
 
       <div>
         <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Desde</label>
-        <input type="date"
+        <input
+          type="date"
           class="mt-1 w-full rounded-xl border bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600"
-          wire:model.live="desde" wire:loading.attr="disabled">
+          wire:model="desde"
+          wire:loading.attr="disabled"
+        >
       </div>
 
       <div>
         <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Hasta</label>
-        <input type="date"
+        <input
+          type="date"
           class="mt-1 w-full rounded-xl border bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600"
-          wire:model.live="hasta" wire:loading.attr="disabled">
+          wire:model="hasta"
+          wire:loading.attr="disabled"
+        >
       </div>
 
       <div>
         <label class="text-sm font-medium text-gray-700 dark:text-gray-200">Buscar doc/ref</label>
-        <input type="text" placeholder="FAC-123, OC, REF…"
+        <input
+          type="text"
+          placeholder="FAC-123, OC, REF…"
           class="mt-1 w-full rounded-xl border bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600"
-          wire:model.debounce.500ms="buscarDoc">
+          wire:model.debounce.500ms="buscarDoc"
+        >
       </div>
     </div>
 
     <div class="mt-4 flex flex-wrap items-center gap-4">
       <div class="flex items-center gap-4">
         <label class="flex items-center gap-2">
-          <input type="radio" class="text-violet-600" value="kardex" wire:model.live="fuenteDatos">
+          <input type="radio" class="text-violet-600" value="kardex" wire:model="fuenteDatos">
           <span class="text-sm text-gray-700 dark:text-gray-200">Solo Kardex</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="radio" class="text-violet-600" value="costos" wire:model.live="fuenteDatos">
+          <input type="radio" class="text-violet-600" value="costos" wire:model="fuenteDatos">
           <span class="text-sm text-gray-700 dark:text-gray-200">Solo Costos</span>
         </label>
         <label class="flex items-center gap-2">
-          <input type="radio" class="text-violet-600" value="ambas" wire:model.live="fuenteDatos">
+          <input type="radio" class="text-violet-600" value="ambas" wire:model="fuenteDatos">
           <span class="text-sm text-gray-700 dark:text-gray-200">Ambas</span>
         </label>
       </div>
 
       <div class="ml-auto flex items-center gap-3">
-        <select wire:model.live="perPage"
-          class="rounded-xl border bg-white dark:bg-gray-800 dark:text-white">
+        <select wire:model="perPage" class="rounded-xl border bg-white dark:bg-gray-800 dark:text-white">
           @foreach([10,25,50,100] as $n)
             <option value="{{ $n }}">{{ $n }}/página</option>
           @endforeach
@@ -123,8 +135,7 @@
     $gruposCol = collect($grupos ?? []);
   @endphp
 
-  <section class="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-6"
-           x-data="{ open: null }">
+  <section class="bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-700 p-6" x-data="{ open: null }">
     <header class="flex justify-between mb-4">
       <div>
         <h2 class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
@@ -163,8 +174,7 @@
                 @click="open === '{{ $uid }}' ? open = null : open = '{{ $uid }}'">
               <td class="px-3 py-2 text-center">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline-block transition-transform"
-                     :class="open === '{{ $uid }}' ? 'rotate-90' : ''"
-                     viewBox="0 0 24 24" fill="currentColor">
+                     :class="open === '{{ $uid }}' ? 'rotate-90' : ''" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/>
                 </svg>
               </td>

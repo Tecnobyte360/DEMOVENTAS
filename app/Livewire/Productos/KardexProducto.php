@@ -10,7 +10,8 @@ use Carbon\Carbon;
 
 use App\Models\Productos\Producto;
 use App\Models\Bodega;
-use App\Models\Movimiento\KardexMovimiento; // << usa tu modelo real
+use App\Models\Movimiento\KardexMovimiento;
+use App\Models\Movimiento\ProductoCostoMovimiento;
 use App\Models\TiposDocumento\TipoDocumento;
 
 class KardexProducto extends Component
@@ -24,6 +25,9 @@ class KardexProducto extends Component
     public ?string $hasta    = null;   // YYYY-MM-DD
     public string $buscarDoc = '';
     public int $perPage      = 25;
+    
+    /** ==== Opción para ver costos históricos ==== */
+    public bool $verCostosHistoricos = false;
 
     /** ==== Saldos ==== */
     public float $saldoInicialCant = 0.0;
@@ -42,6 +46,7 @@ class KardexProducto extends Component
         'hasta'       => ['except' => null],
         'buscarDoc'   => ['except' => ''],
         'perPage'     => ['except' => 25],
+        'verCostosHistoricos' => ['except' => false],
     ];
 
     public function mount(?int $productoId = null): void
@@ -65,8 +70,8 @@ class KardexProducto extends Component
         $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
 
         if ($this->producto_id) {
-            $this->calcularSaldoInicial();                 // saldo antes del rango
-            $filas = $this->kardexEnRangoPaginado();       // movimientos del rango con saldos corridos
+            $this->calcularSaldoInicial();
+            $filas = $this->kardexEnRangoPaginado();
         } else {
             $filas = new LengthAwarePaginator(collect(), 0, $this->perPage, 1, [
                 'path' => request()->url(), 'query' => request()->query()
@@ -91,11 +96,10 @@ class KardexProducto extends Component
         if ($this->bodega_id) $q->where('bodega_id', $this->bodega_id);
         if ($hasta)           $q->where('fecha', '<', $hasta);
 
-        // Trae solo lo necesario
         $movs = $q->orderBy('fecha')->orderBy('id')
             ->get(['entrada','salida','cantidad','signo','costo_unitario','total']);
 
-        $cant = 0.0; $val = 0.0; // valor a costo promedio (no total venta)
+        $cant = 0.0; $val = 0.0;
         foreach ($movs as $m) {
             $entrada = (float)($m->entrada ?? 0);
             $salida  = (float)($m->salida  ?? 0);
@@ -103,12 +107,10 @@ class KardexProducto extends Component
             $c       = $tipo === 'ENTRADA' ? max($entrada, abs((float)$m->cantidad)) : max($salida,  abs((float)$m->cantidad));
 
             if ($tipo === 'ENTRADA') {
-                // Entrada: aumenta cantidad y valor al costo del movimiento
                 $cu  = (float)($m->costo_unitario ?? 0);
                 $val += $c * $cu;
                 $cant += $c;
             } else {
-                // Salida: rebaja a costo promedio vigente
                 $cpu = $cant > 0 ? ($val / max($cant, 1e-9)) : 0.0;
                 $cant -= $c;
                 $val  -= $c * $cpu;
@@ -127,7 +129,7 @@ class KardexProducto extends Component
         $hasta = $this->hasta ? Carbon::parse($this->hasta)->endOfDay()   : null;
 
         $q = KardexMovimiento::query()
-            ->with('tipoDocumento:id,codigo,nombre') // relación para mostrar texto
+            ->with('tipoDocumento:id,codigo,nombre')
             ->where('producto_id', $this->producto_id);
 
         if ($this->bodega_id) $q->where('bodega_id', $this->bodega_id);
@@ -183,20 +185,43 @@ class KardexProducto extends Component
             }
         }
 
+        // Obtener datos de costo histórico si está activado
+        $costosHistoricos = collect();
+        if ($this->verCostosHistoricos && $paginator->items()) {
+            $kardexIds = collect($paginator->items())->pluck('id');
+            
+            // Buscar en ProductoCostoMovimiento por los mismos criterios
+            $costosQuery = ProductoCostoMovimiento::query()
+                ->where('producto_id', $this->producto_id);
+            
+            if ($this->bodega_id) $costosQuery->where('bodega_id', $this->bodega_id);
+            if ($desde)           $costosQuery->where('fecha', '>=', $desde);
+            if ($hasta)           $costosQuery->where('fecha', '<=', $hasta);
+            
+            // Agrupar por doc_id + tipo_documento_id para hacer match
+            $costosHistoricos = $costosQuery
+                ->orderBy('fecha')
+                ->get()
+                ->keyBy(function($item) {
+                    return $item->tipo_documento_id . '_' . $item->doc_id;
+                });
+        }
+
         // Construye items de la página con saldos corridos
-        $items = collect($paginator->items())->map(function (KardexMovimiento $m) use (&$saldoCant, &$saldoVal) {
+        $items = collect($paginator->items())->map(function (KardexMovimiento $m) use (&$saldoCant, &$saldoVal, $costosHistoricos) {
             $entrada = (float)($m->entrada ?? 0);
             $salida  = (float)($m->salida  ?? 0);
             $tipo    = $entrada > 0 ? 'ENTRADA' : ($salida > 0 ? 'SALIDA' : ((int)$m->signo >= 0 ? 'ENTRADA' : 'SALIDA'));
             $c       = $tipo === 'ENTRADA' ? max($entrada, abs((float)$m->cantidad)) : max($salida,  abs((float)$m->cantidad));
 
-            // saldo antes de recalcular cpu
+            // Calcular costo promedio antes de aplicar el movimiento
+            $cpu = null;
             if ($tipo === 'ENTRADA') {
-                $cu = (float)($m->costo_unitario ?? 0);  // costo que venía en el movimiento
+                $cu = (float)($m->costo_unitario ?? 0);
                 $saldoVal  += $c * $cu;
                 $saldoCant += $c;
             } else {
-                $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0; // costo promedio vigente
+                $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
                 $saldoCant -= $c;
                 $saldoVal  -= $c * $cpu;
                 if ($saldoCant < 1e-9) { $saldoCant = 0.0; $saldoVal = 0.0; }
@@ -212,6 +237,13 @@ class KardexProducto extends Component
             if ($m->ref) $docText .= ' ('.$m->ref.')';
             $docText = $docText ?: '—';
 
+            // Buscar datos de costo histórico
+            $costoHistorico = null;
+            if ($this->verCostosHistoricos && $costosHistoricos->isNotEmpty()) {
+                $key = $m->tipo_documento_id . '_' . $m->doc_id;
+                $costoHistorico = $costosHistoricos->get($key);
+            }
+
             return [
                 'id'         => $m->id,
                 'fecha'      => ($m->fecha instanceof Carbon ? $m->fecha->format('Y-m-d H:i') : (string)$m->fecha),
@@ -220,15 +252,23 @@ class KardexProducto extends Component
                 'tipo'       => $tipo,
                 'entrada'    => $tipo === 'ENTRADA' ? $c : null,
                 'salida'     => $tipo === 'SALIDA'  ? $c : null,
-                // Mostrar el costo unitario del movimiento:
-                // - ENTRADA: el que trae el movimiento
-                // - SALIDA: el costo promedio vigente al momento de la salida (ya calculado arriba)
                 'costo_unit' => $tipo === 'ENTRADA'
                                 ? (float)($m->costo_unitario ?? 0)
                                 : ($cpu ?? 0.0),
                 'saldo_cant' => round($saldoCant, 6),
                 'saldo_val'  => round($saldoVal, 2),
                 'saldo_cpu'  => $cpuSaldo !== null ? round($cpuSaldo, 6) : null,
+                // Datos adicionales de costo histórico
+                'costo_historico' => $costoHistorico ? [
+                    'metodo_costeo' => $costoHistorico->metodo_costeo,
+                    'costo_prom_anterior' => $costoHistorico->costo_prom_anterior,
+                    'costo_prom_nuevo' => $costoHistorico->costo_prom_nuevo,
+                    'ultimo_costo_anterior' => $costoHistorico->ultimo_costo_anterior,
+                    'ultimo_costo_nuevo' => $costoHistorico->ultimo_costo_nuevo,
+                    'tipo_evento' => $costoHistorico->tipo_evento,
+                    'valor_mov' => $costoHistorico->valor_mov,
+                    'costo_unit_mov' => $costoHistorico->costo_unit_mov,
+                ] : null,
             ];
         });
 

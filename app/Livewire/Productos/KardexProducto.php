@@ -35,8 +35,18 @@ class KardexProducto extends Component
     public $productos;
     public $bodegas;
 
-    /** ==== Columnas resueltas dinámicamente ==== */
+    /** ==== Config/override manual ==== 
+     * Si sabes cómo se llama la columna del producto en 'movimientos', ponla aquí.
+     * Ejemplos: 'id_producto', 'item_id', 'articulo_id', 'producto_id'
+     * Déjalo en null para autodetectar.
+     */
+    public ?string $colProductoOverride = null;
+
+    /** ==== Cache de columnas resueltas ==== */
     private array $cols = [];
+
+    /** Bandera para mostrar aviso en UI si no hay columna de producto */
+    public bool $productoColumnMissing = false;
 
     protected $queryString = [
         'producto_id' => ['except' => null],
@@ -49,8 +59,8 @@ class KardexProducto extends Component
 
     public function mount(?int $productoId = null): void
     {
-        $this->productos = Producto::orderBy('nombre')->get(['id', 'nombre']);
-        $this->bodegas   = Bodega::orderBy('nombre')->get(['id', 'nombre']);
+        $this->productos = Producto::orderBy('nombre')->get(['id','nombre']);
+        $this->bodegas   = Bodega::orderBy('nombre')->get(['id','nombre']);
 
         $this->producto_id = $productoId ?: $this->producto_id;
         $this->desde = $this->desde ?: Carbon::now()->subDays(90)->toDateString();
@@ -66,7 +76,6 @@ class KardexProducto extends Component
 
     public function render()
     {
-        // reinicia saldos en cada render
         $this->saldoInicialCant = $this->saldoInicialVal = 0.0;
         $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
 
@@ -74,10 +83,9 @@ class KardexProducto extends Component
             $this->calcularSaldoInicial();
             $filas = $this->kardexEnRangoPaginado();
         } else {
-            $filas = new LengthAwarePaginator(
-                collect(), 0, $this->perPage, 1,
-                ['path' => request()->url(), 'query' => request()->query()]
-            );
+            $filas = new LengthAwarePaginator(collect(), 0, $this->perPage, 1, [
+                'path' => request()->url(), 'query' => request()->query()
+            ]);
         }
 
         return view('livewire.productos.kardex-producto', compact('filas'));
@@ -87,79 +95,81 @@ class KardexProducto extends Component
      * RESOLUCIÓN DE COLUMNAS
      * ======================================================= */
     private function resolveColumns(): void
-{
-    $table = (new Movimiento)->getTable(); // p.e. 'movimientos'
-    $colsList = collect(Schema::getColumnListing($table))->map(fn($c) => strtolower($c));
+    {
+        $table = (new Movimiento)->getTable();
+        $colsList = collect(Schema::getColumnListing($table))->map(fn($c)=>strtolower($c));
+        $has = fn(string $c) => Schema::hasColumn($table, $c);
 
-    $has = fn(string $c) => Schema::hasColumn($table, $c);
-
-    $pick = function(array $cands) use ($has) : ?string {
-        foreach ($cands as $c) {
-            if ($c && $has($c)) return $c;
-        }
-        return null;
-    };
-
-    $guessByRegex = function(array $tokens) use ($colsList) : ?string {
-        // Construye un patrón tipo /(producto|product|articulo|item).*(_?id)?$/i
-        $base = implode('|', array_map('preg_quote', $tokens));
-        $pattern = "/(?:{$base}).*?(?:_?id)?$/i";
-        return $colsList->first(fn($c) => preg_match($pattern, $c)) ?: null;
-    };
-
-    $this->cols = [
-        'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
-        'producto'  => $pick([
-            'producto_id','id_producto','product_id','id_product',
-            'item_id','id_item','articulo_id','id_articulo',
-            'producto','product','articulo','item'
-        ]) ?: $guessByRegex(['producto','product','articulo','item']),
-        'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id','bodega','almacen']),
-        'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
-        'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
-        'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
-        'signo'     => $pick(['signo','direction']),
-        'total'     => $pick(['total','valor_total','monto','importe_total']),
-        'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
-        'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
-        'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
-        'ref'       => $pick(['ref','referencia','observacion','detalle']),
-    ];
-
-    // Fallbacks obligatorios (fecha sí o sí; producto NO debe quedar inválido)
-    if (!$this->cols['fecha'])    $this->cols['fecha'] = 'created_at';
-
-    // Si NO hubo forma de resolver la columna de producto, mejor dejarla en null
-    // y evitamos consultas inválidas (mostrar mensaje en la UI si quieres).
-    if (!$this->cols['producto']) {
-        // Como último intento, si existe 'producto' exacto:
-        if ($has('producto')) $this->cols['producto'] = 'producto';
-        // Si tampoco, la dejamos null para no poner WHERE inválido.
-    }
-}
-
-    /** Devuelve el nombre de columna resuelta; con fallback seguro */
-   private function col(string $k, ?string $fallback = null): string
-{
-    if (!array_key_exists($k, $this->cols) || empty($this->cols[$k])) {
-        return $fallback ?? match ($k) {
-            'fecha'    => 'created_at',
-            default    => $k,
+        $pick = function(array $cands) use ($has): ?string {
+            foreach ($cands as $c) if ($c && $has($c)) return $c;
+            return null;
         };
-    }
-    return $this->cols[$k];
-}
 
-private function hasCol(string $k): bool
-{
-    return array_key_exists($k, $this->cols) && !empty($this->cols[$k]);
-}
+        $guessByRegex = function(array $tokens) use ($colsList): ?string {
+            $base = implode('|', array_map('preg_quote', $tokens));
+            $pattern = "/(?:{$base}).*?(?:_?id)?$/i";
+            return $colsList->first(fn($c)=>preg_match($pattern,$c)) ?: null;
+        };
+
+        // ——— Producto: prioridad override > pick > regex
+        $colProducto = $this->colProductoOverride;
+        if ($colProducto && !$has($colProducto)) {
+            // Si el override no existe, lo invalidamos
+            $colProducto = null;
+        }
+        if (!$colProducto) {
+            $colProducto = $pick([
+                'producto_id','id_producto','product_id','id_product',
+                'item_id','id_item','articulo_id','id_articulo'
+            ]) ?: $guessByRegex(['producto','product','articulo','item']);
+        }
+
+        $this->cols = [
+            'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']) ?: 'created_at',
+            'producto'  => $colProducto ?: null,
+            'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id','bodega','almacen']),
+            'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
+            'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
+            'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
+            'signo'     => $pick(['signo','direction']),
+            'total'     => $pick(['total','valor_total','monto','importe_total']),
+            'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
+            'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
+            'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
+            'ref'       => $pick(['ref','referencia','observacion','detalle']),
+        ];
+
+        // bandera para UI:
+        $this->productoColumnMissing = empty($this->cols['producto']);
+    }
+
+    private function col(string $k, ?string $fallback = null): string
+    {
+        if (!array_key_exists($k, $this->cols) || empty($this->cols[$k])) {
+            return $fallback ?? match ($k) {
+                'fecha' => 'created_at',
+                default => $k,
+            };
+        }
+        return $this->cols[$k];
+    }
+    private function hasCol(string $k): bool
+    {
+        return array_key_exists($k, $this->cols) && !empty($this->cols[$k]);
+    }
 
     /* =======================================================
      * CÁLCULOS
      * ======================================================= */
     private function calcularSaldoInicial(): void
     {
+        // Si no tenemos columna de producto, no intentamos filtrar por él.
+        if (!$this->hasCol('producto')) {
+            $this->saldoInicialCant = 0.0;
+            $this->saldoInicialVal  = 0.0;
+            return;
+        }
+
         $hasta = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
 
         $q = Movimiento::query()
@@ -184,14 +194,11 @@ private function hasCol(string $k): bool
 
         $movs = $q->get($select);
 
-        $cant = 0.0;
-        $val  = 0.0;
-
+        $cant = 0.0; $val = 0.0;
         foreach ($movs as $m) {
-            [$tipo, $c, $t] = $this->extractMovimiento($m);
-            if ($tipo === 'ENTRADA') {
-                $cant += $c; $val += $t;
-            } else {
+            [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
+            if ($tipo === 'ENTRADA') { $cant += $c; $val += $t; }
+            else {
                 $cpu = $cant > 0 ? ($val / max($cant, 1e-9)) : 0.0;
                 $cant -= $c; $val -= $c * $cpu;
                 if ($cant < 1e-9) { $cant = 0.0; $val = 0.0; }
@@ -204,6 +211,13 @@ private function hasCol(string $k): bool
 
     private function kardexEnRangoPaginado()
     {
+        if (!$this->hasCol('producto')) {
+            // No hay columna de producto: devolvemos paginación vacía (no rompemos)
+            return new LengthAwarePaginator(collect(), 0, $this->perPage, 1, [
+                'path' => request()->url(), 'query' => request()->query()
+            ]);
+        }
+
         $desde = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
         $hasta = $this->hasta ? Carbon::parse($this->hasta)->endOfDay()   : null;
 
@@ -241,7 +255,6 @@ private function hasCol(string $k): bool
         ]));
         $paginator = $q->paginate($this->perPage, $select);
 
-        // Replay de movimientos previos para CPU correcto al entrar en páginas intermedias
         $idsOrdenados  = (clone $q)->pluck('id');
         $firstModel    = $paginator->items()[0] ?? null;
         $firstIdPagina = $firstModel->id ?? null;
@@ -267,11 +280,9 @@ private function hasCol(string $k): bool
                 ->get($prevSelect);
 
             foreach ($prevMovs as $m) {
-                [$tipo, $c, $t] = $this->extractMovimiento($m);
-
-                if ($tipo === 'ENTRADA') {
-                    $saldoCant += $c; $saldoVal += $t;
-                } else {
+                [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
+                if ($tipo === 'ENTRADA') { $saldoCant += $c; $saldoVal += $t; }
+                else {
                     $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
                     $saldoCant -= $c; $saldoVal -= $c * $cpu;
                     if ($saldoCant < 1e-9) { $saldoCant = 0.0; $saldoVal = 0.0; }
@@ -281,7 +292,6 @@ private function hasCol(string $k): bool
 
         $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
 
-        // Transformar ítems de la página
         $fechaCol = $this->col('fecha');
         $bodCol   = $this->hasCol('bodega') ? $this->col('bodega') : null;
 
@@ -289,15 +299,9 @@ private function hasCol(string $k): bool
             [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
 
             $entrada = null; $salida = null;
-            if ($tipo === 'ENTRADA') {
-                $entrada   = $c;
-                $saldoCant += $c;
-                $saldoVal  += $t;
-            } else {
-                $salida      = $c;
-                $valorSalida = $c * $cpu;
-                $saldoCant  -= $c;
-                $saldoVal   -= $valorSalida;
+            if ($tipo === 'ENTRADA') { $entrada = $c; $saldoCant += $c; $saldoVal += $t; }
+            else {
+                $salida = $c; $valorSalida = $c * $cpu; $saldoCant -= $c; $saldoVal -= $valorSalida;
                 if ($saldoCant < 1e-9) { $saldoCant = 0.0; $saldoVal = 0.0; }
             }
 
@@ -325,7 +329,7 @@ private function hasCol(string $k): bool
                 'id'         => $m->id,
                 'fecha'      => $fechaStr,
                 'bodega'     => $bodegaNombre,
-                'tipo'       => $tipo,               // ENTRADA | SALIDA
+                'tipo'       => $tipo,
                 'doc'        => $doc,
                 'entrada'    => $entrada,
                 'salida'     => $salida,
@@ -354,42 +358,29 @@ private function hasCol(string $k): bool
         );
     }
 
-    /**
-     * Extrae: [tipo (ENTRADA|SALIDA), cantidadPositiva, totalMovimiento, costo_unitario(original si existe)]
-     */
     private function extractMovimiento($m): array
     {
-        $entrada  = $this->hasCol('entrada')  ? (float) ($m->{$this->col('entrada')}  ?? 0) : null;
-        $salida   = $this->hasCol('salida')   ? (float) ($m->{$this->col('salida')}   ?? 0) : null;
-        $cantidad = $this->hasCol('cantidad') ? (float) ($m->{$this->col('cantidad')} ?? 0) : null;
-        $signo    = $this->hasCol('signo')    ? (float) ($m->{$this->col('signo')}    ?? 0) : null;
+        $entrada = $this->hasCol('entrada')  ? (float) ($m->{$this->col('entrada')} ?? 0)  : null;
+        $salida  = $this->hasCol('salida')   ? (float) ($m->{$this->col('salida')}  ?? 0)  : null;
+        $cantidad= $this->hasCol('cantidad') ? (float) ($m->{$this->col('cantidad')} ?? 0): null;
+        $signo   = $this->hasCol('signo')    ? (float) ($m->{$this->col('signo')}    ?? 0): null;
 
-        // 1) Entrada/Salida separadas
         if (!is_null($entrada) || !is_null($salida)) {
             $entrada = max(0.0, (float) $entrada);
             $salida  = max(0.0, (float) $salida);
-
             if ($entrada > 0 && $salida == 0) { $tipo = 'ENTRADA'; $c = $entrada; }
             elseif ($salida > 0 && $entrada == 0) { $tipo = 'SALIDA'; $c = $salida; }
-            else { // si vienen los dos, tomamos el mayor
-                if ($entrada >= $salida) { $tipo = 'ENTRADA'; $c = $entrada; }
-                else { $tipo = 'SALIDA'; $c = $salida; }
-            }
+            else { ($entrada >= $salida) ? $tipo='ENTRADA' : $tipo='SALIDA'; $c = max($entrada,$salida); }
         }
-        // 2) Cantidad + signo
         elseif (!is_null($cantidad) && !is_null($signo)) {
             $tipo = ((int)$signo >= 0) ? 'ENTRADA' : 'SALIDA';
             $c    = abs($cantidad);
         }
-        // 3) Solo cantidad (signo en el valor)
         elseif (!is_null($cantidad)) {
             $tipo = ($cantidad >= 0) ? 'ENTRADA' : 'SALIDA';
             $c    = abs($cantidad);
         }
-        // 4) Sin datos -> no mueve
-        else {
-            $tipo = 'ENTRADA'; $c = 0.0;
-        }
+        else { $tipo = 'ENTRADA'; $c = 0.0; }
 
         $cu = $this->hasCol('cu')    ? (float) ($m->{$this->col('cu')}    ?? 0) : 0.0;
         $t  = $this->hasCol('total') ? (float) ($m->{$this->col('total')} ?? ($c * $cu)) : ($c * $cu);

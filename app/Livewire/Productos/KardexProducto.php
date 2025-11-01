@@ -87,68 +87,73 @@ class KardexProducto extends Component
      * RESOLUCIÓN DE COLUMNAS
      * ======================================================= */
     private function resolveColumns(): void
-    {
-        $table = (new Movimiento)->getTable();
+{
+    $table = (new Movimiento)->getTable(); // p.e. 'movimientos'
+    $colsList = collect(Schema::getColumnListing($table))->map(fn($c) => strtolower($c));
 
-        $pick = function (array $cands) use ($table): ?string {
-            foreach ($cands as $c) {
-                if (Schema::hasColumn($table, $c)) return $c;
-            }
-            return null;
-        };
+    $has = fn(string $c) => Schema::hasColumn($table, $c);
 
-        // Todas las claves existen SIEMPRE; valores nulos si no están en la BD
-        $this->cols = array_merge([
-            'fecha'    => null,
-            'producto' => null,
-            'bodega'   => null,
-            'cantidad' => null,
-            'entrada'  => null,
-            'salida'   => null,
-            'signo'    => null,
-            'total'    => null,
-            'cu'       => null,
-            'doc_tipo' => null,
-            'doc_id'   => null,
-            'ref'      => null,
-        ], [
-            'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
-            'producto'  => $pick(['producto_id','item_id']),
-            'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id']),
-            'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
-            'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
-            'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
-            'signo'     => $pick(['signo','direction']),
-            'total'     => $pick(['total','valor_total','monto','importe_total']),
-            'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
-            'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
-            'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
-            'ref'       => $pick(['ref','referencia','observacion','detalle']),
-        ]);
+    $pick = function(array $cands) use ($has) : ?string {
+        foreach ($cands as $c) {
+            if ($c && $has($c)) return $c;
+        }
+        return null;
+    };
 
-        // Fallbacks obligatorios
-        if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at';
-        if (!$this->cols['producto']) $this->cols['producto'] = 'producto_id';
+    $guessByRegex = function(array $tokens) use ($colsList) : ?string {
+        // Construye un patrón tipo /(producto|product|articulo|item).*(_?id)?$/i
+        $base = implode('|', array_map('preg_quote', $tokens));
+        $pattern = "/(?:{$base}).*?(?:_?id)?$/i";
+        return $colsList->first(fn($c) => preg_match($pattern, $c)) ?: null;
+    };
+
+    $this->cols = [
+        'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
+        'producto'  => $pick([
+            'producto_id','id_producto','product_id','id_product',
+            'item_id','id_item','articulo_id','id_articulo',
+            'producto','product','articulo','item'
+        ]) ?: $guessByRegex(['producto','product','articulo','item']),
+        'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id','bodega','almacen']),
+        'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
+        'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
+        'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
+        'signo'     => $pick(['signo','direction']),
+        'total'     => $pick(['total','valor_total','monto','importe_total']),
+        'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
+        'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
+        'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
+        'ref'       => $pick(['ref','referencia','observacion','detalle']),
+    ];
+
+    // Fallbacks obligatorios (fecha sí o sí; producto NO debe quedar inválido)
+    if (!$this->cols['fecha'])    $this->cols['fecha'] = 'created_at';
+
+    // Si NO hubo forma de resolver la columna de producto, mejor dejarla en null
+    // y evitamos consultas inválidas (mostrar mensaje en la UI si quieres).
+    if (!$this->cols['producto']) {
+        // Como último intento, si existe 'producto' exacto:
+        if ($has('producto')) $this->cols['producto'] = 'producto';
+        // Si tampoco, la dejamos null para no poner WHERE inválido.
     }
+}
 
     /** Devuelve el nombre de columna resuelta; con fallback seguro */
-    private function col(string $k, ?string $fallback = null): string
-    {
-        if (!array_key_exists($k, $this->cols) || empty($this->cols[$k])) {
-            return $fallback ?? match ($k) {
-                'fecha'    => 'created_at',
-                'producto' => 'producto_id',
-                default    => $k,
-            };
-        }
-        return $this->cols[$k];
+   private function col(string $k, ?string $fallback = null): string
+{
+    if (!array_key_exists($k, $this->cols) || empty($this->cols[$k])) {
+        return $fallback ?? match ($k) {
+            'fecha'    => 'created_at',
+            default    => $k,
+        };
     }
+    return $this->cols[$k];
+}
 
-    /** ¿Existe columna resuelta y no vacía? */
-    private function hasCol(string $k): bool
-    {
-        return array_key_exists($k, $this->cols) && !empty($this->cols[$k]);
-    }
+private function hasCol(string $k): bool
+{
+    return array_key_exists($k, $this->cols) && !empty($this->cols[$k]);
+}
 
     /* =======================================================
      * CÁLCULOS

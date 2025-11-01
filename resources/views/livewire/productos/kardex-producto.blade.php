@@ -1,42 +1,3 @@
-@once
-  @push('styles')
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <style>[x-cloak]{display:none!important}</style>
-    <style>
-      /* Resaltado del grupo abierto */
-      .group-highlight {
-        box-shadow: 0 0 0 2px rgba(124,58,237,.45) inset;
-        transition: box-shadow .25s ease;
-      }
-      .row-pulse {
-        animation: rowPulse 1.5s ease 1;
-      }
-      @keyframes rowPulse {
-        0%   { box-shadow: 0 0 0 0 rgba(124,58,237,.5) inset; }
-        60%  { box-shadow: 0 0 0 6px rgba(124,58,237,.2) inset; }
-        100% { box-shadow: 0 0 0 0 rgba(124,58,237,0) inset; }
-      }
-    </style>
-  @endpush
-@endonce
-
-@once
-  @push('scripts')
-    <script>
-      // Listener compatible con v2/v3 gracias al polyfill del componente
-      window.addEventListener('kardex-scroll-to', (e) => {
-        const uid = e.detail?.uid;
-        const row = document.querySelector(`[data-doc-uid="${uid}"]`);
-        if (row) {
-          row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          row.classList.add('row-pulse');
-          setTimeout(() => row.classList.remove('row-pulse'), 1600);
-        }
-      });
-    </script>
-  @endpush
-@endonce
-
 <div class="p-6 space-y-6 bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
 
   <header class="flex flex-col md:flex-row md:items-end gap-4 justify-between">
@@ -149,7 +110,7 @@
         @if($producto_id && isset($grupos) && count($grupos))
           <button type="button"
                   class="px-3 py-1.5 rounded-lg border text-sm bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700"
-                  wire:click="expandirTodo(@js($grupos->pluck('uid')->values()))">
+                  wire:click="expandirTodo({{ $grupos->pluck('uid')->map(fn($u) => "'$u'")->join(',') }})">
             Expandir todo
           </button>
           <button type="button"
@@ -157,7 +118,7 @@
                   wire:click="contraerTodo">
             Contraer todo
           </button>
-        @endif
+        @endif>
 
         <select wire:model.live="perPage" class="rounded-xl border bg-white dark:bg-gray-800 dark:text-white">
           @foreach([10,25,50,100] as $n)
@@ -234,30 +195,27 @@
             {{-- Acordeón por documento --}}
             @forelse($grupos as $g)
               {{-- Cabecera del grupo (RESUMEN) --}}
-              @php $isOpen = (bool)($openGroups[$g['uid']] ?? false); @endphp
               <tr wire:click="toggleGrupo('{{ $g['uid'] }}')"
-                  data-doc-uid="{{ $g['uid'] }}"
-                  class="cursor-pointer bg-gray-50/70 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-700/60
-                         {{ $isOpen ? 'group-highlight' : '' }}">
+                  class="cursor-pointer bg-gray-50/70 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-700/60">
                 <td class="px-3 py-2">
                   <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-violet-100 dark:bg-violet-900 text-violet-700 dark:text-violet-200">
                     DOC
-                    <svg class="w-3 h-3 transition-transform {{ $isOpen ? 'rotate-90' : '' }}"
+                    <svg class="w-3 h-3 transition-transform {{ ($openGroups[$g['uid']] ?? false) ? 'rotate-90' : '' }}"
                          viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M6.293 7.293a1 1 0 011.414 0L12 11.586l-4.293 4.293a1 1 0 01-1.414-1.414L9.586 12 6.293 8.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
                     </svg>
                   </span>
                 </td>
-                <td class="px-3 py-2 font-medium">{{ $g['fecha'] }}</td>
+                <td class="px-3 py-2">{{ $g['fecha'] }}</td>
                 <td class="px-3 py-2">{{ $g['bodega'] }}</td>
-                <td class="px-3 py-2 font-semibold">{{ $g['doc'] }}</td>
+                <td class="px-3 py-2 font-medium">{{ $g['doc'] }}</td>
                 <td class="px-3 py-2 text-center">RESUMEN</td>
                 <td class="px-3 py-2 text-right">{{ $g['entrada_total'] > 0 ? number_format($g['entrada_total'], 2) : '—' }}</td>
                 <td class="px-3 py-2 text-right">{{ $g['salida_total']  > 0 ? number_format($g['salida_total'], 2)  : '—' }}</td>
                 <td class="px-3 py-2 text-right">—</td>
                 {{-- Saldos al cierre del documento --}}
-                <td class="px-3 py-2 text-right">{{ ($g['saldo_cant'] ?? 0) > 0 ? number_format($g['saldo_cant'], 2) : '—' }}</td>
-                <td class="px-3 py-2 text-right">{{ isset($g['saldo_val']) && abs($g['saldo_val'])>0.01 ? number_format($g['saldo_val'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ $g['saldo_cant'] > 0 ? number_format($g['saldo_cant'], 2) : '—' }}</td>
+                <td class="px-3 py-2 text-right">{{ abs($g['saldo_val']) > 0.01 ? number_format($g['saldo_val'], 2) : '—' }}</td>
                 <td class="px-3 py-2 text-right">
                   {{ isset($g['saldo_cpu']) && $g['saldo_cpu']>0 ? number_format($g['saldo_cpu'], 2) : '—' }}
                 </td>
@@ -272,7 +230,7 @@
               </tr>
 
               {{-- Detalle del grupo (solo si está abierto) --}}
-              @if($isOpen)
+              @if($openGroups[$g['uid']] ?? false)
                 @foreach($g['rows'] as $r)
                   <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50
                     {{ ($r['fuente'] ?? 'kardex') === 'costos' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500' }}">

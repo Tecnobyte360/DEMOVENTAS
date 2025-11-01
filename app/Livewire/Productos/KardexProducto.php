@@ -17,9 +17,6 @@ class KardexProducto extends Component
 {
     use WithPagination;
 
-    /** Si usas Tailwind para los links() */
-    protected string $paginationTheme = 'tailwind';
-
     /** ==== Filtros ==== */
     public ?int $producto_id = null;
     public ?int $bodega_id   = null;
@@ -69,6 +66,7 @@ class KardexProducto extends Component
 
     public function render()
     {
+        // reinicia saldos en cada render
         $this->saldoInicialCant = $this->saldoInicialVal = 0.0;
         $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
 
@@ -88,51 +86,64 @@ class KardexProducto extends Component
     /* =======================================================
      * RESOLUCIÓN DE COLUMNAS (dinámica)
      * ======================================================= */
-   private function resolveColumns(): void
-{
-    $table = (new Movimiento)->getTable();
+    private function resolveColumns(): void
+    {
+        $table = (new Movimiento)->getTable(); // normalmente 'movimientos'
 
-    // OJO: el "use ($table)" va ANTES del tipo de retorno
-    $pick = function (array $cands) use ($table): ?string {
-        foreach ($cands as $c) {
-            if (Schema::hasColumn($table, $c)) return $c;
+        // ¡OJO!: el use($table) va antes del tipo de retorno
+        $pick = function (array $cands) use ($table): ?string {
+            foreach ($cands as $c) {
+                if (Schema::hasColumn($table, $c)) return $c;
+            }
+            return null;
+        };
+
+        // Asegura que TODAS las claves existen en el array
+        $this->cols = array_merge([
+            'fecha'    => null,
+            'producto' => null,
+            'bodega'   => null,
+            'cantidad' => null,
+            'entrada'  => null,
+            'salida'   => null,
+            'signo'    => null,
+            'total'    => null,
+            'cu'       => null,
+            'doc_tipo' => null,
+            'doc_id'   => null,
+            'ref'      => null,
+        ], [
+            'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
+            'producto'  => $pick(['producto_id','item_id']),
+            'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id']),
+            'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
+            'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
+            'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
+            'signo'     => $pick(['signo','direction']), // 1 / -1
+            'total'     => $pick(['total','valor_total','monto','importe_total']),
+            'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
+            'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
+            'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
+            'ref'       => $pick(['ref','referencia','observacion','detalle']),
+        ]);
+
+        // Fallbacks obligatorios
+        if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at';
+        if (!$this->cols['producto']) $this->cols['producto'] = 'producto_id';
+    }
+
+    /** Getter seguro para columnas (con fallback adicional opcional) */
+    private function col(string $k, ?string $fallback = null): string
+    {
+        if (!array_key_exists($k, $this->cols) || !$this->cols[$k]) {
+            return $fallback ?? match ($k) {
+                'fecha'    => 'created_at',
+                'producto' => 'producto_id',
+                default    => $k, // última salida
+            };
         }
-        return null;
-    };
-
-    // Asegura TODAS las claves (aunque sea null)
-    $this->cols = array_merge([
-        'fecha'    => null,
-        'producto' => null,
-        'bodega'   => null,
-        'cantidad' => null,
-        'entrada'  => null,
-        'salida'   => null,
-        'signo'    => null,
-        'total'    => null,
-        'cu'       => null,
-        'doc_tipo' => null,
-        'doc_id'   => null,
-        'ref'      => null,
-    ], [
-        'fecha'     => $pick(['fecha','mov_fecha','fecha_movimiento','created_at']),
-        'producto'  => $pick(['producto_id','item_id']),
-        'bodega'    => $pick(['bodega_id','almacen_id','warehouse_id']),
-        'cantidad'  => $pick(['cantidad','qty','cantidad_total','cantidad_um','cantidad_mov']),
-        'entrada'   => $pick(['entrada','cantidad_entrada','qty_in','ingreso']),
-        'salida'    => $pick(['salida','cantidad_salida','qty_out','egreso']),
-        'signo'     => $pick(['signo','direction']),
-        'total'     => $pick(['total','valor_total','monto','importe_total']),
-        'cu'        => $pick(['costo_unitario','cpu','costo_promedio','costo','valor_unitario']),
-        'doc_tipo'  => $pick(['doc_tipo','documento_tipo','tipo_doc']),
-        'doc_id'    => $pick(['doc_id','documento_id','num_doc','numero_doc']),
-        'ref'       => $pick(['ref','referencia','observacion','detalle']),
-    ]);
-
-    // Fallbacks obligatorios
-    if (!$this->cols['fecha'])    $this->cols['fecha']    = 'created_at';
-    if (!$this->cols['producto']) $this->cols['producto'] = 'producto_id';
-}
+        return $this->cols[$k];
+    }
 
     /* =======================================================
      * CÁLCULOS
@@ -143,21 +154,21 @@ class KardexProducto extends Component
         $hasta = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
 
         $q = Movimiento::query()
-            ->where($this->cols['producto'], $this->producto_id);
+            ->where($this->col('producto'), $this->producto_id);
 
-        if ($this->bodega_id && $this->cols['bodega']) $q->where($this->cols['bodega'], $this->bodega_id);
-        if ($hasta) $q->where($this->cols['fecha'], '<', $hasta);
+        if ($this->bodega_id && $this->cols['bodega']) $q->where($this->col('bodega'), $this->bodega_id);
+        if ($hasta) $q->where($this->col('fecha'), '<', $hasta);
 
         // Selección solo de columnas existentes
         $select = array_filter([
-            $this->cols['entrada'],
-            $this->cols['salida'],
-            $this->cols['cantidad'],
-            $this->cols['signo'],
-            $this->cols['total'],
-            $this->cols['cu'],
+            $this->cols['entrada'] ? $this->col('entrada') : null,
+            $this->cols['salida']  ? $this->col('salida')  : null,
+            $this->cols['cantidad']? $this->col('cantidad'): null,
+            $this->cols['signo']   ? $this->col('signo')   : null,
+            $this->cols['total']   ? $this->col('total')   : null,
+            $this->cols['cu']      ? $this->col('cu')      : null,
         ]);
-        if (empty($select)) $select = ['id']; // último recurso
+        if (empty($select)) $select = ['id'];
 
         $movs = $q->get($select);
 
@@ -165,11 +176,11 @@ class KardexProducto extends Component
         $val  = 0.0;
 
         foreach ($movs as $m) {
-            [$tipo, $c, $t] = $this->extractMovimiento($m);
+            [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
 
             if ($tipo === 'ENTRADA') {
                 $cant += $c; $val += $t;
-            } else { // SALIDA
+            } else {
                 $cpu = $cant > 0 ? ($val / max($cant, 1e-9)) : 0.0;
                 $cant -= $c; $val -= $c * $cpu;
                 if ($cant < 1e-9) { $cant = 0.0; $val = 0.0; }
@@ -186,41 +197,41 @@ class KardexProducto extends Component
         $hasta = $this->hasta ? Carbon::parse($this->hasta)->endOfDay()   : null;
 
         $q = Movimiento::query()
-            ->where($this->cols['producto'], $this->producto_id);
+            ->where($this->col('producto'), $this->producto_id);
 
-        if ($this->bodega_id && $this->cols['bodega']) $q->where($this->cols['bodega'], $this->bodega_id);
-        if ($desde) $q->where($this->cols['fecha'], '>=', $desde);
-        if ($hasta) $q->where($this->cols['fecha'], '<=', $hasta);
+        if ($this->bodega_id && $this->cols['bodega']) $q->where($this->col('bodega'), $this->bodega_id);
+        if ($desde) $q->where($this->col('fecha'), '>=', $desde);
+        if ($hasta) $q->where($this->col('fecha'), '<=', $hasta);
 
         if ($this->buscarDoc) {
             $txt = '%' . Str::of($this->buscarDoc)->trim() . '%';
             $q->where(function ($x) use ($txt) {
-                if ($this->cols['doc_tipo']) $x->orWhere($this->cols['doc_tipo'], 'like', $txt);
-                if ($this->cols['doc_id'])   $x->orWhere($this->cols['doc_id'],   'like', $txt);
-                if ($this->cols['ref'])      $x->orWhere($this->cols['ref'],      'like', $txt);
+                if ($this->cols['doc_tipo']) $x->orWhere($this->col('doc_tipo'), 'like', $txt);
+                if ($this->cols['doc_id'])   $x->orWhere($this->col('doc_id'),   'like', $txt);
+                if ($this->cols['ref'])      $x->orWhere($this->col('ref'),      'like', $txt);
             });
         }
 
-        $q->orderBy($this->cols['fecha'])->orderBy('id');
+        $q->orderBy($this->col('fecha'))->orderBy('id');
 
-        // Selección segura
+        // Selecciona solamente columnas existentes
         $select = array_values(array_filter([
             'id',
-            $this->cols['fecha'],
-            $this->cols['bodega'],
-            $this->cols['entrada'],
-            $this->cols['salida'],
-            $this->cols['cantidad'],
-            $this->cols['signo'],
-            $this->cols['cu'],
-            $this->cols['total'],
-            $this->cols['doc_tipo'],
-            $this->cols['doc_id'],
-            $this->cols['ref'],
+            $this->col('fecha'),
+            $this->cols['bodega']   ? $this->col('bodega')   : null,
+            $this->cols['entrada']  ? $this->col('entrada')  : null,
+            $this->cols['salida']   ? $this->col('salida')   : null,
+            $this->cols['cantidad'] ? $this->col('cantidad') : null,
+            $this->cols['signo']    ? $this->col('signo')    : null,
+            $this->cols['cu']       ? $this->col('cu')       : null,
+            $this->cols['total']    ? $this->col('total')    : null,
+            $this->cols['doc_tipo'] ? $this->col('doc_tipo') : null,
+            $this->cols['doc_id']   ? $this->col('doc_id')   : null,
+            $this->cols['ref']      ? $this->col('ref')      : null,
         ]));
         $paginator = $q->paginate($this->perPage, $select);
 
-        // Para CPU correcto en páginas > 1: “replay” previo
+        // IDs completos para “replay” previo y CPU correcto al entrar en una página intermedia
         $idsOrdenados  = (clone $q)->pluck('id');
         $firstModel    = $paginator->items()[0] ?? null;
         $firstIdPagina = $firstModel->id ?? null;
@@ -232,20 +243,21 @@ class KardexProducto extends Component
         if ($idsPrev->isNotEmpty()) {
             $prevSelect = array_values(array_filter([
                 'id',
-                $this->cols['fecha'],
-                $this->cols['entrada'],
-                $this->cols['salida'],
-                $this->cols['cantidad'],
-                $this->cols['signo'],
-                $this->cols['cu'],
-                $this->cols['total'],
+                $this->col('fecha'),
+                $this->cols['entrada']  ? $this->col('entrada')  : null,
+                $this->cols['salida']   ? $this->col('salida')   : null,
+                $this->cols['cantidad'] ? $this->col('cantidad') : null,
+                $this->cols['signo']    ? $this->col('signo')    : null,
+                $this->cols['cu']       ? $this->col('cu')       : null,
+                $this->cols['total']    ? $this->col('total')    : null,
             ]));
+
             $prevMovs = Movimiento::whereIn('id', $idsPrev)
-                ->orderBy($this->cols['fecha'])->orderBy('id')
+                ->orderBy($this->col('fecha'))->orderBy('id')
                 ->get($prevSelect);
 
             foreach ($prevMovs as $m) {
-                [$tipo, $c, $t] = $this->extractMovimiento($m);
+                [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
 
                 if ($tipo === 'ENTRADA') {
                     $saldoCant += $c; $saldoVal += $t;
@@ -259,8 +271,11 @@ class KardexProducto extends Component
 
         $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
 
-        // Transformar ítems de la página y devolver nuevo paginator
-        $items = collect($paginator->items())->map(function ($m) use (&$saldoCant, &$saldoVal, &$cpu) {
+        // Transformar ítems de la página
+        $fechaCol = $this->col('fecha');
+        $bodCol   = $this->cols['bodega'] ? $this->col('bodega') : null;
+
+        $items = collect($paginator->items())->map(function ($m) use (&$saldoCant, &$saldoVal, &$cpu, $fechaCol, $bodCol) {
             [$tipo, $c, $t, $cu] = $this->extractMovimiento($m);
 
             $entrada = null; $salida = null;
@@ -278,26 +293,27 @@ class KardexProducto extends Component
 
             $cpu = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : 0.0;
 
-            $bodegaNombre = $this->cols['bodega']
-                ? optional($this->bodegas->firstWhere('id', $m->{$this->cols['bodega']}))->nombre
+            // bodega
+            $bodegaNombre = $bodCol
+                ? optional($this->bodegas->firstWhere('id', $m->{$bodCol}))->nombre
                 : null;
 
+            // doc/ref
             $doc = trim(
-                ($this->cols['doc_tipo'] && $m->{$this->cols['doc_tipo']} ? $m->{$this->cols['doc_tipo']} : '') .
+                ($this->cols['doc_tipo'] && $m->{$this->col('doc_tipo')} ? $m->{$this->col('doc_tipo')} : '') .
                 ' ' .
-                ($this->cols['doc_id']   && $m->{$this->cols['doc_id']}   ? '#'.$m->{$this->cols['doc_id']} : '')
+                ($this->cols['doc_id']   && $m->{$this->col('doc_id')}   ? '#'.$m->{$this->col('doc_id')} : '')
             );
-            if ($this->cols['ref'] && !empty($m->{$this->cols['ref']})) {
-                $doc .= ' (' . $m->{$this->cols['ref']} . ')';
+            if ($this->cols['ref'] && !empty($m->{$this->col('ref')})) {
+                $doc .= ' (' . $m->{$this->col('ref')} . ')';
             }
             $doc = trim($doc) ?: '—';
 
-            $fechaStr = $m->{$this->cols['fecha']};
-            if ($fechaStr instanceof \DateTimeInterface) {
-                $fechaStr = $fechaStr->format('Y-m-d H:i');
-            } else {
-                $fechaStr = (string) $fechaStr;
-            }
+            // fecha
+            $fechaVal = $m->{$fechaCol};
+            $fechaStr = $fechaVal instanceof \Illuminate\Support\Carbon || $fechaVal instanceof Carbon
+                ? $fechaVal->format('Y-m-d H:i')
+                : (string) $fechaVal;
 
             return [
                 'id'         => $m->id,
@@ -307,6 +323,7 @@ class KardexProducto extends Component
                 'doc'        => $doc,
                 'entrada'    => $entrada,
                 'salida'     => $salida,
+                // Para SALIDA mostramos el CPU vigente; para ENTRADA, el costo de la fila si existe
                 'costo_unit' => $tipo === 'SALIDA' ? $cpu : ($cu ?: null),
                 'saldo_cant' => round($saldoCant, 6),
                 'saldo_val'  => round($saldoVal, 2),
@@ -314,6 +331,7 @@ class KardexProducto extends Component
             ];
         });
 
+        // Saldos finales (solo si hay ítems en la última página)
         if ($paginator->currentPage() === $paginator->lastPage() && $items->count()) {
             $last = $items->last();
             $this->saldoFinalCant = (float) $last['saldo_cant'];
@@ -338,12 +356,12 @@ class KardexProducto extends Component
      */
     private function extractMovimiento($m): array
     {
-        $entrada = $this->cols['entrada'] ? (float) ($m->{$this->cols['entrada']} ?? 0) : null;
-        $salida  = $this->cols['salida']  ? (float) ($m->{$this->cols['salida']}  ?? 0) : null;
-        $cantidad= $this->cols['cantidad']? (float) ($m->{$this->cols['cantidad']} ?? 0) : null;
-        $signo   = $this->cols['signo']   ? (float) ($m->{$this->cols['signo']}    ?? 0) : null;
+        $entrada = $this->cols['entrada'] ? (float) ($m->{$this->col('entrada')} ?? 0) : null;
+        $salida  = $this->cols['salida']  ? (float) ($m->{$this->col('salida')}  ?? 0) : null;
+        $cantidad= $this->cols['cantidad']? (float) ($m->{$this->col('cantidad')} ?? 0) : null;
+        $signo   = $this->cols['signo']   ? (float) ($m->{$this->col('signo')}    ?? 0) : null;
 
-        // 1) Si hay columnas separadas entrada/salida
+        // 1) Entrada/Salida separadas
         if (!is_null($entrada) || !is_null($salida)) {
             $entrada = max(0.0, (float) $entrada);
             $salida  = max(0.0, (float) $salida);
@@ -353,44 +371,28 @@ class KardexProducto extends Component
             } elseif ($salida > 0 && $entrada == 0) {
                 $tipo = 'SALIDA';  $c = $salida;
             } else {
-                // Si por algún motivo vienen ambos, priorizamos el mayor
                 if ($entrada >= $salida) { $tipo = 'ENTRADA'; $c = $entrada; }
                 else { $tipo = 'SALIDA'; $c = $salida; }
             }
         }
-        // 2) Si hay una cantidad y columna signo
+        // 2) Cantidad + signo
         elseif (!is_null($cantidad) && !is_null($signo)) {
             $tipo = ((int)$signo >= 0) ? 'ENTRADA' : 'SALIDA';
             $c    = abs($cantidad);
         }
-        // 3) Solo cantidad (por signo de la cantidad)
+        // 3) Solo cantidad
         elseif (!is_null($cantidad)) {
             $tipo = ($cantidad >= 0) ? 'ENTRADA' : 'SALIDA';
             $c    = abs($cantidad);
         }
-        // 4) Último recurso: sin datos → no mueve
+        // 4) Sin datos → no mueve
         else {
             $tipo = 'ENTRADA'; $c = 0.0;
         }
 
-        $cu = $this->cols['cu']    ? (float) ($m->{$this->cols['cu']}    ?? 0) : 0.0;
-        $t  = $this->cols['total'] ? (float) ($m->{$this->cols['total']} ?? ($c * $cu)) : ($c * $cu);
+        $cu = $this->cols['cu']    ? (float) ($m->{$this->col('cu')}    ?? 0) : 0.0;
+        $t  = $this->cols['total'] ? (float) ($m->{$this->col('total')} ?? ($c * $cu)) : ($c * $cu);
 
         return [$tipo, $c, $t, $cu];
     }
-
- 
-
-/** Getter seguro para columnas (con fallback adicional opcional) */
-private function col(string $k, ?string $fallback = null): string
-{
-    if (!array_key_exists($k, $this->cols) || !$this->cols[$k]) {
-        return $fallback ?? match ($k) {
-            'fecha'    => 'created_at',
-            'producto' => 'producto_id',
-            default    => $k, // última salida: devuelve lo pedido
-        };
-    }
-    return $this->cols[$k];
-}
 }

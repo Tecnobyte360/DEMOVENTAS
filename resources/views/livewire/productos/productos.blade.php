@@ -458,7 +458,7 @@
             <th class="p-3 text-center font-semibold">Precio (sin IVA)</th>
             <th class="p-3 text-center font-semibold">Impuesto</th>
             <th class="p-3 text-center font-semibold">Precio c/ IVA</th>
-            <th class="p-3 text-center font-semibold">Cuentas</th>
+            {{-- <th class="p-3 text-center font-semibold">Cuentas</th> --}}
             <th class="p-3 text-center font-semibold">Subcategoría</th>
             <th class="p-3 text-center font-semibold">Stock Total</th>
             <th class="p-3 text-center font-semibold">Costo Prom. Global</th> {{-- NUEVO --}}
@@ -519,7 +519,7 @@
               <td class="p-3 text-center">${{ number_format($prod->precio_con_iva, 2) }}</td>
 
               {{-- Resumen cuentas --}}
-              <td class="p-3">
+              {{-- <td class="p-3">
                 @if(($prod->mov_contable_segun ?? null) === \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA)
                   <span class="text-xs inline-flex items-center px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
                     Según subcategoría
@@ -537,7 +537,7 @@
                 @else
                   <span class="text-gray-400 italic text-xs">Sin cuentas</span>
                 @endif
-              </td>
+              </td> --}}
 
               <td class="p-3 text-center">{{ $prod->subcategoria->nombre ?? '-' }}</td>
 

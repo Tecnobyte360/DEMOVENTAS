@@ -309,13 +309,13 @@
                   </select>
                 </td>
 
-                {{-- Cuenta ingreso (visual, bloqueada) --}}
+            
                 <td class="px-4 py-3 min-w-[260px]">
                   <div class="space-y-1">
                     <select
                       wire:model.live.number="lineas.{{ $i }}.cuenta_ingreso_id"
                       class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('lineas.'.$i.'.cuenta_ingreso_id') border-red-500 focus:ring-red-300 @enderror"
-                      disabled
+                      
                     >
                       <option value="">— Seleccione —</option>
                       @if($prodSel && $prodSel->cuentaIngreso)
@@ -345,7 +345,7 @@
                 </td>
 
                 {{-- Descripción --}}
-                <td class="px-4 py-3">
+                <td class="px-4 py-3 min-w-[200px]">
                   <input type="text" placeholder="Descripción (opcional)" wire:model.live.debounce.250ms="lineas.{{ $i }}.descripcion"
                          class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                 </td>
@@ -391,7 +391,7 @@
                   <select
                     wire:model.live="lineas.{{ $i }}.impuesto_id"
                     wire:change="setImpuesto({{ $i }}, $event.target.value)"
-                    class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60" disabled
+                    class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60" 
                   >
                     <option value="">— Sin impuesto / Exento —</option>
 

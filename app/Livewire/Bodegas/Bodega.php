@@ -2,15 +2,15 @@
 
 namespace App\Livewire\Bodegas;
 
-use App\Models\Bodegas;
 use Livewire\Attributes\On;
 use Livewire\Component;
-use Illuminate\Validation\Rule;
+// Usa alias para no chocar con el nombre del componente:
+use App\Models\Bodega as BodegaModel;
 
 class Bodega extends Component
 {
     // Lista
-    public $bodegas = [];
+    public array $bodegas = [];
 
     // Formulario
     public ?int $bodega_id = null;
@@ -43,7 +43,7 @@ class Bodega extends Component
     #[On('listarBodegas')]
     public function listar(): void
     {
-        $this->bodegas = Bodega::orderBy('id','desc')->get()->toArray();
+        $this->bodegas = BodegaModel::orderBy('id', 'desc')->get()->toArray();
     }
 
     public function abrirCrear(): void
@@ -54,7 +54,7 @@ class Bodega extends Component
 
     public function abrirEditar(int $id): void
     {
-        $m = Bodega::findOrFail($id);
+        $m = BodegaModel::findOrFail($id);
 
         $this->bodega_id = $m->id;
         $this->nombre    = (string) $m->nombre;
@@ -68,7 +68,7 @@ class Bodega extends Component
     {
         $this->validate();
 
-        Bodega::updateOrCreate(
+        BodegaModel::updateOrCreate(
             ['id' => $this->bodega_id],
             [
                 'nombre'    => $this->nombre,
@@ -78,16 +78,16 @@ class Bodega extends Component
         );
 
         $this->dispatch('toast', type: 'success', message: 'Bodega guardada correctamente.');
-        $this->dispatch('listarBodegas'); // refresca lista (también llama a listar() en este mismo comp)
+        $this->dispatch('listarBodegas'); // refresca lista (también llama a listar())
 
         $this->showModal = false;
         $this->resetForm();
-        $this->listar(); // por si no usas el evento arriba, asegura refresco
+        $this->listar(); // asegura refresco si no se captura el evento
     }
 
     public function toggleEstado(int $id): void
     {
-        $m = Bodega::findOrFail($id);
+        $m = BodegaModel::findOrFail($id);
         $m->activo = ! $m->activo;
         $m->save();
 
@@ -97,7 +97,7 @@ class Bodega extends Component
 
     public function eliminar(int $id): void
     {
-        Bodega::whereKey($id)->delete();
+        BodegaModel::whereKey($id)->delete();
         $this->dispatch('toast', type: 'success', message: 'Bodega eliminada.');
         $this->listar();
     }

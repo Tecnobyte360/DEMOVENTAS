@@ -1,0 +1,532 @@
+{{-- resources/views/livewire/compras/nota-credito-compra-form.blade.php --}}
+<section class="mt-6 md:mt-8 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+
+  {{-- ===== PASO 1: Datos de cabecera ===== --}}
+  <section class="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800" aria-label="Datos de la nota crédito (compra)">
+    <header class="mb-6">
+      <h2 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+        <span class="inline-grid place-items-center w-9 md:w-10 h-9 md:h-10 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">1</span>
+        Datos de la nota crédito de compra
+      </h2>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {{-- Proveedor --}}
+      <section>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+          Proveedor <span class="text-red-500">*</span>
+        </label>
+
+        <select
+          wire:key="proveedor-select-{{ $socio_negocio_id ?? 'x' }}"
+          wire:model.live.number="socio_negocio_id"
+          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+        >
+          <option value="">— Seleccione —</option>
+          @foreach($proveedores as $p)
+            <option value="{{ $p->id }}">{{ $p->razon_social }} ({{ $p->nit }})</option>
+          @endforeach
+        </select>
+        @error('socio_negocio_id')
+          <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+        @enderror
+      </section>
+
+      {{-- Serie --}}
+      <section>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Serie (NC Compra)</label>
+        <div class="flex items-center gap-3">
+          <select
+            wire:model.number="serie_id"
+            class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+          >
+            @foreach($series as $s)
+              <option value="{{ $s->id }}">
+                {{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} → {{ $s->hasta }})
+              </option>
+            @endforeach
+          </select>
+
+          @if($serieDefault)
+            <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 text-xs">
+              <i class="fa fa-star"></i> {{ $serieDefault->nombre }}
+            </span>
+          @endif
+        </div>
+      </section>
+
+      {{-- Fechas / Motivo --}}
+      <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Fecha <span class="text-red-500">*</span></label>
+          <input type="date" wire:model="fecha" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('fecha') border-red-500 focus:ring-red-300 @enderror">
+          @error('fecha') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Motivo</label>
+          <input type="text" wire:model.debounce.300ms="motivo" placeholder="Devolución proveedor, descuento, error…" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+        </div>
+      </section>
+    </div>
+
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {{-- Factura de compra a afectar (opcional) --}}
+      <section>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Factura de compra a afectar (opcional)</label>
+
+        <div class="mb-2 hidden" wire:loading.class.remove="hidden" wire:target="socio_negocio_id">
+          <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+            <i class="fa-solid fa-spinner fa-spin"></i> Cargando facturas del proveedor…
+          </span>
+        </div>
+
+        <select
+          wire:model.number="factura_compra_id"
+          wire:key="facturas-proveedor-select-{{ $socio_negocio_id ?? 0 }}-{{ count($facturasProveedor) }}"
+          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-60"
+          @disabled(empty($socio_negocio_id))
+        >
+          @if(empty($socio_negocio_id))
+            <option value="">— Seleccione un proveedor primero —</option>
+          @else
+            <option value="">— Ninguna —</option>
+            @forelse($facturasProveedor as $f)
+              <option value="{{ $f['id'] }}">
+                #{{ $f['numero'] }} · {{ $f['fecha'] }} · $ {{ number_format($f['total'], 0) }}
+                @if(($f['saldo'] ?? 0) > 0) · Saldo: $ {{ number_format($f['saldo'], 0) }} @endif
+              </option>
+            @empty
+              <option value="">(Este proveedor no tiene facturas)</option>
+            @endforelse
+          @endif
+        </select>
+      </section>
+
+      {{-- Cuenta contable (CxP proveedor / caja-bancos) --}}
+      <section>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+          Cuenta contable (CxP proveedor / caja-bancos)
+        </label>
+
+        @php
+          $selectedId = (int) ($cuenta_cobro_id ?? 0);
+          $tieneSel   = $selectedId && ($cuentasCXP->contains('id',$selectedId) || $cuentasCaja->contains('id',$selectedId));
+          $opActual   = (!$tieneSel && $selectedId) ? \App\Models\CuentasContables\PlanCuentas::find($selectedId) : null;
+        @endphp
+
+        <select
+          wire:model.number="cuenta_cobro_id"
+          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+        >
+          @if($opActual)
+            <option value="{{ $opActual->id }}"> {{ $opActual->codigo }} — {{ $opActual->nombre }} (actual) </option>
+          @endif
+
+          @if($cuentasCXP->count())
+            <optgroup label="Cuentas por pagar (CxP)">
+              @foreach($cuentasCXP as $c)
+                <option value="{{ $c->id }}">{{ $c->codigo }} — {{ $c->nombre }}</option>
+              @endforeach
+            </optgroup>
+          @endif
+
+          @if($cuentasCaja->count())
+            <optgroup label="Caja y Bancos">
+              @foreach($cuentasCaja as $c)
+                <option value="{{ $c->id }}">{{ $c->codigo }} — {{ $c->nombre }}</option>
+              @endforeach
+            </optgroup>
+          @endif
+        </select>
+
+        @error('cuenta_cobro_id')
+          <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+        @enderror
+      </section>
+
+      {{-- Notas --}}
+      <section>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Notas</label>
+        <input type="text" placeholder="Observaciones visibles en el documento" wire:model.debounce.400ms="notas" class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+      </section>
+    </div>
+
+    <div class="mt-6">
+      {{-- Toggle: descontar inventario --}}
+      <label class="inline-flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
+        <input type="checkbox" wire:model="descontar_inventario" class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+        Descontar inventario (devolución al proveedor)
+      </label>
+    </div>
+  </section>
+
+  {{-- ===== PASO 2: Líneas ===== --}}
+  <section class="p-6 md:p-8" aria-label="Líneas de la nota crédito de compra">
+    <section
+      class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-x-auto shadow"
+      aria-label="Tabla de líneas"
+      wire:key="tabla-lineas-compra-{{ $factura_compra_id ?? 0 }}-{{ count($lineas) }}"
+    >
+      <table class="min-w-full text-sm">
+        <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+          <tr>
+            <th class="px-4 py-3 text-left">Imagen</th>
+            <th class="px-4 py-3 text-left">Producto</th>
+            <th class="px-4 py-3 text-left">Descripción</th>
+            <th class="px-4 py-3 text-left">Bodega</th>
+            <th class="px-4 py-3 text-right">Cant.</th>
+            <th class="px-4 py-3 text-right">Costo</th>
+            <th class="px-4 py-3 text-right">Desc %</th>
+            <th class="px-4 py-3 text-left">Impuesto</th>
+            <th class="px-4 py-3 text-right">% Imp.</th>
+            <th class="px-4 py-3 text-right">Imp. $</th>
+            <th class="px-4 py-3 text-right">Total línea</th>
+            <th class="px-4 py-3 text-right">Acciones</th>
+          </tr>
+        </thead>
+
+        <tbody
+          class="divide-y divide-gray-200 dark:divide-gray-800"
+          wire:key="tbody-lineas-compra-{{ $factura_compra_id ?? 0 }}-{{ count($lineas) }}"
+        >
+          @forelse($lineas as $i => $l)
+            @php
+              $prodSel  = !empty($l['producto_id']) ? $productos->firstWhere('id', $l['producto_id']) : null;
+              $imgUrl   = $prodSel?->imagen_url ?? null;
+              $ivaMonto = \App\Helpers\Money::ivaImporte($l);
+              $totalLin = \App\Helpers\Money::totalLinea($l);
+            @endphp
+
+            <tr
+              wire:key="linea-compra-{{ $i }}-{{ $lineas[$i]['producto_id'] ?? 'x' }}-{{ $lineas[$i]['bodega_id'] ?? 'x' }}"
+              class="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+            >
+              {{-- Imagen --}}
+              <td class="px-4 py-3 w-[72px]">
+                <div class="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 grid place-items-center overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700">
+                  @if($imgUrl)
+                    <button type="button" class="group relative h-full w-full"
+                            @click.stop="$dispatch('preview-image', { src: '{{ $imgUrl }}', title: '{{ e($prodSel->nombre ?? 'Producto') }}' })"
+                            aria-label="Ver imagen de {{ $prodSel->nombre ?? 'producto' }}" title="Ver imagen">
+                      <img src="{{ $imgUrl }}" class="h-full w-full object-cover transition group-hover:scale-105" alt="img-{{ $prodSel->nombre ?? 'producto' }}"/>
+                      <span class="pointer-events-none absolute inset-0 ring-2 ring-indigo-400/0 group-hover:ring-indigo-400/60 transition"></span>
+                      <span class="pointer-events-none absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition">Ver</span>
+                    </button>
+                  @else
+                    <div class="h-full w-full grid place-items-center">
+                      <svg viewBox="0 0 24 24" class="h-6 w-6 text-gray-400" aria-hidden="true"><path fill="currentColor" d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h12l2 2Zm-5-9a2 2 0 1 1-4.001-.001A2 2 0 0 1 16 10Z"/></svg>
+                    </div>
+                  @endif
+                </div>
+              </td>
+
+              {{-- Producto --}}
+              <td class="px-4 py-3 min-w-[260px]">
+                <select
+                  wire:key="prod-compra-{{ $i }}-{{ $lineas[$i]['producto_id'] ?? 'x' }}"
+                  wire:model.number="lineas.{{ $i }}.producto_id"
+                  wire:change="setProducto({{ $i }}, $event.target.value)"
+                  class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+                >
+                  <option value="">— Seleccione —</option>
+                  @foreach($productos as $p)
+                    <option value="{{ $p->id }}">{{ $p->nombre }}</option>
+                  @endforeach
+                </select>
+              </td>
+
+              {{-- Descripción --}}
+              <td class="px-4 py-3">
+                <input type="text" placeholder="Descripción (opcional)" wire:model.debounce.250ms="lineas.{{ $i }}.descripcion"
+                       class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+              </td>
+
+              {{-- Bodega + STOCK --}}
+              <td class="px-4 py-3 min-w-[220px]">
+                <select wire:model.number="lineas.{{ $i }}.bodega_id"
+                        class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                  <option value="">— Seleccione —</option>
+                  @foreach($bodegas as $b)
+                    <option value="{{ $b->id }}">{{ $b->nombre }}</option>
+                  @endforeach
+                </select>
+
+                {{-- Stock visible --}}
+                <div class="mt-2 flex items-center justify-between gap-2">
+                  <div
+                    wire:loading.flex
+                    wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
+                    class="items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600"
+                  >
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span class="text-sm italic">Consultando stock…</span>
+                  </div>
+
+                  <span
+                    wire:loading.remove
+                    wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
+                    class="inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                  >
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    Stock: <strong>{{ number_format($this->getStockDeLinea($i), 2) }}</strong>
+                  </span>
+                </div>
+              </td>
+
+              {{-- Cantidad --}}
+              <td class="px-4 py-3 text-right">
+                <input type="number" step="1" min="1"
+                       wire:model.debounce.200ms.number="lineas.{{ $i }}.cantidad"
+                       class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+              </td>
+
+              {{-- Costo (precio unitario de compra) --}}
+              <td class="px-4 py-3 text-right">
+                <input type="number" step="0.01" min="0"
+                       wire:model.debounce.200ms.number="lineas.{{ $i }}.precio_unitario"
+                       class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+              </td>
+
+              {{-- Descuento --}}
+              <td class="px-4 py-3 text-right">
+                <input type="number" step="0.001" min="0"
+                       wire:model.debounce.200ms.number="lineas.{{ $i }}.descuento_pct"
+                       class="w-24 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+              </td>
+
+              {{-- Impuesto (COMPRAS) --}}
+              <td class="px-4 py-3 min-w-[240px]">
+                <select
+                  wire:model.number="lineas.{{ $i }}.impuesto_id"
+                  wire:change="setImpuesto({{ $i }}, $event.target.value)"
+                  class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+                >
+                  <option value="">— Sin impuesto / Exento —</option>
+
+                  @if($prodSel && $prodSel->impuesto && $prodSel->impuesto->activo)
+                    <option value="{{ $prodSel->impuesto->id }}">
+                      (Sugerido) {{ $prodSel->impuesto->codigo }} — {{ $prodSel->impuesto->nombre }}
+                      @if(!is_null($prodSel->impuesto->porcentaje))
+                        ({{ number_format($prodSel->impuesto->porcentaje, 2) }}%)
+                      @else
+                        (monto fijo)
+                      @endif
+                    </option>
+                  @endif
+
+                  @foreach($impuestosCompras as $imp)
+                    <option value="{{ $imp->id }}">
+                      {{ $imp->codigo }} — {{ $imp->nombre }}
+                      @if(!is_null($imp->porcentaje))
+                        ({{ number_format($imp->porcentaje, 2) }}%)
+                      @else
+                        (monto fijo)
+                      @endif
+                    </option>
+                  @endforeach
+                </select>
+              </td>
+
+              {{-- % Impuesto --}}
+              <td class="px-4 py-3 text-right">
+                <input type="number" step="0.001" min="0"
+                       wire:model.debounce.200ms.number="lineas.{{ $i }}.impuesto_pct"
+                       class="w-24 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+              </td>
+
+              {{-- Impuesto $ --}}
+              <td class="px-4 py-3 text-right">${{ number_format($ivaMonto, 2) }}</td>
+
+              {{-- Total línea --}}
+              <td class="px-4 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">${{ number_format($totalLin, 2) }}</td>
+
+              {{-- Acciones --}}
+              <td class="px-4 py-3 text-right">
+                <div class="inline-flex items-center gap-2">
+                  <button type="button" wire:click="addLinea" class="h-10 px-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white"
+                          wire:loading.attr="disabled" wire:target="addLinea,removeLinea,guardar,emitir">
+                    + Línea
+                  </button>
+                  <button type="button" wire:click="removeLinea({{ $i }})" class="h-10 px-3 rounded-xl bg-red-500 hover:bg-red-600 text-white"
+                          wire:loading.attr="disabled" wire:target="addLinea,removeLinea,guardar,emitir">
+                    Quitar
+                  </button>
+                </div>
+              </td>
+            </tr>
+          @empty
+            <tr>
+              <td colspan="12" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                No hay líneas. Usa <button type="button" class="text-violet-600 hover:underline" wire:click="addLinea">+ Línea</button>.
+              </td>
+            </tr>
+          @endforelse
+        </tbody>
+
+        <tfoot class="bg-gray-50 dark:bg-gray-800/40">
+          <tr>
+            <td colspan="9"></td>
+            <td class="px-4 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Subtotal NC:</td>
+            <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">${{ number_format($this->subtotal, 2) }}</td>
+            <td></td>
+          </tr>
+          <tr>
+            <td colspan="9"></td>
+            <td class="px-4 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Impuestos NC:</td>
+            <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">${{ number_format($this->impuestosTotal, 2) }}</td>
+            <td></td>
+          </tr>
+          <tr class="bg-gray-100 dark:bg-gray-800/60">
+            <td colspan="9"></td>
+            <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">Total NC:</td>
+            <td class="px-4 py-2 text-right text-lg font-extrabold text-gray-900 dark:text-white">${{ number_format($this->total, 2) }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
+  </section>
+
+  {{-- ===== FOOTER STICKY DE ACCIONES ===== --}}
+  @php
+    $tieneNota = (bool) ($nota?->id);
+  @endphp
+
+  <footer
+    class="sticky bottom-0 inset-x-0 bg-white/85 dark:bg-gray-900/85 backdrop-blur border-t border-gray-200 dark:border-gray-800"
+    aria-label="Acciones de nota crédito compra"
+  >
+    <div class="px-4 md:px-8 py-4">
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-center">
+
+        {{-- Totales / vínculo --}}
+        <div class="xl:col-span-3 flex flex-wrap items-center gap-2 text-sm md:text-base text-gray-700 dark:text-gray-300">
+          <span class="font-semibold">Total NC:</span>
+          <span class="text-lg md:text-xl font-extrabold text-gray-900 dark:text-white">
+            $ {{ number_format($this->total, 2) }}
+          </span>
+
+          @if($factura_compra_id)
+            <span class="inline-flex items-center gap-2 px-2 py-1.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 text-xs">
+              <i class="fa-solid fa-link"></i>
+              Afecta factura de compra #{{ $factura_compra_id }}
+            </span>
+          @endif
+        </div>
+
+        {{-- Stepper --}}
+        <div class="xl:col-span-6">
+          <div
+            x-data="{
+              estado: @entangle('estado'),
+              get currentStep() {
+                if (this.estado === 'anulada') return 4
+                if (this.estado === 'cerrado') return 4
+                if (this.estado === 'emitida') return 3
+                return 1
+              },
+              stepStatus(n) {
+                if (n < this.currentStep) return 'complete'
+                if (n === this.currentStep) return 'current'
+                return 'upcoming'
+              },
+              get progressPct() {
+                return [0,33,66,100][this.currentStep - 1] || 0
+              }
+            }"
+            class="w-full"
+          >
+            <div class="relative mx-auto max-w-3xl">
+              <div class="absolute left-0 right-0 top-5 h-1 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-1 bg-indigo-600 dark:bg-indigo-400 transition-all duration-500"
+                     :style="`width: ${progressPct}%`"></div>
+              </div>
+
+              <ol class="relative z-10 grid grid-cols-4 gap-3 md:gap-6">
+                <li class="flex flex-col items-center text-center">
+                  <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
+                       :class="{
+                         'bg-indigo-600 text-white border-indigo-600 shadow': stepStatus(1) !== 'upcoming',
+                         'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': stepStatus(1) === 'upcoming'
+                       }" title="Borrador / Guardar">
+                    <i class="fa-solid fa-pen text-sm md:text-base"></i>
+                  </div>
+                  <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Borrador</div>
+                  <div class="hidden md:block text-xs text-slate-500">NC Compra Borrador</div>
+                </li>
+
+                <li class="flex flex-col items-center text-center">
+                  <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
+                       :class="{
+                         'bg-emerald-600 text-white border-emerald-600 shadow': stepStatus(2) !== 'upcoming',
+                         'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': stepStatus(2) === 'upcoming'
+                       }" title="Aplicar contra factura (opcional)">
+                    <i class="fa-solid fa-arrow-rotate-left text-sm md:text-base"></i>
+                  </div>
+                  <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Aplicación</div>
+                  <div class="hidden md:block text-xs text-slate-500">Contra factura compra</div>
+                </li>
+
+                <li class="flex flex-col items-center textcenter">
+                  <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
+                       :class="{
+                         'bg-violet-600 text-white border-violet-600 shadow': stepStatus(3) !== 'upcoming',
+                         'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': stepStatus(3) === 'upcoming'
+                       }" title="Emitir documento">
+                    <i class="fa-solid fa-stamp text-sm md:text-base"></i>
+                  </div>
+                  <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Emitir</div>
+                  <div class="hidden md:block text-xs text-slate-500">—</div>
+                </li>
+
+                <li class="flex flex-col items-center text-center">
+                  <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
+                       :class="{
+                         'bg-rose-600 text-white border-rose-600 shadow': estado === 'anulada',
+                         'bg-teal-600 text-white border-teal-600 shadow': estado === 'cerrado',
+                         'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': !['anulada','cerrado'].includes(estado)
+                       }"
+                       :title="estado === 'anulada' ? 'Anulada' : (estado === 'cerrado' ? 'Cerrada' : 'Fin')">
+                    <i :class="estado === 'anulada' ? 'fa-solid fa-ban' : (estado === 'cerrado' ? 'fa-solid fa-check' : 'fa-regular fa-circle')"
+                       class="text-sm md:text-base"></i>
+                  </div>
+                  <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium"
+                       x-text="estado === 'anulada' ? 'Anulada' : (estado === 'cerrado' ? 'Cerrada' : 'Fin')"></div>
+                  <div class="hidden md:block text-xs text-slate-500">—</div>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        {{-- Acciones --}}
+        <div class="xl:col-span-3">
+          <div class="flex flex-col items-end gap-2">
+            <div class="flex flex-wrap justify-end gap-2">
+              <button type="button"
+                      class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
+                      wire:click="guardar" wire:loading.attr="disabled" wire:target="guardar,emitir"
+                      x-data="{e:@entangle('estado')}" :disabled="['anulada','cerrado'].includes(e)">
+                <i class="fa-solid fa-floppy-disk mr-2"></i>
+                <span wire:loading.remove wire:target="guardar">Nota Crédito Compra (Borrador)</span>
+                <span wire:loading wire:target="guardar">Guardando…</span>
+              </button>
+
+              <button type="button"
+                      class="h-11 px-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
+                      wire:click="emitir"
+                      wire:loading.attr="disabled" wire:target="emitir,guardar"
+                      x-data="{e:@entangle('estado')}" :disabled="['anulada','cerrado'].includes(e)">
+                <i class="fa-solid fa-stamp mr-2"></i>
+                <span wire:loading.remove wire:target="emitir">Emitir</span>
+                <span wire:loading wire:target="emitir">Emitiendo…</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </footer>
+</section>

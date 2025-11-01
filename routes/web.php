@@ -19,6 +19,7 @@ use App\Livewire\Catalogos\CiiuActividades;
 use App\Livewire\Catalogos\Municipios;
 use App\Livewire\Categoria\Categorias;
 use App\Livewire\Categorias\IndexCategorias;
+use App\Livewire\Compras\NotaCreditoCompraForm;
 use App\Livewire\CondicionesPago\Condicionpago;
 use App\Livewire\CondicionPagos\CondicionesPagos;
 use App\Livewire\ConfiguracionEmpresas\Empresas;
@@ -42,6 +43,7 @@ use App\Livewire\Inventario\Salidas;
 use App\Livewire\MaestroRutas\MaestroRutas;
 use App\Livewire\MediosPagos\MediosPagos;
 use App\Livewire\NormasReparto\NormasReparto;
+use App\Livewire\NotasCredito\NotaCreditoCompraForm as NotasCreditoNotaCreditoCompraForm;
 use App\Livewire\OperacionesStock\OperacionesStock;
 use App\Livewire\Productos\Productos;
 use App\Livewire\RutaDisponiblesConductor\RutasDisponiblesConductor;
@@ -261,6 +263,11 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/Cotizaciones', Cotizacion::class)->name('Cotizaciones');
     Route::get('/Facturacion', Index::class)->name('Facturacion');
     Route::get('/Notas-credito-clientes', NotaCreditoForm::class)->name('notascreditoclientes');
+  Route::get('/Notas-credito-compra', NotasCreditoNotaCreditoCompraForm::class)->name('Notascreditocompra');
+
+
+
+    
     Route::get('/SeriesDocumentos', Serie::class)->name('SeriesDocumentos');
     Route::get('/facturas/{factura}/ticket', [FacturaTicketController::class, 'show'])
         ->whereNumber('factura')

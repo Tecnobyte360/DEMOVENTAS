@@ -629,4 +629,7 @@ class FacturaCompraService
             Log::info('COMPRA::revertirPorFacturaCompra -> FIN', ['factura_id' => $f->id]);
         }, 3);
     }
+
+
+    
 }

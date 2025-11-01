@@ -191,7 +191,7 @@
                                     </a>
                                 </li>
                                   <li class="mb-1 last:mb-0">
-                                    <a class="block transition truncate @if(Route::is('Factura-compras')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Factura-compras') }}">
+                                    <a class="block transition truncate @if(Route::is('Notascreditocompra')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('Notascreditocompra') }}">
                                         <span class="text-sm font-medium ml-4">Nota credito de compras</span>
                                     </a>
                                 </li>

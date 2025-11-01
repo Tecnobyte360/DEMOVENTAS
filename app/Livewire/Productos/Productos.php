@@ -87,43 +87,50 @@ class Productos extends Component
         $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
     }
 
-    public function render()
-    {
-        $query = Producto::with([
-            'subcategoria',
-            'bodegas',
-            'impuesto',
-            'cuentas.tipo',
-            'cuentas.cuentaPUC',
-            'unidadMedida',
-        ]);
+  public function render()
+{
+    $query = Producto::with([
+        'subcategoria',
+        'bodegas',           // importante para costos por bodega
+        'impuesto',
+        'cuentas.tipo',
+        'cuentas.cuentaPUC',
+        'unidadMedida',
+    ]);
 
-        if ($this->search) {
-            $query->where('nombre', 'like', '%' . $this->search . '%');
-        }
-
-        $this->productos = $query->get();
-
-        // Preview de precio + IVA mientras editas
-        if ($this->isEdit && $this->producto_id) {
-            $this->productos = $this->productos->map(function ($p) {
-                if ($p->id === (int)$this->producto_id) {
-                    $p->precio = (float)($this->precio ?? $p->precio);
-                    if ($this->impuestoSeleccionado) {
-                        $p->setRelation('impuesto', $this->impuestoSeleccionado);
-                    }
-                }
-                return $p;
-            });
-        }
-
-        return view('livewire.productos.productos', [
-            'impuestos'   => $this->impuestos,
-            'tiposCuenta' => $this->tiposCuenta,
-            'cuentasPUC'  => $this->cuentasPUC,
-            'unidades'    => $this->unidades,
-        ]);
+    if ($this->search) {
+        $query->where('nombre', 'like', '%' . $this->search . '%');
     }
+
+    // Cargar productos
+    $this->productos = $query->get()->map(function (Producto $p) {
+        // Adjuntamos costos por bodega y promedio global
+        $p->setAttribute('costos_por_bodega', $p->costosPorBodega());
+        $p->setAttribute('costo_promedio_global', $p->costo_promedio_global);
+        return $p;
+    });
+
+    // Preview de precio + IVA mientras editas
+    if ($this->isEdit && $this->producto_id) {
+        $this->productos = $this->productos->map(function ($p) {
+            if ($p->id === (int)$this->producto_id) {
+                $p->precio = (float)($this->precio ?? $p->precio);
+                if ($this->impuestoSeleccionado) {
+                    $p->setRelation('impuesto', $this->impuestoSeleccionado);
+                }
+            }
+            return $p;
+        });
+    }
+
+    return view('livewire.productos.productos', [
+        'impuestos'   => $this->impuestos,
+        'tiposCuenta' => $this->tiposCuenta,
+        'cuentasPUC'  => $this->cuentasPUC,
+        'unidades'    => $this->unidades,
+    ]);
+}
+
 
     /* ========================= EDIT ========================= */
     public function edit(int $id): void
@@ -215,24 +222,24 @@ class Productos extends Component
     }
 
     /** ===== Bodegas UI ===== */
-   public function agregarBodega()
-{
-    if (!$this->es_inventariable) {
-        PendingToast::create()->error()->message('Los servicios no gestionan stock por bodega.')->duration(4000);
-        return;
+    public function agregarBodega()
+    {
+        if (!$this->es_inventariable) {
+            PendingToast::create()->error()->message('Los servicios no gestionan stock por bodega.')->duration(4000);
+            return;
+        }
+        if (!$this->bodegaSeleccionada) {
+            PendingToast::create()->error()->message('Selecciona una bodega primero.')->duration(4000);
+            return;
+        }
+        $this->stocksPorBodega[$this->bodegaSeleccionada] = [
+            'stock_minimo' => $this->stockMinimo,
+            'stock_maximo' => $this->stockMaximo,
+        ];
+        $this->bodegaSeleccionada = '';
+        $this->stockMinimo = 0;
+        $this->stockMaximo = null;
     }
-    if (!$this->bodegaSeleccionada) {
-        PendingToast::create()->error()->message('Selecciona una bodega primero.')->duration(4000);
-        return;
-    }
-    $this->stocksPorBodega[$this->bodegaSeleccionada] = [
-        'stock_minimo' => $this->stockMinimo,
-        'stock_maximo' => $this->stockMaximo,
-    ];
-    $this->bodegaSeleccionada = '';
-    $this->stockMinimo = 0;
-    $this->stockMaximo = null;
-}
     public function eliminarBodega($id)
     {
         unset($this->stocksPorBodega[$id]);
@@ -370,7 +377,7 @@ class Productos extends Component
                 'impuesto_id'        => $this->impuesto_id,
                 'unidad_medida_id'   => $this->unidad_medida_id,
                 'mov_contable_segun' => $this->mov_contable_segun,
-                 'es_inventariable'   => $this->es_inventariable,
+                'es_inventariable'   => $this->es_inventariable,
             ];
 
             if (!empty($this->imagen_base64)) {
@@ -471,7 +478,7 @@ class Productos extends Component
             'stocksPorBodega',
             'stockMinimoGlobal',
             'stockMaximoGlobal',
-              'es_inventariable',
+            'es_inventariable',
         ]);
 
         $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
@@ -501,5 +508,48 @@ class Productos extends Component
         if (!is_null($imp->porcentaje)) return round($base * (1 + ((float)$imp->porcentaje / 100)), 2);
         if (!is_null($imp->monto_fijo)) return round($base + (float)$imp->monto_fijo, 2);
         return round($base, 2);
+    }
+
+    public function costosPorBodega(): array
+    {
+        $this->loadMissing('bodegas');
+
+        return $this->bodegas
+            ->mapWithKeys(function ($b) {
+                return [
+                    $b->id => [
+                        'bodega'         => $b->nombre,
+                        'ultimo_costo'   => is_null($b->pivot->ultimo_costo) ? null : (float) $b->pivot->ultimo_costo,
+                        'costo_promedio' => is_null($b->pivot->costo_promedio) ? null : (float) $b->pivot->costo_promedio,
+                        'stock'          => (float) ($b->pivot->stock ?? 0),
+                    ],
+                ];
+            })
+            ->all();
+    }
+    public function getCostoPromedioGlobalAttribute(): ?float
+    {
+        if (!$this->relationLoaded('bodegas')) return null;
+
+        $totalStock = $this->bodegas->sum(fn($b) => (float) ($b->pivot->stock ?? 0));
+
+        // Si no hay stock, promedio simple de los costos_promedio existentes
+        if ($totalStock <= 0) {
+            $vals = $this->bodegas
+                ->pluck('pivot.costo_promedio')
+                ->filter(fn($v) => !is_null($v))
+                ->map(fn($v) => (float) $v);
+
+            return $vals->isEmpty() ? null : round($vals->avg(), 6);
+        }
+
+        // Promedio ponderado por stock
+        $sum = $this->bodegas->sum(function ($b) {
+            $stock = (float) ($b->pivot->stock ?? 0);
+            $cpu   = (float) ($b->pivot->costo_promedio ?? 0);
+            return $stock * $cpu;
+        });
+
+        return round($sum / max($totalStock, 1), 6);
     }
 }

@@ -446,7 +446,7 @@
     </div>
 
     <div class="w-full overflow-x-auto">
-      <table class="min-w-[1400px] w-full bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden text-sm text-gray-700 dark:text-gray-300">
+      <table class="min-w-[1500px] w-full bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden text-sm text-gray-700 dark:text-gray-300">
         <thead class="bg-violet-600 text-white">
           <tr>
             <th class="p-3 text-left font-semibold">#ID</th>
@@ -461,6 +461,7 @@
             <th class="p-3 text-center font-semibold">Cuentas</th>
             <th class="p-3 text-center font-semibold">Subcategoría</th>
             <th class="p-3 text-center font-semibold">Stock Total</th>
+            <th class="p-3 text-center font-semibold">Costo Prom. Global</th> {{-- NUEVO --}}
             <th class="p-3 text-center font-semibold">Estado</th>
             <th class="p-3 text-center font-semibold">Bodegas</th>
             <th class="p-3 text-center font-semibold">Acciones</th>
@@ -545,6 +546,11 @@
                 {{ $prod->es_inventariable ? $prod->bodegas->sum(fn($b) => $b->pivot->stock) : '—' }}
               </td>
 
+              {{-- NUEVO: Costo promedio global (CPU) --}}
+              <td class="p-3 text-center">
+                {{ is_null($prod->costo_promedio_global) ? '—' : number_format($prod->costo_promedio_global, 6) }}
+              </td>
+
               {{-- Estado --}}
               <td class="p-3 text-center">
                 <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full {{ $prod->activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
@@ -576,7 +582,7 @@
             {{-- Detalle bodegas (solo si inventariable) --}}
             @if ($prod->es_inventariable && !empty($mostrarBodegas[$prod->id]) && $prod->bodegas)
               <tr>
-                <td colspan="15" class="bg-gray-100 dark:bg-gray-700 p-4">
+                <td colspan="16" class="bg-gray-100 dark:bg-gray-700 p-4"> {{-- ajustado: antes 15 --}}
                   <div class="overflow-x-auto">
                     <table class="min-w-full text-sm text-gray-700 dark:text-gray-300">
                       <thead class="bg-violet-200 dark:bg-violet-700 text-gray-800 dark:text-white">
@@ -587,14 +593,20 @@
                           <th class="p-2 text-center">Stock Mínimo</th>
                           <th class="p-2 text-center">Stock Máximo</th>
                           <th class="p-2 text-center">Condición</th>
+                          <th class="p-2 text-center">Último Costo</th>      {{-- NUEVO --}}
+                          <th class="p-2 text-center">Costo Promedio</th>    {{-- NUEVO --}}
+                          <th class="p-2 text-center">Método</th>            {{-- NUEVO --}}
                         </tr>
                       </thead>
                       <tbody class="divide-y divide-gray-300 dark:divide-gray-600">
                         @foreach($prod->bodegas as $bodega)
                           @php
-                            $stock=$bodega->pivot->stock;
-                            $minimo=$bodega->pivot->stock_minimo;
-                            $maximo=$bodega->pivot->stock_maximo;
+                            $stock  = $bodega->pivot->stock;
+                            $minimo = $bodega->pivot->stock_minimo;
+                            $maximo = $bodega->pivot->stock_maximo;
+                            $ultimo = $bodega->pivot->ultimo_costo;
+                            $cpu    = $bodega->pivot->costo_promedio;
+                            $metodo = $bodega->pivot->metodo_costeo;
                           @endphp
                           <tr>
                             <td class="p-2">{{ $bodega->id }}</td>
@@ -621,6 +633,17 @@
                                 </span>
                               @endif
                             </td>
+
+                            {{-- NUEVAS CELDAS DE COSTOS --}}
+                            <td class="p-2 text-center">
+                              {{ is_null($ultimo) ? '—' : number_format((float)$ultimo, 6) }}
+                            </td>
+                            <td class="p-2 text-center">
+                              {{ is_null($cpu) ? '—' : number_format((float)$cpu, 6) }}
+                            </td>
+                            <td class="p-2 text-center">
+                              {{ $metodo ?: '—' }}
+                            </td>
                           </tr>
                         @endforeach
                       </tbody>
@@ -631,7 +654,7 @@
             @endif
           @empty
             <tr>
-              <td colspan="15" class="p-4 text-center text-gray-500 dark:text-gray-400 italic">No hay productos registrados.</td>
+              <td colspan="16" class="p-4 text-center text-gray-500 dark:text-gray-400 italic">No hay productos registrados.</td>
             </tr>
           @endforelse
         </tbody>
@@ -774,5 +797,3 @@
     Swal.fire({ icon: 'error', title: 'Error', text: e.detail.mensaje });
   });
 </script>
-
-

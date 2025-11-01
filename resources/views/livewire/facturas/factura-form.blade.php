@@ -590,7 +590,15 @@
                     <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Emitir</div>
                     <div class="hidden md:block text-xs text-rose-600" x-show="bloqueaEmitir">Requiere pago total</div>
                   </li>
-
+@if($habilitarActualizar)
+  <button type="button"
+          wire:click="actualizar"
+          wire:loading.attr="disabled"
+          class="h-11 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white shadow">
+    <i class="fa-solid fa-rotate mr-2"></i>
+    Actualizar cambios
+  </button>
+@endif
                   <li class="flex flex-col items-center text-center">
                     <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
                          :class="{

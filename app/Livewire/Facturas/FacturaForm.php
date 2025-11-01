@@ -42,7 +42,8 @@ class FacturaForm extends Component
     public ?string $terminos_pago = null;
     public ?string $notas = null;
     public string $moneda = 'COP';
-
+public bool $habilitarActualizar = false;
+private ?string $originalHash = null;
     public string $estado = 'borrador';
     public array $lineas = [];
     public array $stockVista = [];
@@ -1367,5 +1368,76 @@ public function emitir(): void
         ->info()->message('Formulario reiniciado, listo para nueva factura.')
         ->duration(4000);
 }
+/** Hash estable del estado relevante del form */
+private function computeHash(): string
+{
+    $payload = [
+        'serie_id'          => (int)($this->serie_id ?? 0),
+        'socio_negocio_id'  => (int)($this->socio_negocio_id ?? 0),
+        'fecha'             => (string)$this->fecha,
+        'vencimiento'       => (string)($this->vencimiento ?? ''),
+        'tipo_pago'         => (string)$this->tipo_pago,
+        'plazo_dias'        => (int)($this->plazo_dias ?? 0),
+        'terminos_pago'     => (string)($this->terminos_pago ?? ''),
+        'notas'             => (string)($this->notas ?? ''),
+        'moneda'            => (string)$this->moneda,
+        'estado'            => (string)$this->estado,
+        'cuenta_cobro_id'   => (int)($this->cuenta_cobro_id ?? 0),
+        'condicion_pago_id' => (int)($this->condicion_pago_id ?? 0),
 
+        // Normalizamos líneas para que el hash sea consistente
+        'lineas' => array_values(array_map(function ($l) {
+            return [
+                'producto_id'       => (int)($l['producto_id'] ?? 0),
+                'cuenta_ingreso_id' => (int)($l['cuenta_ingreso_id'] ?? 0),
+                'bodega_id'         => (int)($l['bodega_id'] ?? 0),
+                'descripcion'       => (string)($l['descripcion'] ?? ''),
+                'cantidad'          => round((float)($l['cantidad'] ?? 0), 3),
+                'precio_unitario'   => round((float)($l['precio_unitario'] ?? 0), 2),
+                'descuento_pct'     => round((float)($l['descuento_pct'] ?? 0), 3),
+                'impuesto_id'       => (int)($l['impuesto_id'] ?? 0),
+                'impuesto_pct'      => round((float)($l['impuesto_pct'] ?? 0), 3),
+            ];
+        }, $this->lineas ?? [])),
+    ];
+
+    return hash('sha256', json_encode($payload));
+}
+
+/** Congela el snapshot actual como base “sin cambios” */
+private function takeSnapshot(): void
+{
+    $this->originalHash = $this->computeHash();
+    $this->habilitarActualizar = false;
+}
+
+/** Recalcula la bandera de cambios, respetando reglas de estado */
+private function markDirtyIfNeeded(): void
+{
+    // No habilitar actualización si está bloqueada o emitida
+    if ($this->bloqueada || $this->estado === 'emitida') {
+        $this->habilitarActualizar = false;
+        return;
+    }
+    $this->habilitarActualizar = $this->computeHash() !== ($this->originalHash ?? '');
+}
+public function actualizar(): void
+{
+    if ($this->estado === 'emitida' || $this->bloqueada) {
+        PendingToast::create()->error()->message('No es posible actualizar: la factura está bloqueada o emitida.')->duration(6000);
+        return;
+    }
+
+    try {
+        // Reusa tu flujo de borrador
+        $this->persistirBorrador();
+        $this->takeSnapshot();
+
+        PendingToast::create()->success()->message('Cambios actualizados correctamente.')->duration(4500);
+        $this->dispatch('refrescar-lista-facturas');
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()->error()->message('No se pudieron actualizar los cambios.')->duration(8000);
+    }
+}
 }

@@ -17,7 +17,7 @@ class Asientos extends Component
     public string $search = '';
     public ?string $desde = null;
     public ?string $hasta = null;
-    public ?string $origen = null;   // Si quieres arrancar mostrando solo facturas: init en mount() => $this->origen = 'factura';
+    public ?string $origen = null;
     public ?string $tercero = null;
     public int $perPage = 15;
 
@@ -42,18 +42,12 @@ class Asientos extends Component
         'page'    => ['except' => 1],
     ];
 
-    // Si quieres iniciar filtrado solo por facturas, descomenta:
-    // public function mount(): void
-    // {
-    //     $this->origen = 'factura';
-    // }
-
-    public function updatingSearch()  { $this->resetPage(); }
-    public function updatingDesde()   { $this->resetPage(); }
-    public function updatingHasta()   { $this->resetPage(); }
-    public function updatingOrigen()  { $this->resetPage(); }
-    public function updatingTercero() { $this->resetPage(); }
-    public function updatingPerPage() { $this->resetPage(); }
+    public function updatingSearch()   { $this->resetPage(); }
+    public function updatingDesde()    { $this->resetPage(); }
+    public function updatingHasta()    { $this->resetPage(); }
+    public function updatingOrigen()   { $this->resetPage(); }
+    public function updatingTercero()  { $this->resetPage(); }
+    public function updatingPerPage()  { $this->resetPage(); }
 
     public function render()
     {
@@ -69,18 +63,14 @@ class Asientos extends Component
                           ->orWhere('origen_id', 'like', $s);
                     });
                 })
-                ->when($this->desde, fn ($q) => $q->whereDate('fecha', '>=', $this->desde))
-                ->when($this->hasta, fn ($q) => $q->whereDate('fecha', '<=', $this->hasta))
-                ->when($this->origen, fn ($q) => $q->where('origen', $this->origen))
-                ->when($this->tercero, function ($q) {
-                    $s = "%{$this->tercero}%";
-                    $q->whereHas('tercero', function ($qt) use ($s) {
-                        $qt->where('razon_social', 'like', $s)
-                           ->orWhere('nit', 'like', $s);
-                    });
-                })
-                // Prioriza facturas y, dentro de todo, muestra más recientes primero
-                ->orderByRaw("CASE WHEN origen = 'factura' THEN 0 ELSE 1 END")
+                ->when($this->desde, fn($q) => $q->whereDate('fecha', '>=', $this->desde))
+                ->when($this->hasta, fn($q) => $q->whereDate('fecha', '<=', $this->hasta))
+                ->when($this->origen, fn($q) => $q->where('origen', $this->origen))
+
+                // 👇 Prioriza últimas facturas si el origen es "factura"
+                ->when($this->origen === 'factura', fn($q) => $q->orderByDesc('origen_id'))
+
+                // Respaldo general: más recientes por fecha e id
                 ->orderByDesc('fecha')
                 ->orderByDesc('id')
                 ->paginate($this->perPage);
@@ -191,15 +181,15 @@ class Asientos extends Component
             }
 
             $this->asientoDetalle = [
-                'id'          => $a->id,
-                'fecha'       => $a->fecha,
-                'glosa'       => $a->glosa,
-                'origen'      => $a->origen,
-                'origen_id'   => $a->origen_id,
-                'moneda'      => $a->moneda,
-                'total_debe'  => $a->total_debe,
-                'total_haber' => $a->total_haber,
-                'tercero'     => $a->tercero ? [
+                'id'         => $a->id,
+                'fecha'      => $a->fecha,
+                'glosa'      => $a->glosa,
+                'origen'     => $a->origen,
+                'origen_id'  => $a->origen_id,
+                'moneda'     => $a->moneda,
+                'total_debe' => $a->total_debe,
+                'total_haber'=> $a->total_haber,
+                'tercero'    => $a->tercero ? [
                     'razon_social' => $a->tercero->razon_social,
                     'nit'          => $a->tercero->nit,
                 ] : null,

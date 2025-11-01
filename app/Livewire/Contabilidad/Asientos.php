@@ -49,40 +49,40 @@ class Asientos extends Component
     public function updatingTercero()  { $this->resetPage(); }
     public function updatingPerPage()  { $this->resetPage(); }
 
-   public function render()
-{
-    try {
-        $asientos = Asiento::query()
-            ->with(['tercero:id,razon_social,nit'])
-            ->when($this->search !== '', function ($q) {
-                $s = "%{$this->search}%";
-                $q->where(function ($q) use ($s) {
-                    $q->where('glosa', 'like', $s)
-                      ->orWhere('id', intval($this->search))
-                      ->orWhere('origen', 'like', $s)
-                      ->orWhere('origen_id', 'like', $s);
-                });
-            })
-            ->when($this->desde, fn($q) => $q->whereDate('fecha', '>=', $this->desde))
-            ->when($this->hasta, fn($q) => $q->whereDate('fecha', '<=', $this->hasta))
-            ->when($this->origen, fn($q) => $q->where('origen', $this->origen))
+    public function render()
+    {
+        try {
+            $asientos = Asiento::query()
+                ->with(['tercero:id,razon_social,nit'])
+                ->when($this->search !== '', function ($q) {
+                    $s = "%{$this->search}%";
+                    $q->where(function ($q) use ($s) {
+                        $q->where('glosa', 'like', $s)
+                          ->orWhere('id', intval($this->search))
+                          ->orWhere('origen', 'like', $s)
+                          ->orWhere('origen_id', 'like', $s);
+                    });
+                })
+                ->when($this->desde, fn($q) => $q->whereDate('fecha', '>=', $this->desde))
+                ->when($this->hasta, fn($q) => $q->whereDate('fecha', '<=', $this->hasta))
+                ->when($this->origen, fn($q) => $q->where('origen', $this->origen))
 
-            // Orden de llegada (cronológico ascendente)
-            // Si tu tabla tiene created_at, úsalo; si no, 'fecha' + 'id'.
-            // ->orderBy('created_at')->orderBy('id')   // <— usa este si existe created_at
-            ->when($this->origen === 'factura', fn($q) => $q->orderBy('origen_id')) // factura # asc
-            ->orderBy('fecha')     // más antiguos primero
-            ->orderBy('id')        // desempate estable
-            ->paginate($this->perPage);
+                // ====== ORDEN "LA ÚLTIMA PRIMERO" ======
+                // Para facturas: número de origen más alto primero
+                ->when($this->origen === 'factura', fn($q) => $q->orderByDesc('origen_id'))
+                // Recientes por fecha primero y, de empate, por id descendente
+                ->orderByDesc('fecha')
+                ->orderByDesc('id')
+                // =======================================
+                ->paginate($this->perPage);
 
-        return view('livewire.contabilidad.asientos', compact('asientos'));
-    } catch (\Throwable $e) {
-        Log::error('ASIENTOS RENDER ERROR', ['msg' => $e->getMessage()]);
-        PendingToast::create()->error()->message('No se pudo cargar la lista de asientos.')->duration(6000);
-        return view('livewire.contabilidad.asientos', ['asientos' => collect()]);
+            return view('livewire.contabilidad.asientos', compact('asientos'));
+        } catch (\Throwable $e) {
+            Log::error('ASIENTOS RENDER ERROR', ['msg' => $e->getMessage()]);
+            PendingToast::create()->error()->message('No se pudo cargar la lista de asientos.')->duration(6000);
+            return view('livewire.contabilidad.asientos', ['asientos' => collect()]);
+        }
     }
-}
-
 
     /** Ver detalle (consolidado por defecto) */
     public function ver(int $id): void

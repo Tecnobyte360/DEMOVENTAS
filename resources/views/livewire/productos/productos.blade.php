@@ -547,9 +547,10 @@
               </td>
 
               {{-- NUEVO: Costo promedio global (CPU) --}}
-              <td class="p-3 text-center">
-                {{ is_null($prod->costo_promedio_global) ? '—' : number_format($prod->costo_promedio_global, 6) }}
+             <td class="p-3 text-center">
+                {{ is_null($prod->costo_promedio_global) ? '—' : number_format($prod->costo_promedio_global, 2) }}
               </td>
+
 
               {{-- Estado --}}
               <td class="p-3 text-center">

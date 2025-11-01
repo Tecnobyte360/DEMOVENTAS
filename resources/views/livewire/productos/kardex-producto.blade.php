@@ -1,8 +1,10 @@
-{{-- Tabla (resumen + acordeón de detalle) --}}
+{{-- =============== MOVIMIENTOS (RESUMEN + DETALLE) =============== --}}
 <section class="space-y-3">
+  {{-- Toolbar --}}
   <div class="flex items-center justify-between">
     <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Movimientos</h3>
     <div class="flex items-center gap-2">
+      <label class="text-xs text-gray-500 dark:text-gray-400">Items:</label>
       <select wire:model.live="perPage" class="rounded-xl border bg-white dark:bg-gray-800 dark:text-white">
         @foreach([10,25,50,100] as $n)
           <option value="{{ $n }}">{{ $n }}/página</option>
@@ -11,9 +13,14 @@
     </div>
   </div>
 
-  <div x-data="{ open: {} }" class="overflow-x-auto">
-    {{-- Encabezado SOLO con columnas de resumen --}}
-    <table class="min-w-[900px] w-full text-sm bg-white dark:bg-gray-800 rounded-xl overflow-hidden">
+  {{-- Acordeones controlados por Alpine, con persistencia --}}
+  <div
+    x-data="kdxAccordions('kdx-open')"
+    x-init="init()"
+    class="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+  >
+    {{-- Encabezado (solo columnas resumen) --}}
+    <table class="min-w-[900px] w-full text-sm">
       <thead class="bg-violet-600 text-white">
         <tr>
           <th class="px-3 py-2 text-left">Fuente</th>
@@ -25,14 +32,15 @@
       </thead>
 
       <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-        @if(!$producto_id)
+        {{-- Si no hay producto seleccionado --}}
+        @unless($producto_id)
           <tr>
-            <td colspan="5" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">
+            <td colspan="5" class="px-3 py-6 text-center text-gray-500 dark:text-gray-400 italic">
               Selecciona un producto para ver su Kardex.
             </td>
           </tr>
         @else
-          {{-- Fila de saldo inicial (solo en primera página) --}}
+          {{-- Saldo inicial (solo página 1) --}}
           @if($filas->currentPage() === 1)
             <tr class="bg-gray-50 dark:bg-gray-700/50">
               <td class="px-3 py-2">
@@ -42,65 +50,61 @@
               </td>
               <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">—</td>
               <td class="px-3 py-2 italic text-gray-600 dark:text-gray-200">
-                {{ $bodega_id ? ($bodegas->firstWhere('id',$bodega_id)->nombre ?? '—') : 'Todas' }}
+                {{ $bodega_id ? ($bodegas->firstWhere('id', $bodega_id)->nombre ?? '—') : 'Todas' }}
               </td>
               <td class="px-3 py-2 font-medium">Saldo inicial</td>
               <td class="px-3 py-2 text-center">—</td>
             </tr>
           @endif
 
-          {{-- === GRUPOS POR DOCUMENTO (FILA RESUMEN + DETALLE OCULTO) === --}}
+          {{-- === GRUPOS POR DOCUMENTO: RESUMEN + DETALLE === --}}
           @forelse($grupos as $g)
-            {{-- FILA RESUMEN (clic para abrir/cerrar) --}}
+            @php
+              // id único por grupo para aria-controls (seguro para HTML)
+              $rowId = 'kdx-' . $g['uid'];
+            @endphp
+
+            {{-- FILA RESUMEN --}}
             <tr
-              class="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer border-l-4 border-l-indigo-500"
-              @click="open['{{ $g['uid'] }}'] = !open['{{ $g['uid'] }}']"
+              wire:key="kdx-row-{{ $g['uid'] }}"
+              class="hover:bg-gray-50 dark:hover:bg-gray-700/40 cursor-pointer border-l-4 border-l-indigo-500"
+              :aria-expanded="isOpen('{{ $g['uid'] }}')"
+              @click="toggle('{{ $g['uid'] }}')"
+              @keydown.enter.prevent="toggle('{{ $g['uid'] }}')"
+              @keydown.space.prevent="toggle('{{ $g['uid'] }}')"
+              tabindex="0"
+              role="button"
+              aria-controls="{{ $rowId }}"
             >
-              {{-- Fuente --}}
               <td class="px-3 py-2">
-                <span class="text-xs px-2 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 font-medium">
-                  DOC
-                </span>
+                <span class="text-xs px-2 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 font-medium">DOC</span>
               </td>
-
-              {{-- Fecha --}}
               <td class="px-3 py-2">{{ $g['fecha'] }}</td>
-
-              {{-- Bodega --}}
               <td class="px-3 py-2">{{ $g['bodega'] ?: '—' }}</td>
-
-              {{-- Doc/Ref con caret --}}
               <td class="px-3 py-2">
                 <div class="flex items-center gap-2">
                   <svg class="w-4 h-4 transition-transform"
-                       :class="open['{{ $g['uid'] }}'] ? 'rotate-90' : 'rotate-0'"
-                       viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd"
-                          d="M6 6a1 1 0 011.707-.707l4 4a1 1 0 010 1.414l-4 4A1 1 0 016 13.586L9.586 10 6 6.414A1 1 0 016 6z"
-                          clip-rule="evenodd" />
+                       :class="isOpen('{{ $g['uid'] }}') ? 'rotate-90' : 'rotate-0'"
+                       viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M7 5a1 1 0 011.707-.707l4 4a1 1 0 010 1.414l-4 4A1 1 0 017 12.586L10.586 9 7 5.414A1 1 0 017 5z" clip-rule="evenodd" />
                   </svg>
-                  <a class="text-violet-700 dark:text-violet-300 underline-offset-2 hover:underline">
+                  <span class="text-violet-700 dark:text-violet-300 underline-offset-2 hover:underline">
                     {{ $g['doc'] }}
-                  </a>
+                  </span>
                 </div>
               </td>
-
-              {{-- Chip RESUMEN --}}
               <td class="px-3 py-2 text-center">
-                <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
-                  RESUMEN
-                </span>
+                <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">RESUMEN</span>
               </td>
             </tr>
 
             {{-- FILA DETALLE (ACORDEÓN) --}}
-            <tr x-show="open['{{ $g['uid'] }}']" x-cloak>
-              <td colspan="5" class="px-3 pb-3">
-                <div class="mt-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-                  {{-- Tabla interna con TODAS las columnas técnicas --}}
+            <tr id="{{ $rowId }}" x-show="isOpen('{{ $g['uid'] }}')" x-collapse x-cloak>
+              <td colspan="5" class="px-0 pb-3">
+                <div class="mx-3 mt-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                   <div class="overflow-x-auto">
                     <table class="min-w-[1200px] w-full text-xs">
-                      <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
+                      <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200">
                         <tr>
                           <th class="px-3 py-2 text-left">Fuente</th>
                           <th class="px-3 py-2 text-left">Fecha</th>
@@ -128,13 +132,9 @@
                           <tr class="{{ $r['fuente']==='costos' ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-green-500' }}">
                             <td class="px-3 py-2">
                               @if($r['fuente']==='kardex')
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 font-medium">
-                                  KARDEX
-                                </span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-200 font-medium">KARDEX</span>
                               @else
-                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-medium">
-                                  COSTOS
-                                </span>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200 font-medium">COSTOS</span>
                               @endif
                             </td>
                             <td class="px-3 py-2">{{ $r['fecha'] }}</td>
@@ -192,7 +192,7 @@
                   </div>
 
                   {{-- Totales del documento (opcional) --}}
-                  <div class="flex items-center justify-end gap-6 px-3 py-2 text-xs text-gray-700 dark:text-gray-300">
+                  <div class="flex items-center justify-end gap-6 px-4 py-2 text-xs text-gray-700 dark:text-gray-300">
                     <div><span class="font-medium">Total entrada:</span> {{ number_format($g['entrada_total'],2) }}</div>
                     <div><span class="font-medium">Total salida:</span>  {{ number_format($g['salida_total'],2) }}</div>
                   </div>
@@ -201,15 +201,35 @@
             </tr>
           @empty
             <tr>
-              <td colspan="5" class="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic">Sin movimientos en el rango.</td>
+              <td colspan="5" class="px-3 py-6 text-center text-gray-500 dark:text-gray-400 italic">Sin movimientos en el rango.</td>
             </tr>
           @endforelse
-        @endif
+        @endunless
       </tbody>
     </table>
   </div>
 
+  {{-- Paginación --}}
   <div>
     {{ $filas->links() }}
   </div>
 </section>
+
+{{-- ===== Alpine helpers ===== --}}
+<script>
+  document.documentElement.classList.add('js'); // ayuda para x-cloak en CSS si lo usas global
+  function kdxAccordions(storageKey) {
+    return {
+      openMap: {},
+      init() {
+        const raw = localStorage.getItem(storageKey);
+        this.openMap = raw ? JSON.parse(raw) : {};
+      },
+      isOpen(uid) { return !!this.openMap[uid]; },
+      toggle(uid) {
+        this.openMap[uid] = !this.openMap[uid];
+        localStorage.setItem(storageKey, JSON.stringify(this.openMap));
+      },
+    }
+  }
+</script>

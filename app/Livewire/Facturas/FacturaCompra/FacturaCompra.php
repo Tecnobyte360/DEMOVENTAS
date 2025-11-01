@@ -1012,7 +1012,7 @@ class FacturaCompra extends Component
                     'estado'   => 'emitida',
                 ]);
 
-                \App\Services\FacturaCompraService::emitirFacturaCompra($this->factura);
+               \App\Services\InventarioService::aumentarPorFacturaCompra($this->factura);
 
                 $this->estado = $this->factura->estado;
             }, 3);

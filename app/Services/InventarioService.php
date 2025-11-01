@@ -380,4 +380,93 @@ class InventarioService
                 ->value('id') ?? 0) ?: null;
         });
     }
+
+    public static function aumentarPorFacturaCompra(\App\Models\Factura\Factura $factura): void
+{
+    DB::transaction(function () use ($factura) {
+        // Asegura relaciones necesarias
+        $factura->loadMissing('detalles.producto', 'serie.tipo');
+
+        // Tipo documento para Kardex (usa serie->tipo si existe)
+        $tipoId = static::tipoDocumentoId('FACTURA', $factura);
+
+        foreach ($factura->detalles as $d) {
+            if (!$d->producto_id || !$d->bodega_id) {
+                throw new \RuntimeException("Cada línea debe tener producto y bodega.");
+            }
+
+            // Costo unitario neto de la compra (sin IVA). Si manejas descuento a nivel línea, aplícalo aquí.
+            $costoUnit = static::costoUnitarioCompra($d); // ver helper abajo
+            $cantidad  = (float) $d->cantidad;
+
+            /** @var \App\Models\Productos\ProductoBodega $pb */
+            $pb = \App\Models\Productos\ProductoBodega::query()
+                ->where('producto_id', $d->producto_id)
+                ->where('bodega_id',   $d->bodega_id)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$pb) {
+                $pb = new \App\Models\Productos\ProductoBodega([
+                    'producto_id'     => (int)$d->producto_id,
+                    'bodega_id'       => (int)$d->bodega_id,
+                    'stock'           => 0,
+                    'costo_promedio'  => 0,
+                    'ultimo_costo'    => 0,
+                ]);
+            }
+
+            // === Costo promedio móvil (promedio ponderado) ===
+            $stockAnt   = (float) $pb->stock;
+            $cpmAnt     = (float) $pb->costo_promedio;
+            $stockNuevo = $stockAnt + $cantidad;
+
+            $cpmNuevo = $stockNuevo > 0
+                ? round((($stockAnt * $cpmAnt) + ($cantidad * $costoUnit)) / $stockNuevo, 6)
+                : round($costoUnit, 6);
+
+            // Actualiza bodega
+            $pb->stock          = $stockNuevo;
+            $pb->costo_promedio = $cpmNuevo;
+            $pb->ultimo_costo   = round($costoUnit, 6);
+            $pb->save();
+
+            // Registra ENTRADA en Kardex
+            static::registrarKardex(
+                tipoLogico:        'COMPRA',
+                signo:             1,
+                fecha:             $factura->fecha ?? now(),
+                productoId:        (int) $d->producto_id,
+                bodegaId:          (int) $d->bodega_id,
+                cantidad:          $cantidad,
+                costoUnitario:     $costoUnit,
+                tipoDocumentoId:   $tipoId,
+                docTipoLegacy:     'FACTURA_COMPRA',
+                docId:             (int) $factura->id,
+                ref:               static::refFactura($factura)   
+            );
+        }
+    });
+}
+private static function costoUnitarioCompra($detalle): float
+{
+    // Asume que precio_unitario ya es SIN IVA en compras (como manejas arriba).
+    $pu   = (float) ($detalle->precio_unitario ?? 0);
+    $desc = (float) ($detalle->descuento_pct   ?? 0);
+
+    // Aplica descuento si existe
+    $puNeto = $pu * (1 - max(0, min(100, $desc)) / 100);
+
+    // Si por diseño tu precio_unitario viene con IVA, desinfla:
+    // $iva = (float) ($detalle->impuesto_pct ?? 0);
+    // if ($iva > 0) $puNeto = $puNeto / (1 + $iva / 100);
+
+    // Fallbacks si llega 0
+    if ($puNeto <= 0 && !empty($detalle->costo_unitario)) {
+        $puNeto = (float) $detalle->costo_unitario;
+    }
+
+    return max(0.0, round($puNeto, 6));
+}
+
 }

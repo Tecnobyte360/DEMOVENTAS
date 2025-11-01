@@ -12,7 +12,6 @@ use App\Models\Productos\Producto;
 use App\Models\Bodega;
 use App\Models\Movimiento\KardexMovimiento;
 use App\Models\Movimiento\ProductoCostoMovimiento;
-use Illuminate\Database\Eloquent\Collection;
 
 class KardexProducto extends Component
 {
@@ -67,90 +66,80 @@ class KardexProducto extends Component
         $this->resetPage();
     }
 
-   public function render()
-{
-    // ---------------------------------------------------------
-    // 0) Reset de saldos
-    // ---------------------------------------------------------
-    $this->saldoInicialCant = 0.0;
-    $this->saldoInicialVal  = 0.0;
-    $this->saldoFinalCant   = 0.0;
-    $this->saldoFinalVal    = 0.0;
+    public function render()
+    {
+        // 0) Reset de saldos
+        $this->saldoInicialCant = 0.0;
+        $this->saldoInicialVal  = 0.0;
+        $this->saldoFinalCant   = 0.0;
+        $this->saldoFinalVal    = 0.0;
 
-    // Sanitiza perPage
-    $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
+        // Sanitiza perPage
+        $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
 
-    // ---------------------------------------------------------
-    // 1) Obtener movimientos paginados (o paginator vacío)
-    // ---------------------------------------------------------
-    if ($this->producto_id) {
-        $this->calcularSaldoInicial();
-        $filas = $this->kardexEnRangoPaginado();
-    } else {
-        $filas = new LengthAwarePaginator(
-            collect(),
-            0,
-            $this->perPage,
-            1,
-            ['path' => request()->url(), 'query' => request()->query()]
-        );
+        // 1) Movimientos (o paginator vacío)
+        if ($this->producto_id) {
+            $this->calcularSaldoInicial();
+            $filas = $this->kardexEnRangoPaginado();
+        } else {
+            $filas = new LengthAwarePaginator(
+                collect(),
+                0,
+                $this->perPage,
+                1,
+                ['path' => request()->url(), 'query' => request()->query()]
+            );
+        }
+
+        // 2) Grupos por documento (para acordeón)
+        $items = collect($filas->items() ?? [])
+            ->map(fn($r) => is_array($r) ? $r : (array)$r);
+
+        $grupos = $items
+            ->groupBy(function ($r) {
+                // Usamos doc_tipo + doc_id si existen; si no, hash estable por doc+fecha
+                $docTipo = trim((string)($r['doc_tipo'] ?? ''));
+                $docId   = trim((string)($r['doc_id'] ?? ''));
+                $uid     = trim($docTipo . '-' . $docId, '- ');
+                return $uid !== ''
+                    ? $uid
+                    : md5(($r['doc'] ?? 'Documento') . '|' . ($r['fecha'] ?? ''));
+            })
+            ->map(function ($rows) {
+                $rows = collect($rows);
+                $h = (array) $rows->first();
+
+                $docTipo = trim((string)($h['doc_tipo'] ?? ''));
+                $docId   = trim((string)($h['doc_id'] ?? ''));
+                $uid     = trim($docTipo . '-' . $docId, '- ');
+                if ($uid === '') {
+                    $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
+                }
+
+                return [
+                    'uid'           => $uid,
+                    'doc'           => (string)($h['doc']   ?? 'Documento'),
+                    'fecha'         => (string)($h['fecha'] ?? '—'),
+                    'bodega'        => (string)($h['bodega'] ?? '—'),
+                    'entrada_total' => (float)$rows->sum(fn($x) => (float)($x['entrada'] ?? 0)),
+                    'salida_total'  => (float)$rows->sum(fn($x) => (float)($x['salida']  ?? 0)),
+                    'rows'          => $rows->values()->map(fn($x) => (array)$x),
+                ];
+            })
+            ->values();
+
+        // 3) Vista
+        return view('livewire.productos.kardex-producto', [
+            'filas'  => $filas,
+            'grupos' => $grupos,
+        ]);
     }
 
-    // ---------------------------------------------------------
-    // 2) Construir grupos por documento (para el acordeón)
-    // ---------------------------------------------------------
-    $items = collect($filas->items() ?? [])
-        ->map(function ($r) {
-            return is_array($r) ? $r : (array)$r;
-        });
-
-    $grupos = $items
-        ->groupBy(function ($r) {
-            $docTipo = trim((string)($r['doc_tipo'] ?? ''));
-            $docId   = trim((string)($r['doc_id'] ?? ''));
-            $uid     = trim($docTipo . '-' . $docId, '- ');
-            return $uid !== ''
-                ? $uid
-                : md5(($r['doc'] ?? 'Documento') . '|' . ($r['fecha'] ?? ''));
-        })
-        ->map(function ($rows) {
-            // ✅ Elimina tipado estricto de Eloquent\Collection
-            $rows = collect($rows); // asegura que sea una Support\Collection
-
-            $h = (array)$rows->first();
-
-            $docTipo = trim((string)($h['doc_tipo'] ?? ''));
-            $docId   = trim((string)($h['doc_id'] ?? ''));
-            $uid     = trim($docTipo . '-' . $docId, '- ');
-            if ($uid === '') {
-                $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
-            }
-
-            return [
-                'uid'           => $uid,
-                'doc'           => (string)($h['doc']   ?? 'Documento'),
-                'fecha'         => (string)($h['fecha'] ?? '—'),
-                'bodega'        => (string)($h['bodega'] ?? '—'),
-                'entrada_total' => (float)$rows->sum(fn($x) => (float)($x['entrada'] ?? 0)),
-                'salida_total'  => (float)$rows->sum(fn($x) => (float)($x['salida']  ?? 0)),
-                'rows'          => $rows->values()->map(fn($x) => (array)$x),
-            ];
-        })
-        ->values();
-
-    // ---------------------------------------------------------
-    // 3) Retornar vista
-    // ---------------------------------------------------------
-    return view('livewire.productos.kardex-producto', [
-        'filas'  => $filas,
-        'grupos' => $grupos,
-    ]);
-}
     /* =======================================================
      * CÁLCULOS
      * ======================================================= */
 
-    /** Suma entradas y salidas (a costo promedio móvil) ANTES del rango. */
+    /** Suma entradas/salidas antes del rango (costo promedio móvil). */
     private function calcularSaldoInicial(): void
     {
         $hasta = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
@@ -278,7 +267,7 @@ class KardexProducto extends Component
                         'tipo_documento_id' => $m->tipo_documento_id,
                         'doc_id' => $m->doc_id,
                         'ref' => $m->ref,
-                        'tipo_documento' => $m->tipoDocumento,
+                        'tipo_documento' => $m->tipoDocumento, // relación cargada
                         'entrada' => (float)($m->entrada ?? 0),
                         'salida' => (float)($m->salida ?? 0),
                         'cantidad' => (float)($m->cantidad ?? 0),
@@ -326,7 +315,7 @@ class KardexProducto extends Component
                         'tipo_documento_id' => $m->tipo_documento_id,
                         'doc_id' => $m->doc_id,
                         'ref' => $m->ref,
-                        'tipo_documento' => $m->tipoDocumento,
+                        'tipo_documento' => $m->tipoDocumento, // relación cargada
                         'entrada' => $cant > 0 ? $cant : 0,
                         'salida' => $cant < 0 ? abs($cant) : 0,
                         'cantidad' => $cant,
@@ -382,7 +371,7 @@ class KardexProducto extends Component
             }
         }
 
-        // 6) Construir items de la página con saldos
+        // 6) Items de la página con saldos + campos para agrupar
         $items = $itemsPagina->map(function ($m) use (&$saldoCant, &$saldoVal) {
             $tipo = $m['entrada'] > 0 ? 'ENTRADA' : 'SALIDA';
             $c    = $tipo === 'ENTRADA' ? $m['entrada'] : $m['salida'];
@@ -403,8 +392,11 @@ class KardexProducto extends Component
 
             $bodegaNombre = optional($this->bodegas->firstWhere('id', $m['bodega_id']))->nombre;
 
+            $tipoDocCodigoONombre = $m['tipo_documento']->codigo
+                ?? ($m['tipo_documento']->nombre ?? null);
+
             $docText = trim(
-                ($m['tipo_documento']?->codigo ?? $m['tipo_documento']?->nombre ?? '') . ' ' .
+                ($tipoDocCodigoONombre ?: '') . ' ' .
                 ($m['doc_id'] ? '#'.$m['doc_id'] : '')
             );
             $ref = $m['ref'] ?? null;
@@ -416,6 +408,8 @@ class KardexProducto extends Component
                 'fecha'      => ($m['fecha'] instanceof Carbon ? $m['fecha']->format('Y-m-d H:i') : (string)$m['fecha']),
                 'bodega'     => $bodegaNombre ?: '—',
                 'doc'        => $docText,
+                'doc_tipo'   => $tipoDocCodigoONombre,     // <-- para agrupar
+                'doc_id'     => $m['doc_id'],              // <-- para agrupar
                 'tipo'       => $tipo,
                 'entrada'    => $tipo === 'ENTRADA' ? $c : null,
                 'salida'     => $tipo === 'SALIDA'  ? $c : null,
@@ -444,7 +438,7 @@ class KardexProducto extends Component
         });
 
         // 7) Saldos finales (última página)
-        if ($currentPage === (int) ceil($total / $this->perPage) && $items->count()) {
+        if ($items->count()) {
             $last = $items->last();
             $this->saldoFinalCant = (float) $last['saldo_cant'];
             $this->saldoFinalVal  = (float) $last['saldo_val'];

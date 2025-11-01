@@ -509,24 +509,27 @@ class Productos extends Component
         if (!is_null($imp->monto_fijo)) return round($base + (float)$imp->monto_fijo, 2);
         return round($base, 2);
     }
+public function costosPorBodega(): array
+{
+    $this->loadMissing('bodegas');
 
-    public function costosPorBodega(): array
-    {
-        $this->loadMissing('bodegas');
+    return $this->bodegas
+        ->mapWithKeys(function ($b) {
+            return [
+                $b->id => [
+                    'bodega'         => $b->nombre,
+                    'ultimo_costo'   => is_null($b->pivot->ultimo_costo) ? null : (float) $b->pivot->ultimo_costo,
+                    'costo_promedio' => is_null($b->pivot->costo_promedio) ? null : (float) $b->pivot->costo_promedio,
+                    'stock'          => (float) ($b->pivot->stock ?? 0),
+                    'metodo_costeo'  => $b->pivot->metodo_costeo,
+                ],
+            ];
+        })
+        ->all();
+}
 
-        return $this->bodegas
-            ->mapWithKeys(function ($b) {
-                return [
-                    $b->id => [
-                        'bodega'         => $b->nombre,
-                        'ultimo_costo'   => is_null($b->pivot->ultimo_costo) ? null : (float) $b->pivot->ultimo_costo,
-                        'costo_promedio' => is_null($b->pivot->costo_promedio) ? null : (float) $b->pivot->costo_promedio,
-                        'stock'          => (float) ($b->pivot->stock ?? 0),
-                    ],
-                ];
-            })
-            ->all();
-    }
+
+
     public function getCostoPromedioGlobalAttribute(): ?float
     {
         if (!$this->relationLoaded('bodegas')) return null;

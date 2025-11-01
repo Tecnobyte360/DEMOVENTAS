@@ -12,6 +12,7 @@ use App\Models\Productos\Producto;
 use App\Models\Bodega;
 use App\Models\Movimiento\KardexMovimiento;
 use App\Models\Movimiento\ProductoCostoMovimiento;
+use Illuminate\Database\Eloquent\Collection;
 
 class KardexProducto extends Component
 {
@@ -66,22 +67,101 @@ class KardexProducto extends Component
         $this->resetPage();
     }
 
-    public function render()
-    {
-        $this->saldoInicialCant = $this->saldoInicialVal = 0.0;
-        $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
+   public function render()
+{
+    // ---------------------------------------------------------
+    // 0) Reset de saldos
+    // ---------------------------------------------------------
+    $this->saldoInicialCant = 0.0;
+    $this->saldoInicialVal  = 0.0;
+    $this->saldoFinalCant   = 0.0;
+    $this->saldoFinalVal    = 0.0;
 
-        if ($this->producto_id) {
-            $this->calcularSaldoInicial();
-            $filas = $this->kardexEnRangoPaginado();
-        } else {
-            $filas = new LengthAwarePaginator(collect(), 0, $this->perPage, 1, [
-                'path' => request()->url(), 'query' => request()->query()
-            ]);
-        }
+    // Sanitiza perPage por si viene raro desde la UI
+    $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 10;
 
-        return view('livewire.productos.kardex-producto', compact('filas'));
+    // ---------------------------------------------------------
+    // 1) Obtener movimientos paginados (o paginator vacío)
+    // ---------------------------------------------------------
+    if ($this->producto_id) {
+        // Tus métodos existentes
+        $this->calcularSaldoInicial();
+        $filas = $this->kardexEnRangoPaginado(); // Debe devolver LengthAwarePaginator
+    } else {
+        // Paginador vacío para mantener {{ $filas->links() }} y estructura
+        $filas = new LengthAwarePaginator(
+            collect(),
+            0,
+            $this->perPage,
+            1,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
     }
+
+    // ---------------------------------------------------------
+    // 2) Construir grupos por documento para el acordeón
+    // ---------------------------------------------------------
+    // Asegúrate que cada ítem del paginator sea un array (o conviértelo).
+    $items = collect($filas->items() ?? [])
+        ->map(function ($r) {
+            // Normaliza a array si viene como objeto
+            return is_array($r) ? $r : (is_object($r) ? (array)$r : []);
+        });
+
+    $grupos = $items
+        ->groupBy(function (array $r) {
+            // Intento 1: doc_tipo + doc_id (lo ideal para un ID estable)
+            $docTipo = trim((string)($r['doc_tipo'] ?? ''));
+            $docId   = trim((string)($r['doc_id']   ?? ''));
+            $uid     = trim($docTipo . '-' . $docId, '- ');
+
+            if ($uid !== '') {
+                return $uid;
+            }
+
+            // Intento 2: hash estable basado en doc + fecha (fallback)
+            $doc   = (string)($r['doc']   ?? 'Documento');
+            $fecha = (string)($r['fecha'] ?? '—');
+            return md5($doc . '|' . $fecha);
+        })
+        ->map(function (Collection $rows) {
+            $h = (array)$rows->first();
+
+            // Recalcular uid para tenerlo disponible en la vista
+            $docTipo = trim((string)($h['doc_tipo'] ?? ''));
+            $docId   = trim((string)($h['doc_id']   ?? ''));
+            $uid     = trim($docTipo . '-' . $docId, '- ');
+            if ($uid === '') {
+                $uid = md5(((string)($h['doc'] ?? 'Documento')) . '|' . ((string)($h['fecha'] ?? '—')));
+            }
+
+            return [
+                'uid'           => $uid,
+                'doc'           => (string)($h['doc']   ?? 'Documento'),
+                'fecha'         => (string)($h['fecha'] ?? '—'),
+                'bodega'        => (string)($h['bodega'] ?? '—'),
+                'entrada_total' => (float)$rows->sum(fn($x) => (float) ((array)$x)['entrada'] ?? 0),
+                'salida_total'  => (float)$rows->sum(fn($x) => (float) ((array)$x)['salida']  ?? 0),
+                'rows'          => $rows->values()->map(fn($x) => (array)$x), // líneas del documento
+            ];
+        })
+        ->values();
+
+    // ---------------------------------------------------------
+    // 3) (Opcional) Actualiza saldos finales si procede aquí
+    // ---------------------------------------------------------
+    // Si tus métodos ya devuelven estos valores, deja esto comentado.
+    // $this->saldoFinalCant = ...;
+    // $this->saldoFinalVal  = ...;
+
+    // ---------------------------------------------------------
+    // 4) Retornar a la vista
+    // ---------------------------------------------------------
+    return view('livewire.productos.kardex-producto', [
+        'filas'  => $filas,   // paginator original (para links)
+        'grupos' => $grupos,  // grupos por documento (para el acordeón)
+    ]);
+}
 
     /* =======================================================
      * CÁLCULOS

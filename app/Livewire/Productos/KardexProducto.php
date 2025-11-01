@@ -58,22 +58,33 @@ class KardexProducto extends Component
         $this->resetPage();
     }
 
-    public function render()
-    {
-        $this->saldoInicialCant = $this->saldoInicialVal = 0.0;
-        $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
+   public function render()
+{
+    // reset saldos
+    $this->saldoInicialCant = $this->saldoInicialVal = 0.0;
+    $this->saldoFinalCant   = $this->saldoFinalVal   = 0.0;
 
-        $filas = collect();
-        if ($this->producto_id) {
-            $this->calcularSaldoInicial();
-            $filas = $this->kardexEnRangoPaginado();
-        }
-
-        return view('livewire.productos.kardex-producto', [
-            'filas' => $filas, // paginator
-        ]);
+    if ($this->producto_id) {
+        $this->calcularSaldoInicial();
+        $filas = $this->kardexEnRangoPaginado(); // ← ya retorna LengthAwarePaginator
+    } else {
+        // ← devolver SIEMPRE un paginador vacío
+        $filas = new LengthAwarePaginator(
+            collect(),       // items
+            0,               // total
+            $this->perPage,  // per page
+            1,               // current page
+            [
+                'path'  => request()->url(),
+                'query' => request()->query(),
+            ]
+        );
     }
 
+    return view('livewire.productos.kardex-producto', [
+        'filas' => $filas,  // siempre paginator
+    ]);
+}
     /* =======================================================
      * CÁLCULOS
      * ======================================================= */

@@ -27,4 +27,13 @@ class ProductoCostoMovimiento extends Model
     {
         return $this->belongsTo(\App\Models\TiposDocumento\TipoDocumento::class, 'tipo_documento_id');
     }
+    public function producto()
+{
+    return $this->belongsTo(\App\Models\Productos\Producto::class, 'producto_id');
+}
+
+public function bodega()
+{
+    return $this->belongsTo(\App\Models\Bodega::class, 'bodega_id');
+}
 }

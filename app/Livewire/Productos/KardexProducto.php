@@ -12,11 +12,13 @@ use App\Models\Productos\Producto;
 use App\Models\Bodega;
 use App\Models\Movimiento\KardexMovimiento;
 use App\Models\Movimiento\ProductoCostoMovimiento;
-use App\Models\TiposDocumento\TipoDocumento;
 
 class KardexProducto extends Component
 {
     use WithPagination;
+
+    /** Tailwind para la paginación */
+    protected string $paginationTheme = 'tailwind';
 
     /** ==== Filtros ==== */
     public ?int $producto_id = null;
@@ -25,7 +27,7 @@ class KardexProducto extends Component
     public ?string $hasta    = null;   // YYYY-MM-DD
     public string $buscarDoc = '';
     public int $perPage      = 25;
-    
+
     /** ==== Opciones de vista ==== */
     public string $fuenteDatos = 'kardex'; // 'kardex' | 'costos' | 'ambas'
 
@@ -90,10 +92,9 @@ class KardexProducto extends Component
     {
         $hasta = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
 
-        // Usamos ambas tablas para calcular el saldo inicial
         $movimientos = collect();
 
-        // Movimientos de KardexMovimiento
+        // KardexMovimiento
         if (in_array($this->fuenteDatos, ['kardex', 'ambas'])) {
             $qKardex = KardexMovimiento::query()
                 ->where('producto_id', $this->producto_id);
@@ -119,7 +120,7 @@ class KardexProducto extends Component
             $movimientos = $movimientos->merge($kardexMovs);
         }
 
-        // Movimientos de ProductoCostoMovimiento
+        // ProductoCostoMovimiento
         if (in_array($this->fuenteDatos, ['costos', 'ambas'])) {
             $qCostos = ProductoCostoMovimiento::query()
                 ->where('producto_id', $this->producto_id);
@@ -146,9 +147,10 @@ class KardexProducto extends Component
             $movimientos = $movimientos->merge($costosMovs);
         }
 
-        // Ordenar todos los movimientos por fecha
+        // Orden cronológico
         $movimientos = $movimientos->sortBy('fecha')->values();
 
+        // Rolling
         $cant = 0.0; $val = 0.0;
         foreach ($movimientos as $m) {
             $entrada = $m['entrada'];
@@ -172,16 +174,15 @@ class KardexProducto extends Component
         $this->saldoInicialVal  = round($val, 2);
     }
 
-    /** Lista movimientos del rango de AMBAS tablas y calcula saldos corridos. */
+    /** Lista movimientos del rango (ambas tablas) y calcula saldos corridos. */
     private function kardexEnRangoPaginado(): LengthAwarePaginator
     {
         $desde = $this->desde ? Carbon::parse($this->desde)->startOfDay() : null;
         $hasta = $this->hasta ? Carbon::parse($this->hasta)->endOfDay()   : null;
 
-        // Colección unificada de movimientos
         $movimientos = collect();
 
-        // 1. Obtener movimientos de KardexMovimiento
+        // 1) KardexMovimiento
         if (in_array($this->fuenteDatos, ['kardex', 'ambas'])) {
             $qKardex = KardexMovimiento::query()
                 ->with('tipoDocumento:id,codigo,nombre')
@@ -192,11 +193,14 @@ class KardexProducto extends Component
             if ($hasta)           $qKardex->where('fecha', '<=', $hasta);
 
             if (trim($this->buscarDoc) !== '') {
-                $txt = '%' . Str::of($this->buscarDoc)->trim() . '%';
+                $txt = '%' . (string) Str::of($this->buscarDoc)->trim() . '%';
                 $qKardex->where(function ($x) use ($txt) {
                     $x->orWhere('doc_id', 'like', $txt)
                       ->orWhere('ref', 'like', $txt)
-                      ->orWhereHas('tipoDocumento', fn($q)=>$q->where('nombre','like',$txt)->orWhere('codigo','like',$txt));
+                      ->orWhereHas('tipoDocumento', fn($q) =>
+                          $q->where('nombre','like',$txt)
+                            ->orWhere('codigo','like',$txt)
+                      );
                 });
             }
 
@@ -225,7 +229,7 @@ class KardexProducto extends Component
             $movimientos = $movimientos->merge($kardexMovs);
         }
 
-        // 2. Obtener movimientos de ProductoCostoMovimiento
+        // 2) ProductoCostoMovimiento
         if (in_array($this->fuenteDatos, ['costos', 'ambas'])) {
             $qCostos = ProductoCostoMovimiento::query()
                 ->with('tipoDocumento:id,codigo,nombre')
@@ -236,11 +240,14 @@ class KardexProducto extends Component
             if ($hasta)           $qCostos->where('fecha', '<=', $hasta);
 
             if (trim($this->buscarDoc) !== '') {
-                $txt = '%' . Str::of($this->buscarDoc)->trim() . '%';
+                $txt = '%' . (string) Str::of($this->buscarDoc)->trim() . '%';
                 $qCostos->where(function ($x) use ($txt) {
                     $x->orWhere('doc_id', 'like', $txt)
                       ->orWhere('ref', 'like', $txt)
-                      ->orWhereHas('tipoDocumento', fn($q)=>$q->where('nombre','like',$txt)->orWhere('codigo','like',$txt));
+                      ->orWhereHas('tipoDocumento', fn($q) =>
+                          $q->where('nombre','like',$txt)
+                            ->orWhere('codigo','like',$txt)
+                      );
                 });
             }
 
@@ -277,22 +284,22 @@ class KardexProducto extends Component
             $movimientos = $movimientos->merge($costosMovs);
         }
 
-        // 3. Ordenar todos los movimientos por fecha e id
+        // 3) Orden estable por fecha e id real
         $movimientos = $movimientos->sortBy([
             ['fecha', 'asc'],
-            ['id', 'asc']
+            ['model_id', 'asc'],
         ])->values();
 
-        // 4. Paginar manualmente
+        // 4) Paginación manual
         $total = $movimientos->count();
-        $currentPage = $this->getPage();
+        $currentPage = (int) ($this->page ?? \Illuminate\Pagination\Paginator::resolveCurrentPage() ?: 1);
+        $currentPage = max(1, $currentPage);
         $offset = ($currentPage - 1) * $this->perPage;
         $itemsPagina = $movimientos->slice($offset, $this->perPage)->values();
 
-        // 5. Calcular saldos corridos desde el inicio de la página
+        // 5) Saldos corridos (acumular previos a la página)
         [$saldoCant, $saldoVal] = [$this->saldoInicialCant, $this->saldoInicialVal];
 
-        // Recorrer movimientos ANTES de la página actual
         if ($offset > 0) {
             $prevMovs = $movimientos->slice(0, $offset);
             foreach ($prevMovs as $m) {
@@ -312,7 +319,7 @@ class KardexProducto extends Component
             }
         }
 
-        // 6. Construir items de la página con saldos
+        // 6) Construir items de la página con saldos
         $items = $itemsPagina->map(function ($m) use (&$saldoCant, &$saldoVal) {
             $tipo = $m['entrada'] > 0 ? 'ENTRADA' : 'SALIDA';
             $c    = $tipo === 'ENTRADA' ? $m['entrada'] : $m['salida'];
@@ -332,11 +339,13 @@ class KardexProducto extends Component
             $cpuSaldo = $saldoCant > 0 ? ($saldoVal / max($saldoCant, 1e-9)) : null;
 
             $bodegaNombre = optional($this->bodegas->firstWhere('id', $m['bodega_id']))->nombre;
+
             $docText = trim(
                 ($m['tipo_documento']?->codigo ?? $m['tipo_documento']?->nombre ?? '') . ' ' .
                 ($m['doc_id'] ? '#'.$m['doc_id'] : '')
             );
-            if ($m['ref']) $docText .= ' ('.$m['ref'].')';
+            $ref = $m['ref'] ?? null;
+            if ($ref) $docText .= ' ('.$ref.')';
             $docText = $docText ?: '—';
 
             $item = [
@@ -354,16 +363,15 @@ class KardexProducto extends Component
                 'fuente'     => $m['fuente'],
             ];
 
-            // Agregar datos de costos si vienen de ProductoCostoMovimiento
             if ($m['fuente'] === 'costos') {
                 $item['costo_historico'] = [
-                    'metodo_costeo' => $m['metodo_costeo'] ?? null,
-                    'costo_prom_anterior' => $m['costo_prom_anterior'] ?? null,
-                    'costo_prom_nuevo' => $m['costo_prom_nuevo'] ?? null,
-                    'ultimo_costo_anterior' => $m['ultimo_costo_anterior'] ?? null,
-                    'ultimo_costo_nuevo' => $m['ultimo_costo_nuevo'] ?? null,
-                    'tipo_evento' => $m['tipo_evento'] ?? null,
-                    'valor_mov' => $m['valor_mov'] ?? null,
+                    'metodo_costeo'          => $m['metodo_costeo'] ?? null,
+                    'costo_prom_anterior'    => $m['costo_prom_anterior'] ?? null,
+                    'costo_prom_nuevo'       => $m['costo_prom_nuevo'] ?? null,
+                    'ultimo_costo_anterior'  => $m['ultimo_costo_anterior'] ?? null,
+                    'ultimo_costo_nuevo'     => $m['ultimo_costo_nuevo'] ?? null,
+                    'tipo_evento'            => $m['tipo_evento'] ?? null,
+                    'valor_mov'              => $m['valor_mov'] ?? null,
                 ];
             } else {
                 $item['costo_historico'] = null;
@@ -372,8 +380,8 @@ class KardexProducto extends Component
             return $item;
         });
 
-        // 7. Saldos finales
-        if ($currentPage === (int)ceil($total / $this->perPage) && $items->count()) {
+        // 7) Saldos finales (última página)
+        if ($currentPage === (int) ceil($total / $this->perPage) && $items->count()) {
             $last = $items->last();
             $this->saldoFinalCant = (float) $last['saldo_cant'];
             $this->saldoFinalVal  = (float) $last['saldo_val'];

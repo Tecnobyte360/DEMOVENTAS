@@ -274,7 +274,7 @@
         </div>
         @if(in_array($fuenteDatos, ['costos', 'ambas']))
           <div class="md:col-span-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-            <p class="text-gray-700 dark:text-gray-300"><strong>Columnas de costos históricos:</strong> Se muestran solo para movimientos de la tabla producto_costo_movimientos, donde se registran los cambios en costos promedio y último costo.</p>
+           
           </div>
         @endif
       </div>

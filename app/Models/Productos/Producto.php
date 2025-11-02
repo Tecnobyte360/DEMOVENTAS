@@ -72,11 +72,10 @@ class Producto extends Model
      |  Relaciones
      |=========================================================*/
 
-    public function subcategoria(): BelongsTo
-    {
-        return $this->belongsTo(Subcategoria::class);
-    }
-
+    public function subcategoria()
+{
+    return $this->belongsTo(Subcategoria::class, 'subcategoria_id');
+}
     public function unidadMedida(): BelongsTo
     {
         return $this->belongsTo(UnidadesMedida::class, 'unidad_medida_id');

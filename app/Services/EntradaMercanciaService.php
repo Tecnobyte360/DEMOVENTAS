@@ -31,7 +31,7 @@ class EntradaMercanciaService
         return ProductoCuenta::query()
             ->where('producto_id', $productoId)
             ->where('tipo_id', self::tipoInventarioId())
-            ->whereHas('cuentaPUC', fn ($q) => $q->where('titulo', 0)->where('cuenta_activa', 1))
+            ->whereHas('cuentaPUC', fn($q) => $q->where('titulo', 0)->where('cuenta_activa', 1))
             ->value('plan_cuentas_id');
     }
 
@@ -43,7 +43,7 @@ class EntradaMercanciaService
         return SubcategoriaCuenta::query()
             ->where('subcategoria_id', $subcategoriaId)
             ->where('tipo_id', self::tipoInventarioId())
-            ->whereHas('cuentaPUC', fn ($q) => $q->where('titulo', 0)->where('cuenta_activa', 1))
+            ->whereHas('cuentaPUC', fn($q) => $q->where('titulo', 0)->where('cuenta_activa', 1))
             ->value('plan_cuentas_id');
     }
 
@@ -55,7 +55,7 @@ class EntradaMercanciaService
     protected static function resolverCuentaInventario(int $productoId): ?int
     {
         /** @var Producto|null $p */
-        $p = Producto::query()->select('id','subcategoria_id','mov_contable_segun')->find($productoId);
+        $p = Producto::query()->select('id', 'subcategoria_id', 'mov_contable_segun')->find($productoId);
         if (!$p) return null;
 
         $segun = strtoupper((string) $p->mov_contable_segun);
@@ -80,8 +80,8 @@ class EntradaMercanciaService
     {
         $q = ConceptoDocumentoCuenta::query()
             ->where('concepto_documento_id', $conceptoId)
-            ->when($rol, fn ($qq) => $qq->where('rol', $rol))
-            ->whereHas('plan', fn ($qq) => $qq->where('titulo', 0)->where('cuenta_activa', 1))
+            ->when($rol, fn($qq) => $qq->where('rol', $rol))
+            ->whereHas('plan', fn($qq) => $qq->where('titulo', 0)->where('cuenta_activa', 1))
             ->orderBy('prioridad', 'asc');
 
         return $q->value('plan_cuenta_id'); // null si no existe imputable/activa
@@ -94,10 +94,10 @@ class EntradaMercanciaService
     protected static function esDeudora(PlanCuentas $c): bool
     {
         $nat = strtoupper((string) $c->naturaleza);
-        if (in_array($nat, ['D','DEUDORA','ACTIVO','GASTO','COSTO','INVENTARIO'], true)) return true;
-        if (in_array($nat, ['C','ACREEDORA','PASIVO','PATRIMONIO','INGRESOS'], true)) return false;
+        if (in_array($nat, ['D', 'DEUDORA', 'ACTIVO', 'GASTO', 'COSTO', 'INVENTARIO'], true)) return true;
+        if (in_array($nat, ['C', 'ACREEDORA', 'PASIVO', 'PATRIMONIO', 'INGRESOS'], true)) return false;
         // Fallback: clases típicas
-        return in_array(substr((string) $c->codigo, 0, 1), ['1','5','6'], true);
+        return in_array(substr((string) $c->codigo, 0, 1), ['1', '5', '6'], true);
     }
 
     /**
@@ -166,7 +166,7 @@ class EntradaMercanciaService
                 $lineas[] = [
                     'producto_id'     => $l['producto_id'] ?? null,
                     'bodega_id'       => $l['bodega_id'] ?? null,
-                    'descripcion'     => $l['descripcion'] ?? null,
+
                     'cantidad'        => (float) ($l['cantidad'] ?? 0),
                     'precio_unitario' => (float) ($l['precio_unitario'] ?? 0),
                 ];
@@ -196,14 +196,14 @@ class EntradaMercanciaService
 
         foreach ($e->detalles as $idx => $d) {
             if (!$d->producto_id || !$d->bodega_id) {
-                throw new \RuntimeException("Línea #".($idx + 1).": falta producto o bodega.");
+                throw new \RuntimeException("Línea #" . ($idx + 1) . ": falta producto o bodega.");
             }
             if ((float) $d->cantidad <= 0) {
-                throw new \RuntimeException("Línea #".($idx + 1).": la cantidad debe ser > 0.");
+                throw new \RuntimeException("Línea #" . ($idx + 1) . ": la cantidad debe ser > 0.");
             }
             $ctaInv = self::resolverCuentaInventario((int) $d->producto_id);
             if (!$ctaInv) {
-                throw new \RuntimeException("Línea #".($idx + 1).": no hay cuenta de inventario imputable/activa según ARTICULO/SUBCATEGORIA.");
+                throw new \RuntimeException("Línea #" . ($idx + 1) . ": no hay cuenta de inventario imputable/activa según ARTICULO/SUBCATEGORIA.");
             }
         }
 
@@ -226,7 +226,7 @@ class EntradaMercanciaService
             'tipo'        => 'ENTRADA',
             'glosa'       => sprintf(
                 'Entrada de Mercancía %s%s',
-                $e->serie?->prefijo ? $e->serie->prefijo.'-' : '',
+                $e->serie?->prefijo ? $e->serie->prefijo . '-' : '',
                 (string) $e->numero
             ),
             'origen'      => 'entrada_mercancia',

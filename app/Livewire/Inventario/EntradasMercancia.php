@@ -430,4 +430,28 @@ public function updatedConceptoRol(): void
         $this->cerrarMulti();
         $this->dispatch('$refresh');
     }
+    public function productoSeleccionado(int $i): void
+{
+    if (!isset($this->entradas[$i])) return;
+
+    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+    if ($pid > 0) {
+        $producto = $this->productos->firstWhere('id', $pid);
+        if ($producto) {
+            $this->entradas[$i]['descripcion'] = $producto->nombre;
+            $cuentaId = \App\Services\EntradaMercanciaService::resolverCuentaInventarioPublic($pid);
+            if ($cuentaId) {
+                $cuenta = \App\Models\CuentasContables\PlanCuentas::find($cuentaId);
+                $this->entradas[$i]['cuenta_str'] = $cuenta
+                    ? "{$cuenta->codigo} — {$cuenta->nombre}"
+                    : 'Sin cuenta';
+            } else {
+                $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
+            }
+        }
+    }
+
+    $this->dispatch('$refresh');
+}
+
 }

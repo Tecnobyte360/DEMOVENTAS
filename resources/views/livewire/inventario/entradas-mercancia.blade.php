@@ -203,7 +203,7 @@
                   <select
                     data-first-product
                     wire:model.live="entradas.{{ $i }}.producto_id"
-                    wire:change="syncEntradasDescripcion"
+                  wire:change="productoSeleccionado({{ $i }})"
                     class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
                   >
                     <option value="">— Seleccione —</option>

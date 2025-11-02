@@ -195,50 +195,28 @@ class EntradasMercancia extends Component
         }
     }
 
-    private function actualizarCuentaStr(int $i): void
-    {
-        if (!isset($this->entradas[$i])) return;
+   private function actualizarCuentaStr(int $i): void
+{
+    if (!isset($this->entradas[$i])) return;
 
-        $this->entradas[$i]['cuenta_str'] = '';
+    $this->entradas[$i]['cuenta_str'] = '';
 
-        $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-        if ($pid <= 0) return;
+    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+    if ($pid <= 0) return;
 
-        $p = $this->productos->firstWhere('id', $pid);
-        if (!$p) return;
+    // Resolver SIEMPRE vía el service (ARTICULO / SUBCATEGORIA ya está contemplado allí)
+    $cuentaId = \App\Services\EntradaMercanciaService::resolverCuentaInventarioPublic($pid);
 
-        $segun  = self::norm($p->mov_contable_segun ?? '');
-        $tipoId = (int) config('conta.tipo_inventario_id', 4);
-
-        if ($segun === 'ARTICULO') {
-            $pc = \App\Models\Productos\ProductoCuenta::query()
-                ->with('cuentaPUC:id,codigo,nombre,cuenta_activa,titulo')
-                ->where('producto_id', $pid)
-                ->where('tipo_id', $tipoId)
-                ->first();
-
-            if ($pc && $pc->cuentaPUC && !$pc->cuentaPUC->titulo && $pc->cuentaPUC->cuenta_activa) {
-                $this->entradas[$i]['cuenta_str'] = "{$pc->cuentaPUC->codigo} — {$pc->cuentaPUC->nombre}";
-                return;
-            }
+    if ($cuentaId) {
+        $cta = \App\Models\CuentasContables\PlanCuentas::select('codigo','nombre','titulo','cuenta_activa')->find($cuentaId);
+        if ($cta && !$cta->titulo && $cta->cuenta_activa) {
+            $this->entradas[$i]['cuenta_str'] = "{$cta->codigo} — {$cta->nombre}";
+            return;
         }
-
-        if ($segun === 'SUBCATEGORIA' && $p->subcategoria_id) {
-            $sc = SubcategoriaCuenta::query()
-                ->with('cuentaPUC:id,codigo,nombre,cuenta_activa,titulo')
-                ->where('subcategoria_id', (int)$p->subcategoria_id)
-                ->where('tipo_id', $tipoId)
-                ->orderBy('id')
-                ->first();
-
-            if ($sc && $sc->cuentaPUC && !$sc->cuentaPUC->titulo && $sc->cuentaPUC->cuenta_activa) {
-                $this->entradas[$i]['cuenta_str'] = "{$sc->cuentaPUC->codigo} — {$sc->cuentaPUC->nombre}";
-                return;
-            }
-        }
-
-        $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
     }
+
+    $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
+}
 
     /* ===================== Persistencia ===================== */
 

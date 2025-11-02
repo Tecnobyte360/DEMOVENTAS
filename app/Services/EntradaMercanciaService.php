@@ -21,9 +21,15 @@ class EntradaMercanciaService
 
     /** Id del tipo "Inventario" (PUC) configurado */
     protected static function tipoInventarioId(): int
-    {
-        return (int) config('conta.tipo_inventario_id', 4);
-    }
+{
+    // Busca por código para no depender del .env/config.
+    // Cachea 1 hora para no consultar en cada llamada.
+    return cache()->remember('tipo_inventario_id', 3600, function () {
+        return (int) \App\Models\Productos\ProductoCuentaTipo::query()
+            ->where('codigo', 'INVENTARIO')
+            ->value('id') ?: 4; // fallback razonable si no existe
+    });
+}
 
     /** Cuenta de inventario por PRODUCTO (solo imputable/activa) */
     protected static function cuentaInventarioPorProducto(int $productoId): ?int

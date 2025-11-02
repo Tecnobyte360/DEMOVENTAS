@@ -9,14 +9,14 @@ use Illuminate\Validation\ValidationException;
 use Masmerise\Toaster\PendingToast;
 
 use App\Models\Bodega;
-use App\Models\Categorias\SubcategoriaCuenta;
-use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 use App\Models\Inventario\EntradaMercancia;
 use App\Models\Productos\ProductoCuenta;
+use App\Models\Categorias\SubcategoriaCuenta;
 use App\Services\EntradaMercanciaService;
+use Illuminate\Support\Str;
 
 class EntradasMercancia extends Component
 {
@@ -34,8 +34,7 @@ class EntradasMercancia extends Component
     public ?string $observaciones = null;
     public string $moneda = 'COP';
 
-    // Detalle
-    /** @var array<int,array{producto_id?:?int,bodega_id?:?int,descripcion?:?string,cantidad?:float,precio_unitario?:float,cuenta_str?:string}> */
+    /** @var array<int,array{producto_id?:?int,bodega_id?:?int,cantidad?:float,precio_unitario?:float,cuenta_str?:string}> */
     public array $entradas = [];
 
     // UI multi-selección
@@ -43,7 +42,8 @@ class EntradasMercancia extends Component
     public string $multi_buscar = '';
     public ?int $multi_bodega_id = null;
     public ?float $multi_precio = null;
-    public array $multi_items = []; // [producto_id => ['cantidad'=>X,'bodega_id'=>Y,'precio'=>Z]]
+    /** @var array<int,array{cantidad:int,bodega_id:?int,precio:float}> */
+    public array $multi_items = [];
 
     // Catálogos
     public $productos;
@@ -63,7 +63,6 @@ class EntradasMercancia extends Component
         'entradas.*.bodega_id'       => 'required|integer|exists:bodegas,id',
         'entradas.*.cantidad'        => 'required|numeric|min:1',
         'entradas.*.precio_unitario' => 'required|numeric|min:0',
-        'entradas.*.descripcion'     => 'nullable|string|max:255',
     ];
 
     protected array $messages = [
@@ -75,15 +74,16 @@ class EntradasMercancia extends Component
     {
         $this->fecha_contabilizacion = now()->toDateString();
 
-        // Productos (trae campos necesarios para el resolver)
         $this->productos = Producto::where('activo', 1)
-            ->orderBy('nombre')->take(800)
+            ->orderBy('nombre')
+            ->take(800)
             ->get(['id','nombre','mov_contable_segun','subcategoria_id']);
 
         $this->bodegas = Bodega::orderBy('nombre')->get(['id','nombre']);
 
         $this->socios = SocioNegocio::proveedores()
-            ->orderBy('razon_social')->take(500)
+            ->orderBy('razon_social')
+            ->take(500)
             ->get(['id','razon_social']);
 
         $this->conceptos = \App\Models\Conceptos\ConceptoDocumento::with([
@@ -97,7 +97,7 @@ class EntradasMercancia extends Component
 
         $tipo = \App\Models\TiposDocumento\TipoDocumento::where('codigo','ENTRADA_MERCANCIA')->first();
 
-        $this->series = \App\Models\Serie\Serie::with('tipo')
+        $this->series = Serie::with('tipo')
             ->when($tipo, fn ($q) => $q->where('tipo_documento_id', $tipo->id))
             ->activa()
             ->orderBy('nombre')
@@ -106,8 +106,11 @@ class EntradasMercancia extends Component
         $default = $this->series->firstWhere('es_default', 1) ?? $this->series->first();
         $this->serie_id = $default?->id;
 
-        if ($id) $this->cargar($id);
-        else $this->agregarFila();
+        if ($id) {
+            $this->cargar($id);
+        } else {
+            $this->agregarFila();
+        }
     }
 
     public function render()
@@ -121,7 +124,10 @@ class EntradasMercancia extends Component
         ]);
     }
 
-    /* ===================== UI Helpers ===================== */
+    private static function norm(?string $v): string
+    {
+        return Str::upper(Str::ascii(trim((string)$v)));
+    }
 
     public function getProximoPreviewProperty(): ?string
     {
@@ -132,7 +138,9 @@ class EntradasMercancia extends Component
             $len = $s->longitud ?? 6;
             $num = str_pad((string) $n, $len, '0', STR_PAD_LEFT);
             return ($s->prefijo ? "{$s->prefijo}-" : '') . $num;
-        } catch (\Throwable) { return null; }
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     public function agregarFila(): void
@@ -140,7 +148,6 @@ class EntradasMercancia extends Component
         $this->entradas[] = [
             'producto_id'     => null,
             'bodega_id'       => null,
-            'descripcion'     => null,
             'cantidad'        => 1,
             'precio_unitario' => 0.00,
             'cuenta_str'      => '',
@@ -155,54 +162,82 @@ class EntradasMercancia extends Component
         $this->dispatch('$refresh');
     }
 
-    /** Rellena descripción + cuenta al cambiar producto en cualquier fila */
     public function productoSeleccionado(int $i): void
     {
         if (!isset($this->entradas[$i])) return;
 
         $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-        if ($pid <= 0) { $this->entradas[$i]['cuenta_str'] = ''; $this->dispatch('$refresh'); return; }
-
-        $producto = $this->productos->firstWhere('id', $pid);
-        if ($producto) {
-            if (empty($this->entradas[$i]['descripcion'])) {
-                $this->entradas[$i]['descripcion'] = $producto->nombre;
-            }
-
-            $cuentaId = EntradaMercanciaService::resolverCuentaInventarioPublic($pid);
-            if ($cuentaId) {
-                $cuenta = PlanCuentas::select('codigo','nombre')->find($cuentaId);
-                $this->entradas[$i]['cuenta_str'] = $cuenta
-                    ? "{$cuenta->codigo} — {$cuenta->nombre}"
-                    : 'Sin cuenta';
-            } else {
-                $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
-            }
-        }
+        if ($pid > 0) $this->actualizarCuentaStr($i);
+        else $this->entradas[$i]['cuenta_str'] = '';
 
         $this->dispatch('$refresh');
     }
 
-    /** Si cambias concepto/rol, reintenta resolver por producto en cada fila */
+    public function recordarUltimos(int $i): void
+    {
+        // No hace nada; se deja para no romper llamadas del Blade.
+        $this->dispatch('$refresh');
+    }
+
     public function updatedConceptoDocumentoId(): void
     {
         foreach (array_keys($this->entradas) as $i) {
-            if (!($this->entradas[$i]['producto_id'] ?? null)) {
-                $this->entradas[$i]['cuenta_str'] = '';
-            } else {
-                $this->productoSeleccionado((int)$i);
-            }
+            if (!($this->entradas[$i]['producto_id'] ?? null)) $this->entradas[$i]['cuenta_str'] = '';
+            else $this->actualizarCuentaStr((int)$i);
         }
     }
+
     public function updatedConceptoRol(): void
     {
         foreach (array_keys($this->entradas) as $i) {
-            if (!($this->entradas[$i]['producto_id'] ?? null)) {
-                $this->entradas[$i]['cuenta_str'] = '';
-            } else {
-                $this->productoSeleccionado((int)$i);
+            if (!($this->entradas[$i]['producto_id'] ?? null)) $this->entradas[$i]['cuenta_str'] = '';
+            else $this->actualizarCuentaStr((int)$i);
+        }
+    }
+
+    private function actualizarCuentaStr(int $i): void
+    {
+        if (!isset($this->entradas[$i])) return;
+
+        $this->entradas[$i]['cuenta_str'] = '';
+
+        $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+        if ($pid <= 0) return;
+
+        $p = $this->productos->firstWhere('id', $pid);
+        if (!$p) return;
+
+        $segun  = self::norm($p->mov_contable_segun ?? '');
+        $tipoId = (int) config('conta.tipo_inventario_id', 1);
+
+        if ($segun === 'ARTICULO') {
+            $pc = \App\Models\Productos\ProductoCuenta::query()
+                ->with('cuentaPUC:id,codigo,nombre,cuenta_activa,titulo')
+                ->where('producto_id', $pid)
+                ->where('tipo_id', $tipoId)
+                ->first();
+
+            if ($pc && $pc->cuentaPUC && !$pc->cuentaPUC->titulo && $pc->cuentaPUC->cuenta_activa) {
+                $this->entradas[$i]['cuenta_str'] = "{$pc->cuentaPUC->codigo} — {$pc->cuentaPUC->nombre}";
+                return;
             }
         }
+
+        if ($segun === 'SUBCATEGORIA' && $p->subcategoria_id) {
+            $sc = SubcategoriaCuenta::query()
+                ->with('cuentaPUC:id,codigo,nombre,cuenta_activa,titulo')
+                ->where('subcategoria_id', (int)$p->subcategoria_id)
+                ->where('tipo_id', $tipoId)
+                ->orderBy('id')
+                ->first();
+
+            if ($sc && $sc->cuentaPUC && !$sc->cuentaPUC->titulo && $sc->cuentaPUC->cuenta_activa) {
+                $this->entradas[$i]['cuenta_str'] = "{$sc->cuentaPUC->codigo} — {$sc->cuentaPUC->nombre}";
+                return;
+            }
+        }
+
+        $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
     }
 
     /* ===================== Persistencia ===================== */
@@ -221,9 +256,6 @@ class EntradasMercancia extends Component
                 return [
                     'producto_id'     => $l['producto_id'] ?? null,
                     'bodega_id'       => $l['bodega_id'] ?? null,
-                    // === ACTIVA SOLO UNA DE ESTAS DOS LÍNEAS ===
-                    'descripcion'     => $l['descripcion'] ?? null, // <- usa esta SI tu tabla tiene 'descripcion'
-                    // 'detalle'       => $l['descripcion'] ?? null, // <- usa esta SI tu tabla NO tiene 'descripcion'
                     'cantidad'        => (float)($l['cantidad'] ?? 0),
                     'precio_unitario' => (float)($l['precio_unitario'] ?? 0),
                 ];
@@ -247,6 +279,7 @@ class EntradasMercancia extends Component
     {
         try {
             if (!$this->validarConToast()) return;
+
             $e = EntradaMercanciaService::guardarBorrador($this->payload());
             $this->entrada_id = $e->id;
 
@@ -288,7 +321,7 @@ class EntradasMercancia extends Component
     {
         $this->entrada_id = null;
         $this->socio_negocio_id = null;
-        $this->concepto_documento_id = null;
+               $this->concepto_documento_id = null;
         $this->concepto_rol = 'inventario';
         $this->fecha_contabilizacion = now()->toDateString();
         $this->observaciones = null;
@@ -301,6 +334,7 @@ class EntradasMercancia extends Component
     private function cargar(int $id): void
     {
         $e = EntradaMercancia::with('detalles')->findOrFail($id);
+
         $this->entrada_id = $e->id;
         $this->serie_id = $e->serie_id;
         $this->socio_negocio_id = $e->socio_negocio_id;
@@ -312,19 +346,20 @@ class EntradasMercancia extends Component
         $this->entradas = $e->detalles->map(fn ($d) => [
             'producto_id'     => $d->producto_id,
             'bodega_id'       => $d->bodega_id,
-            'descripcion'     => $d->descripcion ?? ($d->detalle ?? null),
             'cantidad'        => (float) $d->cantidad,
             'precio_unitario' => (float) $d->precio_unitario,
             'cuenta_str'      => '',
         ])->toArray();
 
-        foreach (array_keys($this->entradas) as $i) $this->productoSeleccionado((int) $i);
+        foreach (array_keys($this->entradas) as $i) $this->actualizarCuentaStr((int) $i);
+
         $this->dispatch('$refresh');
     }
 
-    /* ============= Selección múltiple ============= */
+    /* ====== Selección múltiple ====== */
 
     public function abrirMulti(): void { $this->showMulti = true; }
+
     public function cerrarMulti(): void
     {
         $this->showMulti = false;
@@ -333,24 +368,28 @@ class EntradasMercancia extends Component
         $this->multi_bodega_id = null;
         $this->multi_precio = null;
     }
+
     public function toggleMultiProducto(int $productoId): void
     {
         if (isset($this->multi_items[$productoId])) unset($this->multi_items[$productoId]);
         else $this->multi_items[$productoId] = ['cantidad'=>1,'bodega_id'=>null,'precio'=>0.0];
         $this->dispatch('$refresh');
     }
+
     public function incCantidadMulti(int $productoId): void
     {
         if (!isset($this->multi_items[$productoId])) return;
         $this->multi_items[$productoId]['cantidad'] = max(1, (int)$this->multi_items[$productoId]['cantidad'] + 1);
         $this->dispatch('$refresh');
     }
+
     public function decCantidadMulti(int $productoId): void
     {
         if (!isset($this->multi_items[$productoId])) return;
         $this->multi_items[$productoId]['cantidad'] = max(1, (int)$this->multi_items[$productoId]['cantidad'] - 1);
         $this->dispatch('$refresh');
     }
+
     public function aplicarPorLote(string $campo): void
     {
         foreach ($this->multi_items as $pid => &$cfg) {
@@ -360,20 +399,19 @@ class EntradasMercancia extends Component
         unset($cfg);
         $this->dispatch('$refresh');
     }
+
     public function agregarSeleccionados(): void
     {
         foreach ($this->multi_items as $pid => $cfg) {
-            $p = $this->productos->firstWhere('id', (int)$pid);
             $this->entradas[] = [
                 'producto_id'     => (int)$pid,
                 'bodega_id'       => $cfg['bodega_id'] ?? null,
-                'descripcion'     => $p?->nombre,
                 'cantidad'        => max(1, (int)($cfg['cantidad'] ?? 1)),
                 'precio_unitario' => max(0.0, (float)($cfg['precio'] ?? 0)),
                 'cuenta_str'      => '',
             ];
         }
-        foreach (array_keys($this->entradas) as $i) $this->productoSeleccionado((int)$i);
+        foreach (array_keys($this->entradas) as $i) $this->actualizarCuentaStr((int)$i);
         $this->cerrarMulti();
         $this->dispatch('$refresh');
     }

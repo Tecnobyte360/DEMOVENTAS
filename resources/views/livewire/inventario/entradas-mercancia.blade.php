@@ -8,7 +8,7 @@
 @once
   @push('scripts')
     <script>
-      // Cargar Alpine después de Livewire
+      // Alpine espera a que Livewire termine
       window.deferLoadingAlpine = (alpineInit) => {
         document.addEventListener('livewire:init', alpineInit);
       };
@@ -93,7 +93,7 @@
           @error('socio_negocio_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </section>
 
-        {{-- Lista de precio (opcional) --}}
+        {{-- Lista de precio --}}
         <section>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
             Lista de precio (opcional)
@@ -109,7 +109,6 @@
 
       {{-- Concepto y rol --}}
       <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-        {{-- Concepto --}}
         <section>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
             Concepto de entrada <span class="text-red-500">*</span>
@@ -126,7 +125,6 @@
           @error('concepto_documento_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </section>
 
-        {{-- Rol --}}
         <section>
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
             Rol del concepto
@@ -143,7 +141,7 @@
             <option value="ingreso_devolucion">Ingreso Devolución</option>
           </select>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            Se toma la primera cuenta del concepto con ese rol (menor prioridad).
+            * En UI no forzamos cuenta; solo al emitir se usa el concepto como contrapartida.
           </p>
         </section>
       </div>
@@ -169,22 +167,9 @@
           <span class="inline-grid place-items-center w-9 h-9 md:w-10 md:h-10 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">2</span>
           Agrega productos
         </h2>
-
-        <div class="flex items-center gap-2">
-          <button type="button"
-                  wire:click="abrirMulti"
-                  class="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow">
-            <i class="fa-solid fa-list-check mr-2"></i> Selección múltiple
-          </button>
-          <button type="button"
-                  wire:click="agregarFila"
-                  class="h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white">
-            + Fila
-          </button>
-        </div>
       </header>
 
-      {{-- Tabla de líneas --}}
+      {{-- Tabla --}}
       <section class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-x-auto shadow">
         <table class="min-w-full text-sm">
           <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
@@ -201,10 +186,6 @@
 
           <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
             @forelse($entradas as $i => $fila)
-              @php
-                $pid = (int)($entradas[$i]['producto_id'] ?? 0);
-                $prodSel = $pid ? $productos->firstWhere('id', $pid) : null;
-              @endphp
               <tr wire:key="fila-{{ $i }}" class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
                 {{-- Producto --}}
                 <td class="px-4 py-3 min-w-[260px]">
@@ -228,13 +209,12 @@
                          class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 text-gray-700 dark:text-gray-200">
                 </td>
 
-                {{-- Descripción (si tu BD no tiene 'descripcion', puedes dejarlo como ayuda visual) --}}
+                {{-- Descripción --}}
                 <td class="px-4 py-3 min-w-[220px]">
                   <input type="text"
                          placeholder="Descripción"
                          wire:model.live.debounce.300ms="entradas.{{ $i }}.descripcion"
                          class="w-full h-11 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                  {{-- Si tu tabla usa 'detalle', NO es obligatorio guardar esta columna; el componente ya mapea al payload --}}
                 </td>
 
                 {{-- Bodega --}}
@@ -292,7 +272,7 @@
       </section>
     </section>
 
-    {{-- ===== FOOTER STICKY (acciones) ===== --}}
+    {{-- ===== FOOTER STICKY ===== --}}
     <footer class="sticky bottom-0 inset-x-0 bg-white/85 dark:bg-gray-900/85 backdrop-blur border-t border-gray-200 dark:border-gray-800">
       <div class="px-4 md:px-8 py-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
@@ -364,12 +344,7 @@
             </thead>
             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               @php
-                $lista = $productos->when($multi_buscar, fn($c)=>$c->filter(
-                  fn($p)=>\Illuminate\Support\Str::contains(
-                    \Illuminate\Support\Str::lower($p->nombre),
-                    \Illuminate\Support\Str::lower($multi_buscar)
-                  )
-                ));
+                $lista = $productos->when($multi_buscar, fn($c)=>$c->filter(fn($p)=>\Illuminate\Support\Str::contains(\Illuminate\Support\Str::lower($p->nombre), \Illuminate\Support\Str::lower($multi_buscar))));
               @endphp
               @foreach($lista as $p)
                 @php $sel = isset($multi_items[$p->id]); @endphp
@@ -377,13 +352,11 @@
                   <td class="px-3 py-2">{{ $p->nombre }}</td>
                   <td class="px-3 py-2 text-right">
                     <div class="flex items-center justify-end gap-1">
-                      <button class="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800"
-                              wire:click="decCantidadMulti({{ $p->id }})">-</button>
+                      <button class="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800" wire:click="decCantidadMulti({{ $p->id }})">-</button>
                       <input type="number" min="1" step="1"
                              wire:model.live="multi_items.{{ $p->id }}.cantidad"
                              class="w-16 h-8 text-right rounded-lg border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-                      <button class="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800"
-                              wire:click="incCantidadMulti({{ $p->id }})">+</button>
+                      <button class="h-8 w-8 rounded-lg bg-gray-100 dark:bg-gray-800" wire:click="incCantidadMulti({{ $p->id }})">+</button>
                     </div>
                   </td>
                   <td class="px-3 py-2">
@@ -414,22 +387,18 @@
 
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-2">
-            <button class="h-10 px-3 rounded-xl bg-gray-100 dark:bg-gray-800"
-                    wire:click="aplicarPorLote('bodega_id')">
+            <button class="h-10 px-3 rounded-xl bg-gray-100 dark:bg-gray-800" wire:click="aplicarPorLote('bodega_id')">
               Aplicar bodega a seleccionados
             </button>
-            <button class="h-10 px-3 rounded-xl bg-gray-100 dark:bg-gray-800"
-                    wire:click="aplicarPorLote('precio')">
+            <button class="h-10 px-3 rounded-xl bg-gray-100 dark:bg-gray-800" wire:click="aplicarPorLote('precio')">
               Aplicar precio a seleccionados
             </button>
           </div>
           <div class="flex items-center gap-2">
-            <button class="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white"
-                    wire:click="agregarSeleccionados">
+            <button class="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white" wire:click="agregarSeleccionados">
               Agregar al detalle
             </button>
-            <button class="h-10 px-4 rounded-xl bg-gray-100 dark:bg-gray-800"
-                    wire:click="cerrarMulti">
+            <button class="h-10 px-4 rounded-xl bg-gray-100 dark:bg-gray-800" wire:click="cerrarMulti">
               Cerrar
             </button>
           </div>

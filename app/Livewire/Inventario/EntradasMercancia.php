@@ -15,6 +15,8 @@ use App\Models\Productos\Producto;
 use App\Models\Inventario\EntradaMercancia;
 use App\Models\Productos\ProductoCuenta;
 use App\Models\Categorias\SubcategoriaCuenta;
+use App\Models\Movimiento\ProductoCostoMovimiento;
+use App\Models\Productos\ProductoBodega;
 use App\Services\EntradaMercanciaService;
 use Illuminate\Support\Str;
 
@@ -162,22 +164,30 @@ class EntradasMercancia extends Component
         $this->dispatch('$refresh');
     }
 
-    public function productoSeleccionado(int $i): void
-    {
-        if (!isset($this->entradas[$i])) return;
+ public function productoSeleccionado(int $i): void
+{
+    if (!isset($this->entradas[$i])) return;
 
-        $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-        if ($pid > 0) $this->actualizarCuentaStr($i);
-        else $this->entradas[$i]['cuenta_str'] = '';
-
-        $this->dispatch('$refresh');
+    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+    if ($pid > 0) {
+        $this->actualizarCuentaStr($i);
+        $this->precargarCosto($i); 
+    } else {
+        $this->entradas[$i]['cuenta_str'] = '';
     }
+
+    $this->dispatch('$refresh');
+}
+
 
     public function recordarUltimos(int $i): void
-    {
-        // No hace nada; se deja para no romper llamadas del Blade.
-        $this->dispatch('$refresh');
+{
+    // Si ya hay producto, intenta precargar costo con la bodega seleccionada
+    if (isset($this->entradas[$i]) && ($this->entradas[$i]['producto_id'] ?? null)) {
+        $this->precargarCosto($i); // ← aquí
     }
+    $this->dispatch('$refresh');
+}
 
     public function updatedConceptoDocumentoId(): void
     {
@@ -253,22 +263,91 @@ class EntradasMercancia extends Component
         }
     }
 
-    public function crearEntrada(): void
-    {
+ public function crearEntrada(): void
+{
+    try {
+        if (!$this->validarConToast()) return;
+
+        // 1) Guardar (o actualizar) el borrador
+        $e = \App\Services\EntradaMercanciaService::guardarBorrador($this->payload());
+        $this->entrada_id = $e->id;
+
+        // 2) Intentar emitir inmediatamente
         try {
-            if (!$this->validarConToast()) return;
+            // Traemos con detalles y emitimos
+            $em = \App\Models\Inventario\EntradaMercancia::with('detalles')->findOrFail($this->entrada_id);
+            \App\Services\EntradaMercanciaService::emitir($em);
 
-            $e = EntradaMercanciaService::guardarBorrador($this->payload());
-            $this->entrada_id = $e->id;
+            \Masmerise\Toaster\PendingToast::create()
+                ->success()
+                ->message('Entrada guardada y emitida correctamente.')
+                ->duration(6000);
 
-            PendingToast::create()->success()->message('Entrada guardada en borrador.')->duration(5000);
+            // Limpiar y refrescar listado
+            $this->resetFormulario();
             $this->dispatch('refrescar-lista-entradas');
-        } catch (\Throwable $e) {
-            Log::error('ENTRADA::guardar error', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')->duration(9000);
+        } catch (\Throwable $ex) {
+            // Si falló la emisión, el borrador igual quedó guardado
+            \Masmerise\Toaster\PendingToast::create()
+                ->warning()
+                ->message('Borrador guardado, pero no se pudo emitir: '.$ex->getMessage())
+                ->duration(12000);
+        }
+
+    } catch (\Throwable $e) {
+        \Illuminate\Support\Facades\Log::error('ENTRADA::guardar error', ['msg' => $e->getMessage()]);
+        \Masmerise\Toaster\PendingToast::create()
+            ->error()
+            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
+            ->duration(9000);
+    }
+}
+
+
+private function precargarCosto(int $i): void
+{
+    if (!isset($this->entradas[$i])) return;
+
+    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+    $bid = (int)($this->entradas[$i]['bodega_id'] ?? 0);
+
+    // Solo autocompletar si no hay precio ingresado (o es 0)
+    $precioActual = (float)($this->entradas[$i]['precio_unitario'] ?? 0);
+    if ($pid <= 0 || $bid <= 0 || $precioActual > 0) return;
+
+    $precio = null;
+
+    // 1) costo_promedio / ultimo_costo en la tabla producto_bodegas
+    $pb = ProductoBodega::query()
+        ->select('costo_promedio', 'ultimo_costo')
+        ->where('producto_id', $pid)
+        ->where('bodega_id', $bid)
+        ->first();
+
+    if ($pb) {
+        if (is_numeric($pb->costo_promedio) && (float)$pb->costo_promedio > 0) {
+            $precio = (float)$pb->costo_promedio;
+        } elseif (is_numeric($pb->ultimo_costo) && (float)$pb->ultimo_costo > 0) {
+            $precio = (float)$pb->ultimo_costo;
         }
     }
 
+    // 2) Fallback: último movimiento de costo (por si no existe producto_bodegas)
+    if ($precio === null) {
+        $precio = ProductoCostoMovimiento::query()
+            ->where('producto_id', $pid)
+            ->where('bodega_id', $bid)
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->value('costo_prom_nuevo');
+
+        $precio = $precio ? (float)$precio : null;
+    }
+
+    if ($precio !== null && $precio > 0) {
+        $this->entradas[$i]['precio_unitario'] = round($precio, 4);
+    }
+}
     public function emitirEntrada(): void
     {
         try {
@@ -378,19 +457,24 @@ class EntradasMercancia extends Component
         $this->dispatch('$refresh');
     }
 
-    public function agregarSeleccionados(): void
-    {
-        foreach ($this->multi_items as $pid => $cfg) {
-            $this->entradas[] = [
-                'producto_id'     => (int)$pid,
-                'bodega_id'       => $cfg['bodega_id'] ?? null,
-                'cantidad'        => max(1, (int)($cfg['cantidad'] ?? 1)),
-                'precio_unitario' => max(0.0, (float)($cfg['precio'] ?? 0)),
-                'cuenta_str'      => '',
-            ];
-        }
-        foreach (array_keys($this->entradas) as $i) $this->actualizarCuentaStr((int)$i);
-        $this->cerrarMulti();
-        $this->dispatch('$refresh');
+   public function agregarSeleccionados(): void
+{
+    foreach ($this->multi_items as $pid => $cfg) {
+        $this->entradas[] = [
+            'producto_id'     => (int)$pid,
+            'bodega_id'       => $cfg['bodega_id'] ?? null,
+            'cantidad'        => max(1, (int)($cfg['cantidad'] ?? 1)),
+            'precio_unitario' => max(0.0, (float)($cfg['precio'] ?? 0)),
+            'cuenta_str'      => '',
+        ];
     }
+
+    foreach (array_keys($this->entradas) as $i) {
+        $this->actualizarCuentaStr((int)$i);
+        $this->precargarCosto((int)$i);  // ← aquí
+    }
+
+    $this->cerrarMulti();
+    $this->dispatch('$refresh');
+}
 }

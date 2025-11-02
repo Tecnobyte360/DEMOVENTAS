@@ -88,13 +88,14 @@ class EntradasMercancia extends Component
 
    
 $this->conceptos = \App\Models\Conceptos\ConceptoDocumento::with([
-        'cuentas'      => fn ($q) => $q->orderBy('prioridad'),
-        'cuentas.plan' => fn ($q) => $q->select('id','codigo','nombre'),
+        'cuentas'      => fn($q) => $q->orderBy('prioridad'),
+        'cuentas.plan' => fn($q) => $q->select('id','codigo','nombre'),
     ])
-    ->where('activo', 1)          // <— en lugar de ->activos()
-    ->where('tipo', 'entrada')    // <— en lugar de ->entradas()
+    ->where('activo', 1)
+    ->where('tipo', 'entrada')
     ->orderBy('nombre')
     ->get(['id','codigo','nombre','tipo','activo']);
+
 
     // Series para ENTRADA_MERCANCIA
     $tipo = \App\Models\TiposDocumento\TipoDocumento::where('codigo','ENTRADA_MERCANCIA')->first();

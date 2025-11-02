@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             DashboardTableSeeder::class,
             ProductoCuentaTipoSeeder::class,
             UnidadMedidaSeeder::class,
+            EntradasMercanciaTipoYSerieSeeder::class,
         ]);
     }
 }

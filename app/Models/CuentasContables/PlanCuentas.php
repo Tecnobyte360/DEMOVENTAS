@@ -2,6 +2,7 @@
 
 namespace App\Models\CuentasContables;
 
+use App\Models\Conceptos\ConceptoDocumento;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -203,4 +204,18 @@ class PlanCuentas extends Model
     {
         return $q->where('clase_cuenta', $clase);
     }
+
+   public function conceptos()
+{
+    return $this->belongsToMany(
+        ConceptoDocumento::class,
+        'concepto_documento_cuenta',
+        'plan_cuenta_id',        
+        'concepto_documento_id' 
+    )->withPivot(['rol','naturaleza','porcentaje','prioridad'])
+     ->withTimestamps();
+}
+
+
+
 }

@@ -20,6 +20,7 @@ use App\Livewire\Catalogos\Municipios;
 use App\Livewire\Categoria\Categorias;
 use App\Livewire\Categorias\IndexCategorias;
 use App\Livewire\Compras\NotaCreditoCompraForm;
+use App\Livewire\Conceptos\ConceptosDocumentos;
 use App\Livewire\CondicionesPago\Condicionpago;
 use App\Livewire\CondicionPagos\CondicionesPagos;
 use App\Livewire\ConfiguracionEmpresas\Empresas;
@@ -247,6 +248,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     //Inventario
     Route::get('Entradas', Indexentradas::class)->name('Entradas');
+    
     Route::get('/EntradasMercancia', EntradasMercancia::class)->name('entradas.mercancia');
     Route::get('/Operaciones-stock', OperacionesStock::class)->name('Operaciones-stock');
     Route::get('/Maestro-Rutas', MaestroRutas::class)->name('Maestro-Rutas');
@@ -280,6 +282,9 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
     Route::get('Factura-compras', IndexFacturas::class)->name('Factura-compras');
+Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
+
+    
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
     // Route::get('/catalogos/ciiu', CiiuActividades::class)
     //     ->name('catalogos.ciiu');

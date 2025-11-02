@@ -39,29 +39,7 @@
         <i class="fa-solid fa-list"></i> Entradas registradas
       </button>
 
-      <!-- Devolución a proveedor -->
-      <button
-        @click="tab = 'ret_form'"
-        :class="tab === 'ret_form' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
-        class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
-        <i class="fa-solid fa-rotate-left"></i> Devolución a proveedor
-      </button>
 
-      <!-- Devoluciones registradas -->
-      <button
-        @click="tab = 'ret_list'"
-        :class="tab === 'ret_list' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
-        class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
-        <i class="fa-solid fa-rectangle-list"></i> Devoluciones registradas
-      </button>
-
-      <!-- Movimientos / Kardex -->
-      <button
-        @click="tab = 'kardex'"
-        :class="tab === 'kardex' ? 'bg-indigo-600 text-white shadow' : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
-        class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
-        <i class="fa-solid fa-diagram-project"></i> Movimientos (Kardex)
-      </button>
     </nav>
 
     {{-- ===== Contenido de pestañas ===== --}}
@@ -76,35 +54,6 @@
         <livewire:inventario.lista-entradas-generadas key="entradas-list" />
         </div>
 
-
-      {{-- TAB: Devolución a proveedor (pendiente / placeholder) --}}
-      <div x-show="tab === 'ret_form'" x-cloak class="text-sm text-gray-600 dark:text-gray-300">
-        {{-- Aquí podrías incluir otro componente Livewire, ej:
-           <livewire:inventario.devoluciones-proveedor key="dev-proveedor-form" />
-        --}}
-        <div class="rounded-xl border border-dashed p-6 dark:border-gray-700">
-          <p class="font-semibold">Formulario de Devolución a Proveedor</p>
-          <p class="mt-1">Próximamente…</p>
-        </div>
-      </div>
-
-      {{-- TAB: Devoluciones registradas (pendiente / placeholder) --}}
-      <div x-show="tab === 'ret_list'" x-cloak class="text-sm text-gray-600 dark:text-gray-300">
-        {{-- <livewire:inventario.devoluciones-proveedor-list key="dev-proveedor-list" /> --}}
-        <div class="rounded-xl border border-dashed p-6 dark:border-gray-700">
-          <p class="font-semibold">Devoluciones registradas</p>
-          <p class="mt-1">Próximamente…</p>
-        </div>
-      </div>
-
-      {{-- TAB: Movimientos / Kardex (pendiente / placeholder) --}}
-      <div x-show="tab === 'kardex'" x-cloak class="text-sm text-gray-600 dark:text-gray-300">
-        {{-- <livewire:inventario.kardex key="kardex" /> --}}
-        <div class="rounded-xl border border-dashed p-6 dark:border-gray-700">
-          <p class="font-semibold">Movimientos (Kardex)</p>
-          <p class="mt-1">Próximamente…</p>
-        </div>
-      </div>
     </div>
   </section>
 </div>

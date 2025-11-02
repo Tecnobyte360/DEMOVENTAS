@@ -2,6 +2,7 @@
 
 namespace App\Models\Inventario;
 
+use App\Livewire\Conceptos\ConceptosDocumentos;
 use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,13 +15,11 @@ class EntradaDetalle extends Model
 
     protected $table = 'entrada_detalles';
 
-    protected $fillable = [
-        'entrada_mercancia_id',
-        'producto_id',
-        'bodega_id',
-        'cantidad',
-        'precio_unitario',
-    ];
+ protected $fillable = [
+  'socio_negocio_id','fecha_contabilizacion','lista_precio','observaciones',
+  'estado','serie_id','prefijo','numero',
+  'concepto_documento_id',   // ← nuevo
+];
 
     public function entrada()
     {
@@ -36,4 +35,8 @@ class EntradaDetalle extends Model
     {
         return $this->belongsTo(Bodega::class);
     }
+    public function concepto()
+{
+    return $this->belongsTo(ConceptosDocumentos::class, 'concepto_documento_id');
+}
 }

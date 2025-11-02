@@ -228,7 +228,7 @@
                                 </a>
                                 <ul x-show="open" x-collapse class="mt-2 space-y-1 pl-4 border-l" :style="`border-color: ${isLight ? '#CBD5E1' : 'rgba(255,255,255,.2)'}`">
                                   <li class="space-y-1">
-                                    <a href="{{ route('Operaciones-stock') }}" class="block text-sm font-medium ml-4 text-[color:var(--sidebar-fg)] hover:opacity-90">Entradas de stock</a>
+                                    <a href="{{ route('Entradas') }}" class="block text-sm font-medium ml-4 text-[color:var(--sidebar-fg)] hover:opacity-90">Entradas de stock</a>
                                     <a href="{{ route('SalidaMercancia') }}" class="block text-sm font-medium ml-4 text-[color:var(--sidebar-fg)] hover:opacity-90">Salida mercancia</a>
                                     <a href="{{ route('DevolucionMercancia') }}" class="block text-sm font-medium ml-4 text-[color:var(--sidebar-fg)] hover:opacity-90">Devolucion de mercancia</a>
                                   </li>
@@ -519,6 +519,12 @@
                                         <span class="text-sm font-medium ml-4">Tipos Gastos</span>
                                     </a>
                                 </li>
+ <li class="mb-1 last:mb-0">
+                                    <a class="block transition truncate @if(Route::is('ConceptoDocumentos')) text-violet-400 @else text-[color:var(--sidebar-fg-muted)] hover:text-[color:var(--sidebar-fg)] @endif" href="{{ route('ConceptoDocumentos') }}">
+                                        <span class="text-sm font-medium ml-4">Conceptos Documentos</span>
+                                    </a>
+                                </li>
+
 
 
                                 

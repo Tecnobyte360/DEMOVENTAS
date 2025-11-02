@@ -19,6 +19,7 @@ class EntradaMercanciaService
      *                RESOLUCIÓN DE CUENTAS
      * ========================================================= */
 
+    /** Id del tipo "Inventario" (PUC) configurado */
     protected static function tipoInventarioId(): int
     {
         return (int) config('conta.tipo_inventario_id', 1);
@@ -49,7 +50,7 @@ class EntradaMercanciaService
     /**
      * Resolver cuenta INVENTARIO según mov_contable_segun:
      * - SUBCATEGORIA: usa subcategoria_cuentas
-     * - ARTICULO (default): producto_cuentas; si no hay, intenta subcategoría
+     * - ARTICULO (o vacío): producto_cuentas; si no hay, intenta subcategoría
      */
     protected static function resolverCuentaInventario(int $productoId): ?int
     {
@@ -59,7 +60,7 @@ class EntradaMercanciaService
 
         $segun = strtoupper((string) $p->mov_contable_segun);
 
-        if ($segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
+        if ($segun === 'SUBCATEGORIA') {
             return self::cuentaInventarioPorSubcategoria($p->subcategoria_id);
         }
 
@@ -68,7 +69,7 @@ class EntradaMercanciaService
             ?? self::cuentaInventarioPorSubcategoria($p->subcategoria_id);
     }
 
-    /** ⇨ Wrapper público para usar en Livewire (solo lectura) */
+    /** Wrapper público (por si lo llamas desde Livewire) */
     public static function resolverCuentaInventarioPublic(int $productoId): ?int
     {
         return self::resolverCuentaInventario($productoId);
@@ -83,7 +84,7 @@ class EntradaMercanciaService
             ->whereHas('plan', fn ($qq) => $qq->where('titulo', 0)->where('cuenta_activa', 1))
             ->orderBy('prioridad', 'asc');
 
-        return $q->value('plan_cuenta_id');
+        return $q->value('plan_cuenta_id'); // null si no existe imputable/activa
     }
 
     /* =========================================================
@@ -95,9 +96,14 @@ class EntradaMercanciaService
         $nat = strtoupper((string) $c->naturaleza);
         if (in_array($nat, ['D','DEUDORA','ACTIVO','GASTO','COSTO','INVENTARIO'], true)) return true;
         if (in_array($nat, ['C','ACREEDORA','PASIVO','PATRIMONIO','INGRESOS'], true)) return false;
+        // Fallback: clases típicas
         return in_array(substr((string) $c->codigo, 0, 1), ['1','5','6'], true);
     }
 
+    /**
+     * Inserta Movimiento y actualiza saldo en PlanCuentas (with lock)
+     * Prohíbe cuentas TÍTULO o INACTIVAS.
+     */
     protected static function post(Asiento $asiento, int $cuentaId, float $debe, float $haber, ?string $detalle = null, array $meta = []): Movimiento
     {
         /** @var PlanCuentas $c */
@@ -152,6 +158,7 @@ class EntradaMercanciaService
                 $e->forceFill($data)->save();
             });
 
+            // Resetear detalles y reinsertar
             $e->detalles()->delete();
 
             $lineas = [];
@@ -204,6 +211,11 @@ class EntradaMercanciaService
         if (!$ctaConcepto) throw new \RuntimeException('El concepto no tiene una cuenta imputable/activa configurada.');
     }
 
+    /**
+     * Contabiliza:
+     *  - DEBE: inventario por cada línea (cuenta según ARTÍCULO/SUBCATEGORÍA)
+     *  - HABER: cuenta del concepto por el total
+     */
     protected static function contabilizar(EntradaMercancia $e): Asiento
     {
         $ctaConcepto = self::cuentaPorConcepto((int) $e->concepto_documento_id, null);
@@ -297,6 +309,7 @@ class EntradaMercanciaService
         self::validarParaEmitir($e);
 
         DB::transaction(function () use ($e) {
+            // Asignar consecutivo de la serie si no tiene
             if ($e->serie_id && empty($e->numero)) {
                 $serie = $e->serie()->lockForUpdate()->first();
                 if ($serie) {
@@ -308,9 +321,13 @@ class EntradaMercanciaService
                 }
             }
 
+            // Contabilización
             self::contabilizar($e->load('detalles', 'serie'));
+
+            // Inventario
             self::aumentarInventario($e->load('detalles'));
 
+            // Estado final
             $e->estado = 'emitida';
             $e->save();
         }, 3);

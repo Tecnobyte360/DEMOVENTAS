@@ -9,10 +9,13 @@ use Illuminate\Validation\ValidationException;
 use Masmerise\Toaster\PendingToast;
 
 use App\Models\Bodega;
+use App\Models\Categorias\SubcategoriaCuenta;
+use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 use App\Models\Inventario\EntradaMercancia;
+use App\Models\Productos\ProductoCuenta;
 use App\Services\EntradaMercanciaService;
 
 class EntradasMercancia extends Component
@@ -73,10 +76,10 @@ class EntradasMercancia extends Component
         $this->fecha_contabilizacion = now()->toDateString();
 
         // Productos: necesitamos mov_contable_segun y subcategoria_id para el resolver
-        $this->productos = Producto::where('activo', 1)
-            ->orderBy('nombre')
-            ->take(800)
-            ->get(['id','nombre','mov_contable_segun','subcategoria_id']);
+      $this->productos = Producto::where('activo', 1)
+    ->orderBy('nombre')
+    ->take(800)
+    ->get(['id','nombre','mov_contable_segun','subcategoria_id']);
 
         $this->bodegas = Bodega::orderBy('nombre')->get(['id','nombre']);
 
@@ -185,33 +188,90 @@ class EntradasMercancia extends Component
     }
 
     /** NO tocar cuenta_str cuando cambia Concepto o Rol (solo refrescar UI) */
-    public function updatedConceptoDocumentoId(): void
-    {
-        $this->dispatch('$refresh');
+   public function updatedConceptoDocumentoId(): void
+{
+    // No tocar cuenta si no hay producto seleccionado
+    foreach (array_keys($this->entradas) as $i) {
+        if (!($this->entradas[$i]['producto_id'] ?? null)) {
+            $this->entradas[$i]['cuenta_str'] = '';
+        } else {
+            $this->actualizarCuentaStr((int)$i);
+        }
     }
-    public function updatedConceptoRol(): void
-    {
-        $this->dispatch('$refresh');
+}
+
+public function updatedConceptoRol(): void
+{
+    foreach (array_keys($this->entradas) as $i) {
+        if (!($this->entradas[$i]['producto_id'] ?? null)) {
+            $this->entradas[$i]['cuenta_str'] = '';
+        } else {
+            $this->actualizarCuentaStr((int)$i);
+        }
     }
+}
 
     /** Llena cuenta_str SOLO por producto (ARTICULO/SUBCATEGORIA); sin fallback al concepto en UI */
-    private function actualizarCuentaStr(int $i): void
-    {
-        if (!isset($this->entradas[$i])) return;
+   private function actualizarCuentaStr(int $i): void
+{
+    if (!isset($this->entradas[$i])) return;
 
-        $this->entradas[$i]['cuenta_str'] = '';
+    $this->entradas[$i]['cuenta_str'] = '';
 
-        $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-        if ($pid <= 0) return;
+    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+    if ($pid <= 0) {
+        // Sin producto: jamás rellenes por concepto
+        return;
+    }
 
-        $cuentaId = EntradaMercanciaService::resolverCuentaInventarioPublic($pid);
-        if ($cuentaId) {
-            $puc = \App\Models\CuentasContables\PlanCuentas::find($cuentaId);
-            if ($puc) {
-                $this->entradas[$i]['cuenta_str'] = "{$puc->codigo} — {$puc->nombre}";
+    // Buscar el producto en el catálogo ya cargado
+    $p = $this->productos->firstWhere('id', $pid);
+
+    // 1) ARTICULO -> cuenta en producto_cuentas (tipo inventario)
+    if ($p && strtoupper((string)$p->mov_contable_segun) === 'ARTICULO') {
+        $pc = ProductoCuenta::query()
+            ->with('cuentaPUC:id,codigo,nombre')
+            ->where('producto_id', $pid)
+            ->where('tipo_id', (int)config('conta.tipo_inventario_id', 1))
+            ->first();
+
+        if ($pc && $pc->cuentaPUC) {
+            $this->entradas[$i]['cuenta_str'] = "{$pc->cuentaPUC->codigo} — {$pc->cuentaPUC->nombre}";
+            return;
+        }
+    }
+
+    // 2) SUBCATEGORIA -> cuenta en subcategoria_cuentas (tipo inventario)
+    if ($p && strtoupper((string)$p->mov_contable_segun) === 'SUBCATEGORIA' && $p->subcategoria_id) {
+        $sc = SubcategoriaCuenta::query()
+            ->with('cuentaPUC:id,codigo,nombre')
+            ->where('subcategoria_id', (int)$p->subcategoria_id)
+            ->where('tipo_id', (int)config('conta.tipo_inventario_id', 1))
+            ->first();
+
+        if ($sc && $sc->cuentaPUC) {
+            $this->entradas[$i]['cuenta_str'] = "{$sc->cuentaPUC->codigo} — {$sc->cuentaPUC->nombre}";
+            return;
+        }
+    }
+
+    // 3) Fallback: CONCEPTO (primera por rol; si no, por prioridad)
+    if ($this->concepto_documento_id) {
+        $c = $this->conceptos->firstWhere('id', (int)$this->concepto_documento_id);
+        if ($c) {
+            $match = collect($c->cuentas ?? [])->firstWhere('rol', $this->concepto_rol)
+                  ?? collect($c->cuentas ?? [])->sortBy('prioridad')->first();
+
+            if ($match?->plan_cuenta_id) {
+                $puc = PlanCuentas::find($match->plan_cuenta_id);
+                if ($puc) {
+                    $this->entradas[$i]['cuenta_str'] = "{$puc->codigo} — {$puc->nombre}";
+                }
             }
         }
     }
+}
+
 
     /* ===================== Persistencia ===================== */
 

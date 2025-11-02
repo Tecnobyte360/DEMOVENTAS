@@ -1,23 +1,3 @@
-{{-- resources/views/livewire/inventario/conceptos-documentos.blade.php --}}
-
-@once
-  @push('styles')
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    <style>[x-cloak]{display:none!important}</style>
-  @endpush
-@endonce
-
-@once
-  @push('scripts')
-    <script>
-      // Cargar Alpine DESPUÉS de Livewire para evitar choques de init
-      window.deferLoadingAlpine = (alpineInit) => {
-        document.addEventListener('livewire:load', alpineInit);
-      };
-    </script>
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  @endpush
-@endonce
 
 <div class="p-6 space-y-6" x-data>
   {{-- ================= Header / Filtros ================= --}}

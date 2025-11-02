@@ -76,7 +76,7 @@ class EntradasMercancia extends Component
         $this->fecha_contabilizacion = now()->toDateString();
 
         // Productos: necesitamos mov_contable_segun y subcategoria_id para el resolver
-      $this->productos = Producto::where('activo', 1)
+     $this->productos = Producto::where('activo', 1)
     ->orderBy('nombre')
     ->take(800)
     ->get(['id','nombre','mov_contable_segun','subcategoria_id']);
@@ -212,23 +212,21 @@ public function updatedConceptoRol(): void
 }
 
     /** Llena cuenta_str SOLO por producto (ARTICULO/SUBCATEGORIA); sin fallback al concepto en UI */
-   private function actualizarCuentaStr(int $i): void
+  private function actualizarCuentaStr(int $i): void
 {
     if (!isset($this->entradas[$i])) return;
 
     $this->entradas[$i]['cuenta_str'] = '';
 
     $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-    if ($pid <= 0) {
-        // Sin producto: jamás rellenes por concepto
-        return;
-    }
+    if ($pid <= 0) return;
 
-    // Buscar el producto en el catálogo ya cargado
+    // Buscar producto ya cargado
     $p = $this->productos->firstWhere('id', $pid);
+    if (!$p) return;
 
-    // 1) ARTICULO -> cuenta en producto_cuentas (tipo inventario)
-    if ($p && strtoupper((string)$p->mov_contable_segun) === 'ARTICULO') {
+    // === ARTICULO ===
+    if (strtoupper((string)$p->mov_contable_segun) === 'ARTICULO') {
         $pc = ProductoCuenta::query()
             ->with('cuentaPUC:id,codigo,nombre')
             ->where('producto_id', $pid)
@@ -241,8 +239,8 @@ public function updatedConceptoRol(): void
         }
     }
 
-    // 2) SUBCATEGORIA -> cuenta en subcategoria_cuentas (tipo inventario)
-    if ($p && strtoupper((string)$p->mov_contable_segun) === 'SUBCATEGORIA' && $p->subcategoria_id) {
+    // === SUBCATEGORIA ===
+    if (strtoupper((string)$p->mov_contable_segun) === 'SUBCATEGORIA' && $p->subcategoria_id) {
         $sc = SubcategoriaCuenta::query()
             ->with('cuentaPUC:id,codigo,nombre')
             ->where('subcategoria_id', (int)$p->subcategoria_id)
@@ -255,21 +253,8 @@ public function updatedConceptoRol(): void
         }
     }
 
-    // 3) Fallback: CONCEPTO (primera por rol; si no, por prioridad)
-    if ($this->concepto_documento_id) {
-        $c = $this->conceptos->firstWhere('id', (int)$this->concepto_documento_id);
-        if ($c) {
-            $match = collect($c->cuentas ?? [])->firstWhere('rol', $this->concepto_rol)
-                  ?? collect($c->cuentas ?? [])->sortBy('prioridad')->first();
-
-            if ($match?->plan_cuenta_id) {
-                $puc = PlanCuentas::find($match->plan_cuenta_id);
-                if ($puc) {
-                    $this->entradas[$i]['cuenta_str'] = "{$puc->codigo} — {$puc->nombre}";
-                }
-            }
-        }
-    }
+    // Ninguna encontrada
+    $this->entradas[$i]['cuenta_str'] = '';
 }
 
 

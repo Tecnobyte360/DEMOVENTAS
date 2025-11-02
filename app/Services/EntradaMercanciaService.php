@@ -22,7 +22,7 @@ class EntradaMercanciaService
     /** Id del tipo "Inventario" (PUC) configurado */
     protected static function tipoInventarioId(): int
     {
-        return (int) config('conta.tipo_inventario_id', 1);
+        return (int) config('conta.tipo_inventario_id', 4);
     }
 
     /** Cuenta de inventario por PRODUCTO (solo imputable/activa) */

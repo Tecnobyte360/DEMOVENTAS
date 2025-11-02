@@ -208,7 +208,7 @@ class EntradasMercancia extends Component
         if (!$p) return;
 
         $segun  = self::norm($p->mov_contable_segun ?? '');
-        $tipoId = (int) config('conta.tipo_inventario_id', 1);
+        $tipoId = (int) config('conta.tipo_inventario_id', 4);
 
         if ($segun === 'ARTICULO') {
             $pc = \App\Models\Productos\ProductoCuenta::query()

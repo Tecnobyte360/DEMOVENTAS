@@ -75,20 +75,17 @@ class EntradasMercancia extends Component
     {
         $this->fecha_contabilizacion = now()->toDateString();
 
-        // Productos: necesitamos mov_contable_segun y subcategoria_id para el resolver
-     $this->productos = Producto::where('activo', 1)
-    ->orderBy('nombre')
-    ->take(800)
-    ->get(['id','nombre','mov_contable_segun','subcategoria_id']);
+        // Productos (trae campos necesarios para el resolver)
+        $this->productos = Producto::where('activo', 1)
+            ->orderBy('nombre')->take(800)
+            ->get(['id','nombre','mov_contable_segun','subcategoria_id']);
 
         $this->bodegas = Bodega::orderBy('nombre')->get(['id','nombre']);
 
         $this->socios = SocioNegocio::proveedores()
-            ->orderBy('razon_social')
-            ->take(500)
+            ->orderBy('razon_social')->take(500)
             ->get(['id','razon_social']);
 
-        // Conceptos (sin tocar cuenta_str en UI)
         $this->conceptos = \App\Models\Conceptos\ConceptoDocumento::with([
                 'cuentas'      => fn ($q) => $q->orderBy('prioridad'),
                 'cuentas.plan' => fn ($q) => $q->select('id','codigo','nombre'),
@@ -98,7 +95,6 @@ class EntradasMercancia extends Component
             ->orderBy('nombre')
             ->get(['id','codigo','nombre','tipo','activo']);
 
-        // Series para ENTRADA_MERCANCIA
         $tipo = \App\Models\TiposDocumento\TipoDocumento::where('codigo','ENTRADA_MERCANCIA')->first();
 
         $this->series = \App\Models\Serie\Serie::with('tipo')
@@ -110,11 +106,8 @@ class EntradasMercancia extends Component
         $default = $this->series->firstWhere('es_default', 1) ?? $this->series->first();
         $this->serie_id = $default?->id;
 
-        if ($id) {
-            $this->cargar($id);
-        } else {
-            $this->agregarFila();
-        }
+        if ($id) $this->cargar($id);
+        else $this->agregarFila();
     }
 
     public function render()
@@ -139,9 +132,7 @@ class EntradasMercancia extends Component
             $len = $s->longitud ?? 6;
             $num = str_pad((string) $n, $len, '0', STR_PAD_LEFT);
             return ($s->prefijo ? "{$s->prefijo}-" : '') . $num;
-        } catch (\Throwable) {
-            return null;
-        }
+        } catch (\Throwable) { return null; }
     }
 
     public function agregarFila(): void
@@ -164,99 +155,55 @@ class EntradasMercancia extends Component
         $this->dispatch('$refresh');
     }
 
-    /** Sincroniza descripción y (solo) cuenta por PRODUCTO */
-    public function syncEntradasDescripcion(): void
+    /** Rellena descripción + cuenta al cambiar producto en cualquier fila */
+    public function productoSeleccionado(int $i): void
     {
-        foreach ($this->entradas as $i => &$l) {
-            if (!empty($l['producto_id']) && empty($l['descripcion'])) {
-                $p = $this->productos->firstWhere('id', (int) $l['producto_id']);
-                if ($p) $l['descripcion'] = $p->nombre;
+        if (!isset($this->entradas[$i])) return;
+
+        $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
+        if ($pid <= 0) { $this->entradas[$i]['cuenta_str'] = ''; $this->dispatch('$refresh'); return; }
+
+        $producto = $this->productos->firstWhere('id', $pid);
+        if ($producto) {
+            if (empty($this->entradas[$i]['descripcion'])) {
+                $this->entradas[$i]['descripcion'] = $producto->nombre;
             }
-            $this->actualizarCuentaStr($i);
+
+            $cuentaId = EntradaMercanciaService::resolverCuentaInventarioPublic($pid);
+            if ($cuentaId) {
+                $cuenta = PlanCuentas::select('codigo','nombre')->find($cuentaId);
+                $this->entradas[$i]['cuenta_str'] = $cuenta
+                    ? "{$cuenta->codigo} — {$cuenta->nombre}"
+                    : 'Sin cuenta';
+            } else {
+                $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
+            }
         }
-        unset($l);
+
         $this->dispatch('$refresh');
     }
 
-    public function recordarUltimos(int $i): void
+    /** Si cambias concepto/rol, reintenta resolver por producto en cada fila */
+    public function updatedConceptoDocumentoId(): void
     {
-        // si se borra el producto, limpia la cuenta
-        if (isset($this->entradas[$i]) && empty($this->entradas[$i]['producto_id'])) {
-            $this->entradas[$i]['cuenta_str'] = '';
-        }
-        $this->dispatch('$refresh');
-    }
-
-    /** NO tocar cuenta_str cuando cambia Concepto o Rol (solo refrescar UI) */
-   public function updatedConceptoDocumentoId(): void
-{
-    // No tocar cuenta si no hay producto seleccionado
-    foreach (array_keys($this->entradas) as $i) {
-        if (!($this->entradas[$i]['producto_id'] ?? null)) {
-            $this->entradas[$i]['cuenta_str'] = '';
-        } else {
-            $this->actualizarCuentaStr((int)$i);
+        foreach (array_keys($this->entradas) as $i) {
+            if (!($this->entradas[$i]['producto_id'] ?? null)) {
+                $this->entradas[$i]['cuenta_str'] = '';
+            } else {
+                $this->productoSeleccionado((int)$i);
+            }
         }
     }
-}
-
-public function updatedConceptoRol(): void
-{
-    foreach (array_keys($this->entradas) as $i) {
-        if (!($this->entradas[$i]['producto_id'] ?? null)) {
-            $this->entradas[$i]['cuenta_str'] = '';
-        } else {
-            $this->actualizarCuentaStr((int)$i);
+    public function updatedConceptoRol(): void
+    {
+        foreach (array_keys($this->entradas) as $i) {
+            if (!($this->entradas[$i]['producto_id'] ?? null)) {
+                $this->entradas[$i]['cuenta_str'] = '';
+            } else {
+                $this->productoSeleccionado((int)$i);
+            }
         }
     }
-}
-
-    /** Llena cuenta_str SOLO por producto (ARTICULO/SUBCATEGORIA); sin fallback al concepto en UI */
-  private function actualizarCuentaStr(int $i): void
-{
-    if (!isset($this->entradas[$i])) return;
-
-    $this->entradas[$i]['cuenta_str'] = '';
-
-    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-    if ($pid <= 0) return;
-
-    // Buscar producto ya cargado
-    $p = $this->productos->firstWhere('id', $pid);
-    if (!$p) return;
-
-    // === ARTICULO ===
-    if (strtoupper((string)$p->mov_contable_segun) === 'ARTICULO') {
-        $pc = ProductoCuenta::query()
-            ->with('cuentaPUC:id,codigo,nombre')
-            ->where('producto_id', $pid)
-            ->where('tipo_id', (int)config('conta.tipo_inventario_id', 1))
-            ->first();
-
-        if ($pc && $pc->cuentaPUC) {
-            $this->entradas[$i]['cuenta_str'] = "{$pc->cuentaPUC->codigo} — {$pc->cuentaPUC->nombre}";
-            return;
-        }
-    }
-
-    // === SUBCATEGORIA ===
-    if (strtoupper((string)$p->mov_contable_segun) === 'SUBCATEGORIA' && $p->subcategoria_id) {
-        $sc = SubcategoriaCuenta::query()
-            ->with('cuentaPUC:id,codigo,nombre')
-            ->where('subcategoria_id', (int)$p->subcategoria_id)
-            ->where('tipo_id', (int)config('conta.tipo_inventario_id', 1))
-            ->first();
-
-        if ($sc && $sc->cuentaPUC) {
-            $this->entradas[$i]['cuenta_str'] = "{$sc->cuentaPUC->codigo} — {$sc->cuentaPUC->nombre}";
-            return;
-        }
-    }
-
-    // Ninguna encontrada
-    $this->entradas[$i]['cuenta_str'] = '';
-}
-
 
     /* ===================== Persistencia ===================== */
 
@@ -274,7 +221,9 @@ public function updatedConceptoRol(): void
                 return [
                     'producto_id'     => $l['producto_id'] ?? null,
                     'bodega_id'       => $l['bodega_id'] ?? null,
-                    'descripcion'     => $l['descripcion'] ?? null,
+                    // === ACTIVA SOLO UNA DE ESTAS DOS LÍNEAS ===
+                    'descripcion'     => $l['descripcion'] ?? null, // <- usa esta SI tu tabla tiene 'descripcion'
+                    // 'detalle'       => $l['descripcion'] ?? null, // <- usa esta SI tu tabla NO tiene 'descripcion'
                     'cantidad'        => (float)($l['cantidad'] ?? 0),
                     'precio_unitario' => (float)($l['precio_unitario'] ?? 0),
                 ];
@@ -318,7 +267,6 @@ public function updatedConceptoRol(): void
             }
 
             $e = EntradaMercancia::with('detalles')->findOrFail($this->entrada_id);
-            // ⇨ sin pasar $this->concepto_rol; la contrapartida se toma del concepto
             EntradaMercanciaService::emitir($e);
 
             PendingToast::create()->success()->message('Entrada emitida correctamente.')->duration(6000);
@@ -364,14 +312,13 @@ public function updatedConceptoRol(): void
         $this->entradas = $e->detalles->map(fn ($d) => [
             'producto_id'     => $d->producto_id,
             'bodega_id'       => $d->bodega_id,
-            'descripcion'     => $d->descripcion,
+            'descripcion'     => $d->descripcion ?? ($d->detalle ?? null),
             'cantidad'        => (float) $d->cantidad,
             'precio_unitario' => (float) $d->precio_unitario,
             'cuenta_str'      => '',
         ])->toArray();
 
-        foreach (array_keys($this->entradas) as $i) $this->actualizarCuentaStr((int) $i);
-
+        foreach (array_keys($this->entradas) as $i) $this->productoSeleccionado((int) $i);
         $this->dispatch('$refresh');
     }
 
@@ -426,32 +373,8 @@ public function updatedConceptoRol(): void
                 'cuenta_str'      => '',
             ];
         }
-        foreach (array_keys($this->entradas) as $i) $this->actualizarCuentaStr((int)$i);
+        foreach (array_keys($this->entradas) as $i) $this->productoSeleccionado((int)$i);
         $this->cerrarMulti();
         $this->dispatch('$refresh');
     }
-    public function productoSeleccionado(int $i): void
-{
-    if (!isset($this->entradas[$i])) return;
-
-    $pid = (int)($this->entradas[$i]['producto_id'] ?? 0);
-    if ($pid > 0) {
-        $producto = $this->productos->firstWhere('id', $pid);
-        if ($producto) {
-            $this->entradas[$i]['descripcion'] = $producto->nombre;
-            $cuentaId = \App\Services\EntradaMercanciaService::resolverCuentaInventarioPublic($pid);
-            if ($cuentaId) {
-                $cuenta = \App\Models\CuentasContables\PlanCuentas::find($cuentaId);
-                $this->entradas[$i]['cuenta_str'] = $cuenta
-                    ? "{$cuenta->codigo} — {$cuenta->nombre}"
-                    : 'Sin cuenta';
-            } else {
-                $this->entradas[$i]['cuenta_str'] = 'Sin cuenta';
-            }
-        }
-    }
-
-    $this->dispatch('$refresh');
-}
-
 }

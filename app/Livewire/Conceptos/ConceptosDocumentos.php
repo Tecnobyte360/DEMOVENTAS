@@ -4,9 +4,7 @@ namespace App\Livewire\Conceptos;
 
 use App\Models\Conceptos\ConceptoDocumento;
 use App\Models\Conceptos\ConceptoDocumentoCuenta;
-
 use App\Models\CuentasContables\PlanCuentas;
-
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -14,7 +12,7 @@ use Livewire\WithPagination;
 
 class ConceptosDocumentos extends Component
 {
-     use WithPagination;
+    use WithPagination;
 
     protected string $paginationTheme = 'tailwind';
 
@@ -23,6 +21,9 @@ class ConceptosDocumentos extends Component
     public string $tipoFiltro = '';
     public bool   $soloActivos = true;
     public int    $perPage = 12;
+
+    /* Filtro para el catálogo de cuentas del modal */
+    public bool   $soloImputables = true; // ← NUEVO
 
     /* ========= Modal / Form ========= */
     public bool $showModal = false;
@@ -36,17 +37,12 @@ class ConceptosDocumentos extends Component
 
     /* ========= Selector de cuentas ========= */
     public string $buscarCuenta = '';
-    /** Catálogo mostrado en el modal (en render) */
     public $cuentasCatalogo = [];
-    /** Mapa de cuentas seleccionadas (por id) con metadatos */
-    public array $cuentasSeleccionadas = [
-        // plan_cuenta_id => ['rol'=>?, 'naturaleza'=>?, 'porcentaje'=>?, 'prioridad'=>?]
-    ];
+    /** plan_cuenta_id => ['rol'=>?, 'naturaleza'=>?, 'porcentaje'=>?, 'prioridad'=>?] */
+    public array $cuentasSeleccionadas = [];
 
-    /** Sugerencias de rol (ajústalas a tu operación) */
     public array $rolesSugeridos = [
-        'gasto', 'ingreso', 'costo', 'inventario',
-        'gasto_devolucion', 'ingreso_devolucion'
+        'gasto','ingreso','costo','inventario','gasto_devolucion','ingreso_devolucion'
     ];
 
     /* ========= Reglas ========= */
@@ -72,9 +68,10 @@ class ConceptosDocumentos extends Component
     ];
 
     /* ========= Acciones de lista ========= */
-    public function updatingSearch()      { $this->resetPage(); }
-    public function updatingTipoFiltro()  { $this->resetPage(); }
-    public function updatingSoloActivos() { $this->resetPage(); }
+    public function updatingSearch()         { $this->resetPage(); }
+    public function updatingTipoFiltro()     { $this->resetPage(); }
+    public function updatingSoloActivos()    { $this->resetPage(); }
+    public function updatingSoloImputables() { $this->resetPage(); } // ← NUEVO
 
     /* ========= Crear / Editar ========= */
     public function crear(): void
@@ -95,7 +92,6 @@ class ConceptosDocumentos extends Component
         $this->descripcion = (string) ($c->descripcion ?? '');
         $this->activo      = (bool) $c->activo;
 
-        // Cargar lo asociado en la pivote
         $rows = ConceptoDocumentoCuenta::where('concepto_documento_id', $c->id)->get();
         foreach ($rows as $r) {
             $this->cuentasSeleccionadas[$r->plan_cuenta_id] = [
@@ -138,24 +134,23 @@ class ConceptosDocumentos extends Component
             );
             $this->concepto_id = $concepto->id;
 
-            // Sincronizar pivote: primero quitamos lo que ya no está seleccionado
             $idsVigentes = array_keys($this->cuentasSeleccionadas);
             ConceptoDocumentoCuenta::where('concepto_documento_id', $concepto->id)
                 ->whereNotIn('plan_cuenta_id', $idsVigentes ?: [0])
                 ->delete();
 
-            // Upsert para lo seleccionado
             foreach ($this->cuentasSeleccionadas as $pcId => $meta) {
                 ConceptoDocumentoCuenta::updateOrCreate(
                     [
                         'concepto_documento_id' => $concepto->id,
-                        'plan_cuenta_id'        => (int)$pcId,
+                        'plan_cuenta_id'        => (int) $pcId,
                     ],
                     [
                         'rol'        => $meta['rol']        ?? null,
                         'naturaleza' => $meta['naturaleza'] ?? null,
-                        'porcentaje' => $meta['porcentaje'] !== '' ? (float)$meta['porcentaje'] : null,
-                        'prioridad'  => isset($meta['prioridad']) ? (int)$meta['prioridad'] : 0,
+                        'porcentaje' => ($meta['porcentaje'] === '' || $meta['porcentaje'] === null)
+                                        ? null : (float) $meta['porcentaje'],
+                        'prioridad'  => isset($meta['prioridad']) ? (int) $meta['prioridad'] : 0,
                     ]
                 );
             }
@@ -168,14 +163,12 @@ class ConceptosDocumentos extends Component
 
     /* ========= Helpers del modal ========= */
 
-    /** Marcar / desmarcar cuenta */
     public function toggleCuenta(int $planCuentaId): void
     {
         if (isset($this->cuentasSeleccionadas[$planCuentaId])) {
             unset($this->cuentasSeleccionadas[$planCuentaId]);
             return;
         }
-        // Defaults al seleccionar
         $this->cuentasSeleccionadas[$planCuentaId] = [
             'rol'        => null,
             'naturaleza' => null,
@@ -184,7 +177,6 @@ class ConceptosDocumentos extends Component
         ];
     }
 
-    /** Cambiar metadatos de la cuenta seleccionada */
     public function setMetaCuenta(int $planCuentaId, string $campo, $valor): void
     {
         if (!isset($this->cuentasSeleccionadas[$planCuentaId])) return;
@@ -216,8 +208,7 @@ class ConceptosDocumentos extends Component
     /* ========= Render ========= */
     public function render()
     {
-        // Lista de conceptos con filtros
-        $conceptos =ConceptoDocumento::query()
+        $conceptos = ConceptoDocumento::query()
             ->when($this->search, function ($q) {
                 $t = trim($this->search);
                 $q->where(function($qq) use ($t) {
@@ -231,7 +222,7 @@ class ConceptosDocumentos extends Component
             ->orderBy('nombre')
             ->paginate($this->perPage);
 
-        // Catálogo de PUC para el modal (filtrado por texto)
+        // Catálogo PUC del modal (texto + solo imputables + activas)
         $this->cuentasCatalogo = PlanCuentas::query()
             ->when($this->buscarCuenta, function ($q) {
                 $t = trim($this->buscarCuenta);
@@ -240,15 +231,15 @@ class ConceptosDocumentos extends Component
                       ->orWhere('nombre','like',"%{$t}%");
                 });
             })
+            ->when($this->soloImputables, fn($q) => $q->where('titulo', 0)) // ← NUEVO
             ->where('cuenta_activa', true)
             ->orderBy('codigo')
             ->limit(100)
             ->get();
 
         return view('livewire.conceptos.conceptos-documentos', [
-            'conceptos'        => $conceptos,
-            'cuentasCatalogo'  => $this->cuentasCatalogo,
+            'conceptos'       => $conceptos,
+            'cuentasCatalogo' => $this->cuentasCatalogo,
         ]);
     }
 }
-

@@ -2,12 +2,12 @@
 
 namespace App\Models\Inventario;
 
-use App\Livewire\Conceptos\ConceptosDocumentos;
-use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\Inventario\EntradaMercancia;
+use App\Models\Bodega;
 use App\Models\Productos\Producto;
+use App\Models\Inventario\EntradaMercancia;
+use App\Models\Conceptos\ConceptoDocumento;
 
 class EntradaDetalle extends Model
 {
@@ -15,11 +15,21 @@ class EntradaDetalle extends Model
 
     protected $table = 'entrada_detalles';
 
- protected $fillable = [
-  'socio_negocio_id','fecha_contabilizacion','lista_precio','observaciones',
-  'estado','serie_id','prefijo','numero',
-  'concepto_documento_id',   // ← nuevo
-];
+    protected $fillable = [
+        'entrada_mercancia_id',
+        'producto_id',
+        'bodega_id',
+        'cantidad',
+        'precio_unitario',
+        'descripcion',
+        'cuenta_id',
+        'cuenta_str',
+    ];
+
+    protected $casts = [
+        'cantidad'        => 'float',
+        'precio_unitario' => 'float',
+    ];
 
     public function entrada()
     {
@@ -28,15 +38,16 @@ class EntradaDetalle extends Model
 
     public function producto()
     {
-        return $this->belongsTo(Producto::class);
+        return $this->belongsTo(Producto::class, 'producto_id');
     }
 
     public function bodega()
     {
-        return $this->belongsTo(Bodega::class);
+        return $this->belongsTo(Bodega::class, 'bodega_id');
     }
+
     public function concepto()
-{
-    return $this->belongsTo(ConceptosDocumentos::class, 'concepto_documento_id');
-}
+    {
+        return $this->belongsTo(ConceptoDocumento::class, 'concepto_documento_id');
+    }
 }

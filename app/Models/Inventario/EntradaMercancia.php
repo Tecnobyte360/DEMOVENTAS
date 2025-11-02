@@ -44,4 +44,10 @@ class EntradaMercancia extends Model
     {
         return $this->belongsTo(Serie::class, 'serie_id');
     }
+
+public function concepto()
+{
+    return $this->belongsTo(\App\Models\Conceptos\ConceptoDocumento::class, 'concepto_documento_id');
+}
+
 }

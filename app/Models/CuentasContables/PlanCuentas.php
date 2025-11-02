@@ -205,15 +205,16 @@ class PlanCuentas extends Model
         return $q->where('clase_cuenta', $clase);
     }
 
-   public function conceptos()
+public function conceptos()
 {
     return $this->belongsToMany(
-        ConceptoDocumento::class,
+        \App\Models\Conceptos\ConceptoDocumento::class,
         'concepto_documento_cuenta',
-        'plan_cuenta_id',        
-        'concepto_documento_id' 
-    )->withPivot(['rol','naturaleza','porcentaje','prioridad'])
-     ->withTimestamps();
+        'plan_cuenta_id',                     // FK hacia PlanCuentas en el pivote
+        'concepto_documento_id'               // FK hacia ConceptoDocumento en el pivote
+    )
+    ->withPivot(['rol','naturaleza','porcentaje','prioridad'])
+    ->withTimestamps();
 }
 
 

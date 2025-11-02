@@ -127,12 +127,12 @@ public function cuentaCompra()
     }
 
     /** Bodegas con pivote de stock y costos */
-    public function bodegas(): BelongsToMany
-    {
-        return $this->belongsToMany(Bodega::class, 'producto_bodega', 'producto_id', 'bodega_id')
-            ->withPivot('stock', 'stock_minimo', 'stock_maximo', 'costo_promedio', 'ultimo_costo', 'metodo_costeo')
-            ->withTimestamps();
-    }
+public function bodegas()
+{
+    return $this->belongsToMany(\App\Models\Bodega::class, 'producto_bodega', 'producto_id', 'bodega_id')
+        ->withPivot(['stock','stock_minimo','stock_maximo','ultimo_costo','costo_promedio','metodo_costeo'])
+        ->withTimestamps();
+}
 
     /* =========================================================
      |  Accessors / Mutators

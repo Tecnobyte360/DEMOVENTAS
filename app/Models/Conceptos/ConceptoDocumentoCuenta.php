@@ -10,17 +10,7 @@ class ConceptoDocumentoCuenta extends Model
     protected $table = 'concepto_documento_cuenta';
 
     protected $fillable = [
-        'concepto_documento_id',
-        'plan_cuenta_id',
-        'rol',
-        'naturaleza',   // 'debito' | 'credito' | null
-        'porcentaje',
-        'prioridad',
-    ];
-
-    protected $casts = [
-        'porcentaje' => 'float',
-        'prioridad'  => 'int',
+        'concepto_documento_id','plan_cuenta_id','rol','naturaleza','porcentaje','prioridad'
     ];
 
     public function concepto()
@@ -28,8 +18,8 @@ class ConceptoDocumentoCuenta extends Model
         return $this->belongsTo(ConceptoDocumento::class, 'concepto_documento_id');
     }
 
-    public function cuenta()
+    public function plan()
     {
-        return $this->belongsTo(PlanCuentas::class, 'plan_cuenta_id');
+        return $this->belongsTo(\App\Models\CuentasContables\PlanCuentas::class, 'plan_cuenta_id');
     }
 }

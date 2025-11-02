@@ -85,15 +85,13 @@
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
             Proveedor <span class="text-red-500">*</span>
           </label>
-          <select
-            wire:model.live="socio_negocio_id"
-            class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('socio_negocio_id') border-red-500 focus:ring-red-300 @enderror"
-          >
-            <option value="">— Seleccione —</option>
-            @foreach($socios as $s)
-              <option value="{{ $s->id }}">{{ $s->razon_social }}</option>
-            @endforeach
-          </select>
+          <select wire:model="socio_negocio_id"
+            class="w-full rounded-xl border-gray-300 dark:bg-gray-800 dark:border-gray-700 text-sm">
+        <option value="">— Seleccione —</option>
+        @foreach($socios as $s)
+            <option value="{{ $s->id }}">{{ $s->razon_social }}</option>
+        @endforeach
+    </select>
           @error('socio_negocio_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </section>
 
@@ -284,6 +282,7 @@
         </table>
       </section>
     </section>
+
 
     {{-- ===== FOOTER STICKY (acciones) ===== --}}
     <footer class="sticky bottom-0 inset-x-0 bg-white/85 dark:bg-gray-900/85 backdrop-blur border-t border-gray-200 dark:border-gray-800">

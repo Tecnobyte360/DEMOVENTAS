@@ -5,11 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Factura\factura;
 use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Services\PosPrinterService;
+use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+
 
 class FacturaPosPrintController extends Controller
 {
@@ -158,4 +160,48 @@ class FacturaPosPrintController extends Controller
             ], 500);
         }
     }
+ 
+      public function preview(Factura $factura)
+    {
+        // Relaciones necesarias
+        $factura->loadMissing(['cliente','serie','detalles.producto','detalles.bodega']);
+
+        // Empresa (ajusta si usas multi-empresa)
+        $e = Empresa::query()->first();
+        $logoSrc = null;
+
+        // Dompdf requiere rutas absolutas o data-uri
+        if ($e && $e->logo_path) {
+            $path = public_path($e->logo_path);
+            if (is_file($path)) {
+                $mime = mime_content_type($path) ?: 'image/png';
+                $logoSrc = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($path));
+            }
+        }
+
+        $empresa = [
+            'nombre'          => $e->nombre        ?? 'Empresa',
+            'nit'             => $e?->nit          ? ('NIT '.$e->nit) : null,
+            'direccion'       => $e->direccion     ?? null,
+            'telefono'        => $e->telefono      ?? null,
+            'email'           => $e->email         ?? null,
+            'website'         => $e->sitio_web     ?? null,
+            'color_primario'  => $e->color_primario ?? '#223361',
+            'logo_src'        => $logoSrc,
+        ];
+
+        // Render PDF
+        $pdf = PdfFacade::loadView('pdf.factura', compact('factura','empresa'))
+                        ->setPaper('letter');
+
+        // Folio para el nombre del archivo
+        $len   = (int)($factura->serie->longitud ?? 6);
+        $num   = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '—';
+        $pref  = $factura->prefijo ? "{$factura->prefijo}-" : '';
+        $folio = "{$pref}{$num}";
+
+        // Mostrar incrustado en el navegador (no descargar)
+        return $pdf->stream("Factura_{$folio}.pdf", ['Attachment' => false]);
+    }
+    
 }

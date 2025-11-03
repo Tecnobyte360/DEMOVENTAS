@@ -115,6 +115,13 @@
                 <i class="fa-solid fa-envelope"></i>
                 <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-indigo-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Enviar por correo</span>
               </button>
+              <button type="button" title="Previsualizar"
+        wire:click="preview({{ $f->id }})"
+        class="group relative px-2.5 py-1.5 rounded-lg bg-slate-700 text-white text-xs hover:bg-slate-800 transition">
+  <i class="fa-solid fa-eye"></i>
+  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Previsualizar</span>
+</button>
+
 
               {{-- Vista previa --}}
              <button type="button" title="Vista previa"
@@ -158,6 +165,46 @@
   {{-- Modal de Envío --}}
   <livewire:facturas.enviar-factura />
   <livewire:mapa-relacion.mapa-relaciones />
+
+  {{-- ===== Modal de Previsualización ===== --}}
+@if($showPreview && $previewId)
+  <div
+    x-data
+    x-on:keydown.escape.window="$wire.closePreview()"
+    class="fixed inset-0 z-[100]">
+    {{-- Backdrop --}}
+    <div class="absolute inset-0 bg-black/50" wire:click="closePreview"></div>
+
+    {{-- Contenedor --}}
+    <div class="relative mx-auto max-w-6xl w-[96vw] mt-6 md:mt-10 bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-800">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+        <h3 class="text-sm md:text-base font-semibold text-gray-900 dark:text-white">
+          Previsualización de factura #{{ $previewId }}
+        </h3>
+        <div class="flex items-center gap-2">
+          <a href="{{ route('facturas.preview', $previewId) }}" target="_blank"
+             class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+            Abrir en otra pestaña
+          </a>
+          <button type="button" wire:click="closePreview"
+                  class="px-3 py-1.5 text-xs rounded-lg bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-700">
+            Cerrar
+          </button>
+        </div>
+      </div>
+
+      <div class="h-[78vh]">
+        <iframe
+          src="{{ route('facturas.preview', $previewId) }}?t={{ now()->timestamp }}"
+          class="w-full h-full"
+          style="border:0"
+          title="Previsualización factura">
+        </iframe>
+      </div>
+    </div>
+  </div>
+@endif
+
 </div>
 
 @once

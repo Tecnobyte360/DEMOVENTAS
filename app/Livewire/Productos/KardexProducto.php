@@ -78,26 +78,33 @@ class KardexProducto extends Component
             ->orderBy('id')
             ->paginate($this->perPage);
 
-        // 🔽 CORRECCIÓN: usar campo 'tipo' en lugar del signo de cantidad
+        // 🔽 MAPEO CORRECTO: usar campo 'tipo' para determinar entrada/salida
         $bodegasIndex = $this->bodegas->keyBy('id');
+        
         $items = collect($filas->items())->map(function ($m) use ($bodegasIndex) {
-            // Siempre usa valor absoluto de cantidad
+            // Cantidad siempre positiva
             $cant = abs((float) ($m->cantidad ?? 0));
             
-            // Lee el campo 'tipo' de la base de datos
+            // Lee el campo 'tipo' de la BD
             $tipo = strtoupper(trim((string) ($m->tipo ?? '')));
 
-            // ✅ Determinar entrada/salida según el campo 'tipo'
+            // ✅ CLAVE: Determinar entrada/salida según el tipo
             $entrada = null;
             $salida  = null;
 
+            // Si es ENTRADA o COMPRA → va a columna ENTRADA
             if (in_array($tipo, ['ENTRADA', 'COMPRA'], true)) {
                 $entrada = $cant;
-            } elseif (in_array($tipo, ['SALIDA', 'VENTA'], true)) {
+                $salida = null;
+            } 
+            // Si es SALIDA o VENTA → va a columna SALIDA
+            elseif (in_array($tipo, ['SALIDA', 'VENTA'], true)) {
+                $entrada = null;
                 $salida = $cant;
-            } else {
-                // Fallback: si no hay tipo, usar el signo de cantidad original
-                if ((float)($m->cantidad ?? 0) > 0) {
+            } 
+            // Fallback por si el tipo no está definido
+            else {
+                if ((float)($m->cantidad ?? 0) >= 0) {
                     $entrada = $cant;
                 } else {
                     $salida = $cant;
@@ -115,8 +122,8 @@ class KardexProducto extends Component
                 'fecha'                 => $m->fecha instanceof Carbon ? $m->fecha->format('Y-m-d H:i') : (string) $m->fecha,
                 'bodega'                => $bodegasIndex[$m->bodega_id]->nombre ?? '—',
                 'doc'                   => $docTxt,
-                'entrada'               => $entrada,
-                'salida'                => $salida,
+                'entrada'               => $entrada,  
+                'salida'                => $salida,  
                 'costo_unit_mov'        => (float) ($m->costo_unit_mov ?? $m->costo_unitario ?? 0),
                 'costo_prom_nuevo'      => (float) ($m->costo_prom_nuevo ?? 0),
                 'ultimo_costo_nuevo'    => (float) ($m->ultimo_costo_nuevo ?? 0),

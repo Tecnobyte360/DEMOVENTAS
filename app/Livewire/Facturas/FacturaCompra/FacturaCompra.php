@@ -984,50 +984,53 @@ class FacturaCompra extends Component
         }
     }
 
-    public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+  public function emitir(): void
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-        try {
-            $this->ensureCuentasEnLineas();
-            if (!$this->validarConToast()) return;
+    try {
+        $this->ensureCuentasEnLineas();
+        if (!$this->validarConToast()) return;
 
-            DB::transaction(function () {
-                $this->persistirBorrador();
+        DB::transaction(function () {
+            // 1) Guardar/actualizar borrador
+            $this->persistirBorrador();
 
-                $this->factura->refresh()
-                    ->loadMissing(['detalles', 'socioNegocio'])
-                    ->recalcularTotales()
-                    ->save();
+            // 2) Numerar y pasar a emitida
+            $this->factura->refresh()
+                ->loadMissing(['detalles', 'socioNegocio'])
+                ->recalcularTotales()
+                ->save();
 
-                if (!$this->serieDefault) {
-                    throw new \RuntimeException('No hay serie default activa para este documento.');
-                }
+            if (!$this->serieDefault) {
+                throw new \RuntimeException('No hay serie default activa para este documento.');
+            }
 
-                $numero = $this->serieDefault->tomarConsecutivo();
-                $this->factura->update([
-                    'serie_id' => $this->serieDefault->id,
-                    'numero'   => $numero,
-                    'prefijo'  => $this->serieDefault->prefijo,
-                    'estado'   => 'emitida',
-                ]);
+            $numero = $this->serieDefault->tomarConsecutivo();
+            $this->factura->update([
+                'serie_id' => $this->serieDefault->id,
+                'numero'   => $numero,
+                'prefijo'  => $this->serieDefault->prefijo,
+                'estado'   => 'emitida',
+            ]);
+        }, 3);
 
-               \App\Services\InventarioService::aumentarPorFacturaCompra($this->factura);
+        // 3) Ejecutar flujo contable + inventario (con idempotencia interna)
+        \App\Services\FacturaCompraService::emitirFacturaCompra($this->factura->fresh());
 
-                $this->estado = $this->factura->estado;
-            }, 3);
+        PendingToast::create()->success()->message(
+            'Factura emitida (ID: '.$this->factura->id.', No: '.$this->factura->prefijo.'-'.$this->factura->numero.').'
+        )->duration(6000);
 
-            PendingToast::create()->success()->message(
-                'Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
-            )->duration(6000);
+        $this->resetFormulario();
+        $this->dispatch('refrescar-lista-facturas');
 
-            $this->resetFormulario();
-            $this->dispatch('refrescar-lista-facturas');
-        } catch (\Throwable $e) {
-            Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()->message($e->getMessage())->duration(12000);
-        }
+    } catch (\Throwable $e) {
+        Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
+        PendingToast::create()->error()->message($e->getMessage())->duration(12000);
     }
+}
+
 
     public function validarAntesDeEmitir(): void
     {

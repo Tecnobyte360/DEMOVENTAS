@@ -287,7 +287,7 @@
                     wire:loading.attr="disabled"
                     class="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow">
               <i class="fa-solid fa-floppy-disk mr-2"></i>
-              Guardar (Borrador)
+              Guardar Entrada
             </button>
           </div>
         </div>

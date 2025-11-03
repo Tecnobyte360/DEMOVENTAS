@@ -9,30 +9,29 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\TurnosCaja\CajaMovimiento;
 use App\Models\Factura\FacturaPago;
 use App\Models\Factura\Factura;
-use App\Models\TurnosCaja\turnos_caja as Turno; // 👈 alias para el MODELO
+use App\Models\TurnosCaja\turnos_caja as Turno;
 
 class TurnoCaja extends Component
 {
-    /** Estado del turno actual (modelo) */
-    public ?Turno $turno = null; // 👈 usa el alias del modelo
+    public ?Turno $turno = null;
 
-    /** Apertura */
+    // Apertura
     public ?int $bodega_id = null;
     public string $base_inicial = '0';
 
-    /** Movimientos (ingreso/retiro/devolución) */
-    public string $tipo_mov = 'INGRESO';  // INGRESO | RETIRO | DEVOLUCION
+    // Movimientos
+    public string $tipo_mov = 'INGRESO';
     public string $monto = '';
     public ?string $motivo = null;
 
     protected function rules(): array
     {
         return [
-            'bodega_id'    => ['nullable','integer','exists:bodegas,id'],
-            'base_inicial' => ['required','numeric','min:0'],
-            'tipo_mov'     => ['required','in:INGRESO,RETIRO,DEVOLUCION'],
-            'monto'        => ['required','numeric','gt:0'],
-            'motivo'       => ['nullable','string','max:255'],
+            'bodega_id'    => ['nullable', 'integer', 'exists:bodegas,id'],
+            'base_inicial' => ['required', 'numeric', 'min:0'],
+            'tipo_mov'     => ['required', 'in:INGRESO,RETIRO,DEVOLUCION'],
+            'monto'        => ['required', 'numeric', 'gt:0'],
+            'motivo'       => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -43,7 +42,7 @@ class TurnoCaja extends Component
         $userId = Auth::id();
         if (!$userId) abort(401);
 
-        // 👇 ahora sí llamamos al MODELO (alias Turno), no al componente
+        // Buscar turno abierto
         $this->turno = Turno::query()
             ->where('user_id', $userId)
             ->when($this->bodega_id, fn($q) => $q->where('bodega_id', $this->bodega_id))
@@ -51,12 +50,13 @@ class TurnoCaja extends Component
             ->first();
     }
 
-    /** Abrir turno (si ya hay uno abierto, devuelve el mismo) */
+    /**
+     * Abrir turno de caja
+     */
     public function abrir(): void
     {
         $this->validateOnly('base_inicial');
 
-        // 👇 usar el alias del modelo
         $this->turno = Turno::firstOrCreate(
             [
                 'user_id'   => Auth::id(),
@@ -70,10 +70,12 @@ class TurnoCaja extends Component
         );
 
         $this->dispatch('$refresh');
-        session()->flash('message', '✅ Turno abierto.');
+        session()->flash('message', '✅ Turno abierto correctamente.');
     }
 
-    /** Ingreso / Retiro / Devolución manual */
+    /**
+     * Agregar movimiento manual (ingreso/retiro/devolución)
+     */
     public function agregarMovimiento(): void
     {
         if (!$this->turno) {
@@ -83,8 +85,8 @@ class TurnoCaja extends Component
 
         $this->validate([
             'tipo_mov' => 'required|in:INGRESO,RETIRO,DEVOLUCION',
-            'monto'    => 'required','numeric','gt:0',
-            'motivo'   => 'nullable','string','max:255',
+            'monto'    => 'required|numeric|gt:0',
+            'motivo'   => 'nullable|string|max:255',
         ]);
 
         $this->turno->movimientos()->create([
@@ -101,7 +103,9 @@ class TurnoCaja extends Component
         session()->flash('message', '💰 Movimiento registrado.');
     }
 
-    /** Cerrar turno y consolidar totales (DINÁMICO por medios de pago) */
+    /**
+     * Cerrar turno y consolidar totales
+     */
     public function cerrar(): void
     {
         if (!$this->turno) {
@@ -112,7 +116,7 @@ class TurnoCaja extends Component
         DB::transaction(function () {
             $t = $this->turno->fresh();
 
-            // Pagos del turno + medio de pago (sin requerir tabla de reglas)
+            // Pagos del turno agrupados por método
             $pagos = FacturaPago::query()
                 ->leftJoin('medio_pagos as mp', 'mp.id', '=', 'factura_pagos.medio_pago_id')
                 ->where('factura_pagos.turno_id', $t->id)
@@ -123,12 +127,12 @@ class TurnoCaja extends Component
                     'mp.nombre as medio_nombre',
                 ]);
 
-            // Totales por TIPO y por MEDIO
+            // Agrupar por TIPO y por MEDIO
             $porTipo  = [];
             $porMedio = [];
 
             foreach ($pagos as $p) {
-                $tipo = $this->tipoDesdePagoRow($p); // EFECTIVO/DEBITO/CREDITO/TRANSFERENCIA/CHEQUE/BONO/OTRO
+                $tipo = $this->tipoDesdePagoRow($p);
 
                 $porTipo[$tipo] = ($porTipo[$tipo] ?? 0) + (float)$p->monto;
 
@@ -142,24 +146,25 @@ class TurnoCaja extends Component
                 ];
             }
 
-            // Mapear a columnas clásicas del turno (cuando el tipo coincide)
+            // Totales por tipo
             $ventasEfectivo = (float)($porTipo['EFECTIVO']      ?? 0);
             $ventasDebito   = (float)($porTipo['DEBITO']        ?? 0);
             $ventasTC       = (float)($porTipo['CREDITO']       ?? 0);
             $ventasTransf   = (float)($porTipo['TRANSFERENCIA'] ?? 0);
 
-            // Ventas emitidas "a crédito" (CXC) durante el turno (por emisión de factura a crédito)
+            // Ventas a crédito (CXC)
             $ventasCredito = (float) Factura::query()
                 ->whereBetween('created_at', [$t->fecha_inicio, now()])
-                ->where('tipo_pago','credito')
+                ->where('tipo_pago', 'credito')
+                ->where('estado', 'emitida')
                 ->sum('total');
 
-            // Movimientos manuales de caja
-            $ingresos = (float) $t->movimientos()->where('tipo','INGRESO')->sum('monto');
-            $retiros  = (float) $t->movimientos()->where('tipo','RETIRO')->sum('monto');
-            $devol    = (float) $t->movimientos()->where('tipo','DEVOLUCION')->sum('monto');
+            // Movimientos manuales
+            $ingresos = (float) $t->movimientos()->where('tipo', 'INGRESO')->sum('monto');
+            $retiros  = (float) $t->movimientos()->where('tipo', 'RETIRO')->sum('monto');
+            $devol    = (float) $t->movimientos()->where('tipo', 'DEVOLUCION')->sum('monto');
 
-            // Total de ventas = suma de tipos cobrados + ventas emitidas a crédito
+            // Total de ventas
             $totalVentas = array_sum($porTipo) + $ventasCredito;
 
             $t->update([
@@ -175,19 +180,21 @@ class TurnoCaja extends Component
                 'ingresos_efectivo'      => $ingresos,
                 'retiros_efectivo'       => $retiros,
                 'resumen' => [
-                    'por_tipo'  => $porTipo,                // { EFECTIVO: 120000, TRANSFERENCIA: 80000, ... }
-                    'por_medio' => array_values($porMedio), // detalle por medio configurado
+                    'por_tipo'  => $porTipo,
+                    'por_medio' => array_values($porMedio),
                 ],
             ]);
 
-            $this->turno = $t->fresh(['pagos','movimientos']);
+            $this->turno = $t->fresh(['pagos', 'movimientos']);
         });
 
         $this->dispatch('$refresh');
-        session()->flash('message', '✅ Turno cerrado.');
+        session()->flash('message', '✅ Turno cerrado correctamente.');
     }
 
-    /** Resumen para la vista */
+    /**
+     * Resumen computed property
+     */
     public function getResumenProperty(): array
     {
         $t = $this->turno?->fresh();
@@ -204,6 +211,7 @@ class TurnoCaja extends Component
                 'devoluciones'          => 0,
                 'ingresos'              => 0,
                 'retiros'               => 0,
+                'efectivo_esperado'     => (float) $this->base_inicial,
             ];
         }
 
@@ -218,46 +226,41 @@ class TurnoCaja extends Component
             'devoluciones'          => (float) $t->devoluciones,
             'ingresos'              => (float) $t->ingresos_efectivo,
             'retiros'               => (float) $t->retiros_efectivo,
+            'efectivo_esperado'     => $t->efectivoEsperado(),
         ];
     }
 
-   public function render()
-{
-    $porTipo  = (array) data_get($this->turno, 'resumen.por_tipo', []);
-    $porMedio = (array) data_get($this->turno, 'resumen.por_medio', []);
+    public function render()
+    {
+        $porTipo  = (array) data_get($this->turno, 'resumen.por_tipo', []);
+        $porMedio = (array) data_get($this->turno, 'resumen.por_medio', []);
 
-    return view('livewire.turnos-caja.turno-caja', [
-        'turno'    => $this->turno,
-        'resumen'  => $this->resumen,
-        'porTipo'  => $porTipo,
-        'porMedio' => $porMedio,
-    ]);
-}
+        return view('livewire.turnos-caja.turno-caja', [
+            'turno'    => $this->turno,
+            'resumen'  => $this->resumen,
+            'porTipo'  => $porTipo,
+            'porMedio' => $porMedio,
+        ]);
+    }
 
     /**
-     * Determina el tipo del pago para consolidación:
-     * Prioridad: metodo (en FacturaPago) > heurística por código/nombre del medio.
-     * Retorna: EFECTIVO, DEBITO, CREDITO, TRANSFERENCIA, CHEQUE, BONO, OTRO.
-     *
-     * @param  \Illuminate\Support\Collection|\stdClass  $row
+     * Determinar tipo de pago desde el registro
      */
     private function tipoDesdePagoRow($row): string
     {
-        // 1) Si el pago ya guardó metodo, úsalo
         if (!empty($row->metodo)) {
             return strtoupper((string)$row->metodo);
         }
 
-        // 2) Fallback por código/nombre del medio
         $cod = strtoupper((string)($row->medio_codigo ?? ''));
         $nom = strtoupper((string)($row->medio_nombre ?? ''));
 
-        if ($cod === 'EFECTIVO' || str_contains($nom,'EFECTIVO') || $cod === 'CASH') return 'EFECTIVO';
-        if (str_contains($cod,'DEBIT') || str_contains($nom,'DEBIT')) return 'DEBITO';
-        if (str_contains($cod,'CRED')  || str_contains($nom,'CREDITO')) return 'CREDITO';
-        if (str_contains($cod,'TRANS') || str_contains($nom,'TRANSFER')) return 'TRANSFERENCIA';
-        if (str_contains($nom,'CHEQUE')) return 'CHEQUE';
-        if (str_contains($nom,'BONO'))   return 'BONO';
+        if ($cod === 'EFECTIVO' || str_contains($nom, 'EFECTIVO')) return 'EFECTIVO';
+        if (str_contains($cod, 'DEBIT') || str_contains($nom, 'DEBIT')) return 'DEBITO';
+        if (str_contains($cod, 'CRED') || str_contains($nom, 'CREDITO')) return 'CREDITO';
+        if (str_contains($cod, 'TRANS') || str_contains($nom, 'TRANSFER')) return 'TRANSFERENCIA';
+        if (str_contains($nom, 'CHEQUE')) return 'CHEQUE';
+        if (str_contains($nom, 'BONO')) return 'BONO';
 
         return 'OTRO';
     }

@@ -66,7 +66,7 @@ class Movimiento extends Model
 
     public function impuesto(): BelongsTo
     {
-        return $this->belongsTo(Impuesto::class, 'impuesto_id'); // usa el namespace correcto
+        return $this->belongsTo(Impuesto::class, 'impuesto_id'); 
     }
 
     public function tercero(): BelongsTo

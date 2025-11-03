@@ -1,7 +1,5 @@
 <?php
-
 namespace App\Services;
-
 use App\Models\Asiento\Asiento;
 use App\Models\Conceptos\ConceptoDocumentoCuenta;
 use App\Models\CuentasContables\PlanCuentas;
@@ -15,13 +13,11 @@ use App\Models\Categorias\SubcategoriaCuenta;
 use App\Models\TiposDocumento\TipoDocumento;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-
 class EntradaMercanciaService
 {
     /* =========================================================
      *                RESOLUCIÓN DE CUENTAS
      * ========================================================= */
-
     protected static function tipoInventarioId(): int
     {
         return cache()->remember('tipo_inventario_id', 3600, function () {
@@ -30,7 +26,6 @@ class EntradaMercanciaService
                 ->value('id') ?: 4;
         });
     }
-
     protected static function cuentaInventarioPorProducto(int $productoId): ?int
     {
         return ProductoCuenta::query()
@@ -39,39 +34,31 @@ class EntradaMercanciaService
             ->whereHas('cuentaPUC', fn($q) => $q->where('titulo', 0)->where('cuenta_activa', 1))
             ->value('plan_cuentas_id');
     }
-
     protected static function cuentaInventarioPorSubcategoria(?int $subcategoriaId): ?int
     {
         if (!$subcategoriaId) return null;
-
         return SubcategoriaCuenta::query()
             ->where('subcategoria_id', $subcategoriaId)
             ->where('tipo_id', self::tipoInventarioId())
             ->whereHas('cuentaPUC', fn($q) => $q->where('titulo', 0)->where('cuenta_activa', 1))
             ->value('plan_cuentas_id');
     }
-
     protected static function resolverCuentaInventario(int $productoId): ?int
     {
         $p = Producto::query()->select('id', 'subcategoria_id', 'mov_contable_segun')->find($productoId);
         if (!$p) return null;
-
         $segun = strtoupper((string) $p->mov_contable_segun);
-
         if ($segun === 'SUBCATEGORIA') {
             return self::cuentaInventarioPorSubcategoria($p->subcategoria_id);
         }
-
         // ARTICULO o vacío
         return self::cuentaInventarioPorProducto($p->id)
             ?? self::cuentaInventarioPorSubcategoria($p->subcategoria_id);
     }
-
     public static function resolverCuentaInventarioPublic(int $productoId): ?int
     {
         return self::resolverCuentaInventario($productoId);
     }
-
     public static function cuentaPorConcepto(int $conceptoId, ?string $rol = null): ?int
     {
         $q = ConceptoDocumentoCuenta::query()
@@ -79,14 +66,11 @@ class EntradaMercanciaService
             ->when($rol, fn($qq) => $qq->where('rol', $rol))
             ->whereHas('plan', fn($qq) => $qq->where('titulo', 0)->where('cuenta_activa', 1))
             ->orderBy('prioridad', 'asc');
-
         return $q->value('plan_cuenta_id');
     }
-
     /* =========================================================
      *           MOVIMIENTOS CONTABLES
      * ========================================================= */
-
     protected static function esDeudora(PlanCuentas $c): bool
     {
         $nat = strtoupper((string) $c->naturaleza);
@@ -94,18 +78,15 @@ class EntradaMercanciaService
         if (in_array($nat, ['C', 'ACREEDORA', 'PASIVO', 'PATRIMONIO', 'INGRESOS'], true)) return false;
         return in_array(substr((string) $c->codigo, 0, 1), ['1', '5', '6'], true);
     }
-
     protected static function post(Asiento $asiento, int $cuentaId, float $debe, float $haber, ?string $detalle = null, array $meta = []): Movimiento
     {
         $c = PlanCuentas::lockForUpdate()->findOrFail($cuentaId);
-
         if ((int) ($c->titulo ?? 0) === 1) {
             throw new \RuntimeException("La cuenta {$c->codigo} — {$c->nombre} es TÍTULO.");
         }
         if (!(bool) ($c->cuenta_activa ?? 0)) {
             throw new \RuntimeException("La cuenta {$c->codigo} — {$c->nombre} está inactiva.");
         }
-
         $mov = Movimiento::create(array_merge([
             'asiento_id' => $asiento->id,
             'cuenta_id'  => $c->id,
@@ -113,28 +94,21 @@ class EntradaMercanciaService
             'credito'    => round($haber, 2),
             'detalle'    => $detalle,
         ], $meta));
-
         $delta = self::esDeudora($c) ? ($mov->debito - $mov->credito) : ($mov->credito - $mov->debito);
-
         PlanCuentas::whereKey($c->id)->update([
             'saldo' => DB::raw('saldo + ' . number_format($delta, 2, '.', '')),
         ]);
-
         return $mov;
     }
-
     /* =========================================================
      *                   VALIDAR & EMITIR
      * ========================================================= */
-
     protected static function validarParaEmitir(EntradaMercancia $e): void
     {
         if (!$e->socio_negocio_id) throw new \RuntimeException('Debes seleccionar el proveedor.');
         if (!$e->concepto_documento_id) throw new \RuntimeException('Debes seleccionar el concepto.');
-
         $e->loadMissing('detalles');
         if ($e->detalles->isEmpty()) throw new \RuntimeException('La entrada no tiene líneas.');
-
         foreach ($e->detalles as $idx => $d) {
             if (!$d->producto_id || !$d->bodega_id) {
                 throw new \RuntimeException("Línea #" . ($idx + 1) . ": falta producto o bodega.");
@@ -147,11 +121,9 @@ class EntradaMercanciaService
                 throw new \RuntimeException("Línea #" . ($idx + 1) . ": no hay cuenta de inventario activa.");
             }
         }
-
         $ctaConcepto = self::cuentaPorConcepto((int) $e->concepto_documento_id, null);
         if (!$ctaConcepto) throw new \RuntimeException('El concepto no tiene una cuenta imputable/activa configurada.');
     }
-
     protected static function contabilizar(EntradaMercancia $e): Asiento
     {
         $ctaConcepto = self::cuentaPorConcepto((int) $e->concepto_documento_id, null);
@@ -163,44 +135,34 @@ class EntradaMercanciaService
             'origen_id'   => $e->id,
             'tercero_id'  => $e->socio_negocio_id,
         ]);
-
         $meta  = ['entrada_id' => $e->id, 'tercero_id' => $e->socio_negocio_id];
         $total = 0.0;
-
         foreach ($e->detalles as $d) {
             $monto = round((float) $d->cantidad * (float) $d->precio_unitario, 2);
             if ($monto <= 0) continue;
-
             $ctaInv = self::resolverCuentaInventario((int) $d->producto_id);
             self::post($asiento, (int) $ctaInv, $monto, 0.0, 'Entrada inventario', $meta);
             $total += $monto;
         }
-
         self::post($asiento, (int) $ctaConcepto, 0.0, round($total, 2), 'Contrapartida concepto', $meta);
-
         $asiento->update([
             'total_debe'  => round($total, 2),
             'total_haber' => round($total, 2),
         ]);
-
         return $asiento;
     }
-
     /* =========================================================
      *                INVENTARIO + HISTORIAL COSTOS
      * ========================================================= */
-
     protected static function registrarMovimientoCosto(EntradaMercancia $e, $detalle): void
     {
         $pb = ProductoBodega::query()
             ->where('producto_id', $detalle->producto_id)
             ->where('bodega_id', $detalle->bodega_id)
             ->first();
-
         $costoProm   = (float) ($pb?->costo_promedio ?? 0);
         $ultimoCosto = (float) ($pb?->ultimo_costo ?? 0);
         $pu          = (float) $detalle->precio_unitario;
-
         ProductoCostoMovimiento::create([
             'fecha'                  => now(),
             'producto_id'            => $detalle->producto_id,
@@ -220,7 +182,6 @@ class EntradaMercanciaService
             'user_id'                => Auth::id(),
         ]);
     }
-
     protected static function aumentarInventario(EntradaMercancia $e): void
     {
         foreach ($e->detalles as $d) {
@@ -229,7 +190,6 @@ class EntradaMercanciaService
                 ->where('bodega_id',   $d->bodega_id)
                 ->lockForUpdate()
                 ->first();
-
             if (!$pb) {
                 $pb = new ProductoBodega([
                     'producto_id'     => $d->producto_id,
@@ -239,33 +199,26 @@ class EntradaMercanciaService
                     'ultimo_costo'    => null,
                 ]);
             }
-
             $cant     = (float) $d->cantidad;
             $pu       = (float) $d->precio_unitario;
             $stockAnt = (float) $pb->stock;
             $cpuAnt   = (float) $pb->costo_promedio;
-
             $stockNew = $stockAnt + $cant;
-
             $cpuNew = $stockNew > 0
                 ? round((($stockAnt * $cpuAnt) + ($cant * $pu)) / $stockNew, 4)
                 : round($pu, 4);
-
             $pb->stock          = $stockNew;
             $pb->costo_promedio = $cpuNew;
             $pb->ultimo_costo   = round($pu, 4);
             $pb->save();
         }
     }
-
     /* =========================================================
      *                        FLUJO PRINCIPAL
      * ========================================================= */
-
     public static function emitir(EntradaMercancia $e): void
     {
         self::validarParaEmitir($e);
-
         DB::transaction(function () use ($e) {
             if ($e->serie_id && empty($e->numero)) {
                 $serie = $e->serie()->lockForUpdate()->first();
@@ -277,16 +230,51 @@ class EntradaMercanciaService
                     $serie->save();
                 }
             }
-
             self::contabilizar($e->load('detalles', 'serie'));
             self::aumentarInventario($e->load('detalles'));
-
             foreach ($e->detalles as $d) {
                 self::registrarMovimientoCosto($e, $d);
             }
-
             $e->estado = 'emitida';
             $e->save();
         }, 3);
     }
+
+ public static function guardarBorrador(array $payload): EntradaMercancia
+    {
+        return DB::transaction(function () use ($payload) {
+            $id = $payload['id'] ?? null;
+            /** @var EntradaMercancia $e */
+            $e = $id ? EntradaMercancia::findOrFail($id) : new EntradaMercancia();
+            $data = [
+                'serie_id'              => $payload['serie_id'] ?? null,
+                'socio_negocio_id'      => $payload['socio_negocio_id'] ?? null,
+                'concepto_documento_id' => $payload['concepto_documento_id'] ?? null,
+                'fecha_contabilizacion' => $payload['fecha_contabilizacion'] ?? now()->toDateString(),
+                'observaciones'         => $payload['observaciones'] ?? null,
+                'estado'                => 'borrador',
+            ];
+            \Illuminate\Database\Eloquent\Model::unguarded(function () use ($e, $data) {
+                $e->forceFill($data)->save();
+            });
+            // Resetear detalles y reinsertar
+            $e->detalles()->delete();
+            $lineas = [];
+            foreach (($payload['lineas'] ?? []) as $l) {
+                $lineas[] = [
+                    'producto_id'     => $l['producto_id'] ?? null,
+                    'bodega_id'       => $l['bodega_id'] ?? null,
+                    'cantidad'        => (float) ($l['cantidad'] ?? 0),
+                    'precio_unitario' => (float) ($l['precio_unitario'] ?? 0),
+                ];
+            }
+            if (!empty($lineas)) {
+                \Illuminate\Database\Eloquent\Model::unguarded(function () use ($e, $lineas) {
+                    $e->detalles()->createMany($lineas);
+                });
+            }
+            return $e->load('detalles');
+        }, 3);
+    }
+
 }

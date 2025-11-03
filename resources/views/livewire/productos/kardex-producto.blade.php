@@ -50,8 +50,8 @@
           <th class="px-3 py-2 text-right">Entrada</th>
           <th class="px-3 py-2 text-right">Salida</th>
           <th class="px-3 py-2 text-right">Costo mov</th>
-          <th class="px-3 py-2 text-right">Costo prom (nuevo)</th>
-          <th class="px-3 py-2 text-right">Último costo (nuevo)</th>
+          <th class="px-3 py-2 text-right">Costo prom</th>
+          <th class="px-3 py-2 text-right">Último costo</th>
           <th class="px-3 py-2 text-left">Método</th>
           <th class="px-3 py-2 text-left">Evento</th>
         </tr>
@@ -62,11 +62,11 @@
             <td class="px-3 py-2">{{ $r['fecha'] }}</td>
             <td class="px-3 py-2">{{ $r['bodega'] }}</td>
             <td class="px-3 py-2">{{ $r['doc'] }}</td>
-            <td class="px-3 py-2 text-right">{{ $r['entrada'] ? number_format($r['entrada'], 2) : '' }}</td>
-            <td class="px-3 py-2 text-right">{{ $r['salida'] ? number_format($r['salida'], 2) : '' }}</td>
-            <td class="px-3 py-2 text-right">{{ number_format($r['costo_unit_mov'], 4) }}</td>
-            <td class="px-3 py-2 text-right">{{ number_format($r['costo_prom_nuevo'], 4) }}</td>
-            <td class="px-3 py-2 text-right">{{ number_format($r['ultimo_costo_nuevo'], 4) }}</td>
+            <td class="px-3 py-2 text-right">{{ $r['entrada'] ? number_format($r['entrada'], 2, ',', '.') : '' }}</td>
+            <td class="px-3 py-2 text-right">{{ $r['salida'] ? number_format($r['salida'], 2, ',', '.') : '' }}</td>
+            <td class="px-3 py-2 text-right">{{ number_format($r['costo_unit_mov'], 2, ',', '.') }}</td>
+            <td class="px-3 py-2 text-right">{{ number_format($r['costo_prom_nuevo'], 2, ',', '.') }}</td>
+            <td class="px-3 py-2 text-right">{{ number_format($r['ultimo_costo_nuevo'], 2, ',', '.') }}</td>
             <td class="px-3 py-2">{{ $r['metodo_costeo'] }}</td>
             <td class="px-3 py-2">{{ $r['tipo_evento'] }}</td>
           </tr>

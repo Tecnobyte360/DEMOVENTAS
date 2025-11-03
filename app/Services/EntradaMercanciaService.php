@@ -154,34 +154,39 @@ class EntradaMercanciaService
     /* =========================================================
      *                INVENTARIO + HISTORIAL COSTOS
      * ========================================================= */
-    protected static function registrarMovimientoCosto(EntradaMercancia $e, $detalle): void
-    {
-        $pb = ProductoBodega::query()
-            ->where('producto_id', $detalle->producto_id)
-            ->where('bodega_id', $detalle->bodega_id)
-            ->first();
-        $costoProm   = (float) ($pb?->costo_promedio ?? 0);
-        $ultimoCosto = (float) ($pb?->ultimo_costo ?? 0);
-        $pu          = (float) $detalle->precio_unitario;
-        ProductoCostoMovimiento::create([
-            'fecha'                  => now(),
-            'producto_id'            => $detalle->producto_id,
-            'bodega_id'              => $detalle->bodega_id,
-            'tipo_documento_id'      => optional($e->tipoDocumento)->id,
-            'doc_id'                 => $e->id,
-            'ref'                    => ($e->prefijo ? $e->prefijo.'-' : '').$e->numero,
-            'cantidad'               => (float) $detalle->cantidad,
-            'valor_mov'              => round($detalle->cantidad * $pu, 4),
-            'costo_unit_mov'         => round($pu, 4),
-            'metodo_costeo'          => 'PROMEDIO',
-            'costo_prom_anterior'    => $costoProm,
-            'costo_prom_nuevo'       => $pb?->costo_promedio ?? $pu,
-            'ultimo_costo_anterior'  => $ultimoCosto,
-            'ultimo_costo_nuevo'     => $pu,
-            'tipo_evento'            => 'ENTRADA_MERCANCIA',
-            'user_id'                => Auth::id(),
-        ]);
-    }
+  protected static function registrarMovimientoCosto(EntradaMercancia $e, $detalle, ?int $tipoDocId): void
+{
+    $pb = \App\Models\Productos\ProductoBodega::query()
+        ->where('producto_id', $detalle->producto_id)
+        ->where('bodega_id',  $detalle->bodega_id)
+        ->first();
+
+    $costoPromAnt   = (float) ($pb?->costo_promedio ?? 0);
+    $ultimoCostoAnt = (float) ($pb?->ultimo_costo   ?? 0);
+    $pu             = (float) $detalle->precio_unitario;
+
+    // Si ya actualizaste PB antes de llamar a esta función, este será el "nuevo"
+    $costoPromNew = (float) ($pb?->costo_promedio ?? $pu);
+
+    \App\Models\Movimiento\ProductoCostoMovimiento::create([
+        'fecha'                  => $e->fecha_contabilizacion ?? now(),
+        'producto_id'            => $detalle->producto_id,
+        'bodega_id'              => $detalle->bodega_id,
+        'tipo_documento_id'      => $tipoDocId,                 
+        'doc_id'                 => $e->id,
+        'ref'                    => ($e->prefijo ? $e->prefijo.'-' : '').$e->numero,
+        'cantidad'               => (float) $detalle->cantidad,
+        'valor_mov'              => round($detalle->cantidad * $pu, 4),
+        'costo_unit_mov'         => round($pu, 4),
+        'metodo_costeo'          => 'PROMEDIO',
+        'costo_prom_anterior'    => $costoPromAnt,
+        'costo_prom_nuevo'       => $costoPromNew,
+        'ultimo_costo_anterior'  => $ultimoCostoAnt,
+        'ultimo_costo_nuevo'     => $pu,
+        'tipo_evento'            => 'ENTRADA_MERCANCIA',
+        'user_id'                => \Illuminate\Support\Facades\Auth::id(),
+    ]);
+}
     protected static function aumentarInventario(EntradaMercancia $e): void
     {
         foreach ($e->detalles as $d) {
@@ -216,29 +221,39 @@ class EntradaMercanciaService
     /* =========================================================
      *                        FLUJO PRINCIPAL
      * ========================================================= */
-    public static function emitir(EntradaMercancia $e): void
-    {
-        self::validarParaEmitir($e);
-        DB::transaction(function () use ($e) {
-            if ($e->serie_id && empty($e->numero)) {
-                $serie = $e->serie()->lockForUpdate()->first();
-                if ($serie) {
-                    $n = max((int) $serie->proximo, (int) $serie->desde);
-                    $e->numero   = $n;
-                    $e->prefijo  = $serie->prefijo;
-                    $serie->proximo = $n + 1;
-                    $serie->save();
-                }
+   public static function emitir(EntradaMercancia $e): void
+{
+    self::validarParaEmitir($e);
+
+    DB::transaction(function () use ($e) {
+        // numeración…
+        if ($e->serie_id && empty($e->numero)) {
+            $serie = $e->serie()->lockForUpdate()->first();
+            if ($serie) {
+                $n = max((int) $serie->proximo, (int) $serie->desde);
+                $e->numero   = $n;
+                $e->prefijo  = $serie->prefijo;
+                $serie->proximo = $n + 1;
+                $serie->save();
             }
-            self::contabilizar($e->load('detalles', 'serie'));
-            self::aumentarInventario($e->load('detalles'));
-            foreach ($e->detalles as $d) {
-                self::registrarMovimientoCosto($e, $d);
-            }
-            $e->estado = 'emitida';
-            $e->save();
-        }, 3);
-    }
+        }
+
+        // ✅ resolver tipo_documento una vez
+        $tipoDocId = self::tipoDocumentoIdEntrada($e->load('serie'));
+
+        self::contabilizar($e->load('detalles', 'serie'));
+        self::aumentarInventario($e->load('detalles'));
+
+        // ✅ pasarlo a cada movimiento de costo
+        foreach ($e->detalles as $d) {
+            self::registrarMovimientoCosto($e, $d, $tipoDocId);
+        }
+
+        $e->estado = 'emitida';
+        $e->save();
+    }, 3);
+}
+
 
  public static function guardarBorrador(array $payload): EntradaMercancia
     {
@@ -276,5 +291,17 @@ class EntradaMercanciaService
             return $e->load('detalles');
         }, 3);
     }
+
+  protected static function tipoDocumentoIdEntrada(?EntradaMercancia $e = null): ?int
+{
+    // 1) Si la serie tiene tipo, úsalo
+    if ($e && $e->relationLoaded('serie') && $e->serie?->tipo_documento_id) {
+        return (int) $e->serie->tipo_documento_id;
+    }
+    // 2) Fallback por código
+    return (int) \App\Models\TiposDocumento\TipoDocumento::query()
+        ->whereRaw('UPPER(codigo)=?', ['ENTRADA_MERCANCIA'])
+        ->value('id');
+}
 
 }

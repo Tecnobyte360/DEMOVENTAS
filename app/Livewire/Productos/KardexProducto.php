@@ -78,32 +78,33 @@ class KardexProducto extends Component
             ->orderBy('id')
             ->paginate($this->perPage);
 
-        // 🔽 MAPEO CORRECTO: usar campo 'tipo' para determinar entrada/salida
+        // 🔽 MAPEO CORRECTO: usar campo 'tipo_evento' para determinar entrada/salida
         $bodegasIndex = $this->bodegas->keyBy('id');
         
         $items = collect($filas->items())->map(function ($m) use ($bodegasIndex) {
             // Cantidad siempre positiva
             $cant = abs((float) ($m->cantidad ?? 0));
             
-            // Lee el campo 'tipo' de la BD
-            $tipo = strtoupper(trim((string) ($m->tipo ?? '')));
+            // Lee el campo 'tipo_evento' de la BD
+            $tipoEvento = strtoupper(trim((string) ($m->tipo_evento ?? '')));
 
-            // ✅ CLAVE: Determinar entrada/salida según el tipo
+            // ✅ CLAVE: Determinar entrada/salida según el tipo_evento
             $entrada = null;
             $salida  = null;
 
-            // Si es ENTRADA o COMPRA → va a columna ENTRADA
-            if (in_array($tipo, ['ENTRADA', 'COMPRA'], true)) {
+            // Eventos que son ENTRADAS (aumentan stock)
+            if (in_array($tipoEvento, ['COMPRA', 'ENTRADA', 'ENTRADA_MERCANCIA', 'ANULACION', 'NOTA_CREDITO'], true)) {
                 $entrada = $cant;
                 $salida = null;
             } 
-            // Si es SALIDA o VENTA → va a columna SALIDA
-            elseif (in_array($tipo, ['SALIDA', 'VENTA'], true)) {
+            // Eventos que son SALIDAS (disminuyen stock)
+            elseif (in_array($tipoEvento, ['VENTA', 'SALIDA', 'REV_NOTA_CREDITO'], true)) {
                 $entrada = null;
                 $salida = $cant;
             } 
-            // Fallback por si el tipo no está definido
+            // Fallback por si el tipo_evento no está definido o es desconocido
             else {
+                // Usar el signo de cantidad como último recurso
                 if ((float)($m->cantidad ?? 0) >= 0) {
                     $entrada = $cant;
                 } else {
@@ -122,13 +123,13 @@ class KardexProducto extends Component
                 'fecha'                 => $m->fecha instanceof Carbon ? $m->fecha->format('Y-m-d H:i') : (string) $m->fecha,
                 'bodega'                => $bodegasIndex[$m->bodega_id]->nombre ?? '—',
                 'doc'                   => $docTxt,
-                'entrada'               => $entrada,  
-                'salida'                => $salida,  
+                'entrada'               => $entrada,  // NULL si es salida
+                'salida'                => $salida,   // NULL si es entrada
                 'costo_unit_mov'        => (float) ($m->costo_unit_mov ?? $m->costo_unitario ?? 0),
                 'costo_prom_nuevo'      => (float) ($m->costo_prom_nuevo ?? 0),
                 'ultimo_costo_nuevo'    => (float) ($m->ultimo_costo_nuevo ?? 0),
                 'metodo_costeo'         => $m->metodo_costeo ?? 'PROMEDIO',
-                'tipo_evento'           => $m->tipo_evento ?? $tipo,
+                'tipo_evento'           => $m->tipo_evento ?? '—',
             ];
         });
 

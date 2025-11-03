@@ -16,7 +16,7 @@ class InventarioService
     /* =========================================================
      * VALIDACIÓN DE DISPONIBILIDAD (VENTA)
      * ========================================================= */
-   public static function verificarDisponibilidadParaFactura(Factura $f): void
+    public static function verificarDisponibilidadParaFactura(Factura $f): void
     {
         // Lanza excepción si falta stock por producto+bodega
         $faltantes = [];
@@ -35,13 +35,13 @@ class InventarioService
             }
         }
         if ($faltantes) {
-            throw new \RuntimeException("Stock insuficiente: ".implode(' | ', $faltantes));
+            throw new \RuntimeException("Stock insuficiente: " . implode(' | ', $faltantes));
         }
     }
 
 
 
-  public static function aumentarPorFacturaCompra(Factura $factura): void
+    public static function aumentarPorFacturaCompra(Factura $factura): void
     {
         // Si ya tienes la lógica en aplicarCompraYCosteo(), reúsala:
         static::aplicarCompraYCosteo($factura);
@@ -61,7 +61,7 @@ class InventarioService
 
                 // Costo promedio unitario de la bodega (o global)
                 $cpu = \App\Services\ContabilidadService::costoPromedioParaLinea(
-                    $d->producto()->with('cuentas')->first(), 
+                    $d->producto()->with('cuentas')->first(),
                     $d->bodega_id
                 );
                 $costoTotal = round($cpu * (float)$d->cantidad, 2);
@@ -87,10 +87,13 @@ class InventarioService
                     'salida'            => $d->cantidad,
                     'cantidad'          => -1 * (float)$d->cantidad,
                     'signo'             => -1,
-                    'costo_unitario'    => $cpu,
+                    'costo_unitario'    => $cpu,             
                     'costo_total'       => $costoTotal,
+                    'metodo'            => 'PROMEDIO',       
+                    'evento'            => 'FACTURA_VENTA',  
                     'origen'            => 'factura',
                     'origen_id'         => $f->id,
+                    'documento'         => "facturaventa #{$f->id} ({$f->prefijo} {$f->numero})",
                     'detalle'           => "Factura {$f->prefijo}-{$f->numero}",
                 ]);
 
@@ -147,17 +150,17 @@ class InventarioService
                 $pb->save();
 
                 static::registrarKardex(
-                    tipoLogico:        'ANULACION',
-                    signo:             1,
-                    fecha:             now(),
-                    productoId:        (int) $d->producto_id,
-                    bodegaId:          (int) $d->bodega_id,
-                    cantidad:          (float) $d->cantidad,
-                    costoUnitario:     static::resolverCostoUnitarioReversion($d),
-                    tipoDocumentoId:   $tipoId,
-                    docTipoLegacy:     'ANULACION_FACTURA',
-                    docId:             (int) $factura->id,
-                    ref:               'Anulación de '.static::refFactura($factura)
+                    tipoLogico: 'ANULACION',
+                    signo: 1,
+                    fecha: now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    cantidad: (float) $d->cantidad,
+                    costoUnitario: static::resolverCostoUnitarioReversion($d),
+                    tipoDocumentoId: $tipoId,
+                    docTipoLegacy: 'ANULACION_FACTURA',
+                    docId: (int) $factura->id,
+                    ref: 'Anulación de ' . static::refFactura($factura)
                 );
             }
         });
@@ -194,17 +197,17 @@ class InventarioService
                 $pb->save();
 
                 static::registrarKardex(
-                    tipoLogico:        'NOTA_CREDITO',
-                    signo:             1,
-                    fecha:             $nota->fecha ?? now(),
-                    productoId:        (int) $d->producto_id,
-                    bodegaId:          (int) $d->bodega_id,
-                    cantidad:          (float) $d->cantidad,
-                    costoUnitario:     static::resolverCostoUnitarioEntrada($d),
-                    tipoDocumentoId:   $tipoId,
-                    docTipoLegacy:     'NOTA_CREDITO',
-                    docId:             (int) $nota->id,
-                    ref:               'NC sobre '.static::refFactura($nota->factura ?? null)
+                    tipoLogico: 'NOTA_CREDITO',
+                    signo: 1,
+                    fecha: $nota->fecha ?? now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    cantidad: (float) $d->cantidad,
+                    costoUnitario: static::resolverCostoUnitarioEntrada($d),
+                    tipoDocumentoId: $tipoId,
+                    docTipoLegacy: 'NOTA_CREDITO',
+                    docId: (int) $nota->id,
+                    ref: 'NC sobre ' . static::refFactura($nota->factura ?? null)
                 );
             }
         });
@@ -241,17 +244,17 @@ class InventarioService
                 $pb->save();
 
                 static::registrarKardex(
-                    tipoLogico:        'REV_NC',
-                    signo:             -1,
-                    fecha:             now(),
-                    productoId:        (int) $d->producto_id,
-                    bodegaId:          (int) $d->bodega_id,
-                    cantidad:          (float) $d->cantidad,
-                    costoUnitario:     static::resolverCostoUnitarioSalida($d),
-                    tipoDocumentoId:   $tipoId,
-                    docTipoLegacy:     'REV_NOTA_CREDITO',
-                    docId:             (int) $nota->id,
-                    ref:               'Reversión NC de '.static::refFactura($nota->factura ?? null)
+                    tipoLogico: 'REV_NC',
+                    signo: -1,
+                    fecha: now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    cantidad: (float) $d->cantidad,
+                    costoUnitario: static::resolverCostoUnitarioSalida($d),
+                    tipoDocumentoId: $tipoId,
+                    docTipoLegacy: 'REV_NOTA_CREDITO',
+                    docId: (int) $nota->id,
+                    ref: 'Reversión NC de ' . static::refFactura($nota->factura ?? null)
                 );
             }
         });
@@ -311,7 +314,7 @@ class InventarioService
                     'costo_unitario' => $costoUnitMov,
                     'total'          => round($cantidad * $costoUnitMov, 2),
                     'doc_id'         => (string) $factura->id,
-                    'ref'            => 'FAC COMP '.static::refFactura($factura),
+                    'ref'            => 'FAC COMP ' . static::refFactura($factura),
                 ];
                 if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) {
                     $dataKx['tipo_documento_id'] = $tipoDocId ?: null;
@@ -338,7 +341,7 @@ class InventarioService
                     'bodega_id'             => (int) $d->bodega_id,
                     'tipo_documento_id'     => $tipoDocId ?: null,
                     'doc_id'                => (string) $factura->id,
-                    'ref'                   => 'FAC COMP '.static::refFactura($factura),
+                    'ref'                   => 'FAC COMP ' . static::refFactura($factura),
                     'cantidad'              => $cantidad,
                     'valor_mov'             => $movVal,
                     'costo_unit_mov'        => $costoUnitMov,
@@ -348,7 +351,7 @@ class InventarioService
                     'ultimo_costo_anterior' => $antesUltimo,
                     'ultimo_costo_nuevo'    => $costoUnitMov,
                     'tipo_evento'           => 'COMPRA',
-                   'user_id' => Auth::id(), // ✅
+                    'user_id' => Auth::id(), // ✅
                 ]);
 
                 /* 3) Actualiza producto_bodega */
@@ -458,9 +461,9 @@ class InventarioService
     private static function refFactura(?Factura $f): string
     {
         if (!$f) return '—';
-        $pref = $f->prefijo ? ($f->prefijo.'-') : '';
+        $pref = $f->prefijo ? ($f->prefijo . '-') : '';
         $num  = $f->numero ? (string) $f->numero : '—';
-        return $pref.$num;
+        return $pref . $num;
     }
 
     /**

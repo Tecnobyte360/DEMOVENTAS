@@ -20,8 +20,8 @@ class KardexProducto extends Component
     /** ==== Filtros ==== */
     public ?int $producto_id = null;
     public ?int $bodega_id   = null;
-    public ?string $desde    = null;   // YYYY-MM-DD
-    public ?string $hasta    = null;   // YYYY-MM-DD
+    public ?string $desde    = null;
+    public ?string $hasta    = null;
     public string $buscarDoc = '';
     public int $perPage      = 25;
 
@@ -78,13 +78,33 @@ class KardexProducto extends Component
             ->orderBy('id')
             ->paginate($this->perPage);
 
-        // Mapeo para la vista (entrada/salida segun signo de cantidad, doc bonito, nombre bodega)
+        // 🔽 CORRECCIÓN: usar campo 'tipo' en lugar del signo de cantidad
         $bodegasIndex = $this->bodegas->keyBy('id');
         $items = collect($filas->items())->map(function ($m) use ($bodegasIndex) {
-            $cant = (float) ($m->cantidad ?? 0);
-            $entrada = $cant > 0 ? $cant : null;
-            $salida  = $cant < 0 ? abs($cant) : null;
+            // Siempre usa valor absoluto de cantidad
+            $cant = abs((float) ($m->cantidad ?? 0));
+            
+            // Lee el campo 'tipo' de la base de datos
+            $tipo = strtoupper(trim((string) ($m->tipo ?? '')));
 
+            // ✅ Determinar entrada/salida según el campo 'tipo'
+            $entrada = null;
+            $salida  = null;
+
+            if (in_array($tipo, ['ENTRADA', 'COMPRA'], true)) {
+                $entrada = $cant;
+            } elseif (in_array($tipo, ['SALIDA', 'VENTA'], true)) {
+                $salida = $cant;
+            } else {
+                // Fallback: si no hay tipo, usar el signo de cantidad original
+                if ((float)($m->cantidad ?? 0) > 0) {
+                    $entrada = $cant;
+                } else {
+                    $salida = $cant;
+                }
+            }
+
+            // Construir texto del documento
             $tipoDoc = $m->tipoDocumento?->codigo ?: $m->tipoDocumento?->nombre;
             $docTxt  = trim(($tipoDoc ? $tipoDoc.' ' : '') . ($m->doc_id ? '#'.$m->doc_id : ''));
             if ($m->ref) $docTxt .= ' ('.$m->ref.')';
@@ -97,17 +117,17 @@ class KardexProducto extends Component
                 'doc'                   => $docTxt,
                 'entrada'               => $entrada,
                 'salida'                => $salida,
-                'costo_unit_mov'        => (float) $m->costo_unit_mov,
-                'costo_prom_nuevo'      => (float) $m->costo_prom_nuevo,
-                'ultimo_costo_nuevo'    => (float) $m->ultimo_costo_nuevo,
-                'metodo_costeo'         => $m->metodo_costeo,
-                'tipo_evento'           => $m->tipo_evento,
+                'costo_unit_mov'        => (float) ($m->costo_unit_mov ?? $m->costo_unitario ?? 0),
+                'costo_prom_nuevo'      => (float) ($m->costo_prom_nuevo ?? 0),
+                'ultimo_costo_nuevo'    => (float) ($m->ultimo_costo_nuevo ?? 0),
+                'metodo_costeo'         => $m->metodo_costeo ?? 'PROMEDIO',
+                'tipo_evento'           => $m->tipo_evento ?? $tipo,
             ];
         });
 
         return view('livewire.productos.kardex-producto', [
-            'filas'  => $filas,   // paginator original para links
-            'items'  => $items,   // filas mapeadas para la tabla
+            'filas'  => $filas,
+            'items'  => $items,
         ]);
     }
 }

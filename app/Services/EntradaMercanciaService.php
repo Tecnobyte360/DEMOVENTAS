@@ -11,6 +11,8 @@ use App\Models\Productos\ProductoBodega;
 use App\Models\Productos\ProductoCuenta;
 use App\Models\Productos\Producto;
 use App\Models\Categorias\SubcategoriaCuenta;
+use App\Models\Movimiento\ProductoCostoMovimiento;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class EntradaMercanciaService
@@ -310,32 +312,65 @@ class EntradaMercanciaService
      *                          FLUJO
      * ========================================================= */
 
-    public static function emitir(EntradaMercancia $e): void
-    {
-        self::validarParaEmitir($e);
+   public static function emitir(EntradaMercancia $e): void
+{
+    self::validarParaEmitir($e);
 
-        DB::transaction(function () use ($e) {
-            // Asignar consecutivo de la serie si no tiene
-            if ($e->serie_id && empty($e->numero)) {
-                $serie = $e->serie()->lockForUpdate()->first();
-                if ($serie) {
-                    $n = max((int) $serie->proximo, (int) $serie->desde);
-                    $e->numero   = $n;
-                    $e->prefijo  = $serie->prefijo;
-                    $serie->proximo = $n + 1;
-                    $serie->save();
-                }
+    DB::transaction(function () use ($e) {
+        if ($e->serie_id && empty($e->numero)) {
+            $serie = $e->serie()->lockForUpdate()->first();
+            if ($serie) {
+                $n = max((int) $serie->proximo, (int) $serie->desde);
+                $e->numero   = $n;
+                $e->prefijo  = $serie->prefijo;
+                $serie->proximo = $n + 1;
+                $serie->save();
             }
+        }
 
-            // Contabilización
-            self::contabilizar($e->load('detalles', 'serie'));
+        self::contabilizar($e->load('detalles', 'serie'));
+        self::aumentarInventario($e->load('detalles'));
 
-            // Inventario
-            self::aumentarInventario($e->load('detalles'));
+        
+        foreach ($e->detalles as $d) {
+            self::registrarMovimientoCosto($e, $d);
+        }
 
-            // Estado final
-            $e->estado = 'emitida';
-            $e->save();
-        }, 3);
-    }
+        $e->estado = 'emitida';
+        $e->save();
+    }, 3);
+}
+
+protected static function registrarMovimientoCosto(EntradaMercancia $e, $detalle): void
+{
+    /** @var \App\Models\Productos\ProductoBodega|null $pb */
+    $pb = ProductoBodega::query()
+        ->where('producto_id', $detalle->producto_id)
+        ->where('bodega_id', $detalle->bodega_id)
+        ->first();
+
+    $costoProm   = (float) ($pb?->costo_promedio ?? 0);
+    $ultimoCosto = (float) ($pb?->ultimo_costo ?? 0);
+    $pu          = (float) $detalle->precio_unitario;
+
+    ProductoCostoMovimiento::create([
+        'fecha'                  => now(),
+        'producto_id'            => $detalle->producto_id,
+        'bodega_id'              => $detalle->bodega_id,
+        'tipo_documento_id'      => optional($e->tipoDocumento)->id,
+        'doc_id'                 => $e->id,
+        'ref'                    => $e->serie?->prefijo.'-'.$e->numero,
+        'cantidad'               => (float) $detalle->cantidad,
+        'valor_mov'              => round($detalle->cantidad * $pu, 4),
+        'costo_unit_mov'         => round($pu, 4),
+        'metodo_costeo'          => 'PROMEDIO',
+        'costo_prom_anterior'    => $costoProm,
+        'costo_prom_nuevo'       => $pb?->costo_promedio ?? $pu,
+        'ultimo_costo_anterior'  => $ultimoCosto,
+        'ultimo_costo_nuevo'     => $pu,
+        'tipo_evento'            => 'ENTRADA_MERCANCIA',
+        'user_id'                => Auth::id(),
+    ]);
+}
+
 }

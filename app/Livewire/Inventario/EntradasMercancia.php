@@ -471,7 +471,7 @@ private function precargarCosto(int $i): void
 
     foreach (array_keys($this->entradas) as $i) {
         $this->actualizarCuentaStr((int)$i);
-        $this->precargarCosto((int)$i);  // ← aquí
+        $this->precargarCosto((int)$i);  
     }
 
     $this->cerrarMulti();

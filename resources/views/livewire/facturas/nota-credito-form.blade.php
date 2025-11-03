@@ -1,5 +1,46 @@
 {{-- resources/views/livewire/facturas/nota-credito-form.blade.php --}}
-<section class="mt-6 md:mt-8 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+
+@once
+  @push('styles')
+    <style>
+      .doc-watermark{
+        position:absolute; inset:0; pointer-events:none; display:grid; place-items:center; z-index:10;
+      }
+      .doc-watermark .stamp{
+        transform:rotate(-18deg);
+        text-transform:uppercase;
+        letter-spacing:.35em;
+        font-weight:900;
+        border-width:6px;
+        padding:.9rem 2.5rem;
+        border-radius:1.25rem;
+        opacity:.12;             /* en pantalla */
+        mix-blend-mode:multiply;
+        font-size: clamp(1.25rem, 6vw, 2.25rem);
+      }
+      @media print{
+        .doc-watermark{position:fixed; opacity:1;}
+        .doc-watermark .stamp{opacity:.16;} /* más visible al imprimir */
+      }
+    </style>
+  @endpush
+@endonce
+
+<section class="mt-6 md:mt-8 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden relative">
+
+  {{-- ===== MARCA DE AGUA SEGÚN ESTADO ===== --}}
+  <div x-data="{ estado: @entangle('estado') }"
+       x-show="['emitida','anulada','cerrado'].includes(estado)"
+       class="doc-watermark">
+    <div class="stamp border-current"
+         :class="{
+           'text-indigo-700 border-indigo-700/60': estado==='emitida',
+           'text-rose-700 border-rose-700/60':     estado==='anulada',
+           'text-teal-700 border-teal-700/60':     estado==='cerrado'
+         }">
+      <span x-text="estado"></span>
+    </div>
+  </div>
 
   {{-- ===== PASO 1: Datos de cabecera ===== --}}
   <section class="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800" aria-label="Datos de la nota crédito">
@@ -12,43 +53,40 @@
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {{-- Cliente --}}
-     <section>
-  <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
-    Cliente <span class="text-red-500">*</span>
-  </label>
+      <section>
+        <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+          Cliente <span class="text-red-500">*</span>
+        </label>
 
-  <select
-    wire:key="cliente-select-{{ $socio_negocio_id ?? 'x' }}"
-    wire:model.live.number="socio_negocio_id"
-    class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
-  >
-    <option value="">— Seleccione —</option>
-    @foreach($clientes as $c)
-      <option value="{{ $c->id }}">{{ $c->razon_social }} ({{ $c->nit }})</option>
-    @endforeach
-  </select>
-  @error('socio_negocio_id')
-    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-  @enderror
-</section>
-
+        <select
+          wire:key="cliente-select-{{ $socio_negocio_id ?? 'x' }}"
+          wire:model.live.number="socio_negocio_id"
+          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+        >
+          <option value="">— Seleccione —</option>
+          @foreach($clientes as $c)
+            <option value="{{ $c->id }}">{{ $c->razon_social }} ({{ $c->nit }})</option>
+          @endforeach
+        </select>
+        @error('socio_negocio_id')
+          <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+        @enderror
+      </section>
 
       {{-- Serie --}}
       <section>
         <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Serie (NC)</label>
         <div class="flex items-center gap-3">
-         <select
-  wire:model.number="serie_id"
-  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 ..."
->
-
-  @foreach($series as $s)
-    <option value="{{ $s->id }}">
-      {{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} → {{ $s->hasta }})
-    </option>
-  @endforeach
-</select>
-
+          <select
+            wire:model.number="serie_id"
+            class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+          >
+            @foreach($series as $s)
+              <option value="{{ $s->id }}">
+                {{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} → {{ $s->hasta }})
+              </option>
+            @endforeach
+          </select>
 
           @if($serieDefault)
             <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200 text-xs">
@@ -56,7 +94,6 @@
             </span>
           @endif
         </div>
-       
       </section>
 
       {{-- Fechas / Motivo --}}
@@ -86,13 +123,13 @@
           </span>
         </div>
 
-       <select
-  wire:model.number="factura_id"
-  wire:key="facturas-select-{{ $socio_negocio_id ?? 0 }}-{{ count($facturasCliente) }}"
-  wire:change="onFacturaElegida($event.target.value)"
-  @disabled(empty($socio_negocio_id))
-  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-60"
->
+        <select
+          wire:model.number="factura_id"
+          wire:key="facturas-select-{{ $socio_negocio_id ?? 0 }}-{{ count($facturasCliente) }}"
+          wire:change="onFacturaElegida($event.target.value)"
+          @disabled(empty($socio_negocio_id))
+          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-60"
+        >
           @if(empty($socio_negocio_id))
             <option value="">— Seleccione un cliente primero —</option>
           @else
@@ -107,8 +144,6 @@
             @endforelse
           @endif
         </select>
-
-        
       </section>
 
       {{-- Cuenta de devolución / CxC --}}
@@ -301,7 +336,6 @@
                     <i class="fas fa-spinner fa-spin"></i>
                     <span class="text-sm italic">Consultando stock…</span>
                   </div>
-
                 </div>
               </td>
 
@@ -561,7 +595,6 @@
             </template>
 
             <div class="flex flex-wrap justify-end gap-2">
-            
               <button type="button"
                       class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
                       wire:click="guardar" wire:loading.attr="disabled" wire:target="guardar,emitir"

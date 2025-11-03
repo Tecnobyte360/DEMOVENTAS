@@ -1022,16 +1022,18 @@ public function emitir(): void
     if ($this->abortIfLocked('emitir')) return;
 
     try {
+        // Asegura cuentas en líneas y normaliza pago (fecha/vencimiento)
         $this->ensureCuentasEnLineas();
         $this->normalizarPagoAntesDeValidar();
+
         if (!$this->validarConToast()) return;
 
         DB::transaction(function () {
-            // 1) Guardar como borrador y recalcular
+            // 1) Guardar como borrador y recalcular totales
             $this->persistirBorrador();
 
             $this->factura->refresh()
-                ->loadMissing(['detalles','cliente','socioNegocio'])
+                ->loadMissing(['detalles','cliente','socioNegocio','serie.tipo'])
                 ->recalcularTotales()
                 ->save();
 
@@ -1043,24 +1045,25 @@ public function emitir(): void
                 }
             }
 
+            // 3) Serie / validación
             if (!$this->serieDefault) {
                 throw new \RuntimeException('No hay serie default activa para este documento.');
             }
 
-            // 3) Validaciones de líneas
+            // 4) Validaciones de líneas
             foreach ($this->factura->detalles as $idx => $d) {
                 if (empty($d->cuenta_ingreso_id)) {
-                    throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
+                    throw new \RuntimeException("La fila #".($idx + 1)." no tiene cuenta de ingreso.");
                 }
                 if (!$d->producto_id || !$d->bodega_id) {
-                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
+                    throw new \RuntimeException("La fila #".($idx + 1)." debe tener producto y bodega.");
                 }
             }
 
-            // 4) Verificar stock
+            // 5) Verificar stock para VENTA
             \App\Services\InventarioService::verificarDisponibilidadParaFactura($this->factura);
 
-            // 5) Consecutivo + marcar emitida
+            // 6) Tomar consecutivo y marcar como emitida
             $numero = $this->serieDefault->tomarConsecutivo();
             $this->factura->update([
                 'serie_id' => $this->serieDefault->id,
@@ -1069,7 +1072,7 @@ public function emitir(): void
                 'estado'   => 'emitida',
             ]);
 
-            // 6) Contabilizar y descontar inventario
+            // 7) Contabilizar (VENTA) y mover inventario (KÁRDEX SALIDA)
             \App\Services\ContabilidadService::asientoDesdeFactura($this->factura);
             \App\Services\InventarioService::descontarPorFactura($this->factura);
 
@@ -1077,21 +1080,26 @@ public function emitir(): void
         }, 3);
 
         PendingToast::create()
-            ->success()->message('Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').')
+            ->success()
+            ->message('Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').')
             ->duration(6000);
 
-        
+        // Si era contado y ya está pagada, intenta cerrar (opcional)
+        $this->cerrarSiAplicada();
+
+        // Deja el formulario listo para una nueva
         $this->resetFormulario();
 
-        // Actualiza la lista (si tienes un listado abierto)
+        // Refresca listados
         $this->dispatch('refrescar-lista-facturas');
 
     } catch (\Throwable $e) {
         Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
-        $msg = config('app.debug') ? ($e->getMessage() ?? 'No se pudo emitir la factura.') : 'No se pudo emitir la factura.';
+        $msg = config('app.debug') ? ($e->getMessage() ?: 'No se pudo emitir la factura.') : 'No se pudo emitir la factura.';
         PendingToast::create()->error()->message($msg)->duration(12000);
     }
 }
+
 
 
     public function anular(): void

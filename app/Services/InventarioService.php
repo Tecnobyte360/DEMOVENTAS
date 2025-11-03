@@ -16,35 +16,31 @@ class InventarioService
     /* =========================================================
      * VALIDACIÓN DE DISPONIBILIDAD (VENTA)
      * ========================================================= */
-    public static function verificarDisponibilidadParaFactura(Factura $factura): void
+   public static function verificarDisponibilidadParaFactura(Factura $f): void
     {
-        $requeridos = [];
-
-        foreach ($factura->detalles as $d) {
+        // Lanza excepción si falta stock por producto+bodega
+        $faltantes = [];
+        foreach ($f->detalles as $d) {
             if (!$d->producto_id || !$d->bodega_id) {
                 throw new \RuntimeException("Cada línea debe tener producto y bodega.");
             }
-            $key = $d->producto_id.'-'.$d->bodega_id;
-            $requeridos[$key] = ($requeridos[$key] ?? 0) + (float) $d->cantidad;
-        }
-
-        foreach ($requeridos as $key => $cant) {
-            [$productoId, $bodegaId] = array_map('intval', explode('-', $key));
-
-            $pb = ProductoBodega::query()
-                ->where('producto_id', $productoId)
-                ->where('bodega_id', $bodegaId)
+            $pb = ProductoBodega::lockForUpdate()
+                ->where('producto_id', $d->producto_id)
+                ->where('bodega_id',  $d->bodega_id)
                 ->first();
 
-            $stockActual = (float) ($pb->stock ?? 0);
-            if ($stockActual < $cant - 1e-6) {
-                throw new \RuntimeException(
-                    "Stock insuficiente para el producto {$productoId} en bodega {$bodegaId}. ".
-                    "Disponible: {$stockActual}, Requerido: {$cant}"
-                );
+            $disp = (float)($pb->stock ?? 0);
+            if ($disp < (float)$d->cantidad) {
+                $faltantes[] = "Prod {$d->producto_id} en bodega {$d->bodega_id}: disp {$disp}, req {$d->cantidad}";
             }
         }
+        if ($faltantes) {
+            throw new \RuntimeException("Stock insuficiente: ".implode(' | ', $faltantes));
+        }
     }
+
+
+
   public static function aumentarPorFacturaCompra(Factura $factura): void
     {
         // Si ya tienes la lógica en aplicarCompraYCosteo(), reúsala:
@@ -53,69 +49,70 @@ class InventarioService
     /* =========================================================
      * DESCUENTO POR FACTURA (VENTA)
      * ========================================================= */
-    public static function descontarPorFactura(Factura $factura): void
+    public static function descontarPorFactura(Factura $f): void
     {
-        DB::transaction(function () use ($factura) {
-            $factura->loadMissing('detalles.producto', 'serie.tipo');
+        DB::transaction(function () use ($f) {
+            $tipoDocumentoId = optional($f->serie)->tipo_documento_id; // si tu Serie lo tiene
 
-            $requeridos = [];
-            foreach ($factura->detalles as $d) {
-                if (!$d->producto_id || !$d->bodega_id) {
-                    throw new \RuntimeException("Cada línea debe tener producto y bodega.");
-                }
-                $key = $d->producto_id.'-'.$d->bodega_id;
-                $requeridos[$key] = ($requeridos[$key] ?? 0) + (float) $d->cantidad;
-            }
-
-            // 1) Descontar stock (lock)
-            foreach ($requeridos as $key => $cant) {
-                [$productoId, $bodegaId] = array_map('intval', explode('-', $key));
-
-                $pb = ProductoBodega::query()
-                    ->where('producto_id', $productoId)
-                    ->where('bodega_id', $bodegaId)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$pb) {
-                    $pb = new ProductoBodega([
-                        'producto_id' => $productoId,
-                        'bodega_id'   => $bodegaId,
-                        'stock'       => 0,
-                    ]);
+            foreach ($f->detalles as $d) {
+                if (!$d->producto_id || !$d->bodega_id || $d->cantidad <= 0) {
+                    continue;
                 }
 
-                $nuevo = (float) $pb->stock - (float) $cant;
-                if ($nuevo < -1e-6) {
-                    throw new \RuntimeException(
-                        "Stock negativo al descontar producto {$productoId} en bodega {$bodegaId}. ".
-                        "Actual: {$pb->stock}, Descuento: {$cant}"
-                    );
-                }
-
-                $pb->stock = $nuevo;
-                $pb->save();
-            }
-
-            // 2) Kardex: SALIDA por cada línea
-            $tipoId = static::tipoDocumentoId('FACTURA', $factura); // usa serie->tipo si existe
-            foreach ($factura->detalles as $d) {
-                static::registrarKardex(
-                    tipoLogico:        'VENTA',
-                    signo:             -1,
-                    fecha:             $factura->fecha ?? now(),
-                    productoId:        (int) $d->producto_id,
-                    bodegaId:          (int) $d->bodega_id,
-                    cantidad:          (float) $d->cantidad,
-                    costoUnitario:     static::resolverCostoUnitarioSalida($d),
-                    tipoDocumentoId:   $tipoId,
-                    docTipoLegacy:     'FACTURA', // solo si la columna existe
-                    docId:             (int) $factura->id,
-                    ref:               static::refFactura($factura)
+                // Costo promedio unitario de la bodega (o global)
+                $cpu = \App\Services\ContabilidadService::costoPromedioParaLinea(
+                    $d->producto()->with('cuentas')->first(), 
+                    $d->bodega_id
                 );
+                $costoTotal = round($cpu * (float)$d->cantidad, 2);
+
+                // 1) Actualiza stock en ProductoBodega (SALIDA)
+                $pb = ProductoBodega::lockForUpdate()
+                    ->where('producto_id', $d->producto_id)
+                    ->where('bodega_id',  $d->bodega_id)
+                    ->firstOrFail();
+
+                $stockAntes = (float)$pb->stock;
+                $pb->stock  = round($stockAntes - (float)$d->cantidad, 6);
+                // En salida usualmente NO cambias costo_promedio
+                $pb->save();
+
+                // 2) Registra Kárdex (SALIDA)
+                KardexMovimiento::create([
+                    'fecha'             => $f->fecha,
+                    'producto_id'       => $d->producto_id,
+                    'bodega_id'         => $d->bodega_id,
+                    'tipo_documento_id' => $tipoDocumentoId,
+                    'entrada'           => 0,
+                    'salida'            => $d->cantidad,
+                    'cantidad'          => -1 * (float)$d->cantidad,
+                    'signo'             => -1,
+                    'costo_unitario'    => $cpu,
+                    'costo_total'       => $costoTotal,
+                    'origen'            => 'factura',
+                    'origen_id'         => $f->id,
+                    'detalle'           => "Factura {$f->prefijo}-{$f->numero}",
+                ]);
+
+                // 3) Auditoría de costo por movimiento (opcional pero recomendado)
+                ProductoCostoMovimiento::create([
+                    'producto_id'       => $d->producto_id,
+                    'bodega_id'         => $d->bodega_id,
+                    'tipo'              => 'SALIDA',
+                    'fecha'             => $f->fecha,
+                    'cantidad'          => (float)$d->cantidad,
+                    'costo_unitario'    => $cpu,
+                    'costo_total'       => $costoTotal,
+                    'stock_antes'       => $stockAntes,
+                    'stock_despues'     => (float)$pb->stock,
+                    'origen'            => 'factura',
+                    'origen_id'         => $f->id,
+                    'detalle'           => "Factura {$f->prefijo}-{$f->numero}",
+                ]);
             }
         });
     }
+
 
     /* =========================================================
      * REVERSA POR ANULACIÓN DE FACTURA

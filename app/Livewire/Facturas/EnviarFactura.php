@@ -54,64 +54,75 @@ class EnviarFactura extends Component
     }
 
     public function enviar(): void
-    {
-        $this->validate();
+{
+    $this->validate();
 
-        $tmpRel = null;
+    $tmpRel = null;
 
-        try {
-            $factura = Factura::with('cliente','serie','detalles.producto','detalles.bodega')
-                ->findOrFail($this->facturaId);
+    try {
+        $factura = Factura::with('cliente','serie','detalles.producto','detalles.bodega','empresa')
+            ->findOrFail($this->facturaId);
 
-            // ====== Empresa desde tu tabla/configuración
-            $empresa = $this->empresaActual(); // ← arreglo listo para la vista PDF
+        // 1) Empresa como MODELO (igual que en preview)
+        /** @var \App\Models\ConfiguracionEmpresas\Empresa|null $empresaModel */
+        $empresaModel = $factura->empresa ?: Empresa::query()->first();
 
-            // ====== PDF
-            $len  = $factura->serie->longitud ?? 6;
-            $num  = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '000001';
-            $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
-            $name = "FACT-{$pref}{$num}.pdf";
+        // 2) Theme explícito (igual que en preview)
+        $theme = (is_object($empresaModel) && method_exists($empresaModel, 'pdfTheme'))
+            ? $empresaModel->pdfTheme()
+            : [];
 
-            $pdf = Pdf::loadView('pdf.factura', [
-                'factura' => $factura,
-                'empresa' => $empresa,
-            ])->setPaper('a4');
+        // 3) Logo embebido opcional (para DomPDF); si prefieres, puedes omitirlo
+        $logoSrc = $this->toDataUrlFromPublic($empresaModel?->logo_dark_path ?: $empresaModel?->logo_path);
 
-            $tmpRel = "tmp/{$name}";
-            Storage::put($tmpRel, $pdf->output());
-            $tmpAbs = Storage::path($tmpRel);
+        // ====== PDF
+        $len  = $factura->serie->longitud ?? 6;
+        $num  = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '000001';
+        $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
+        $name = "FACT-{$pref}{$num}.pdf";
 
-            // ====== CCs válidos
-            $ccs = collect(preg_split('/[;, ]+/', (string)$this->cc, -1, PREG_SPLIT_NO_EMPTY))
-                ->filter(fn($v) => filter_var($v, FILTER_VALIDATE_EMAIL))
-                ->values()
-                ->all();
+        $pdf = Pdf::loadView('pdf.factura', [
+            'factura' => $factura,
+            // OJO: pasamos el MODELO, no un array
+            'empresa' => $empresaModel,
+            // y además pasamos theme explícito (tu Blade ya lo soporta)
+            'theme'   => $theme,
+            // y un override de logo si quieres forzar data URL en DomPDF
+            'logoSrc' => $logoSrc,
+        ])->setPaper('a4');
 
-            // ====== Envío
-            Mail::to($this->para)
-                ->cc($ccs)
-                ->send(new FacturaPdfMail(
-                    factura: $factura,
-                    pdfPath: $tmpAbs,
-                    asunto: (string)($this->asunto ?: "Factura {$pref}{$num}")
-                ));
+        $tmpRel = "tmp/{$name}";
+        Storage::put($tmpRel, $pdf->output());
+        $tmpAbs = Storage::path($tmpRel);
 
-            // Éxito
-            PendingToast::create()->success()->message('Factura enviada con éxito.')->duration(6000);
-            $this->show = false;
+        // CCs válidos
+        $ccs = collect(preg_split('/[;, ]+/', (string)$this->cc, -1, PREG_SPLIT_NO_EMPTY))
+            ->filter(fn($v) => filter_var($v, FILTER_VALIDATE_EMAIL))
+            ->values()
+            ->all();
 
-            // refresca el form si está abierto
-            $this->dispatch('$refresh')->to(\App\Livewire\Facturas\FacturaForm::class);
+        Mail::to($this->para)
+            ->cc($ccs)
+            ->send(new FacturaPdfMail(
+                factura: $factura,
+                pdfPath: $tmpAbs,
+                asunto: (string)($this->asunto ?: "Factura {$pref}{$num}")
+            ));
 
-        } catch (\Throwable $e) {
-            $msg = mb_strimwidth($e->getMessage() ?: 'Error desconocido', 0, 220, '…');
-            PendingToast::create()->error()->message('No se pudo enviar la factura: ' . $msg)->duration(11000);
-        } finally {
-            if ($tmpRel && Storage::exists($tmpRel)) {
-                Storage::delete($tmpRel);
-            }
+        PendingToast::create()->success()->message('Factura enviada con éxito.')->duration(6000);
+        $this->show = false;
+
+        $this->dispatch('$refresh')->to(\App\Livewire\Facturas\FacturaForm::class);
+
+    } catch (\Throwable $e) {
+        $msg = mb_strimwidth($e->getMessage() ?: 'Error desconocido', 0, 220, '…');
+        PendingToast::create()->error()->message('No se pudo enviar la factura: ' . $msg)->duration(11000);
+    } finally {
+        if ($tmpRel && Storage::exists($tmpRel)) {
+            Storage::delete($tmpRel);
         }
     }
+}
 
     /**
      * Construye el arreglo de empresa a partir de tu modelo Empresa (tabla `empresas`).

@@ -225,6 +225,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::fallback(function () {
         return view('pages/utility/404');
     });
+Route::get('/facturas/{factura}/preview', [FacturaPosPrintController::class, 'preview'])
+     ->name('facturas.preview');
 
 
 
@@ -244,12 +246,10 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/categorias', Categorias::class)->name('categorias.index');
     Route::get('/subcategorias', SubCategorias::class)->name('subcategorias.index');
     Route::get('/indexcategorias', IndexCategorias::class)->name('indexcategorias');
-Route::get('/facturas/{factura}/preview', [FacturaPosPrintController::class, 'preview'])
-     ->name('facturas.preview');
+
 
     //Inventario
     Route::get('Entradas', Indexentradas::class)->name('Entradas');
-
     Route::get('/EntradasMercancia', EntradasMercancia::class)->name('entradas.mercancia');
     Route::get('/Operaciones-stock', OperacionesStock::class)->name('Operaciones-stock');
     Route::get('/Maestro-Rutas', MaestroRutas::class)->name('Maestro-Rutas');

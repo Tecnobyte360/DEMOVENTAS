@@ -16,7 +16,7 @@ class Empresas extends Component
 
     public ?Empresa $empresa = null;
 
-    // Formulario
+    // Formulario base
     public string $nombre = '';
     public ?string $nit = null;
     public ?string $email = null;
@@ -24,22 +24,38 @@ class Empresas extends Component
     public ?string $sitio_web = null;
     public ?string $direccion = null;
 
-    public ?string $color_primario = null;
-    public ?string $color_secundario = null;
-    public bool $usar_gradiente = false;
-    public ?int $grad_angle = 135;
     public bool $is_activa = true;
 
-    // Recibidos desde el Blade como DataURL Base64
+    // Imágenes (Base64)
     public ?string $logo_b64 = null;
     public ?string $logo_dark_b64 = null;
     public ?string $favicon_b64 = null;
 
-    // (opcional) diagnóstico
-    public array $uploadDiagnostics = [];
+    // 🎨 Tema PDF — solo los colores reales del pdf_theme
+    public array $theme = [
+        'primary'   => '#7666AB',
+        'base'      => '#FFFFFF',
+        'ink'       => '#2B2B2B',
+        'muted'     => '#4D4D4D',
+        'border'    => '#E6E6E6',
+        'theadBg'   => '#7666AB',
+        'theadText' => '#FFFFFF',
+        'stripe'    => '#F6F5FB',
+        'grandBg'   => '#473C7B',
+        'grandTx'   => '#FFFFFF',
+        'wmColor'   => 'rgba(118, 102, 171, .06)',
+    ];
 
     public string $q = '';
     public int $perPage = 10;
+
+    public function mount(): void
+    {
+        if ($empresa = Empresa::query()->first()) {
+            $this->empresa = $empresa;
+            $this->fillFromModel($empresa);
+        }
+    }
 
     protected function rules(): array
     {
@@ -50,38 +66,42 @@ class Empresas extends Component
             'telefono'         => ['nullable','string','max:50'],
             'sitio_web'        => ['nullable','url','max:255'],
             'direccion'        => ['nullable','string','max:255'],
-
-            'color_primario'   => ['nullable','regex:/^#?[0-9A-Fa-f]{6}$/'],
-            'color_secundario' => ['nullable','regex:/^#?[0-9A-Fa-f]{6}$/'],
-
-            'usar_gradiente'   => ['boolean'],
-            'grad_angle'       => ['nullable','integer','min:0','max:360'],
             'is_activa'        => ['boolean'],
 
-            // Validación simple de DataURL base64
             'logo_b64'        => ['nullable','string','starts_with:data:image/'],
             'logo_dark_b64'   => ['nullable','string','starts_with:data:image/'],
             'favicon_b64'     => ['nullable','string','starts_with:data:image/'],
+
+            // 🎨 Validar pdf_theme (sin defaults)
+            'theme.primary'   => ['required','string','max:32'],
+            'theme.base'      => ['required','string','max:32'],
+            'theme.ink'       => ['required','string','max:32'],
+            'theme.muted'     => ['required','string','max:32'],
+            'theme.border'    => ['required','string','max:32'],
+            'theme.theadBg'   => ['required','string','max:32'],
+            'theme.theadText' => ['required','string','max:32'],
+            'theme.stripe'    => ['required','string','max:32'],
+            'theme.grandBg'   => ['required','string','max:32'],
+            'theme.grandTx'   => ['required','string','max:32'],
+            'theme.wmColor'   => ['required','string','max:64'],
         ];
     }
 
-    public function updatingQ(){ $this->resetPage(); }
-    public function updatingPerPage(){ $this->resetPage(); }
+    public function updatingQ() { $this->resetPage(); }
+    public function updatingPerPage() { $this->resetPage(); }
 
     public function createNew(): void
     {
         $this->resetForm();
         $this->empresa = null;
-        $this->uploadDiagnostics = [];
     }
 
     public function edit(int $id): void
     {
         try {
-            $model = Empresa::findOrFail($id);
-            $this->empresa = $model;
-            $this->fillFromModel($model);
-            $this->uploadDiagnostics = [];
+            $empresa = Empresa::findOrFail($id);
+            $this->empresa = $empresa;
+            $this->fillFromModel($empresa);
         } catch (Throwable $e) {
             $this->handleException($e, 'No se pudo cargar la empresa seleccionada.');
         }
@@ -95,46 +115,29 @@ class Empresas extends Component
     public function save(): void
     {
         try {
-            // Valida campos (deja que arroje ValidationException si algo falla)
             $this->validate();
 
-            if ($this->usar_gradiente && (!$this->color_primario || !$this->color_secundario)) {
-                $this->addError('color_primario', 'Debes definir color primario y secundario para el gradiente.');
-                $this->addError('color_secundario', 'Debes definir color primario y secundario para el gradiente.');
-                return;
-            }
-
-            // Guarda datos base
             $empresa = $this->empresa ?? new Empresa();
             $empresa->fill([
-                'nombre'           => $this->nombre,
-                'nit'              => $this->nit,
-                'email'            => $this->email,
-                'telefono'         => $this->telefono,
-                'sitio_web'        => $this->sitio_web,
-                'direccion'        => $this->direccion,
-                'color_primario'   => $this->normalizeHex($this->color_primario),
-                'color_secundario' => $this->normalizeHex($this->color_secundario),
-                'usar_gradiente'   => $this->usar_gradiente,
-                'grad_angle'       => $this->grad_angle ?? 135,
-                'is_activa'        => $this->is_activa,
+                'nombre'      => $this->nombre,
+                'nit'         => $this->nit,
+                'email'       => $this->email,
+                'telefono'    => $this->telefono,
+                'sitio_web'   => $this->sitio_web,
+                'direccion'   => $this->direccion,
+                'is_activa'   => $this->is_activa,
+                'pdf_theme'   => $this->theme, // Solo se guarda lo que el usuario definió
             ]);
 
-            // Si llegaron nuevas imágenes en base64, se guardan en los mismos campos *_path
-            if ($this->logo_b64) {
-                $empresa->logo_path = $this->logo_b64;
-            }
-            if ($this->logo_dark_b64) {
-                $empresa->logo_dark_path = $this->logo_dark_b64;
-            }
-            if ($this->favicon_b64) {
-                $empresa->favicon_path = $this->favicon_b64;
-            }
+            // Imágenes
+            if ($this->logo_b64)      $empresa->logo_path = $this->logo_b64;
+            if ($this->logo_dark_b64) $empresa->logo_dark_path = $this->logo_dark_b64;
+            if ($this->favicon_b64)   $empresa->favicon_path = $this->favicon_b64;
 
             $empresa->save();
             $this->empresa = $empresa;
 
-            session()->flash('ok', 'Configuración de empresa guardada correctamente.');
+            session()->flash('ok', 'Configuración guardada correctamente.');
             $this->resetUploads();
         } catch (Throwable $e) {
             $this->handleException($e, 'No se pudo guardar la configuración de la empresa.');
@@ -146,11 +149,9 @@ class Empresas extends Component
         try {
             $empresa = Empresa::findOrFail($id);
             $empresa->delete();
-
             if ($this->empresa?->id === $id) {
                 $this->createNew();
             }
-
             session()->flash('ok', 'Empresa eliminada.');
             $this->resetPage();
         } catch (Throwable $e) {
@@ -158,26 +159,20 @@ class Empresas extends Component
         }
     }
 
-    private function normalizeHex(?string $hex): ?string
-    {
-        return $hex ? '#'.strtolower(ltrim($hex, '#')) : null;
-    }
-
     private function fillFromModel(Empresa $m): void
     {
         $this->fill([
-            'nombre'           => $m->nombre,
-            'nit'              => $m->nit,
-            'email'            => $m->email,
-            'telefono'         => $m->telefono,
-            'sitio_web'        => $m->sitio_web,
-            'direccion'        => $m->direccion,
-            'color_primario'   => $m->color_primario,
-            'color_secundario' => $m->color_secundario,
-            'usar_gradiente'   => (bool) ($m->usar_gradiente ?? false),
-            'grad_angle'       => (int)  ($m->grad_angle ?? 135),
-            'is_activa'        => (bool) ($m->is_activa ?? true),
+            'nombre'     => $m->nombre,
+            'nit'        => $m->nit,
+            'email'      => $m->email,
+            'telefono'   => $m->telefono,
+            'sitio_web'  => $m->sitio_web,
+            'direccion'  => $m->direccion,
+            'is_activa'  => (bool) $m->is_activa,
         ]);
+
+        // Carga el theme exactamente como está en BD
+        $this->theme = (array) $m->pdf_theme;
 
         $this->resetUploads();
     }
@@ -186,16 +181,27 @@ class Empresas extends Component
     {
         $this->reset([
             'nombre','nit','email','telefono','sitio_web','direccion',
-            'color_primario','color_secundario','usar_gradiente','grad_angle','is_activa',
+            'is_activa','theme'
         ]);
         $this->is_activa = true;
-        $this->grad_angle = 135;
+        $this->theme = [
+            'primary'   => '#7666AB',
+            'base'      => '#FFFFFF',
+            'ink'       => '#2B2B2B',
+            'muted'     => '#4D4D4D',
+            'border'    => '#E6E6E6',
+            'theadBg'   => '#7666AB',
+            'theadText' => '#FFFFFF',
+            'stripe'    => '#F6F5FB',
+            'grandBg'   => '#473C7B',
+            'grandTx'   => '#FFFFFF',
+            'wmColor'   => 'rgba(118, 102, 171, .06)',
+        ];
         $this->resetUploads();
     }
 
     private function resetUploads(): void
     {
-        // Limpia las 3 cadenas Base64
         $this->reset(['logo_b64','logo_dark_b64','favicon_b64']);
     }
 
@@ -216,16 +222,12 @@ class Empresas extends Component
 
             return view('livewire.configuracion-empresas.empresas', compact('rows'));
         } catch (Throwable $e) {
-            // Si algo muy raro falla en render, registra y muestra una lista vacía
             $this->handleException($e, 'No se pudieron cargar las empresas.');
             $rows = collect([])->paginate($this->perPage);
             return view('livewire.configuracion-empresas.empresas', compact('rows'));
         }
     }
 
-    /**
-     * Manejo centralizado de excepciones: log + error amigable.
-     */
     private function handleException(Throwable $e, string $userMessage): void
     {
         Log::error($userMessage, [
@@ -236,7 +238,6 @@ class Empresas extends Component
             'trace' => $e->getTraceAsString(),
         ]);
 
-        // Muestra en UI (puedes cambiar a session()->flash('error', ...) si prefieres un alert global)
         $this->addError('general', $userMessage);
     }
 }

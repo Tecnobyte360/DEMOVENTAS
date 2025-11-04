@@ -368,7 +368,6 @@ public function mount(?int $id = null): void
    public function updatedCondicionPagoId($val): void
 {
     if ($this->bloqueada) return;
-
     $cond = $val ? CondicionPago::find((int)$val) : null;
     if (!$cond) return;
 

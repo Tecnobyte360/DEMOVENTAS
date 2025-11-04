@@ -9,29 +9,24 @@ class Empresa extends Model
     protected $table = 'empresas';
 
     protected $fillable = [
-        'nombre', 'nit', 'email', 'telefono', 'sitio_web', 'direccion',
-        'logo_path', 'logo_dark_path', 'favicon_path',
-        'color_primario', 'color_secundario', 'is_activa', 'extra',
+        'nombre','nit','email','telefono','sitio_web','direccion',
+        'logo_path','logo_dark_path','favicon_path',
+        'color_primario','color_secundario','is_activa','extra',
+        'pdf_theme',
     ];
 
     protected $casts = [
         'is_activa' => 'boolean',
         'extra'     => 'array',
+        'pdf_theme' => 'array',
     ];
 
-    // Retorna directamente el Base64
-    public function getLogoUrlAttribute(): ?string
+    /** 
+     * Retorna directamente el tema PDF almacenado, 
+     * o un set básico de respaldo si no hay datos 
+     */
+    public function pdfTheme(): array
     {
-        return $this->logo_path ?: null;
-    }
-
-    public function getLogoDarkUrlAttribute(): ?string
-    {
-        return $this->logo_dark_path ?: null;
-    }
-
-    public function getFaviconUrlAttribute(): ?string
-    {
-        return $this->favicon_path ?: null;
+     return (array) ($this->pdf_theme ?? []);
     }
 }

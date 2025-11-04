@@ -71,49 +71,8 @@
   <div class="relative z-10 w-full max-w-[95vw] h-[95vh] mx-auto mt-[2.5vh] rounded-3xl overflow-hidden mapa-modal border border-white/10">
     <div class="absolute inset-0 bg-gradient-to-br from-white/10 to-white/5 dark:from-white/5 dark:to-white/0 pointer-events-none"></div>
 
-    {{-- Header --}}
-    <div class="px-8 py-5 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 border-b border-white/20 flex items-center justify-between">
-      <div class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center text-2xl shadow-lg">🗺️</div>
-        <div>
-          <h3 class="text-xl font-black text-white tracking-tight">Mapa de Relaciones</h3>
-          <p class="text-sm text-indigo-100 font-medium mt-0.5">Red de documentos vinculados</p>
-        </div>
-      </div>
-      <div class="flex items-center gap-3">
-        <div class="hidden md:flex items-center gap-2 glass border border-slate-200/60 dark:border-slate-700/60 px-3 py-2 rounded-xl">
-          <input x-model="state.searchTerm" @keydown.enter.prevent="searchNumber()" type="text"
-                 placeholder="Buscar por número…"
-                 class="bg-transparent placeholder-white/70 text-white text-sm focus:outline-none w-44">
-          <button @click="searchNumber()"
-                  class="px-3 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-semibold">Buscar</button>
-        </div>
-        <button class="px-6 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-sm font-bold text-white transition-all shadow-lg border border-white/30"
-                @click="$wire.cerrar()">✕ Cerrar</button>
-      </div>
-    </div>
+   
 
-    {{-- Leyenda + Filtros --}}
-    <div class="px-6 py-3 glass border-b border-slate-200/50 dark:border-slate-700/50">
-      <div class="flex items-center gap-2 flex-wrap text-xs font-bold">
-        <span class="text-slate-700 dark:text-slate-200 mr-2 text-sm">📚 TIPOS</span>
-
-        <template x-for="chip in legend" :key="chip.type">
-          <button
-            class="legend-chip px-3 py-1.5 rounded-xl text-white shadow"
-            :class="chip.active ? 'ring-2 ring-white/70' : 'opacity-70'"
-            :style="`background: linear-gradient(135deg, ${chip.bg[0]}, ${chip.bg[1]});`"
-            @click="toggleType(chip.type)">
-            <span class="inline-flex items-center gap-2 text-[12px]">
-              <span x-text="chip.icon" class="text-base"></span>
-              <span x-text="chip.label"></span>
-            </span>
-          </button>
-        </template>
-
-        <button @click="resetFilters()" class="ml-2 px-3 py-1.5 rounded-xl bg-slate-800/80 text-white text-[12px] border border-white/10">Mostrar todo</button>
-      </div>
-    </div>
 
     {{-- Canvas Cytoscape --}}
     <div class="p-6 h-[calc(95vh-220px)] bg-gradient-to-br from-white/70 to-slate-50/70 dark:from-slate-950/60 dark:to-slate-900/60">
@@ -136,15 +95,7 @@
       </div>
     </div>
 
-    {{-- Footer --}}
-    <div class="px-8 py-4 glass border-t border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
-      <div class="flex items-center gap-6 text-sm text-slate-700 dark:text-slate-300 font-medium">
-        <div class="flex items-center gap-2"><span class="text-lg">🖱️</span><span>Scroll para zoom</span></div>
-        <div class="flex items-center gap-2"><span class="text-lg">✋</span><span>Arrastra para mover</span></div>
-        <div class="flex items-center gap-2"><span class="text-lg">👆</span><span>Click en documentos</span></div>
-      </div>
-      <div class="text-xs text-slate-500 dark:text-slate-400">Tip: usa el buscador para resaltar un número específico</div>
-    </div>
+   
   </div>
 </div>
 

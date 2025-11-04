@@ -115,25 +115,15 @@
                 <i class="fa-solid fa-envelope"></i>
                 <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-indigo-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Enviar por correo</span>
               </button>
-              <button type="button" title="Previsualizar"
+              <button type="button" title="Factura de venta"
         wire:click="preview({{ $f->id }})"
         class="group relative px-2.5 py-1.5 rounded-lg bg-slate-700 text-white text-xs hover:bg-slate-800 transition">
-  <i class="fa-solid fa-eye"></i>
+ <i class="fa-solid fa-file-pdf"></i>
   <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-slate-800 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Previsualizar</span>
 </button>
 
 
-              {{-- Vista previa --}}
-             <button type="button" title="Vista previa"
-        wire:click="preview({{ $f->id }})"
-        class="group relative px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition">
-  <i class="fa-solid fa-eye"></i>
-  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 
-               opacity-0 group-hover:opacity-100 bg-amber-600 text-white text-[11px] px-2 py-1 
-               rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">
-    Vista previa
-  </span>
-</button>
+       
 
 
               {{-- Imprimir --}}

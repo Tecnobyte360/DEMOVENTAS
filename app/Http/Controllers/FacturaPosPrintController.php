@@ -2,75 +2,65 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Factura\factura;
+use App\Models\Factura\Factura;
 use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Services\PosPrinterService;
 use Barryvdh\DomPDF\Facade\Pdf as PdfFacade;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 use Throwable;
-
 
 class FacturaPosPrintController extends Controller
 {
-    public function print(factura $factura, PosPrinterService $pos): JsonResponse
+    /** ===========================
+     *  Impresión POS (ticket)
+     *  =========================== */
+    public function print(Factura $factura, PosPrinterService $pos): JsonResponse
     {
         try {
+            $factura->load(['cliente', 'serie', 'detalles.producto', 'empresa']);
+
             Log::info('Iniciando impresión POS', [
                 'factura_id' => $factura->id,
-                'driver'     => $pos->driverUsed,
-                'target'     => $pos->target,
-                'codepage'   => $pos->codePageSelected,
+                'driver'     => $pos->driverUsed ?? null,
+                'target'     => $pos->target ?? null,
+                'codepage'   => $pos->codePageSelected ?? null,
             ]);
 
-            // Carga relaciones necesarias
-            $factura->load(['cliente', 'serie', 'detalles.producto']);
+            /** @var \App\Models\ConfiguracionEmpresas\Empresa|null $empresaModel */
+            $empresaModel = $factura->empresa ?: Empresa::query()->first();
 
-            // ===== Empresa desde BD =====
-            $e = Empresa::query()->first(); // ajusta si manejas multi-empresa
-            $logoSrc = $e->logo_path ?: null; // puede ser data:image/...;base64,... o ruta accesible en public/
-
-            $empresa = [
-                'nombre'     => $e->nombre           ?? '—',
-                'slogan'     => $e->slogan           ?? null,
-                'nit'        => $e?->nit             ? ('NIT '.$e->nit) : null,
-                'direccion'  => $e->direccion        ?? null,
-                'telefono'   => $e->telefono         ?? null,
-                'regimen'    => $e->regimen          ?? 'Regimen: Responsable de IVA',
+            // ⚠️ Array SOLO para POS. No usar este array en el Blade del PDF.
+            $empresaPos = [
+                'nombre'     => $empresaModel->nombre           ?? '—',
+                'slogan'     => $empresaModel->slogan           ?? null,
+                'nit'        => $empresaModel?->nit             ? ('NIT '.$empresaModel->nit) : null,
+                'direccion'  => $empresaModel->direccion        ?? null,
+                'telefono'   => $empresaModel->telefono         ?? null,
+                'regimen'    => $empresaModel->regimen          ?? 'Régimen: Responsable de IVA',
                 'pos'        => 'Caja Principal',
-                'cajero'     => Auth::user()?->name  ?? '—',
-                'website'    => $e->sitio_web        ?: $e->email,
-                'resolucion' => $e->resolucion       ?? null,
-                'logo_src'   => $logoSrc,
-                'accent'     => $e->color_primario   ?: '#0ea5e9',
+                'cajero'     => Auth::user()?->name             ?? '—',
+                'website'    => $empresaModel->sitio_web        ?: $empresaModel->email,
+                'resolucion' => $empresaModel->resolucion       ?? null,
+                'logo_src'   => $empresaModel->logo_path        ?: null,
+                'accent'     => $empresaModel->color_primario   ?: '#0ea5e9',
             ];
 
-            // Diagnóstico de logo
-            Log::info('[POS] Estado del logo', [
-                'has_logo' => !empty($empresa['logo_src']),
-                'prefix'   => substr((string)($empresa['logo_src'] ?? ''), 0, 30),
-                'length'   => strlen((string)($empresa['logo_src'] ?? '')),
-            ]);
-
-            // ===== Folio =====
             $len   = $factura->serie->longitud ?? 6;
-            $num   = $factura->numero !== null
-                ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT)
-                : '—';
+            $num   = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '—';
             $pref  = $factura->prefijo ? "{$factura->prefijo}-" : '';
             $folio = "{$pref}{$num}";
 
-            // ===== Doc =====
             $fechaEmi = Carbon::parse($factura->fecha ?? $factura->created_at);
             $doc = [
                 'folio'            => $folio,
                 'tipo_pago'        => $factura->tipo_pago ?? 'contado',
                 'fecha'            => $fechaEmi->format('d/m/Y g:i a'),
                 'vence'            => ($factura->tipo_pago === 'credito' && $factura->vencimiento)
-                    ? Carbon::parse($factura->vencimiento)->format('d/m/Y')
-                    : $fechaEmi->format('d/m/Y'),
+                                        ? Carbon::parse($factura->vencimiento)->format('d/m/Y')
+                                        : $fechaEmi->format('d/m/Y'),
                 'cliente_nombre'   => $factura->cliente->razon_social ?? '—',
                 'cliente_nit'      => $factura->cliente->nit ?? '—',
                 'cliente_dir'      => $factura->cliente->direccion ?? null,
@@ -86,8 +76,7 @@ class FacturaPosPrintController extends Controller
                 ),
             ];
 
-            // ===== Ítems + resumen de impuestos =====
-            $items   = [];
+            $items = [];
             $resumen = [];
 
             foreach (($factura->detalles ?? []) as $d) {
@@ -100,14 +89,13 @@ class FacturaPosPrintController extends Controller
                 $iva     = $base * $ivaPct / 100;
                 $totalLn = $base + $iva;
 
-                // nombre + descripción (para mostrar: CÓDIGO - NOMBRE - DESCRIPCIÓN)
-                $nombre       = $d->producto->nombre ?? ($d->descripcion ?: ('#'.$d->producto_id));
-                $descripcion  = trim($d->producto->descripcion ?? $d->descripcion ?? '');
+                $nombre      = $d->producto->nombre ?? ($d->descripcion ?: ('#'.$d->producto_id));
+                $descripcion = trim($d->producto->descripcion ?? $d->descripcion ?? '');
 
                 $items[] = [
                     'codigo'      => $d->producto->codigo ?? $d->producto->item_code ?? null,
                     'nombre'      => $nombre,
-                    'descripcion' => $descripcion, // se imprimirá junto al código y nombre
+                    'descripcion' => $descripcion,
                     'cant'        => $cant,
                     'precio'      => $precio,
                     'desc'        => $descPct,
@@ -132,76 +120,46 @@ class FacturaPosPrintController extends Controller
                 ];
             }
 
-            Log::info('Datos preparados, enviando a imprimir', [
-                'items_count' => count($items),
-                'total'       => $doc['total'],
-            ]);
+            $pos->printInvoice($empresaPos, $doc, $items, $resumenImpuestos);
 
-            // ===== Imprimir =====
-            $pos->printInvoice($empresa, $doc, $items, $resumenImpuestos);
-
-            Log::info('Impresión enviada exitosamente');
             return response()->json(['ok' => true]);
-
         } catch (Throwable $e) {
             Log::error('POS print failed', [
                 'factura_id' => $factura->id ?? null,
                 'msg'        => $e->getMessage(),
                 'file'       => $e->getFile(),
                 'line'       => $e->getLine(),
-                'trace'      => $e->getTraceAsString(),
             ]);
 
             return response()->json([
                 'ok'     => false,
                 'error'  => $e->getMessage(),
-                'driver' => $pos->driverUsed ?? null,
-                'target' => $pos->target ?? null,
             ], 500);
         }
     }
- 
-      public function preview(Factura $factura)
+
+    /** ===========================
+     *  Vista previa PDF
+     *  =========================== */
+    public function preview(Factura $factura)
     {
-        // Relaciones necesarias
-        $factura->loadMissing(['cliente','serie','detalles.producto','detalles.bodega']);
+        $factura->load(['cliente', 'serie', 'detalles.producto', 'detalles.bodega', 'empresa']);
 
-        // Empresa (ajusta si usas multi-empresa)
-        $e = Empresa::query()->first();
-        $logoSrc = null;
+        /** @var \App\Models\ConfiguracionEmpresas\Empresa|null $empresaModel */
+        $empresaModel = $factura->empresa ?: Empresa::query()->first();
 
-        // Dompdf requiere rutas absolutas o data-uri
-        if ($e && $e->logo_path) {
-            $path = public_path($e->logo_path);
-            if (is_file($path)) {
-                $mime = mime_content_type($path) ?: 'image/png';
-                $logoSrc = 'data:' . $mime . ';base64,' . base64_encode(file_get_contents($path));
-            }
-        }
+        $theme = method_exists($empresaModel, 'pdfTheme') ? $empresaModel->pdfTheme() : null;
 
-        $empresa = [
-            'nombre'          => $e->nombre        ?? 'Empresa',
-            'nit'             => $e?->nit          ? ('NIT '.$e->nit) : null,
-            'direccion'       => $e->direccion     ?? null,
-            'telefono'        => $e->telefono      ?? null,
-            'email'           => $e->email         ?? null,
-            'website'         => $e->sitio_web     ?? null,
-            'color_primario'  => $e->color_primario ?? '#223361',
-            'logo_src'        => $logoSrc,
-        ];
-
-        // Render PDF
-        $pdf = PdfFacade::loadView('pdf.factura', compact('factura','empresa'))
-                        ->setPaper('letter');
-
-        // Folio para el nombre del archivo
-        $len   = (int)($factura->serie->longitud ?? 6);
+        $len   = $factura->serie->longitud ?? 6;
         $num   = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '—';
         $pref  = $factura->prefijo ? "{$factura->prefijo}-" : '';
         $folio = "{$pref}{$num}";
 
-        // Mostrar incrustado en el navegador (no descargar)
-        return $pdf->stream("Factura_{$folio}.pdf", ['Attachment' => false]);
+        return PdfFacade::loadView('pdf.factura', [
+            'factura' => $factura,
+            'empresa' => $empresaModel, 
+            'theme'   => $theme,
+            'folio'   => $folio,
+        ])->stream('factura-'.$folio.'.pdf');
     }
-    
 }

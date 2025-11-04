@@ -3,7 +3,7 @@
             bg-gradient-to-br from-violet-50 via-white to-indigo-50
             dark:from-gray-900 dark:via-gray-900 dark:to-gray-800
             border border-violet-100/50 dark:border-gray-700"
-     x-data="logoUploader()">
+     x-data="{ ...logoUploader(), theme: @entangle('theme'), usarGrad: @entangle('usar_gradiente'), gradAngle: @entangle('grad_angle') }">
 
   {{-- Fondos decorativos --}}
   <div aria-hidden="true" class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-indigo-400/20 blur-3xl"></div>
@@ -19,7 +19,7 @@
           </span>
           Configuración de Empresas
         </h2>
-        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Gestiona nombre, logos y datos básicos. Personaliza colores y estado.</p>
+        <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">Gestiona nombre, logos y datos básicos. Personaliza colores, tema PDF y estado.</p>
       </div>
     </div>
   </div>
@@ -40,7 +40,7 @@
   {{-- Formulario principal --}}
   <form wire:submit.prevent="save" class="relative z-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    {{-- Columna 1 (datos) --}}
+    {{-- Columna 1 (datos + tema PDF) --}}
     <div class="lg:col-span-2 space-y-7 max-w-6xl mx-auto w-full">
 
       {{-- Datos generales --}}
@@ -117,29 +117,201 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Color primario</label>
-            <input type="text" wire:model.defer="color_primario"
-                   class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                   placeholder="#4f46e5">
+            <div class="mt-2 flex items-center gap-2">
+              <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
+                     x-model="theme.primary" @input="$wire.set('theme.primary', theme.primary)">
+              <input type="text" wire:model.defer="color_primario"
+                     x-model.lazy="theme.primary"
+                     class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                     placeholder="#223361">
+            </div>
             @error('color_primario') <p class="text-xs text-red-600 mt-2">{{ $message }}</p> @enderror
           </div>
 
           <div>
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Color secundario</label>
-            <input type="text" wire:model.defer="color_secundario"
-                   class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
-                   placeholder="#22d3ee">
+            <div class="mt-2 flex items-center gap-2">
+              <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
+                     x-model="theme.theadBg" @input="$wire.set('theme.theadBg', theme.theadBg)">
+              <input type="text" wire:model.defer="color_secundario"
+                     class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                     placeholder="#eef2f8">
+            </div>
             @error('color_secundario') <p class="text-xs text-red-600 mt-2">{{ $message }}</p> @enderror
           </div>
 
-          <div class="md:col-span-2 flex items-center justify-start mt-4">
-            <label class="inline-flex items-center gap-3 text-sm font-medium 
-                         text-gray-700 dark:text-gray-200 select-none">
+          <div class="md:col-span-2 flex items-center justify-start">
+            <label class="inline-flex items-center gap-3 text-sm font-medium text-gray-700 dark:text-gray-200 select-none">
               <input type="checkbox" wire:model.defer="is_activa"
-                     class="rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 
-                            dark:border-gray-700 dark:bg-gray-900">
+                     class="rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900">
               Empresa activa
             </label>
           </div>
+        </div>
+      </div>
+
+      {{-- 🎨 Tema PDF (Factura) --}}
+      <div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700 p-8">
+        <div class="mb-6 flex items-center gap-3">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+            <i class="fa-solid fa-file-invoice"></i>
+          </span>
+          <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Tema PDF (Factura)</h3>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {{-- Colores 1 --}}
+          <div class="space-y-4">
+            @php
+              $keys1 = [
+                ['primary','Primario'],
+                ['base','Base (fondo)'],
+                ['ink','Texto principal'],
+                ['muted','Texto secundario'],
+              ];
+            @endphp
+            @foreach ($keys1 as [$key,$label])
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</label>
+                <div class="mt-2 flex items-center gap-2">
+                  <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
+                         x-model="theme.{{ $key }}" @input="$wire.set('theme.{{ $key }}', theme.{{ $key }})">
+                  <input type="text" class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                         x-model.lazy="theme.{{ $key }}" placeholder="#000000">
+                </div>
+              </div>
+            @endforeach
+          </div>
+
+          {{-- Colores 2 --}}
+          <div class="space-y-4">
+            @php
+              $keys2 = [
+                ['border','Borde'],
+                ['theadBg','Encabezado tabla (bg)'],
+                ['theadText','Encabezado tabla (texto)'],
+                ['stripe','Fila alterna'],
+              ];
+            @endphp
+            @foreach ($keys2 as [$key,$label])
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</label>
+                <div class="mt-2 flex items-center gap-2">
+                  <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
+                         x-model="theme.{{ $key }}" @input="$wire.set('theme.{{ $key }}', theme.{{ $key }})">
+                  <input type="text" class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                         x-model.lazy="theme.{{ $key }}" placeholder="#000000">
+                </div>
+              </div>
+            @endforeach
+          </div>
+
+          {{-- Colores 3 + Gradiente --}}
+          <div class="space-y-4">
+            @php
+              $keys3 = [
+                ['grandBg','Total (bg)'],
+                ['grandTx','Total (texto)'],
+              ];
+            @endphp
+            @foreach ($keys3 as [$key,$label])
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</label>
+                <div class="mt-2 flex items-center gap-2">
+                  <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
+                         x-model="theme.{{ $key }}" @input="$wire.set('theme.{{ $key }}', theme.{{ $key }})">
+                  <input type="text" class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                         x-model.lazy="theme.{{ $key }}" placeholder="#000000">
+                </div>
+              </div>
+            @endforeach
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Watermark (rgba)</label>
+              <input type="text" class="mt-2 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                     x-model.lazy="theme.wmColor" placeholder="rgba(34, 51, 97, .06)">
+            </div>
+
+            <div class="pt-2 space-y-2">
+              <label class="inline-flex items-center gap-3 text-sm font-medium text-gray-700 dark:text-gray-200 select-none">
+                <input type="checkbox"
+                       class="rounded-lg border-gray-300 text-indigo-600 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900"
+                       x-model="usarGrad">
+                Usar gradiente de encabezado
+              </label>
+              <div class="flex items-center gap-3" x-show="usarGrad">
+                <input type="range" min="0" max="360" step="1"
+                       class="w-full"
+                       x-model.number="gradAngle"
+                       @input="$wire.set('grad_angle', gradAngle)">
+                <span class="text-xs text-gray-600 dark:text-gray-300 w-12 text-right" x-text="gradAngle + '°'"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {{-- Vista previa mini --}}
+        <div class="mt-8">
+          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">Previsualización</h4>
+          <div class="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow">
+            {{-- Header --}}
+            <div class="p-4"
+                 :style="usarGrad
+                          ? `background: linear-gradient(${gradAngle}deg, ${theme.primary}, ${theme.theadBg});`
+                          : `background: ${theme.primary};`">
+              <div class="text-white font-bold">FACTURA</div>
+              <div class="text-white/80 text-xs">N.º DEMO-000001</div>
+            </div>
+
+            {{-- Tabla --}}
+            <div class="bg-white dark:bg-gray-900">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr :style="`background:${theme.theadBg}; color:${theme.theadText}; border-bottom:1px solid ${theme.border}`">
+                    <th class="text-left px-4 py-2">Producto</th>
+                    <th class="text-right px-4 py-2">Cant.</th>
+                    <th class="text-right px-4 py-2">Precio</th>
+                    <th class="text-right px-4 py-2">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :style="`border-bottom:1px solid ${theme.border}`">
+                    <td class="px-4 py-2">Artículo A</td>
+                    <td class="px-4 py-2 text-right">2</td>
+                    <td class="px-4 py-2 text-right">$10.00</td>
+                    <td class="px-4 py-2 text-right">$20.00</td>
+                  </tr>
+                  <tr :style="`background:${theme.stripe}; border-bottom:1px solid ${theme.border}`">
+                    <td class="px-4 py-2">Artículo B</td>
+                    <td class="px-4 py-2 text-right">1</td>
+                    <td class="px-4 py-2 text-right">$5.00</td>
+                    <td class="px-4 py-2 text-right">$5.00</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {{-- Totales --}}
+            <div class="p-4 flex items-center justify-end gap-6"
+                 :style="`color:${theme.ink}; background:${theme.base}`">
+              <div class="text-right text-sm">
+                <div :style="`color:${theme.muted}`">Subtotal</div>
+                <div :style="`color:${theme.muted}`">Impuestos</div>
+                <div class="font-bold px-3 py-1 rounded-lg"
+                     :style="`background:${theme.grandBg}; color:${theme.grandTx}`">Total</div>
+              </div>
+              <div class="text-right text-sm">
+                <div>$25.00</div>
+                <div>$4.75</div>
+                <div class="font-bold px-3 py-1 rounded-lg"
+                     :style="`background:${theme.grandBg}; color:${theme.grandTx}`">$29.75</div>
+              </div>
+            </div>
+          </div>
+
+          <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            Esta es una vista previa aproximada. El PDF final usa estos mismos colores.
+          </p>
         </div>
       </div>
     </div>
@@ -155,13 +327,12 @@
           <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Identidad visual</h3>
         </div>
 
-        {{-- Logo claro (sin wire:model: convertimos a Base64 con Alpine y lo mandamos al componente) --}}
+        {{-- Logo claro --}}
         <div class="group">
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
           <input type="file" accept="image/*"
                  @change="toBase64($event, 'logoPreview', 'logo_b64')"
                  class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
-
           @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
 
           <div class="mt-3 flex items-center gap-3">
@@ -343,7 +514,6 @@
         reader.onload = e => {
           const dataUrl = e.target.result; // data:image/*;base64,....
           this[previewKey] = dataUrl;
-          // Mandar al componente Livewire como string (evita /livewire/upload-file)
           if (window.Livewire) {
             window.Livewire.find(@this.__instance.id).set(livewireProp, dataUrl);
           } else if (window.livewire) {

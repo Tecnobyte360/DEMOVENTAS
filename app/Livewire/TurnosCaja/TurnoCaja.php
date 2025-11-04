@@ -2,266 +2,231 @@
 
 namespace App\Livewire\TurnosCaja;
 
-use Livewire\Component;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Auth;
-
+use App\Models\TurnosCaja\turnos_caja;
 use App\Models\TurnosCaja\CajaMovimiento;
 use App\Models\Factura\FacturaPago;
-use App\Models\Factura\Factura;
-use App\Models\TurnosCaja\turnos_caja as Turno;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Livewire\Component;
 
 class TurnoCaja extends Component
 {
-    public ?Turno $turno = null;
-
-    // Apertura
+    // Form apertura
     public ?int $bodega_id = null;
-    public string $base_inicial = '0';
+    public float $base_inicial = 0;
 
-    // Movimientos
+    // Form movimientos
     public string $tipo_mov = 'INGRESO';
-    public string $monto = '';
+    public ?float $monto = null;
     public ?string $motivo = null;
 
-    protected function rules(): array
+    // Estado
+    public ?turnos_caja $turno = null;
+
+    // Resúmenes para la vista
+    public array $resumen = [];
+    public array $porTipo = [];   // EFECTIVO/DEBITO/...
+    public array $porMedio = [];  // cada medio
+
+    protected $rules = [
+        'bodega_id'    => 'nullable|integer',
+        'base_inicial' => 'required|numeric|min:0',
+        'tipo_mov'     => 'required|in:INGRESO,RETIRO,DEVOLUCION',
+        'monto'        => 'nullable|numeric|min:0.01',
+        'motivo'       => 'nullable|string|max:255',
+    ];
+
+    public function mount(): void
     {
-        return [
-            'bodega_id'    => ['nullable', 'integer', 'exists:bodegas,id'],
-            'base_inicial' => ['required', 'numeric', 'min:0'],
-            'tipo_mov'     => ['required', 'in:INGRESO,RETIRO,DEVOLUCION'],
-            'monto'        => ['required', 'numeric', 'gt:0'],
-            'motivo'       => ['nullable', 'string', 'max:255'],
-        ];
-    }
-
-    public function mount(?int $bodega = null): void
-    {
-        $this->bodega_id = $bodega;
-
-        $userId = Auth::id();
-        if (!$userId) abort(401);
-
-        // Buscar turno abierto
-        $this->turno = Turno::query()
-            ->where('user_id', $userId)
-            ->when($this->bodega_id, fn($q) => $q->where('bodega_id', $this->bodega_id))
+        $this->turno = turnos_caja::query()
+            ->where('user_id', Auth::id())
             ->where('estado', 'abierto')
+            ->latest('id')
             ->first();
-    }
 
-    /**
-     * Abrir turno de caja
-     */
-    public function abrir(): void
-    {
-        $this->validateOnly('base_inicial');
-
-        $this->turno = Turno::firstOrCreate(
-            [
-                'user_id'   => Auth::id(),
-                'bodega_id' => $this->bodega_id,
-                'estado'    => 'abierto',
-            ],
-            [
-                'fecha_inicio' => now(),
-                'base_inicial' => (float) $this->base_inicial,
-            ]
-        );
-
-        $this->dispatch('$refresh');
-        session()->flash('message', '✅ Turno abierto correctamente.');
-    }
-
-    /**
-     * Agregar movimiento manual (ingreso/retiro/devolución)
-     */
-    public function agregarMovimiento(): void
-    {
-        if (!$this->turno) {
-            session()->flash('error', 'Primero abre un turno.');
-            return;
-        }
-
-        $this->validate([
-            'tipo_mov' => 'required|in:INGRESO,RETIRO,DEVOLUCION',
-            'monto'    => 'required|numeric|gt:0',
-            'motivo'   => 'nullable|string|max:255',
-        ]);
-
-        $this->turno->movimientos()->create([
-            'user_id' => Auth::id(),
-            'tipo'    => $this->tipo_mov,
-            'monto'   => (float) $this->monto,
-            'motivo'  => $this->motivo,
-        ]);
-
-        $this->monto = '';
-        $this->motivo = null;
-        $this->turno->refresh();
-
-        session()->flash('message', '💰 Movimiento registrado.');
-    }
-
-    /**
-     * Cerrar turno y consolidar totales
-     */
-    public function cerrar(): void
-    {
-        if (!$this->turno) {
-            session()->flash('error', 'No hay turno abierto.');
-            return;
-        }
-
-        DB::transaction(function () {
-            $t = $this->turno->fresh();
-
-            // Pagos del turno agrupados por método
-            $pagos = FacturaPago::query()
-                ->leftJoin('medio_pagos as mp', 'mp.id', '=', 'factura_pagos.medio_pago_id')
-                ->where('factura_pagos.turno_id', $t->id)
-                ->get([
-                    'factura_pagos.*',
-                    'mp.id as medio_id',
-                    'mp.codigo as medio_codigo',
-                    'mp.nombre as medio_nombre',
-                ]);
-
-            // Agrupar por TIPO y por MEDIO
-            $porTipo  = [];
-            $porMedio = [];
-
-            foreach ($pagos as $p) {
-                $tipo = $this->tipoDesdePagoRow($p);
-
-                $porTipo[$tipo] = ($porTipo[$tipo] ?? 0) + (float)$p->monto;
-
-                $keyMedio = $p->medio_id ? (string)$p->medio_id : 'sin_medio';
-                $porMedio[$keyMedio] = [
-                    'medio_id' => $p->medio_id,
-                    'codigo'   => $p->medio_codigo,
-                    'nombre'   => $p->medio_nombre,
-                    'tipo'     => $tipo,
-                    'total'    => ($porMedio[$keyMedio]['total'] ?? 0) + (float)$p->monto,
-                ];
-            }
-
-            // Totales por tipo
-            $ventasEfectivo = (float)($porTipo['EFECTIVO']      ?? 0);
-            $ventasDebito   = (float)($porTipo['DEBITO']        ?? 0);
-            $ventasTC       = (float)($porTipo['CREDITO']       ?? 0);
-            $ventasTransf   = (float)($porTipo['TRANSFERENCIA'] ?? 0);
-
-            // Ventas a crédito (CXC)
-            $ventasCredito = (float) Factura::query()
-                ->whereBetween('created_at', [$t->fecha_inicio, now()])
-                ->where('tipo_pago', 'credito')
-                ->where('estado', 'emitida')
-                ->sum('total');
-
-            // Movimientos manuales
-            $ingresos = (float) $t->movimientos()->where('tipo', 'INGRESO')->sum('monto');
-            $retiros  = (float) $t->movimientos()->where('tipo', 'RETIRO')->sum('monto');
-            $devol    = (float) $t->movimientos()->where('tipo', 'DEVOLUCION')->sum('monto');
-
-            // Total de ventas
-            $totalVentas = array_sum($porTipo) + $ventasCredito;
-
-            $t->update([
-                'fecha_cierre'           => now(),
-                'estado'                 => 'cerrado',
-                'total_ventas'           => $totalVentas,
-                'ventas_efectivo'        => $ventasEfectivo,
-                'ventas_debito'          => $ventasDebito,
-                'ventas_credito_tarjeta' => $ventasTC,
-                'ventas_transferencias'  => $ventasTransf,
-                'ventas_a_credito'       => $ventasCredito,
-                'devoluciones'           => $devol,
-                'ingresos_efectivo'      => $ingresos,
-                'retiros_efectivo'       => $retiros,
-                'resumen' => [
-                    'por_tipo'  => $porTipo,
-                    'por_medio' => array_values($porMedio),
-                ],
-            ]);
-
-            $this->turno = $t->fresh(['pagos', 'movimientos']);
-        });
-
-        $this->dispatch('$refresh');
-        session()->flash('message', '✅ Turno cerrado correctamente.');
-    }
-
-    /**
-     * Resumen computed property
-     */
-    public function getResumenProperty(): array
-    {
-        $t = $this->turno?->fresh();
-
-        if (!$t) {
-            return [
-                'total_ventas'          => 0,
-                'base_inicial'          => (float) $this->base_inicial,
-                'ventas_efectivo'       => 0,
-                'ventas_debito'         => 0,
-                'ventas_credito'        => 0,
-                'ventas_transferencias' => 0,
-                'ventas_credito_cxc'    => 0,
-                'devoluciones'          => 0,
-                'ingresos'              => 0,
-                'retiros'               => 0,
-                'efectivo_esperado'     => (float) $this->base_inicial,
-            ];
-        }
-
-        return [
-            'total_ventas'          => (float) $t->total_ventas,
-            'base_inicial'          => (float) $t->base_inicial,
-            'ventas_efectivo'       => (float) $t->ventas_efectivo,
-            'ventas_debito'         => (float) $t->ventas_debito,
-            'ventas_credito'        => (float) $t->ventas_credito_tarjeta,
-            'ventas_transferencias' => (float) $t->ventas_transferencias,
-            'ventas_credito_cxc'    => (float) $t->ventas_a_credito,
-            'devoluciones'          => (float) $t->devoluciones,
-            'ingresos'              => (float) $t->ingresos_efectivo,
-            'retiros'               => (float) $t->retiros_efectivo,
-            'efectivo_esperado'     => $t->efectivoEsperado(),
-        ];
+        $this->refrescarResumenes(); // ✅ nombre correcto
     }
 
     public function render()
     {
-        $porTipo  = (array) data_get($this->turno, 'resumen.por_tipo', []);
-        $porMedio = (array) data_get($this->turno, 'resumen.por_medio', []);
-
         return view('livewire.turnos-caja.turno-caja', [
             'turno'    => $this->turno,
             'resumen'  => $this->resumen,
-            'porTipo'  => $porTipo,
-            'porMedio' => $porMedio,
+            'porTipo'  => $this->porTipo,
+            'porMedio' => $this->porMedio,
         ]);
     }
 
-    /**
-     * Determinar tipo de pago desde el registro
-     */
-    private function tipoDesdePagoRow($row): string
+    /** Abrir turno */
+    public function abrir(): void
     {
-        if (!empty($row->metodo)) {
-            return strtoupper((string)$row->metodo);
+        $this->validateOnly('base_inicial');
+
+        if (turnos_caja::where('user_id', Auth::id())->where('estado','abierto')->exists()) {
+            session()->flash('error', 'Ya tienes un turno abierto.');
+            return;
         }
 
-        $cod = strtoupper((string)($row->medio_codigo ?? ''));
-        $nom = strtoupper((string)($row->medio_nombre ?? ''));
+        $this->turno = turnos_caja::create([
+            'user_id'      => Auth::id(),
+            'bodega_id'    => $this->bodega_id,
+            'fecha_inicio' => now(),
+            'base_inicial' => $this->base_inicial,
+            'estado'       => 'abierto',
+            'resumen'      => [],
+        ]);
 
-        if ($cod === 'EFECTIVO' || str_contains($nom, 'EFECTIVO')) return 'EFECTIVO';
-        if (str_contains($cod, 'DEBIT') || str_contains($nom, 'DEBIT')) return 'DEBITO';
-        if (str_contains($cod, 'CRED') || str_contains($nom, 'CREDITO')) return 'CREDITO';
-        if (str_contains($cod, 'TRANS') || str_contains($nom, 'TRANSFER')) return 'TRANSFERENCIA';
-        if (str_contains($nom, 'CHEQUE')) return 'CHEQUE';
-        if (str_contains($nom, 'BONO')) return 'BONO';
+        session()->flash('message', 'Turno abierto.');
+        $this->refrescarResumenes();
+    }
 
-        return 'OTRO';
+    /** Registrar ingreso/retiro/devolución manual */
+    public function agregarMovimiento(): void
+    {
+        if (!$this->turno || $this->turno->estaCerrado()) {
+            session()->flash('error', 'No hay turno abierto.');
+            return;
+        }
+        $this->validate([
+            'tipo_mov',
+            'monto'  => 'required|numeric|min:0.01',
+            'motivo' => 'nullable|string|max:255',
+        ]);
+
+        DB::transaction(function () {
+            CajaMovimiento::create([
+                'turno_id' => $this->turno->id,
+                'user_id'  => Auth::id(),
+                'tipo'     => $this->tipo_mov,
+                'monto'    => $this->monto,
+                'motivo'   => $this->motivo,
+            ]);
+
+            if ($this->tipo_mov === 'INGRESO')    $this->turno->increment('ingresos_efectivo', $this->monto);
+            if ($this->tipo_mov === 'RETIRO')     $this->turno->increment('retiros_efectivo',  $this->monto);
+            if ($this->tipo_mov === 'DEVOLUCION') $this->turno->increment('devoluciones',     $this->monto);
+        });
+
+        $this->monto = $this->motivo = null;
+        session()->flash('message', 'Movimiento registrado.');
+        $this->refrescarResumenes();
+    }
+
+    /** Cerrar turno con arqueo */
+    public function cerrar(): void
+    {
+        if (!$this->turno || $this->turno->estaCerrado()) {
+            session()->flash('error','No hay turno abierto.');
+            return;
+        }
+
+        DB::transaction(function () {
+            $pagos = FacturaPago::where('turno_id', $this->turno->id)->get();
+
+            $byTipo  = $pagos->groupBy('medio_tipo')->map->sum('monto')->toArray();
+            $byMedio = $pagos->groupBy('medio_codigo')->map(function($g){
+                return [
+                    'codigo' => $g->first()->medio_codigo,
+                    'tipo'   => $g->first()->medio_tipo,
+                    'nombre' => $g->first()->medio_codigo,
+                    'total'  => $g->sum('monto'),
+                ];
+            })->values()->toArray();
+
+            $totalVentas = (float) $pagos->sum('monto');
+
+            $resumen = [
+                'base_inicial'          => (float) $this->turno->base_inicial,
+                'total_ventas'          => $totalVentas,
+                'por_tipo'              => $byTipo,
+                'por_medio'             => $byMedio,
+                'ingresos_efectivo'     => (float) $this->turno->ingresos_efectivo,
+                'retiros_efectivo'      => (float) $this->turno->retiros_efectivo,
+                'devoluciones'          => (float) $this->turno->devoluciones,
+                'efectivo_esperado'     => $this->turno->efectivoEsperado(),
+                'total_cobrado_sin_cxc' => $this->turno->totalCobrado(),
+                'cerrado_por'           => Auth::id(),
+            ];
+
+            $this->turno->update([
+                'estado'        => 'cerrado',
+                'fecha_cierre'  => now(),
+                'total_ventas'  => $totalVentas,
+                'ventas_efectivo'        => (float)($byTipo['EFECTIVO'] ?? 0),
+                'ventas_debito'          => (float)($byTipo['DEBITO'] ?? 0),
+                'ventas_credito_tarjeta' => (float)($byTipo['CREDITO'] ?? 0),
+                'ventas_transferencias'  => (float)($byTipo['TRANSFERENCIA'] ?? 0),
+                'ventas_a_credito'       => (float)($byTipo['CREDITO_CLIENTE'] ?? 0),
+                'resumen'       => $resumen,
+            ]);
+        });
+
+        session()->flash('message','Turno cerrado.');
+        $this->turno = null;
+        $this->refrescarResumenes();
+    }
+
+    /** ✅ Nombre correcto */
+    private function refrescarResumenes(): void
+    {
+        $this->resumen = $this->porTipo = $this->porMedio = [];
+        if (!$this->turno) return;
+
+        // Detectar columnas reales en factura_pagos
+        $tipoColCandidates   = ['medio_tipo','tipo','tipo_medio','metodo','forma_pago'];
+        $codigoColCandidates = ['medio_codigo','codigo','medio','metodo_codigo','referencia','ref'];
+
+        $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
+        $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
+
+        $tipoExpr   = $tipoCol   ? '['.$tipoCol.']'   : "CAST('OTRO' AS varchar(30))";
+        $codigoExpr = $codigoCol ? '['.$codigoCol.']' : "CAST('—' AS varchar(50))";
+
+        $pagos = FacturaPago::query()
+            ->selectRaw("monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo")
+            ->where('turno_id', $this->turno->id)
+            ->get();
+
+        $this->resumen = [
+            'base_inicial'        => (float) $this->turno->base_inicial,
+            'total_ventas'        => (float) $pagos->sum('monto'),
+            'devoluciones'        => (float) $this->turno->devoluciones,
+            'ingresos'            => (float) $this->turno->ingresos_efectivo,
+            'retiros'             => (float) $this->turno->retiros_efectivo,
+            'ventas_credito_cxc'  => (float) $this->turno->ventas_a_credito,
+        ];
+
+        $this->porTipo = $pagos->groupBy('medio_tipo')
+            ->map(fn($g) => (float) $g->sum('monto'))
+            ->sortDesc()
+            ->toArray();
+
+        $this->porMedio = $pagos->groupBy('medio_codigo')
+            ->map(function ($g) {
+                return [
+                    'codigo' => $g->first()->medio_codigo,
+                    'nombre' => $g->first()->medio_codigo,
+                    'tipo'   => $g->first()->medio_tipo,
+                    'total'  => (float) $g->sum('monto'),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /** 🔁 Alias por si quedó alguna llamada antigua con “resumenses” */
+    private function refrescarResumenses(): void
+    {
+        $this->refrescarResumenes();
+    }
+
+    /** Helper público para otros flujos */
+    public static function turnoAbiertoDe(int $userId): ?turnos_caja
+    {
+        return turnos_caja::where('user_id',$userId)
+            ->where('estado','abierto')
+            ->latest('id')
+            ->first();
     }
 }

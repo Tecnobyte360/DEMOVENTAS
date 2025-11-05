@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Factura\Factura;
 use App\Models\Movimiento\KardexMovimiento;
 use App\Models\Movimiento\ProductoCostoMovimiento;
+use App\Models\NotaCredito;
 use App\Models\Productos\ProductoBodega;
 use App\Models\TiposDocumento\TipoDocumento;
 use Illuminate\Support\Facades\Auth;
@@ -250,20 +251,26 @@ class InventarioService
     /* =========================================================
      * NOTA CRÉDITO (REPONE STOCK)
      * ========================================================= */
-    public static function reponerPorNotaCredito(\App\Models\NotaCredito $nota): void
+      public static function reponerPorNotaCredito(NotaCredito $nc): void
     {
-        DB::transaction(function () use ($nota) {
-            $nota->loadMissing('detalles.producto', 'factura');
+        $nc->loadMissing('detalles.producto');
 
-            $tipoId = static::tipoDocumentoId('NOTA_CREDITO');
+        DB::transaction(function () use ($nc) {
+            foreach ($nc->detalles as $d) {
+                $cant = (float) $d->cantidad;
+                if ($cant <= 0 || !$d->producto_id || !$d->bodega_id) {
+                    continue;
+                }
 
-            foreach ($nota->detalles as $d) {
-                if (!$d->producto_id || !$d->bodega_id) continue;
+                // CPU por bodega (mismo helper que usas para factura)
+                $cpu = ContabilidadService::costoPromedioParaLinea($d->producto, (int)$d->bodega_id);
+                $costoTotal = round($cpu * $cant, 2);
 
-                $pb = ProductoBodega::query()
+                // 1) Actualizar stock y (si manejas) costo_promedio del producto-bodega
+                /** @var ProductoBodega $pb */
+                $pb = ProductoBodega::lockForUpdate()
                     ->where('producto_id', $d->producto_id)
-                    ->where('bodega_id', $d->bodega_id)
-                    ->lockForUpdate()
+                    ->where('bodega_id',  $d->bodega_id)
                     ->first();
 
                 if (!$pb) {
@@ -271,47 +278,62 @@ class InventarioService
                         'producto_id' => $d->producto_id,
                         'bodega_id'   => $d->bodega_id,
                         'stock'       => 0,
-                        'costo_promedio' => 0,
-                        'ultimo_costo' => 0,
+                        'costo_promedio' => $cpu ?: 0,
                     ]);
                 }
 
-                $stockAntes = (float)$pb->stock;
-                $pb->stock = (float)$pb->stock + (float)$d->cantidad;
+                // Si deseas recalcular costo promedio ponderado al reingresar:
+                // nuevo_prom = (stock_act * cpu_act + cant * cpu_nc) / (stock_act + cant)
+                $stockAct = (float) ($pb->stock ?? 0);
+                $cpuAct   = (float) ($pb->costo_promedio ?? 0);
+                $nuevoStock = $stockAct + $cant;
+
+                if ($nuevoStock > 0) {
+                    $nuevoCPU = $stockAct > 0
+                        ? round((($stockAct * $cpuAct) + ($cant * $cpu)) / $nuevoStock, 4)
+                        : round($cpu, 4);
+                } else {
+                    $nuevoCPU = round($cpu, 4);
+                }
+
+                $pb->stock = $nuevoStock;
+                $pb->costo_promedio = $nuevoCPU;
                 $pb->save();
 
-                $costoUnit = static::resolverCostoUnitarioEntrada($d);
+                // 2) Kardex de entrada
+                KardexMovimiento::create([
+                    'fecha'             => $nc->fecha ?? now(),
+                    'producto_id'       => $d->producto_id,
+                    'bodega_id'         => $d->bodega_id,
+                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id, // si lo manejas
+                    'documento'         => 'nota_credito',
+                    'documento_id'      => $nc->id,
+                    'entrada'           => $cant,
+                    'salida'            => 0,
+                    'cantidad'          => $cant,
+                    'signo'             => +1,
+                    'costo_unitario'    => $cpu,
+                    'costo_total'       => $costoTotal,
+                    'descripcion'       => 'Reposición por Nota Crédito',
+                ]);
 
-                static::registrarKardex(
-                    tipoLogico: 'NOTA_CREDITO',
-                    signo: 1,
-                    fecha: $nota->fecha ?? now(),
-                    productoId: (int)$d->producto_id,
-                    bodegaId: (int)$d->bodega_id,
-                    cantidad: (float)$d->cantidad,
-                    costoUnitario: $costoUnit,
-                    tipoDocumentoId: $tipoId,
-                    docTipoLegacy: 'NOTA_CREDITO',
-                    docId: (int)$nota->id,
-                    ref: 'NC sobre ' . static::refFactura($nota->factura ?? null)
-                );
-
-                // ✅ Registrar en producto_costo_movimientos
-                static::registrarCostoMovimiento(
-                    fecha: $nota->fecha ?? now(),
-                    productoId: (int)$d->producto_id,
-                    bodegaId: (int)$d->bodega_id,
-                    tipo: 'ENTRADA',
-                    cantidad: (float)$d->cantidad,
-                    costoUnitario: $costoUnit,
-                    stockAntes: $stockAntes,
-                    stockDespues: (float)$pb->stock,
-                    tipoDocumentoId: $tipoId,
-                    docId: (int)$nota->id,
-                    origen: 'nota_credito',
-                    detalle: 'NC sobre ' . static::refFactura($nota->factura ?? null),
-                    tipoEvento: 'NOTA_CREDITO'
-                );
+                // 3) Traza de costo (opcional pero útil para auditoría)
+                ProductoCostoMovimiento::create([
+                    'fecha'        => $nc->fecha ?? now(),
+                    'producto_id'  => $d->producto_id,
+                    'bodega_id'    => $d->bodega_id,
+                    'documento'    => 'nota_credito',
+                    'documento_id' => $nc->id,
+                    'tipo'         => 'ENTRADA_NC',
+                    'cantidad'     => $cant,
+                    'costo_unit'   => $cpu,
+                    'costo_total'  => $costoTotal,
+                    'meta'         => [
+                        'nota_detalle_id' => $d->id,
+                        'prefijo'         => $nc->prefijo,
+                        'numero'          => $nc->numero,
+                    ],
+                ]);
             }
         });
     }
@@ -319,71 +341,70 @@ class InventarioService
     /* =========================================================
      * REVERSA DE LA REPOSICIÓN POR NC (RESTAR)
      * ========================================================= */
-    public static function revertirReposicionPorNotaCredito(\App\Models\NotaCredito $nota): void
+      public static function revertirReposicionPorNotaCredito(NotaCredito $nc): void
     {
-        DB::transaction(function () use ($nota) {
-            $nota->loadMissing('detalles.producto', 'factura');
+        $nc->loadMissing('detalles.producto');
 
-            $tipoId = static::tipoDocumentoId('REV_NOTA_CREDITO');
-
-            foreach ($nota->detalles as $d) {
-                if (!$d->producto_id || !$d->bodega_id) continue;
-
-                $pb = ProductoBodega::query()
-                    ->where('producto_id', $d->producto_id)
-                    ->where('bodega_id', $d->bodega_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$pb) {
-                    $pb = new ProductoBodega([
-                        'producto_id' => $d->producto_id,
-                        'bodega_id'   => $d->bodega_id,
-                        'stock'       => 0,
-                        'costo_promedio' => 0,
-                        'ultimo_costo' => 0,
-                    ]);
+        DB::transaction(function () use ($nc) {
+            foreach ($nc->detalles as $d) {
+                $cant = (float) $d->cantidad;
+                if ($cant <= 0 || !$d->producto_id || !$d->bodega_id) {
+                    continue;
                 }
 
-                $stockAntes = (float)$pb->stock;
-                $pb->stock = (float)$pb->stock - (float)$d->cantidad;
+                // CPU que quedó registrado en el Kardex de la NC o, si no, usa helper
+                $cpu = ContabilidadService::costoPromedioParaLinea($d->producto, (int)$d->bodega_id);
+                $costoTotal = round($cpu * $cant, 2);
+
+                /** @var ProductoBodega $pb */
+                $pb = ProductoBodega::lockForUpdate()
+                    ->where('producto_id', $d->producto_id)
+                    ->where('bodega_id',  $d->bodega_id)
+                    ->first();
+
+                $stockAct = (float) ($pb->stock ?? 0);
+                $nuevoStock = max(0, $stockAct - $cant);
+                $pb->stock = $nuevoStock;
+                // El CPU lo podrías mantener (no recalcular) al revertir.
                 $pb->save();
 
-                $costoUnit = static::resolverCostoUnitarioSalida($d);
+                // Kardex de salida (reverso)
+                KardexMovimiento::create([
+                    'fecha'             => $nc->fecha ?? now(),
+                    'producto_id'       => $d->producto_id,
+                    'bodega_id'         => $d->bodega_id,
+                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id, // si lo manejas
+                    'documento'         => 'nota_credito',
+                    'documento_id'      => $nc->id,
+                    'entrada'           => 0,
+                    'salida'            => $cant,
+                    'cantidad'          => -$cant,
+                    'signo'             => -1,
+                    'costo_unitario'    => $cpu,
+                    'costo_total'       => $costoTotal,
+                    'descripcion'       => 'Reverso reposición por anulación de NC',
+                ]);
 
-                static::registrarKardex(
-                    tipoLogico: 'REV_NC',
-                    signo: -1,
-                    fecha: now(),
-                    productoId: (int)$d->producto_id,
-                    bodegaId: (int)$d->bodega_id,
-                    cantidad: (float)$d->cantidad,
-                    costoUnitario: $costoUnit,
-                    tipoDocumentoId: $tipoId,
-                    docTipoLegacy: 'REV_NOTA_CREDITO',
-                    docId: (int)$nota->id,
-                    ref: 'Reversión NC de ' . static::refFactura($nota->factura ?? null)
-                );
-
-                // ✅ Registrar en producto_costo_movimientos
-                static::registrarCostoMovimiento(
-                    fecha: now(),
-                    productoId: (int)$d->producto_id,
-                    bodegaId: (int)$d->bodega_id,
-                    tipo: 'SALIDA',
-                    cantidad: (float)$d->cantidad,
-                    costoUnitario: $costoUnit,
-                    stockAntes: $stockAntes,
-                    stockDespues: (float)$pb->stock,
-                    tipoDocumentoId: $tipoId,
-                    docId: (int)$nota->id,
-                    origen: 'nota_credito',
-                    detalle: 'Reversión NC de ' . static::refFactura($nota->factura ?? null),
-                    tipoEvento: 'REV_NOTA_CREDITO'
-                );
+                ProductoCostoMovimiento::create([
+                    'fecha'        => $nc->fecha ?? now(),
+                    'producto_id'  => $d->producto_id,
+                    'bodega_id'    => $d->bodega_id,
+                    'documento'    => 'nota_credito',
+                    'documento_id' => $nc->id,
+                    'tipo'         => 'SALIDA_REV_NC',
+                    'cantidad'     => -$cant,
+                    'costo_unit'   => $cpu,
+                    'costo_total'  => -$costoTotal,
+                    'meta'         => [
+                        'nota_detalle_id' => $d->id,
+                        'prefijo'         => $nc->prefijo,
+                        'numero'          => $nc->numero,
+                    ],
+                ]);
             }
         });
     }
+
 
     /* =========================================================
      * COMPRA: Kardex primero + historial costo + actualizar PB

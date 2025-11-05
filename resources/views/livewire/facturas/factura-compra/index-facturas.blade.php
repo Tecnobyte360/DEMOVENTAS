@@ -73,22 +73,8 @@
         />
       </div>
 
-      {{-- TAB: Listado de facturas de compra --}}
-      {{-- <div x-show="tab === 'list'" x-cloak>
-        <livewire:facturas.factura-compra.lista-facturas-compra
-          :key="'factura-compra-list'"
-        />
-      </div> --}}
 
-      {{-- TAB: Devoluciones a proveedor (puedes reemplazar por tu componente real) --}}
-      <div x-show="tab === 'ret_form'" x-cloak>
-        {{-- Reemplaza por tu componente real cuando lo tengas --}}
-        {{-- <livewire:compras.devoluciones.devolucion-proveedor :key="'devoluciones-proveedor-form'" /> --}}
-        <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-6 text-sm text-gray-600 dark:text-gray-300">
-          <p class="font-semibold mb-2">Devoluciones a proveedor</p>
-          <p>Placeholder del módulo. Aquí puedes montar tu componente de devoluciones.</p>
-        </div>
-      </div>
+     
     </div>
   </section>
 </div>

@@ -29,7 +29,12 @@ class FacturaCompra extends Component
     public ?SerieModel $serieDefault = null;
     public ?int $stockCheck = null;
     public string $modo = 'compra';
+    public bool $showPreview = false;
+    public ?int $previewId = null;
+    protected $listeners = ['refrescar-lista-facturas' => 'refreshList'];
 
+    public int $perPage = 10;
+    public string $q = '';
     // Cabecera
     public ?int $serie_id = null;
     public ?int $socio_negocio_id = null;
@@ -101,6 +106,24 @@ class FacturaCompra extends Component
         $this->cargarFactura($id);
     }
 
+
+    public function preview(int $id): void
+    {
+        $this->previewId = $id;
+        $this->showPreview = true;
+    }
+
+
+    public function closePreview(): void
+    {
+        $this->showPreview = false;
+        $this->previewId = null;
+    }
+
+    public function refreshList(): void
+    {
+        $this->resetPage();
+    }
     /* ======================
      *  Inicialización
      * ====================== */
@@ -114,11 +137,11 @@ class FacturaCompra extends Component
             ->where(fn($q) => $q->whereNull('titulo')->orWhere('titulo', 0))
             ->where(function ($q) {
                 $q->where('codigo', 'like', '1%')   // Activo (Inventarios)
-                  ->orWhere('codigo', 'like', '5%') // Gastos
-                  ->orWhere('codigo', 'like', '6%'); // Costos
+                    ->orWhere('codigo', 'like', '5%') // Gastos
+                    ->orWhere('codigo', 'like', '6%'); // Costos
             })
             ->orderBy('codigo')
-            ->get(['id','codigo','nombre']);
+            ->get(['id', 'codigo', 'nombre']);
 
         $this->pucIndex = $this->cuentasInventario
             ->keyBy('id')
@@ -200,101 +223,51 @@ class FacturaCompra extends Component
     /* ======================
      *  Render
      * ====================== */
-    public function render()
-    {
-        try {
-            try {
-                $clientes = SocioNegocio::proveedores()
-                    ->orderBy('razon_serial')->orderBy('razon_social')
-                    ->take(200)->get();
-            } catch (\Throwable $e) {
-                $clientes = SocioNegocio::proveedores()
-                    ->orderBy('razon_social')->take(200)->get();
-            }
+   public function render()
+{
+    try {
+        // Construcción del listado con filtros
+        $items = \App\Models\Factura\Factura::query()
+            ->with(['cliente:id,razon_social,nit', 'serie:id,prefijo,longitud'])
+            ->when($this->estado !== 'todas', fn($q) => $q->where('estado', $this->estado))
+            ->when($this->q !== '', function ($q) {
+                $t = '%' . trim($this->q) . '%';
+                $q->where(function ($x) use ($t) {
+                    $x->where('prefijo', 'like', $t)
+                      ->orWhere('numero', 'like', $t)
+                      ->orWhere('estado', 'like', $t)
+                      ->orWhereHas('cliente', fn($c) => $c
+                          ->where('razon_social', 'like', $t)
+                          ->orWhere('nit', 'like', $t)
+                      );
+                });
+            })
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->paginate($this->perPage);
 
-            $productos = Producto::with([
-                'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta,cuenta_id',
-                'cuentaIngreso:id,codigo,nombre',
-                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-                'cuentas.cuentaPUC:id,codigo,nombre',
-                'cuentas.tipo:id,codigo,nombre',
-                'subcategoria:id,nombre',
-                'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
-            ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
+        // Vista de la lista (IMPORTANTE: pasar showPreview y previewId)
+        return view('livewire.facturas.lista-facturas', [
+            'items'        => $items,
+            'showPreview'  => $this->showPreview,
+            'previewId'    => $this->previewId,
+        ]);
+    } catch (\Throwable $e) {
+        report($e);
 
-            $bodegas = Bodega::orderBy('nombre')->get();
+        // Paginador vacío para no romper la vista si falla la consulta
+        $items = new \Illuminate\Pagination\LengthAwarePaginator(
+            collect(), 0, $this->perPage, 1, ['path' => request()->url(), 'query' => request()->query()]
+        );
 
-            // Listado de cuentas imputables (si necesitas mostrar más de inventario)
-            $cuentasIngresos = PlanCuentas::query()
-                ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
-                ->where('cuenta_activa', 1)
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre']);
-
-            $impuestosDocumento = Impuesto::activos()
-                ->whereIn('aplica_sobre', $this->aplicaSobreParaImpuestos())
-                ->orderBy('prioridad')
-                ->orderBy('nombre')
-                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
-
-            $series = SerieModel::query()
-                ->with('tipo')
-                ->activa()
-                ->when(
-                    $this->documento !== '',
-                    fn($q) => $q->whereHas('tipo', fn($t) => $t->where('codigo', $this->documento))
-                )
-                ->orderBy('nombre')
-                ->get(['id', 'nombre', 'prefijo', 'desde', 'hasta', 'proximo', 'longitud', 'es_default', 'tipo_documento_id']);
-
-            if (!$this->serie_id) {
-                $this->serie_id = $this->serieDefault?->id
-                    ?? optional($series->firstWhere('es_default', true))->id
-                    ?? optional($series->first())->id;
-            }
-
-            // Cuentas proveedor (CxP/IVA si aplica)
-            $cuentasProveedor = ['todas' => collect()];
-            if ($this->socio_negocio_id) {
-                $cuentasProveedor = $this->obtenerCuentasProveedor((int)$this->socio_negocio_id);
-            }
-
-            // Condiciones de pago
-            $condicionesPago = CondicionPago::orderBy('nombre')
-                ->get(['id', 'nombre', DB::raw('plazo_dias as dias')]);
-
-            return view('livewire.facturas.factura-compra.factura-compra', [
-                'clientes'          => $clientes,
-                'productos'         => $productos,
-                'bodegas'           => $bodegas,
-                'series'            => $series,
-                'serieDefault'      => $this->serieDefault,
-                'cuentasIngresos'   => $cuentasIngresos,
-                'cuentasInventario' => $this->cuentasInventario,
-                'impuestosVentas'   => $impuestosDocumento,
-                'bloqueada'         => $this->bloqueada,
-                'cuentasProveedor'  => $cuentasProveedor,
-                'condicionesPago'   => $condicionesPago,
-            ]);
-        } catch (Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
-
-            return view('livewire.facturas.factura-compra.factura-compra', [
-                'clientes'          => collect(),
-                'productos'         => collect(),
-                'bodegas'           => collect(),
-                'series'            => collect(),
-                'serieDefault'      => $this->serieDefault,
-                'cuentasIngresos'   => collect(),
-                'cuentasInventario' => $this->cuentasInventario ?? collect(),
-                'impuestosVentas'   => collect(),
-                'bloqueada'         => $this->bloqueada,
-                'cuentasProveedor'  => ['todas' => collect()],
-                'condicionesPago'   => collect(),
-            ]);
-        }
+        return view('livewire.facturas.lista-facturas', [
+            'items'        => $items,
+            'showPreview'  => $this->showPreview ?? false,
+            'previewId'    => $this->previewId ?? null,
+        ]);
     }
+}
+
 
     /* =========================
      *  BLOQUEO / SOLO LECTURA
@@ -319,7 +292,10 @@ class FacturaCompra extends Component
      * ========================= */
     private function tipoIngresoId(): ?int
     {
-        return cache()->remember('producto_cuenta_tipo_ingreso_id', 600, fn () =>
+        return cache()->remember(
+            'producto_cuenta_tipo_ingreso_id',
+            600,
+            fn() =>
             ProductoCuentaTipo::query()->where('codigo', 'INGRESO')->value('id')
         );
     }
@@ -363,7 +339,10 @@ class FacturaCompra extends Component
     {
         if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
 
-        $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
+        $tipoInvId = cache()->remember(
+            'producto_cuenta_tipo_inventario_id',
+            600,
+            fn() =>
             ProductoCuentaTipo::query()->where('codigo', 'INVENTARIO')->value('id')
         );
         if (!$tipoInvId) return null;
@@ -842,7 +821,7 @@ class FacturaCompra extends Component
         $this->plazo_dias = $dias;
         $base = $this->fecha ?: now()->toDateString();
         $this->vencimiento = $this->calcularVencimiento($base, $dias);
-        $this->resetErrorBag(['vencimiento','condicion_pago_id','plazo_dias']);
+        $this->resetErrorBag(['vencimiento', 'condicion_pago_id', 'plazo_dias']);
         $this->dispatch('$refresh');
     }
 
@@ -1012,8 +991,8 @@ class FacturaCompra extends Component
                     'prefijo'  => $this->serieDefault->prefijo,
                     'estado'   => 'emitida',
                 ]);
-            \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
-               InventarioService::aumentarPorFacturaCompra($this->factura);
+                \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
+                InventarioService::aumentarPorFacturaCompra($this->factura);
 
                 $this->estado = $this->factura->estado;
             }, 3);

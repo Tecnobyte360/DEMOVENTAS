@@ -11,6 +11,7 @@ use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\CuentasContables\PlanCuentas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 /**
@@ -298,4 +299,98 @@ class ContabilidadNotaCreditoService
         }
         return null;
     }
+    public static function revertirAsientoNotaCredito(NotaCredito $nc): Asiento
+{
+    return DB::transaction(function () use ($nc) {
+        // 1) Localizar asiento original de la NC
+        /** @var \App\Models\Asiento\Asiento|null $orig */
+        $orig = Asiento::with('movimientos')
+            ->where('documento', 'nota_credito')
+            ->where('documento_id', $nc->id)
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$orig) {
+            throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
+        }
+
+        // 2) Evitar doble reversión
+        $tieneColsReverso = Schema::hasColumn('asientos', 'reverso_de_asiento_id')
+            && Schema::hasColumn('asientos', 'revertido_por_asiento_id')
+            && Schema::hasColumn('asientos', 'estado');
+
+        if ($tieneColsReverso) {
+            $yaRev = Asiento::where('reverso_de_asiento_id', $orig->id)->exists();
+            if ($yaRev || ($orig->estado ?? null) === 'revertido') {
+                throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
+            }
+        } else {
+            // Sin columnas extra: marcamos por "documento" y "referencia" con prefijo REV-
+            $refRev = 'REV-'.(string)($orig->referencia ?? ('NC#'.$nc->id));
+            $yaRev = Asiento::where('documento', 'nota_credito_reverso')
+                ->where('documento_id', $nc->id)
+                ->where('referencia', $refRev)
+                ->exists();
+            if ($yaRev) {
+                throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
+            }
+        }
+
+        // 3) Crear cabecera del reverso
+        $refOrig = (string)($orig->referencia ?? ('NC#'.$nc->id));
+        $refRev  = 'REV-'.$refOrig;
+
+        $reverso = Asiento::create([
+            'fecha'        => now()->toDateString(),                 // o $nc->fecha si prefieres
+            'glosa'        => 'Reverso de asiento '.$refOrig.' (NC ID '.$nc->id.')',
+            'documento'    => 'nota_credito_reverso',
+            'documento_id' => $nc->id,
+            'referencia'   => $refRev,
+        ]);
+
+        // Si existen columnas de linkeo, las aprovechamos:
+        if ($tieneColsReverso) {
+            $reverso->reverso_de_asiento_id = $orig->id;
+            $reverso->estado = 'emitido';
+            $reverso->save();
+        }
+
+        // 4) Insertar movimientos invertidos
+        if ($orig->movimientos->isEmpty()) {
+            throw new RuntimeException('El asiento original no tiene movimientos.');
+        }
+
+        $now = now();
+        $rows = $orig->movimientos->map(function ($m) use ($reverso, $now) {
+            return [
+                'asiento_id' => $reverso->id,
+                'cuenta_id'  => (int)$m->cuenta_id,
+                'debito'     => (float)$m->credito,           // invierte
+                'credito'    => (float)$m->debito,            // invierte
+                'glosa'      => 'Reverso: '.(string)($m->glosa ?? ''),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        })->toArray();
+
+        Movimiento::insert($rows);
+
+        // 5) Verificación de cuadre
+        $deb = round($reverso->movimientos()->sum('debito'), 2);
+        $cre = round($reverso->movimientos()->sum('credito'), 2);
+        if ($deb !== $cre) {
+            Log::error('Reverso NC descuadrado', ['reverso_id'=>$reverso->id,'deb'=>$deb,'cre'=>$cre]);
+            throw new RuntimeException('El reverso contable no cuadra.');
+        }
+
+        // 6) Marcar original como revertido si hay columnas
+        if ($tieneColsReverso) {
+            $orig->estado = 'revertido';
+            $orig->revertido_por_asiento_id = $reverso->id;
+            $orig->save();
+        }
+
+        return $reverso;
+    }, 3);
+}
 }

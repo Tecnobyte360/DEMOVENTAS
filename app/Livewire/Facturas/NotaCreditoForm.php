@@ -1127,7 +1127,7 @@ class NotaCreditoForm extends Component
                 }
 
                 // Reversar asiento
-                ContabilidadNotaCreditoService::revertirAsientoNotaCredito($this->nota);
+               ContabilidadNotaCreditoService::revertirAsientoNotaCredito($this->nota);
 
                 $this->nota->update(['estado' => 'anulada']);
                 $this->estado = 'anulada';

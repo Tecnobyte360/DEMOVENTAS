@@ -305,7 +305,7 @@
           </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-          @forelse($turno->movimientos()->with('user')->latest()->take(200)->get() as $m)
+          {{-- @forelse($turno->movimientos()->with('user')->latest()->take(200)->get() as $m)
             <tr>
               <td class="td muted">{{ $m->created_at }}</td>
               <td class="td">
@@ -324,7 +324,7 @@
             </tr>
           @empty
             <tr><td class="td muted" colspan="5">Sin movimientos…</td></tr>
-          @endforelse
+          @endforelse --}}
           </tbody>
         </table>
       </div>

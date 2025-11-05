@@ -201,4 +201,5 @@ class Factura extends Model
     return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
 }
 
+
 }

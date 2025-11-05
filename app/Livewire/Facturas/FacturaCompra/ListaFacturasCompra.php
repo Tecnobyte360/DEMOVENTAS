@@ -27,6 +27,10 @@ class ListaFacturasCompra extends Component
     public string $sortField = 'fecha';
     public string $sortDir   = 'desc';
 
+    // ✅ AGREGAR ESTAS PROPIEDADES PARA EL MODAL DE PREVIEW
+    public bool $showPreview = false;
+    public ?int $previewId = null;
+
     #[On('refrescar-lista-facturas')]
     public function refrescar(): void
     {
@@ -49,6 +53,29 @@ class ListaFacturasCompra extends Component
             $this->sortDir = 'asc';
         }
         $this->resetPage();
+    }
+
+    // ✅ AGREGAR ESTOS MÉTODOS PARA EL MODAL DE PREVIEW
+    public function preview(int $id): void
+    {
+        $factura = Factura::find($id);
+        
+        if (!$factura) {
+            $this->dispatch('notificacion', [
+                'tipo' => 'error',
+                'mensaje' => 'Factura no encontrada'
+            ]);
+            return;
+        }
+
+        $this->previewId = $id;
+        $this->showPreview = true;
+    }
+
+    public function closePreview(): void
+    {
+        $this->showPreview = false;
+        $this->previewId = null;
     }
 
     public function render()
@@ -101,4 +128,3 @@ class ListaFacturasCompra extends Component
         return view('livewire.facturas.lista-facturas', compact('items'));
     }
 }
-

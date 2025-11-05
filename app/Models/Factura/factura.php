@@ -2,6 +2,7 @@
 
 namespace App\Models\Factura;
 
+use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Models\MediosPago\MedioPagos;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;

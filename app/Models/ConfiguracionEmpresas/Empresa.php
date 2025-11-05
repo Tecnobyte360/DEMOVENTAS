@@ -29,4 +29,8 @@ class Empresa extends Model
     {
      return (array) ($this->pdf_theme ?? []);
     }
+    public function empresa()
+{
+    return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
+}
 }

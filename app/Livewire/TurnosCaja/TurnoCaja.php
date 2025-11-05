@@ -180,9 +180,8 @@ class TurnoCaja extends Component
         $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
         $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
 
-        /** ✅ Versión compatible con SQL Server */
-        $tipoExpr   = $tipoCol   ? "[{$tipoCol}]"   : "CAST('OTRO' AS varchar(30))";
-        $codigoExpr = $codigoCol ? "[{$codigoCol}]" : "CAST('—' AS varchar(50))";
+       $tipoExpr   = $tipoCol   ? "`{$tipoCol}`"   : "CAST('OTRO' AS CHAR(30))";
+$codigoExpr = $codigoCol ? "`{$codigoCol}`" : "CAST('-' AS CHAR(50))";
 
         $pagos = FacturaPago::query()
             ->selectRaw("monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo")

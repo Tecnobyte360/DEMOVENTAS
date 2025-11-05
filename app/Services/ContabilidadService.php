@@ -7,26 +7,34 @@ use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Factura\Factura;
 use App\Models\Factura\FacturaPago;
 use App\Models\MediosPago\MedioPagoCuenta;
+use App\Models\MediosPago\MedioPagos;
 use App\Models\Movimiento\Movimiento;
 use App\Models\Productos\Producto;
 use App\Models\Productos\ProductoCuentaTipo;
-use App\Models\MediosPago\MedioPagos;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Servicio contable central.
+ *
+ * - Resuelve cuentas por configuración (ARTICULO / SUBCATEGORIA) y tipos: INGRESO, DEVOLUCION, IVA, INVENTARIO, COSTO.
+ * - Calcula costo promedio por línea (por bodega, con fallback).
+ * - Postea asientos (ventas, cobros) y puede revertir asientos ligados a una factura.
+ */
 class ContabilidadService
 {
     /* ============================================================
-     *  RESOLUCIÓN DINÁMICA DE CUENTAS
+     *  RESOLUCIÓN DINÁMICA DE CUENTAS (Producto/Subcategoría)
      * ============================================================ */
 
     protected static function tipoId(string $codigo): ?int
     {
         $codigo = strtoupper(trim($codigo));
         return cache()->remember("pcta:tipo:$codigo", 600, function () use ($codigo) {
-            return (int) (ProductoCuentaTipo::where('codigo', $codigo)->value('id') ?? 0) ?: null;
+            $id = ProductoCuentaTipo::where('codigo', $codigo)->value('id');
+            return $id ? (int)$id : null;
         });
     }
 
@@ -38,24 +46,11 @@ class ContabilidadService
         if (!$tipoId) return null;
 
         return cache()->remember("subcat:$subcategoriaId:tipo:$tipoId", 600, function () use ($subcategoriaId, $tipoId) {
-            return (int) (DB::table('subcategoria_cuentas')
+            return DB::table('subcategoria_cuentas')
                 ->where('subcategoria_id', $subcategoriaId)
                 ->where('tipo_id', $tipoId)
-                ->value('plan_cuentas_id') ?? 0) ?: null;
-        });
-    }
-
-    public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo): ?int
-    {
-        if (!$p) return null;
-
-        $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
-        if ($modo === 'SUBCATEGORIA') {
-            return self::cuentaDeSubcategoriaPorTipo($p->subcategoria_id, $tipoCodigo)
-                ?: self::cuentaDeProductoPorTipo($p, $tipoCodigo);
-        }
-
-        return self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+                ->value('plan_cuentas_id') ?: null;
+        }) ? (int) cache("subcat:$subcategoriaId:tipo:$tipoId") : null;
     }
 
     protected static function cuentaDeProductoPorTipo(?Producto $p, string $tipoCodigo): ?int
@@ -69,113 +64,51 @@ class ContabilidadService
             ? $p->cuentas->firstWhere('tipo_id', $tipoId)
             : $p->cuentas()->where('tipo_id', $tipoId)->first();
 
-        return $cuenta?->plan_cuentas_id ? (int) $cuenta->plan_cuentas_id : null;
+        return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
     }
 
-    /**
-     * IVA para VENTAS (tu lógica existente).
-     */
+    /** Público: usado por Facturas y Notas Crédito. */
+    public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo): ?int
+    {
+        if (!$p) return null;
+
+        $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
+
+        if ($modo === 'SUBCATEGORIA') {
+            return self::cuentaDeSubcategoriaPorTipo($p->subcategoria_id, $tipoCodigo)
+                ?: self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+        }
+
+        return self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+    }
+
+    /* ===================== IVA (Ventas/Compras) ===================== */
+
+    /** IVA ventas: primero configuración (tipo IVA), luego cuenta del impuesto del producto. */
     protected static function cuentaIvaParaProducto(?Producto $p): ?int
     {
         if (!$p) return null;
 
-        // 1) Config por subcategoría/artículo (tipo 'IVA')
         $cta = self::cuentaSegunConfiguracion($p, 'IVA');
         if ($cta) return $cta;
 
-        // 2) Fallback: cuenta propia del impuesto del producto
-        $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->with('cuenta')->first();
-        if ($imp && !empty($imp->cuenta_id)) {
-            return (int) $imp->cuenta_id;
-        }
-        return null;
+        $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->first();
+        return $imp && !empty($imp->cuenta_id) ? (int)$imp->cuenta_id : null;
     }
 
-    /**
-     * IVA para COMPRAS: tolera indicador de cuenta como int|string|null.
-     * Prioridad:
-     *   1) Indicador explícito ($indicadorCuentaId) si viene y es válido.
-     *   2) Configuración por subcategoría/artículo (tipo 'IVA').
-     *   3) Cuenta del impuesto asociado al producto ($p->impuesto->cuenta_id).
-     */
+    /** IVA compras (si lo necesitas en compras). */
     protected static function resolveCuentaIvaCompra(?Producto $p, int $proveedorId, int|string|null $indicadorCuentaId = null): ?int
     {
-        // Normalización por si llega como string
         if (is_string($indicadorCuentaId)) {
-            $indicadorCuentaId = trim($indicadorCuentaId) === '' ? null : (int) $indicadorCuentaId;
+            $indicadorCuentaId = trim($indicadorCuentaId) === '' ? null : (int)$indicadorCuentaId;
         }
+        if (!is_null($indicadorCuentaId) && (int)$indicadorCuentaId > 0) return (int)$indicadorCuentaId;
 
-        // 1) Override/indicador explícito
-        if (!is_null($indicadorCuentaId) && (int)$indicadorCuentaId > 0) {
-            return (int)$indicadorCuentaId;
-        }
-
-        // 2) Configuración por Subcategoría/Artículo (tipo 'IVA')
         $cta = self::cuentaSegunConfiguracion($p, 'IVA');
         if ($cta) return $cta;
 
-        // 3) Fallback: cuenta del impuesto del producto
-        if ($p) {
-            $imp = $p->relationLoaded('impuesto') ? $p->impuesto : $p->impuesto()->first();
-            if ($imp && !empty($imp->cuenta_id)) {
-                return (int) $imp->cuenta_id;
-            }
-        }
-
-        return null;
-    }
-
-    /* ============================================================
-     *  REVERSIÓN
-     * ============================================================ */
-
-    /**
-     * Revierte TODOS los asientos contables ligados a una factura (VENTA, COBRO, etc.)
-     * - Revierte saldos en PlanCuentas y elimina movimientos y asientos.
-     * - No toca pagos ni inventario (se manejan en sus propios servicios).
-     */
-    public static function revertirPorFactura(Factura $f): bool
-    {
-        return DB::transaction(function () use ($f) {
-            $asientos = Asiento::where('origen', 'factura')
-                ->where('origen_id', $f->id)
-                ->lockForUpdate()
-                ->get();
-
-            if ($asientos->isEmpty()) {
-                return true;
-            }
-
-            foreach ($asientos as $asiento) {
-                $movs = Movimiento::where('asiento_id', $asiento->id)->get();
-
-                foreach ($movs as $mov) {
-                    /** @var PlanCuentas|null $cuenta */
-                    $cuenta = PlanCuentas::lockForUpdate()->find($mov->cuenta_id);
-                    if (!$cuenta) {
-                        $mov->delete();
-                        continue;
-                    }
-
-                    $esDeudora = self::esDeudora($cuenta);
-                    $deltaOriginal = $esDeudora
-                        ? ((float)$mov->debito - (float)$mov->credito)
-                        : ((float)$mov->credito - (float)$mov->debito);
-
-                    $reversa = -1 * $deltaOriginal;
-                    PlanCuentas::whereKey($cuenta->id)->update([
-                        'saldo' => DB::raw('saldo + ' . number_format($reversa, 2, '.', '')),
-                    ]);
-
-                    $mov->delete();
-                }
-
-                $asiento->delete();
-            }
-
-            Log::info('Asientos contables revertidos para factura', ['factura_id' => $f->id]);
-            return true;
-        });
+        $imp = $p?->impuesto;
+        return ($imp && !empty($imp->cuenta_id)) ? (int)$imp->cuenta_id : null;
     }
 
     /* ============================================================
@@ -192,23 +125,99 @@ class ContabilidadService
         return self::cuentaSegunConfiguracion($p, 'COSTO');
     }
 
-    protected static function esDeudora(PlanCuentas $c): bool
+    /* ============================================================
+     *  COSTO PROMEDIO POR LÍNEA (por bodega)
+     * ============================================================ */
+    public static function costoPromedioParaLinea(Producto $p, ?int $bodegaId): float
     {
-        $nat = strtoupper((string) $c->naturaleza);
-        if (in_array($nat, ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'])) return true;
-        if (in_array($nat, ['C','ACREEDORA','PASIVO','PASIVOS','PATRIMONIO','INGRESOS'])) return false;
+        try {
+            if ($bodegaId) {
+                $cpu = \App\Models\Productos\ProductoBodega::query()
+                    ->where('producto_id', $p->id)
+                    ->where('bodega_id', $bodegaId)
+                    ->value('costo_promedio');
 
-        $first = substr((string) $c->codigo, 0, 1);
-        return in_array($first, ['1','5','6']);
+                if (is_numeric($cpu) && (float)$cpu > 0) {
+                    return round((float)$cpu, 4);
+                }
+            }
+
+            $cpuGlobal = \App\Models\Productos\ProductoBodega::query()
+                ->where('producto_id', $p->id)
+                ->avg('costo_promedio');
+
+            if (is_numeric($cpuGlobal) && (float)$cpuGlobal > 0) {
+                return round((float)$cpuGlobal, 4);
+            }
+        } catch (\Throwable $e) {
+            // Si no existe tabla/columna, continuar con fallback.
+        }
+
+        $fallback = $p->costo_promedio ?? $p->costo ?? 0;
+        return round((float)$fallback, 4);
     }
 
     /* ============================================================
-     *  POSTEOS
+     *  UTILIDADES DE CUENTAS
      * ============================================================ */
+
+    protected static function cuentaPorCodigo(string $codigo): ?int
+    {
+        $codigo = trim($codigo);
+        if ($codigo === '') return null;
+
+        return cache()->remember("puc:codigo:$codigo", 600, function () use ($codigo) {
+            return PlanCuentas::where('codigo', $codigo)
+                ->where('cuenta_activa', 1)
+                ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+                ->value('id');
+        }) ?: null;
+    }
+
+    /** Cuenta asociada a un medio de pago (mapeo explícito → campo directo → heurística). */
+    public static function cuentaDesdeMedioPago(?MedioPagos $medio): ?int
+    {
+        if (!$medio) return null;
+
+        $map = $medio->relationLoaded('cuentas')
+            ? $medio->cuentas->first()
+            : MedioPagoCuenta::where('medio_pago_id', $medio->id)->first();
+
+        if ($map?->plan_cuentas_id) return (int)$map->plan_cuentas_id;
+
+        if (!empty($medio->cuenta_contable_id)) return (int)$medio->cuenta_contable_id;
+
+        $codigo = strtoupper((string)($medio->codigo ?? ''));
+        $nombre = strtoupper((string)($medio->nombre ?? ''));
+
+        if (str_contains($codigo, 'CAJA') || str_contains($nombre, 'CAJA') || str_contains($nombre, 'EFECTIVO')) {
+            return PlanCuentas::where('clase_cuenta', 'CAJA_GENERAL')
+                ->where('cuenta_activa', 1)->where('titulo', 0)->value('id');
+        }
+        if (str_contains($codigo, 'BAN') || str_contains($nombre, 'BANCO') || str_contains($nombre, 'TRANSFER')) {
+            return PlanCuentas::where('clase_cuenta', 'BANCOS')
+                ->where('cuenta_activa', 1)->where('titulo', 0)->value('id');
+        }
+
+        return null;
+    }
+
+    /* ============================================================
+     *  REGLAS DE NATURALEZA / POSTEO / SALDOS
+     * ============================================================ */
+
+    protected static function esDeudora(PlanCuentas $c): bool
+    {
+        $nat = strtoupper((string)$c->naturaleza);
+        if (in_array($nat, ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'])) return true;
+        if (in_array($nat, ['C','ACREEDORA','PASIVO','PASIVOS','PATRIMONIO','INGRESOS'])) return false;
+
+        $first = substr((string)$c->codigo, 0, 1);
+        return in_array($first, ['1','5','6']); // heurística
+    }
 
     public static function postAumento(Asiento $asiento, int $cuentaId, float $monto, ?string $detalle = null, array $meta = []): Movimiento
     {
-        /** @var PlanCuentas $c */
         $c = PlanCuentas::lockForUpdate()->findOrFail($cuentaId);
         if (!$c->cuenta_activa || $c->titulo) {
             throw new \RuntimeException("Cuenta no imputable o inactiva (id={$cuentaId}).");
@@ -222,7 +231,6 @@ class ContabilidadService
 
     public static function post(Asiento $asiento, int $cuentaId, float $debe, float $haber, ?string $detalle = null, array $meta = []): Movimiento
     {
-        /** @var PlanCuentas $c */
         $c = PlanCuentas::lockForUpdate()->findOrFail($cuentaId);
         if (!$c->cuenta_activa || $c->titulo) {
             throw new \RuntimeException("Cuenta no imputable o inactiva (id={$cuentaId}).");
@@ -239,7 +247,7 @@ class ContabilidadService
                 'debito'     => round($debe, 2),
                 'credito'    => round($haber, 2),
 
-                // columnas legacy si existen en tu tabla
+                // columnas legacy (si existen en tu tabla)
                 'debe'       => 0.0,
                 'haber'      => 0.0,
                 'detalle'    => $detalle,
@@ -261,79 +269,18 @@ class ContabilidadService
         return $mov;
     }
 
-    protected static function costoPromedioUnitario(Producto $p): float
-    {
-        return round((float) ($p->costo_promedio ?? $p->costo ?? 0), 4);
-    }
-
-    /* ============================================================
-     *  UTILIDADES DE CUENTAS ESPECÍFICAS
-     * ============================================================ */
-
-    protected static function cuentaPorCodigo(string $codigo): ?int
-    {
-        $codigo = trim($codigo);
-        if ($codigo === '') return null;
-
-        return cache()->remember("puc:codigo:$codigo", 600, function () use ($codigo) {
-            return PlanCuentas::where('codigo', $codigo)
-                ->where('cuenta_activa', 1)
-                ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
-                ->value('id');
-        });
-    }
-
-    /** Cuenta asociada a un medio de pago. */
-    public static function cuentaDesdeMedioPago(?MedioPagos $medio): ?int
-    {
-        if (!$medio) return null;
-
-        // 1) Mapeo explícito en medio_pago_cuentas
-        if ($medio->relationLoaded('cuentas')) {
-            $map = $medio->cuentas->first();
-        } else {
-            $map = MedioPagoCuenta::where('medio_pago_id', $medio->id)->first();
-        }
-        if ($map && $map->plan_cuentas_id) {
-            return (int) $map->plan_cuentas_id;
-        }
-
-        // 2) Campo directo opcional en medio_pagos
-        if (!empty($medio->cuenta_contable_id)) {
-            return (int) $medio->cuenta_contable_id;
-        }
-
-        // 3) Heurística (último recurso)
-        $codigo = strtoupper((string)($medio->codigo ?? ''));
-        $nombre = strtoupper((string)($medio->nombre ?? ''));
-
-        if (str_contains($codigo, 'CAJA') || str_contains($nombre, 'CAJA') || str_contains($nombre, 'EFECTIVO')) {
-            return PlanCuentas::where('clase_cuenta', 'CAJA_GENERAL')
-                ->where('cuenta_activa', 1)->where('titulo', 0)->value('id');
-        }
-        if (str_contains($codigo, 'BAN') || str_contains($nombre, 'BANCO') || str_contains($nombre, 'TRANSFER')) {
-            return PlanCuentas::where('clase_cuenta', 'BANCOS')
-                ->where('cuenta_activa', 1)->where('titulo', 0)->value('id');
-        }
-
-        return null;
-    }
-
     /* ============================================================
      *  ASIENTOS DE COBRO (ventas)
      * ============================================================ */
 
-    /** Asiento por **un solo** pago. */
+    /** Asiento por un solo pago. */
     public static function asientoDesdePago(Factura $f, FacturaPago $pago): Asiento
     {
         return self::asientoDesdePagos($f, collect([$pago]), 'Cobro Factura');
     }
 
     /**
-     * Asiento por **varios pagos** (un debe por cada medio y un haber a 1305).
-     *
-     * Debe  : cuentas de medios (Caja/Banco) por cada medio.
-     * Haber : 1305 (CxC) o cuenta_cobro_id por el total.
+     * Asiento por varios pagos (un DEBE por cada medio y un HABER a 1305/CxC).
      */
     public static function asientoDesdePagos(Factura $f, array|Collection $pagos, string $glosa = 'Cobro Factura'): Asiento
     {
@@ -351,8 +298,7 @@ class ContabilidadService
             $asiento = Asiento::create([
                 'fecha'       => optional($pagos->first())->fecha ?: $f->fecha,
                 'tipo'        => 'COBRO',
-                'glosa'       => sprintf('%s %s-%s · %s',
-                                    $glosa, (string)$f->prefijo, (string)$f->numero, optional($f->cliente)->razon_social),
+                'glosa'       => sprintf('%s %s-%s · %s', $glosa, (string)$f->prefijo, (string)$f->numero, optional($f->cliente)->razon_social),
                 'origen'      => 'factura',
                 'origen_id'   => $f->id,
                 'tercero_id'  => $f->socio_negocio_id,
@@ -361,21 +307,14 @@ class ContabilidadService
                 'total_haber' => 0,
             ]);
 
-            $metaBase = [
-                'factura_id' => $f->id,
-                'tercero_id' => $f->socio_negocio_id,
-            ];
-
-            $totalDebe  = 0.0;
-            $totalHaber = 0.0;
-            $totalCobro = 0.0;
+            $metaBase = ['factura_id' => $f->id, 'tercero_id' => $f->socio_negocio_id];
+            $totalDebe = $totalHaber = $totalCobro = 0.0;
 
             $porMedio = $pagos->groupBy('medio_pago_id')->map(fn($rows) => round($rows->sum('monto'), 2));
 
             foreach ($porMedio as $medioId => $monto) {
                 if ($monto <= 0) continue;
 
-                /** @var MedioPagos|null $medio */
                 $medio    = MedioPagos::find($medioId);
                 $ctaMedio = self::cuentaDesdeMedioPago($medio);
                 if (!$ctaMedio || !PlanCuentas::whereKey($ctaMedio)->exists()) {
@@ -414,7 +353,6 @@ class ContabilidadService
     /* ============================================================
      *  ASIENTO DESDE FACTURA (VENTAS)
      * ============================================================ */
-
     public static function asientoDesdeFactura(Factura $f): Asiento
     {
         return DB::transaction(function () use ($f) {
@@ -433,14 +371,14 @@ class ContabilidadService
                 $tPct = (float)$d->impuesto_pct;
                 $iva  = round($base * $tPct / 100, 2);
 
-                // ===== Ingresos =====
+                // Ingresos
                 $ctaIng = (int)$d->cuenta_ingreso_id;
                 if ($ctaIng <= 0) {
                     throw new \RuntimeException("El detalle {$d->id} no tiene cuenta de ingreso.");
                 }
                 $ingresosPorCuenta[$ctaIng] = ($ingresosPorCuenta[$ctaIng] ?? 0) + $base;
 
-                // ===== IVA =====
+                // IVA
                 if ($d->producto_id && $iva > 0) {
                     $p = \App\Models\Productos\Producto::with(['cuentas','impuesto'])->find($d->producto_id);
                     $ctaIva = self::cuentaIvaParaProducto($p);
@@ -453,7 +391,7 @@ class ContabilidadService
 
                 $totalFactura += ($base + $iva);
 
-                // ===== COSTO/INVENTARIO si es inventario =====
+                // Costo/Inventario (si corresponde)
                 if ($d->producto_id && $d->cantidad > 0) {
                     $p = isset($p) && $p?->id === $d->producto_id
                         ? $p
@@ -464,8 +402,8 @@ class ContabilidadService
                         $costo = round($cpu * (float)$d->cantidad, 2);
 
                         if ($costo > 0) {
-                            $ctaInv   = self::cuentaInventarioProducto($p); // Inventarios (Haber)
-                            $ctaCosto = self::cuentaCostoProducto($p);      // Costo de ventas (Debe)
+                            $ctaInv   = self::cuentaInventarioProducto($p); // Haber
+                            $ctaCosto = self::cuentaCostoProducto($p);      // Debe
                             if (!$ctaInv)   throw new \RuntimeException("Producto {$p->id} sin cuenta de INVENTARIO.");
                             if (!$ctaCosto) throw new \RuntimeException("Producto {$p->id} sin cuenta de COSTO.");
 
@@ -476,7 +414,7 @@ class ContabilidadService
                 }
             }
 
-            // ===== Cabecera del asiento =====
+            // Cabecera
             $asiento = Asiento::create([
                 'fecha'       => $f->fecha,
                 'tipo'        => 'VENTA',
@@ -489,40 +427,25 @@ class ContabilidadService
                 'total_haber' => 0,
             ]);
 
-            $totalDebe  = 0.0;
-            $totalHaber = 0.0;
+            $totalDebe = $totalHaber = 0.0;
+            $metaBase  = ['factura_id' => $f->id, 'tercero_id' => $f->socio_negocio_id];
 
-            $metaBase = [
-                'factura_id' => $f->id,
-                'tercero_id' => $f->socio_negocio_id,
-            ];
-
-            // DEBE: CxC por el total de la factura
-            $mov = self::post(
-                $asiento,
-                (int)$f->cuenta_cobro_id,
-                round($totalFactura, 2),
-                0.0,
-                'Cobro factura',
-                $metaBase + ['descripcion'=>'Cobro factura','base_gravable'=>null,'tarifa_pct'=>null,'valor_impuesto'=>null]
-            );
+            // DEBE: CxC total
+            $mov = self::post($asiento, (int)$f->cuenta_cobro_id, round($totalFactura, 2), 0.0, 'Cobro factura', $metaBase);
             $totalDebe  += $mov->debito;
             $totalHaber += $mov->credito;
 
             // HABER: Ingresos
             foreach ($ingresosPorCuenta as $cuentaId => $montoBase) {
                 $mov = self::post(
-                    $asiento,
-                    (int)$cuentaId,
-                    0.0,
-                    round($montoBase, 2),
+                    $asiento, (int)$cuentaId, 0.0, round($montoBase, 2),
                     'Ingreso base sin IVA',
                     $metaBase + [
-                        'descripcion'     => 'Ingreso base sin IVA',
-                        'base_gravable'   => round($montoBase,2),
-                        'tarifa_pct'      => null,
-                        'valor_impuesto'  => 0.0,
-                        'impuesto_id'     => null
+                        'descripcion'    => 'Ingreso base sin IVA',
+                        'base_gravable'  => round($montoBase,2),
+                        'tarifa_pct'     => null,
+                        'valor_impuesto' => 0.0,
+                        'impuesto_id'    => null
                     ]
                 );
                 $totalDebe  += $mov->debito;
@@ -537,17 +460,13 @@ class ContabilidadService
                     if ($iva <= 0) continue;
 
                     $mov = self::post(
-                        $asiento,
-                        (int)$ctaIva,
-                        0.0,
-                        $iva,
-                        'IVA ventas',
+                        $asiento, (int)$ctaIva, 0.0, $iva, 'IVA ventas',
                         $metaBase + [
-                            'descripcion'     => 'IVA generado',
-                            'impuesto_id'     => $vals['impuesto_id'] ?? null,
-                            'base_gravable'   => $base,
-                            'tarifa_pct'      => (float)$pct,
-                            'valor_impuesto'  => $iva
+                            'descripcion'    => 'IVA generado',
+                            'impuesto_id'    => $vals['impuesto_id'] ?? null,
+                            'base_gravable'  => $base,
+                            'tarifa_pct'     => (float)$pct,
+                            'valor_impuesto' => $iva
                         ]
                     );
                     $totalDebe  += $mov->debito;
@@ -555,30 +474,16 @@ class ContabilidadService
                 }
             }
 
-            // DEBE: Costos de venta
+            // DEBE: Costo de ventas
             foreach ($costoPorCuenta as $cta => $monto) {
-                $mov = self::post(
-                    $asiento,
-                    (int)$cta,
-                    round($monto, 2),
-                    0.0,
-                    'Costo de ventas por factura',
-                    $metaBase + ['descripcion'=>'Costo de ventas por factura']
-                );
+                $mov = self::post($asiento, (int)$cta, round($monto, 2), 0.0, 'Costo de ventas por factura', $metaBase);
                 $totalDebe  += $mov->debito;
                 $totalHaber += $mov->credito;
             }
 
-            // HABER: Inventario (salida)
+            // HABER: Inventario
             foreach ($inventarioPorCuenta as $cta => $monto) {
-                $mov = self::post(
-                    $asiento,
-                    (int)$cta,
-                    0.0,
-                    round($monto, 2),
-                    'Salida de inventario (costo)',
-                    $metaBase + ['descripcion'=>'Salida de inventario (costo)']
-                );
+                $mov = self::post($asiento, (int)$cta, 0.0, round($monto, 2), 'Salida de inventario (costo)', $metaBase);
                 $totalDebe  += $mov->debito;
                 $totalHaber += $mov->credito;
             }
@@ -593,35 +498,45 @@ class ContabilidadService
     }
 
     /* ============================================================
-     *  COSTO PROMEDIO POR LÍNEA (por bodega)
+     *  REVERSIÓN DE ASIENTOS POR FACTURA (no toca inventario/pagos)
      * ============================================================ */
-
-    public static function costoPromedioParaLinea(\App\Models\Productos\Producto $p, ?int $bodegaId): float
+    public static function revertirPorFactura(Factura $f): bool
     {
-        try {
-            if ($bodegaId) {
-                $cpu = \App\Models\Productos\ProductoBodega::query()
-                    ->where('producto_id', $p->id)
-                    ->where('bodega_id', $bodegaId)
-                    ->value('costo_promedio');
+        return DB::transaction(function () use ($f) {
+            $asientos = Asiento::where('origen', 'factura')
+                ->where('origen_id', $f->id)
+                ->lockForUpdate()
+                ->get();
 
-                if (is_numeric($cpu) && (float)$cpu > 0) {
-                    return round((float)$cpu, 4);
+            if ($asientos->isEmpty()) return true;
+
+            foreach ($asientos as $asiento) {
+                $movs = Movimiento::where('asiento_id', $asiento->id)->get();
+
+                foreach ($movs as $mov) {
+                    /** @var PlanCuentas|null $cuenta */
+                    $cuenta = PlanCuentas::lockForUpdate()->find($mov->cuenta_id);
+                    if (!$cuenta) { $mov->delete(); continue; }
+
+                    $esDeudora = self::esDeudora($cuenta);
+                    $deltaOriginal = $esDeudora
+                        ? ((float)$mov->debito - (float)$mov->credito)
+                        : ((float)$mov->credito - (float)$mov->debito);
+
+                    $reversa = -1 * $deltaOriginal;
+
+                    PlanCuentas::whereKey($cuenta->id)->update([
+                        'saldo' => DB::raw('saldo + ' . number_format($reversa, 2, '.', '')),
+                    ]);
+
+                    $mov->delete();
                 }
+
+                $asiento->delete();
             }
 
-            $cpuGlobal = \App\Models\Productos\ProductoBodega::query()
-                ->where('producto_id', $p->id)
-                ->avg('costo_promedio');
-
-            if (is_numeric($cpuGlobal) && (float)$cpuGlobal > 0) {
-                return round((float)$cpuGlobal, 4);
-            }
-        } catch (\Throwable $e) {
-            // si no existe la tabla/columna, pasamos a fallback
-        }
-
-        $fallback = $p->costo_promedio ?? $p->costo ?? 0;
-        return round((float)$fallback, 4);
+            Log::info('Asientos contables revertidos para factura', ['factura_id' => $f->id]);
+            return true;
+        });
     }
 }

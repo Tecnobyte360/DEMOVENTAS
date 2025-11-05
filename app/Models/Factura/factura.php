@@ -196,8 +196,9 @@ class Factura extends Model
             $this->recalcularTotales()->save();
         });
     }
-    public function empresa()
+ public function empresa()
 {
-    return $this->belongsTo(Empresa::class, 'empresa_id');
+    return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
 }
+
 }

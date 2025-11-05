@@ -63,7 +63,7 @@ class TurnoCaja extends Component
     {
         $this->validateOnly('base_inicial');
 
-        if (turnos_caja::where('user_id', Auth::id())->where('estado','abierto')->exists()) {
+        if (turnos_caja::where('user_id', Auth::id())->where('estado', 'abierto')->exists()) {
             session()->flash('error', 'Ya tienes un turno abierto.');
             return;
         }
@@ -117,7 +117,7 @@ class TurnoCaja extends Component
     public function cerrar(): void
     {
         if (!$this->turno || $this->turno->estaCerrado()) {
-            session()->flash('error','No hay turno abierto.');
+            session()->flash('error', 'No hay turno abierto.');
             return;
         }
 
@@ -125,7 +125,7 @@ class TurnoCaja extends Component
             $pagos = FacturaPago::where('turno_id', $this->turno->id)->get();
 
             $byTipo  = $pagos->groupBy('medio_tipo')->map->sum('monto')->toArray();
-            $byMedio = $pagos->groupBy('medio_codigo')->map(function($g){
+            $byMedio = $pagos->groupBy('medio_codigo')->map(function ($g) {
                 return [
                     'codigo' => $g->first()->medio_codigo,
                     'tipo'   => $g->first()->medio_tipo,
@@ -162,7 +162,7 @@ class TurnoCaja extends Component
             ]);
         });
 
-        session()->flash('message','Turno cerrado.');
+        session()->flash('message', 'Turno cerrado.');
         $this->turno = null;
         $this->refrescarResumenes();
     }
@@ -174,14 +174,15 @@ class TurnoCaja extends Component
         if (!$this->turno) return;
 
         // Detectar columnas reales en factura_pagos
-        $tipoColCandidates   = ['medio_tipo','tipo','tipo_medio','metodo','forma_pago'];
-        $codigoColCandidates = ['medio_codigo','codigo','medio','metodo_codigo','referencia','ref'];
+        $tipoColCandidates   = ['medio_tipo', 'tipo', 'tipo_medio', 'metodo', 'forma_pago'];
+        $codigoColCandidates = ['medio_codigo', 'codigo', 'medio', 'metodo_codigo', 'referencia', 'ref'];
 
         $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
         $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
 
-        $tipoExpr   = $tipoCol   ? '['.$tipoCol.']'   : "CAST('OTRO' AS varchar(30))";
-        $codigoExpr = $codigoCol ? '['.$codigoCol.']' : "CAST('—' AS varchar(50))";
+        /** ✅ Versión compatible con SQL Server */
+        $tipoExpr   = $tipoCol   ? "[{$tipoCol}]"   : "CAST('OTRO' AS varchar(30))";
+        $codigoExpr = $codigoCol ? "[{$codigoCol}]" : "CAST('—' AS varchar(50))";
 
         $pagos = FacturaPago::query()
             ->selectRaw("monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo")
@@ -224,8 +225,8 @@ class TurnoCaja extends Component
     /** Helper público para otros flujos */
     public static function turnoAbiertoDe(int $userId): ?turnos_caja
     {
-        return turnos_caja::where('user_id',$userId)
-            ->where('estado','abierto')
+        return turnos_caja::where('user_id', $userId)
+            ->where('estado', 'abierto')
             ->latest('id')
             ->first();
     }

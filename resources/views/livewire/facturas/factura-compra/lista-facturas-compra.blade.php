@@ -9,23 +9,31 @@
         {{-- Filtros rápidos --}}
         <div class="flex flex-wrap items-end gap-2">
           <input type="text" wire:model.live.debounce.400ms="search"
-                 placeholder="Buscar (número, proveedor, notas)…"
+                 placeholder="Buscar (número, proveedor, NIT, estado)…"
                  class="h-10 w-64 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white" />
 
           <select wire:model.live="proveedor_id"
                   class="h-10 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
             <option value="">Todos los proveedores</option>
-            @foreach($proveedores as $p)
-              <option value="{{ $p->id }}">{{ $p->razon_social }} @if($p->nit) ({{ $p->nit }}) @endif</option>
-            @endforeach
+            @forelse($proveedores as $p)
+              <option value="{{ $p->id }}">
+                {{ $p->razon_social }} @if($p->nit) ({{ $p->nit }}) @endif
+              </option>
+            @empty
+              <option value="">—</option>
+            @endforelse
           </select>
 
           <select wire:model.live="serie_id"
                   class="h-10 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
             <option value="">Todas las series</option>
-            @foreach($series as $s)
-              <option value="{{ $s->id }}">{{ $s->nombre }} @if($s->prefijo) ({{ $s->prefijo }}) @endif</option>
-            @endforeach
+            @forelse($series as $s)
+              <option value="{{ $s->id }}">
+                {{ $s->nombre }} @if($s->prefijo) ({{ $s->prefijo }}) @endif
+              </option>
+            @empty
+              <option value="">—</option>
+            @endforelse
           </select>
 
           <select wire:model.live="estado"
@@ -57,16 +65,16 @@
         <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300">
           <tr>
             <th class="px-4 py-3 text-left">
-              <button wire:click="sortBy('f.fecha')" class="font-semibold">Fecha</button>
+              <button wire:click="sortBy('fecha')" class="font-semibold">Fecha</button>
             </th>
             <th class="px-4 py-3 text-left">Proveedor</th>
             <th class="px-4 py-3 text-left">Serie</th>
             <th class="px-4 py-3 text-left">
-              <button wire:click="sortBy('f.numero')" class="font-semibold">Número</button>
+              <button wire:click="sortBy('numero')" class="font-semibold">Número</button>
             </th>
             <th class="px-4 py-3 text-left">Estado</th>
             <th class="px-4 py-3 text-right">
-              <button wire:click="sortBy('f.total')" class="font-semibold">Total</button>
+              <button wire:click="sortBy('total')" class="font-semibold">Total</button>
             </th>
             <th class="px-4 py-3 text-right">Acciones</th>
           </tr>
@@ -74,13 +82,13 @@
 
         <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
           @forelse($items as $f)
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40" wire:key="fc-{{ $f->id }}">
               <td class="px-4 py-3">{{ \Illuminate\Support\Carbon::parse($f->fecha)->format('Y-m-d') }}</td>
               <td class="px-4 py-3">
-                {{ $f->socioNegocio?->razon_social }}
+                {{ $f->socioNegocio?->razon_social ?? '—' }}
                 @if($f->socioNegocio?->nit) <span class="text-xs text-gray-500">({{ $f->socioNegocio->nit }})</span> @endif
               </td>
-              <td class="px-4 py-3">{{ $f->serie?->nombre }}</td>
+              <td class="px-4 py-3">{{ $f->serie?->nombre ?? '—' }}</td>
               <td class="px-4 py-3">
                 @if($f->numero)
                   {{ $f->prefijo ? $f->prefijo.'-' : '' }}{{ str_pad($f->numero, 6, '0', STR_PAD_LEFT) }}
@@ -105,13 +113,10 @@
               </td>
               <td class="px-4 py-3 text-right">
                 <div class="inline-flex gap-2">
-                  {{-- Ver/editar: dispara evento para abrir en el formulario si lo tienes en el mismo layout --}}
                   <button wire:click="$dispatch('abrir-factura', { id: {{ $f->id }} })"
                           class="h-9 px-3 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs">
                     Abrir
                   </button>
-                  {{-- Si manejas rutas, puedes agregar un link --}}
-                  {{-- <a href="{{ route('compras.facturas.edit', $f->id) }}" class="h-9 px-3 rounded-lg bg-indigo-600 text-white text-xs grid place-items-center">Editar</a> --}}
                 </div>
               </td>
             </tr>

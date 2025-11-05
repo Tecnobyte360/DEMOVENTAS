@@ -74,11 +74,11 @@
       </div>
 
       {{-- TAB: Listado de facturas de compra --}}
-      <div x-show="tab === 'list'" x-cloak>
+      {{-- <div x-show="tab === 'list'" x-cloak>
         <livewire:facturas.factura-compra.lista-facturas-compra
           :key="'factura-compra-list'"
         />
-      </div>
+      </div> --}}
 
       {{-- TAB: Devoluciones a proveedor (puedes reemplazar por tu componente real) --}}
       <div x-show="tab === 'ret_form'" x-cloak>

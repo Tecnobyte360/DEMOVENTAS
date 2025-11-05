@@ -11,12 +11,15 @@ class ListaFacturas extends Component
 {
     use WithPagination;
 
+    /** Tailwind para la paginación */
+    protected string $paginationTheme = 'tailwind';
+
     // Filtros visibles
     public string $q = '';
     public string $estado = 'todas';
     public int $perPage = 12;
 
-    // Filtros opcionales (los usas en render)
+    // Filtros opcionales
     public ?int $serie_id = null;
     public ?int $proveedor_id = null;
     public ?string $desde = null;   // YYYY-MM-DD
@@ -27,12 +30,14 @@ class ListaFacturas extends Component
     public ?int $previewId = null;
 
     protected $queryString = ['q','estado','page','perPage'];
-    protected $listeners = ['refrescar-lista-facturas' => '$refresh'];
+    protected $listeners   = ['refrescar-lista-facturas' => '$refresh'];
 
+    /** Reset de página al cambiar filtros */
     public function updatingQ()       { $this->resetPage(); }
     public function updatingEstado()  { $this->resetPage(); }
     public function updatingPerPage() { $this->resetPage(); }
 
+    /** Acciones */
     public function abrir(int $id): void
     {
         $this->dispatch('abrir-factura', id: $id)
@@ -72,7 +77,7 @@ class ListaFacturas extends Component
     {
         $q = Factura::query()
             ->with(['cliente','serie'])
-            // Ajusta el código según tu tipo de documento (ventas/compras)
+            // Ajusta el código según sea ventas/compras
             ->whereHas('serie.tipo', fn($t) => $t->where('codigo', 'factura'))
             ->latest('id');
 
@@ -83,22 +88,20 @@ class ListaFacturas extends Component
                    ->orWhere('prefijo', 'like', $s)
                    ->orWhere('estado', 'like', $s)
                    ->orWhereHas('cliente', fn ($c) =>
-                        $c->where('razon_social','like',$s)->orWhere('nit','like',$s)
+                        $c->where('razon_social','like',$s)
+                          ->orWhere('nit','like',$s)
                    );
             });
         }
 
-        if ($this->estado !== 'todas') {
-            $q->where('estado', $this->estado);
-        }
-        if (!empty($this->serie_id))     $q->where('serie_id', (int)$this->serie_id);
-        if (!empty($this->proveedor_id)) $q->where('socio_negocio_id', (int)$this->proveedor_id);
-        if (!empty($this->desde))        $q->whereDate('fecha', '>=', $this->desde);
-        if (!empty($this->hasta))        $q->whereDate('fecha', '<=', $this->hasta);
+        if ($this->estado !== 'todas')         $q->where('estado', $this->estado);
+        if (!empty($this->serie_id))           $q->where('serie_id', (int) $this->serie_id);
+        if (!empty($this->proveedor_id))       $q->where('socio_negocio_id', (int) $this->proveedor_id);
+        if (!empty($this->desde))              $q->whereDate('fecha', '>=', $this->desde);
+        if (!empty($this->hasta))              $q->whereDate('fecha', '<=', $this->hasta);
 
         $items = $q->paginate($this->perPage);
 
-        // ⬇️ IMPORTANTE: enviar también showPreview y previewId
         return view('livewire.facturas.lista-facturas', [
             'items'       => $items,
             'showPreview' => $this->showPreview,

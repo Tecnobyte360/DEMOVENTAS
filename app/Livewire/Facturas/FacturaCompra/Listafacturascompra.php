@@ -3,6 +3,9 @@
 namespace App\Livewire\Facturas\FacturaCompra;
 
 use App\Models\Factura\Factura;
+use App\Models\SocioNegocio\SocioNegocio;
+use App\Models\Serie\Serie;
+use App\Models\TiposDocumento\TipoDocumento;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -15,17 +18,17 @@ class ListaFacturasCompra extends Component
     protected $paginationTheme = 'tailwind';
 
     // Filtros
-    public string $search = '';
-    public int    $perPage = 10;
-    public ?int   $proveedor_id = null;
-    public ?int   $serie_id     = null;
-    public ?string $estado      = null;
-    public ?string $desde       = null;
-    public ?string $hasta       = null;
+    public string  $search = '';
+    public int     $perPage = 10;
+    public ?int    $proveedor_id = null;
+    public ?int    $serie_id     = null;
+    public ?string $estado       = null;   // '', 'borrador', 'emitida', 'cerrado', 'anulada'
+    public ?string $desde        = null;   // YYYY-MM-DD
+    public ?string $hasta        = null;   // YYYY-MM-DD
 
     // Orden
-    public string $sortField = 'fecha';
-    public string $sortDir   = 'desc';
+    public string $sortField = 'fecha';    // 'fecha' | 'numero' | 'total'
+    public string $sortDir   = 'desc';     // 'asc' | 'desc'
 
     #[On('refrescar-lista-facturas')]
     public function refrescar(): void
@@ -33,6 +36,7 @@ class ListaFacturasCompra extends Component
         $this->resetPage();
     }
 
+    /** Reset de página al cambiar cualquier filtro relevante */
     public function updating($name, $value): void
     {
         if (in_array($name, ['search','proveedor_id','serie_id','estado','desde','hasta','perPage'])) {
@@ -42,28 +46,31 @@ class ListaFacturasCompra extends Component
 
     public function sortBy(string $field): void
     {
+        if (!in_array($field, ['fecha','numero','total'])) {
+            return;
+        }
         if ($this->sortField === $field) {
             $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
         } else {
             $this->sortField = $field;
-            $this->sortDir = 'asc';
+            $this->sortDir   = 'asc';
         }
         $this->resetPage();
     }
 
     public function render()
     {
-        // === Obtener el ID del tipo de documento 'facturacompra' ===
-        $idTipo = \App\Models\TiposDocumento\TipoDocumento::where('codigo', 'facturacompra')->value('id');
+        // ID del tipo de documento 'facturacompra'
+        $idTipo = TipoDocumento::where('codigo', 'facturacompra')->value('id');
 
         $q = Factura::query()
             ->with(['socioNegocio','serie'])
-            // Solo facturas de compra (filtra por tipo_documento_id)
+            // solo facturas de compra (por tipo en la serie)
             ->whereHas('serie', function (Builder $s) use ($idTipo) {
                 $s->where('tipo_documento_id', $idTipo);
             });
 
-        // === Filtro de búsqueda ===
+        // Búsqueda general
         if (trim($this->search) !== '') {
             $s = '%'.trim($this->search).'%';
             $q->where(function ($qq) use ($s) {
@@ -73,31 +80,35 @@ class ListaFacturasCompra extends Component
                    ->orWhereHas('socioNegocio', fn ($c) =>
                         $c->where('razon_social','like',$s)
                           ->orWhere('nit','like',$s)
-                    );
+                   );
             });
         }
 
-        // === Otros filtros ===
-        if ($this->estado && $this->estado !== 'todas') {
-            $q->where('estado', $this->estado);
-        }
-        if ($this->serie_id) {
-            $q->where('serie_id', $this->serie_id);
-        }
-        if ($this->proveedor_id) {
-            $q->where('socio_negocio_id', $this->proveedor_id);
-        }
-        if ($this->desde) {
-            $q->whereDate('fecha', '>=', $this->desde);
-        }
-        if ($this->hasta) {
-            $q->whereDate('fecha', '<=', $this->hasta);
-        }
+        // Filtros específicos
+        if ($this->estado)            $q->where('estado', $this->estado);
+        if ($this->serie_id)          $q->where('serie_id', $this->serie_id);
+        if ($this->proveedor_id)      $q->where('socio_negocio_id', $this->proveedor_id);
+        if ($this->desde)             $q->whereDate('fecha', '>=', $this->desde);
+        if ($this->hasta)             $q->whereDate('fecha', '<=', $this->hasta);
 
-        // === Orden y paginación ===
+        // Orden y paginación
         $items = $q->orderBy($this->sortField, $this->sortDir)
                    ->paginate($this->perPage);
 
-        return view('livewire.facturas.lista-facturas', compact('items'));
+        // Catálogos para los selects
+        $proveedores = SocioNegocio::proveedores()
+            ->orderBy('razon_social')->get(['id','razon_social','nit']);
+
+        $series = Serie::query()
+            ->with('tipo:id,codigo')
+            ->where('tipo_documento_id', $idTipo)
+            ->orderBy('nombre')
+            ->get(['id','nombre','prefijo','tipo_documento_id']);
+
+        return view('livewire.facturas.lista-facturas', [
+            'items'       => $items,
+            'proveedores' => $proveedores,
+            'series'      => $series,
+        ]);
     }
 }

@@ -3,7 +3,6 @@
 namespace App\Models\Factura;
 
 use App\Models\MediosPago\MedioPagos;
-use App\Models\NotaCredito;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
 use Carbon\Carbon;
@@ -186,7 +185,7 @@ class Factura extends Model
                 $this->pagos()->create([
                     'fecha'         => $fecha,
                     'medio_pago_id' => $medioId,
-                    'metodo'        => $medio?->codigo,
+                    'metodo'        => $medio?->codigo,               
                     'monto'         => (float) ($i['monto'] ?? 0),
                     'referencia'    => $i['referencia'] ?? null,
                     'notas'         => $notas,
@@ -196,14 +195,4 @@ class Factura extends Model
             $this->recalcularTotales()->save();
         });
     }
-    public function notasCredito(): HasMany
-    {
-        return $this->hasMany(NotaCredito::class, 'factura_id');
-    }
-      public function empresa(): BelongsTo
-    {
-        return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
-    }
-
-
 }

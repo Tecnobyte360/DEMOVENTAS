@@ -232,47 +232,58 @@ class ContabilidadNotaCreditoService
     }
 
     /** ---------- Inserción segura del asiento (cuadrado) ---------- */
-    private static function insertAsiento(array $payload): Asiento
-    {
-        $movs = $payload['movimientos'] ?? [];
-        if (empty($movs)) throw new RuntimeException('No hay movimientos para registrar.');
+   private static function insertAsiento(array $payload): Asiento
+{
+    $movs = $payload['movimientos'] ?? [];
+    if (empty($movs)) {
+        throw new RuntimeException('No hay movimientos para registrar.');
+    }
 
-        $deb = array_sum(array_column($movs, 'debito'));
-        $cre = array_sum(array_column($movs, 'credito'));
-        if (round($deb - $cre, 2) !== 0.0) {
-            throw new RuntimeException('El asiento no cuadra.');
+    $deb = round(array_sum(array_column($movs, 'debito')), 2);
+    $cre = round(array_sum(array_column($movs, 'credito')), 2);
+    if ($deb !== $cre) {
+        throw new RuntimeException('El asiento no cuadra.');
+    }
+
+    return DB::transaction(function () use ($payload, $movs, $deb, $cre) {
+        /** @var \App\Models\Asiento\Asiento $asiento */
+        $asiento = Asiento::create([
+            'fecha'        => $payload['fecha'] ?? now()->toDateString(),
+            'glosa'        => $payload['glosa'] ?? null,
+            'origen'       => $payload['origen'] ?? null,     // <- aquí
+            'origen_id'    => $payload['origen_id'] ?? null,  // <- aquí
+            'moneda'       => $payload['moneda'] ?? 'COP',
+            'total_debe'   => $deb,
+            'total_haber'  => $cre,
+            // 'tercero_id' => ... si quieres asociar cliente
+        ]);
+
+        $now  = now();
+        $rows = collect($movs)->map(fn ($m) => [
+            'asiento_id' => $asiento->id,
+            'cuenta_id'  => (int) $m['cuenta_id'],
+            'debito'     => (float) $m['debito'],
+            'credito'    => (float) $m['credito'],
+            'glosa'      => (string) ($m['glosa'] ?? null),
+            'created_at' => $now,
+            'updated_at' => $now,
+        ])->toArray();
+
+        Movimiento::insert($rows);
+
+        // Verificación post–insert
+        $deb2 = round($asiento->movimientos()->sum('debito'), 2);
+        $cre2 = round($asiento->movimientos()->sum('credito'), 2);
+        if ($deb2 !== $cre2 || $deb2 !== $deb) {
+            Log::error('Asiento no cuadra tras insertar movimientos', [
+                'asiento_id' => $asiento->id, 'deb' => $deb2, 'cre' => $cre2
+            ]);
+            throw new RuntimeException('El asiento no cuadra tras insertar movimientos.');
         }
 
-        return DB::transaction(function () use ($payload, $movs) {
-            $asiento = Asiento::create([
-                'fecha'        => $payload['fecha'] ?? now()->toDateString(),
-                'glosa'        => $payload['glosa'] ?? null,
-                'documento'    => $payload['documento'] ?? null,
-                'documento_id' => $payload['documento_id'] ?? null,
-                'referencia'   => $payload['referencia'] ?? null,
-            ]);
-
-            $now = now();
-            $rows = collect($movs)->map(fn($m) => [
-                'asiento_id' => $asiento->id,
-                'cuenta_id'  => (int)$m['cuenta_id'],
-                'debito'     => (float)$m['debito'],
-                'credito'    => (float)$m['credito'],
-                'glosa'      => (string)($m['glosa'] ?? null),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ])->toArray();
-
-            Movimiento::insert($rows);
-
-            $delta = round($asiento->movimientos()->sum('debito') - $asiento->movimientos()->sum('credito'), 2);
-            if ($delta !== 0.0) {
-                Log::error('Asiento no cuadra luego de insertar movimientos', ['asiento_id'=>$asiento->id,'Δ'=>$delta]);
-                throw new RuntimeException('El asiento no cuadra tras insertar movimientos.');
-            }
-            return $asiento;
-        });
-    }
+        return $asiento;
+    });
+}
 
     /** ---------- Consolidación por cuenta (para fallback) ---------- */
     private static function consolidar(array $movs): array
@@ -395,89 +406,75 @@ class ContabilidadNotaCreditoService
 
     /** ============ Reversión del asiento de la NC (anulación) ============ */
     public static function revertirAsientoNotaCredito(NotaCredito $nc): Asiento
-    {
-        return DB::transaction(function () use ($nc) {
-            /** @var \App\Models\Asiento\Asiento|null $orig */
-            $orig = Asiento::with('movimientos')
-                ->where('documento', 'nota_credito')
-                ->where('documento_id', $nc->id)
-                ->orderByDesc('id')
-                ->first();
+{
+    return DB::transaction(function () use ($nc) {
+        // 1) Encontrar el asiento original de la NC por tu esquema
+        /** @var \App\Models\Asiento\Asiento|null $orig */
+        $orig = Asiento::with('movimientos')
+            ->where('origen', 'nota_credito')
+            ->where('origen_id', $nc->id)
+            ->orderByDesc('id')
+            ->first();
 
-            if (!$orig) {
-                throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
-            }
+        if (!$orig) {
+            throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
+        }
 
-            $tieneColsReverso = Schema::hasColumn('asientos', 'reverso_de_asiento_id')
-                && Schema::hasColumn('asientos', 'revertido_por_asiento_id')
-                && Schema::hasColumn('asientos', 'estado');
+        // 2) Evitar doble reversión: si ya existe uno con origen 'nota_credito_reverso'
+        $yaRev = Asiento::where('origen', 'nota_credito_reverso')
+            ->where('origen_id', $nc->id)
+            ->exists();
+        if ($yaRev) {
+            throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
+        }
 
-            if ($tieneColsReverso) {
-                $yaRev = Asiento::where('reverso_de_asiento_id', $orig->id)->exists();
-                if ($yaRev || ($orig->estado ?? null) === 'revertido') {
-                    throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
-                }
-            } else {
-                $refRev = 'REV-'.(string)($orig->referencia ?? ('NC#'.$nc->id));
-                $yaRev = Asiento::where('documento', 'nota_credito_reverso')
-                    ->where('documento_id', $nc->id)
-                    ->where('referencia', $refRev)
-                    ->exists();
-                if ($yaRev) {
-                    throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
-                }
-            }
+        if ($orig->movimientos->isEmpty()) {
+            throw new RuntimeException('El asiento original no tiene movimientos.');
+        }
 
-            $refOrig = (string)($orig->referencia ?? ('NC#'.$nc->id));
-            $refRev  = 'REV-'.$refOrig;
+        // 3) Crear cabecera del reverso (sin columnas especiales)
+        $reverso = Asiento::create([
+            'fecha'       => now()->toDateString(), // o $nc->fecha si así lo prefieres
+            'glosa'       => 'Reverso de asiento NC ID '.$nc->id,
+            'origen'      => 'nota_credito_reverso',
+            'origen_id'   => $nc->id,
+            'moneda'      => 'COP',
+            'total_debe'  => 0,
+            'total_haber' => 0,
+        ]);
 
-            $reverso = Asiento::create([
-                'fecha'        => now()->toDateString(),
-                'glosa'        => 'Reverso de asiento '.$refOrig.' (NC ID '.$nc->id.')',
-                'documento'    => 'nota_credito_reverso',
-                'documento_id' => $nc->id,
-                'referencia'   => $refRev,
+        // 4) Insertar movimientos invertidos
+        $now = now();
+        $rows = $orig->movimientos->map(function ($m) use ($reverso, $now) {
+            return [
+                'asiento_id' => $reverso->id,
+                'cuenta_id'  => (int) $m->cuenta_id,
+                'debito'     => (float) $m->credito,  // invierte
+                'credito'    => (float) $m->debito,   // invierte
+                'glosa'      => 'Reverso: '.(string) ($m->glosa ?? ''),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        })->toArray();
+
+        Movimiento::insert($rows);
+
+        // 5) Calcular y guardar totales del reverso
+        $deb = round($reverso->movimientos()->sum('debito'), 2);
+        $cre = round($reverso->movimientos()->sum('credito'), 2);
+        if ($deb !== $cre) {
+            Log::error('Reverso NC descuadrado', [
+                'reverso_id' => $reverso->id, 'deb' => $deb, 'cre' => $cre
             ]);
+            throw new RuntimeException('El reverso contable no cuadra.');
+        }
 
-            if ($tieneColsReverso) {
-                $reverso->reverso_de_asiento_id = $orig->id;
-                $reverso->estado = 'emitido';
-                $reverso->save();
-            }
+        $reverso->update([
+            'total_debe'  => $deb,
+            'total_haber' => $cre,
+        ]);
 
-            if ($orig->movimientos->isEmpty()) {
-                throw new RuntimeException('El asiento original no tiene movimientos.');
-            }
-
-            $now = now();
-            $rows = $orig->movimientos->map(function ($m) use ($reverso, $now) {
-                return [
-                    'asiento_id' => $reverso->id,
-                    'cuenta_id'  => (int)$m->cuenta_id,
-                    'debito'     => (float)$m->credito,
-                    'credito'    => (float)$m->debito,
-                    'glosa'      => 'Reverso: '.(string)($m->glosa ?? ''),
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            })->toArray();
-
-            Movimiento::insert($rows);
-
-            $deb = round($reverso->movimientos()->sum('debito'), 2);
-            $cre = round($reverso->movimientos()->sum('credito'), 2);
-            if ($deb !== $cre) {
-                Log::error('Reverso NC descuadrado', ['reverso_id'=>$reverso->id,'deb'=>$deb,'cre'=>$cre]);
-                throw new RuntimeException('El reverso contable no cuadra.');
-            }
-
-            if ($tieneColsReverso) {
-                $orig->estado = 'revertido';
-                $orig->revertido_por_asiento_id = $reverso->id;
-                $orig->save();
-            }
-
-            return $reverso;
-        }, 3);
-    }
+        return $reverso;
+    }, 3);
+}
 }

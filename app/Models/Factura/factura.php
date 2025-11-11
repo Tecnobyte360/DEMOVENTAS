@@ -196,10 +196,11 @@ class Factura extends Model
             $this->recalcularTotales()->save();
         });
     }
- public function empresa()
-{
-    return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
-}
 
+  public function empresa(): BelongsTo
+    {
+        // si tu FK es empresa_id y la tabla empresas, esto basta
+        return $this->belongsTo(Empresa::class, 'empresa_id');
+    }
 
 }

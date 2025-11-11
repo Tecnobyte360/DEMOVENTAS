@@ -167,53 +167,72 @@ class TurnoCaja extends Component
         $this->refrescarResumenes();
     }
 
-    /** ✅ Nombre correcto */
-    private function refrescarResumenes(): void
-    {
-        $this->resumen = $this->porTipo = $this->porMedio = [];
-        if (!$this->turno) return;
+   private function refrescarResumenes(): void
+{
+    $this->resumen = $this->porTipo = $this->porMedio = [];
+    if (!$this->turno) return;
 
-        // Detectar columnas reales en factura_pagos
-        $tipoColCandidates   = ['medio_tipo', 'tipo', 'tipo_medio', 'metodo', 'forma_pago'];
-        $codigoColCandidates = ['medio_codigo', 'codigo', 'medio', 'metodo_codigo', 'referencia', 'ref'];
+    // Detectar columnas reales en factura_pagos
+    $tipoColCandidates   = ['medio_tipo', 'tipo', 'tipo_medio', 'metodo', 'forma_pago'];
+    $codigoColCandidates = ['medio_codigo', 'codigo', 'medio', 'metodo_codigo', 'referencia', 'ref'];
 
-        $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
-        $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
+    $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
+    $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
 
-       $tipoExpr   = $tipoCol   ? "`{$tipoCol}`"   : "CAST('OTRO' AS CHAR(30))";
-$codigoExpr = $codigoCol ? "`{$codigoCol}`" : "CAST('-' AS CHAR(50))";
+    // Envoltorio portátil de identificadores (produce [] en SQL Server y ` ` en MySQL)
+    $wrap = fn(string $c) => DB::getQueryGrammar()->wrap($c);
 
-        $pagos = FacturaPago::query()
-            ->selectRaw("monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo")
-            ->where('turno_id', $this->turno->id)
-            ->get();
+    // Construir expresiones y bindings para selectRaw SIN backticks ni CAST no-portátiles
+    $bindings = [];
 
-        $this->resumen = [
-            'base_inicial'        => (float) $this->turno->base_inicial,
-            'total_ventas'        => (float) $pagos->sum('monto'),
-            'devoluciones'        => (float) $this->turno->devoluciones,
-            'ingresos'            => (float) $this->turno->ingresos_efectivo,
-            'retiros'             => (float) $this->turno->retiros_efectivo,
-            'ventas_credito_cxc'  => (float) $this->turno->ventas_a_credito,
-        ];
-
-        $this->porTipo = $pagos->groupBy('medio_tipo')
-            ->map(fn($g) => (float) $g->sum('monto'))
-            ->sortDesc()
-            ->toArray();
-
-        $this->porMedio = $pagos->groupBy('medio_codigo')
-            ->map(function ($g) {
-                return [
-                    'codigo' => $g->first()->medio_codigo,
-                    'nombre' => $g->first()->medio_codigo,
-                    'tipo'   => $g->first()->medio_tipo,
-                    'total'  => (float) $g->sum('monto'),
-                ];
-            })
-            ->values()
-            ->all();
+    if ($tipoCol) {
+        $tipoExpr = $wrap($tipoCol);
+    } else {
+        $tipoExpr = '?';
+        $bindings[] = 'OTRO';
     }
+
+    if ($codigoCol) {
+        $codigoExpr = $wrap($codigoCol);
+    } else {
+        $codigoExpr = '?';
+        $bindings[] = '-';
+    }
+
+    $pagos = FacturaPago::query()
+        ->selectRaw(
+            "monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo",
+            $bindings
+        )
+        ->where('turno_id', $this->turno->id)
+        ->get();
+
+    $this->resumen = [
+        'base_inicial'       => (float) $this->turno->base_inicial,
+        'total_ventas'       => (float) $pagos->sum('monto'),
+        'devoluciones'       => (float) $this->turno->devoluciones,
+        'ingresos'           => (float) $this->turno->ingresos_efectivo,
+        'retiros'            => (float) $this->turno->retiros_efectivo,
+        'ventas_credito_cxc' => (float) $this->turno->ventas_a_credito,
+    ];
+
+    $this->porTipo = $pagos->groupBy('medio_tipo')
+        ->map(fn($g) => (float) $g->sum('monto'))
+        ->sortDesc()
+        ->toArray();
+
+    $this->porMedio = $pagos->groupBy('medio_codigo')
+        ->map(function ($g) {
+            return [
+                'codigo' => $g->first()->medio_codigo,
+                'nombre' => $g->first()->medio_codigo,
+                'tipo'   => $g->first()->medio_tipo,
+                'total'  => (float) $g->sum('monto'),
+            ];
+        })
+        ->values()
+        ->all();
+}
 
     /** 🔁 Alias por si quedó alguna llamada antigua con “resumenses” */
     private function refrescarResumenses(): void

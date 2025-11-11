@@ -38,14 +38,14 @@ class ConceptosDocumentos extends Component
     /* ========= Selector de cuentas ========= */
     public string $buscarCuenta = '';
     public $cuentasCatalogo = [];
-    /** plan_cuenta_id => ['rol'=>?, 'naturaleza'=>?, 'porcentaje'=>?, 'prioridad'=>?] */
+
     public array $cuentasSeleccionadas = [];
 
     public array $rolesSugeridos = [
         'gasto','ingreso','costo','inventario','gasto_devolucion','ingreso_devolucion'
     ];
 
-    /* ========= Reglas ========= */
+
     protected function rules(): array
     {
         return [
@@ -222,16 +222,16 @@ class ConceptosDocumentos extends Component
             ->orderBy('nombre')
             ->paginate($this->perPage);
 
-        // Catálogo PUC del modal (texto + solo imputables + activas)
+ 
         $this->cuentasCatalogo = PlanCuentas::query()
             ->when($this->buscarCuenta, function ($q) {
                 $t = trim($this->buscarCuenta);
                 $q->where(function($w) use ($t){
                     $w->where('codigo','like',"%{$t}%")
                       ->orWhere('nombre','like',"%{$t}%");
-                });
+                }); 
             })
-            ->when($this->soloImputables, fn($q) => $q->where('titulo', 0)) // ← NUEVO
+            ->when($this->soloImputables, fn($q) => $q->where('titulo', 0)) 
             ->where('cuenta_activa', true)
             ->orderBy('codigo')
             ->limit(100)

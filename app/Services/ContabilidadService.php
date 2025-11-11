@@ -9,6 +9,7 @@ use App\Models\Factura\FacturaPago;
 use App\Models\MediosPago\MedioPagoCuenta;
 use App\Models\MediosPago\MedioPagos;
 use App\Models\Movimiento\Movimiento;
+use App\Models\NotaCredito;
 use App\Models\Productos\Producto;
 use App\Models\Productos\ProductoCuentaTipo;
 use Illuminate\Database\QueryException;
@@ -68,18 +69,38 @@ class ContabilidadService
     }
 
     /** Público: usado por Facturas y Notas Crédito. */
-    public static function cuentaSegunConfiguracion(?Producto $p, string $tipoCodigo): ?int
+ public static function cuentaSegunConfiguracion(\App\Models\Productos\Producto $p, string $tipoCodigo): ?int
     {
-        if (!$p) return null;
+        $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO')); // 'SUBCATEGORIA' | 'ARTICULO'
+        $try  = [$tipoCodigo]; // ej: 'DEVOLUCION'
+        if ($tipoCodigo === 'DEVOLUCION') { $try[] = 'INGRESO_DEV'; $try[] = 'INGRESO'; }
 
-        $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
-
-        if ($modo === 'SUBCATEGORIA') {
-            return self::cuentaDeSubcategoriaPorTipo($p->subcategoria_id, $tipoCodigo)
-                ?: self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+        // 1) Por ARTICULO
+        if ($modo === 'ARTICULO' && $p->relationLoaded('cuentas') ? $p->cuentas->count() : $p->cuentas()->exists()) {
+            foreach ($try as $t) {
+                $id = optional(
+                        $p->relationLoaded('cuentas')
+                          ? $p->cuentas->firstWhere('tipo.codigo', $t)
+                          : $p->cuentas()->whereHas('tipo', fn($q)=>$q->where('codigo',$t))->first()
+                    )->plan_cuentas_id;
+                if ($id) return (int)$id;
+            }
         }
 
-        return self::cuentaDeProductoPorTipo($p, $tipoCodigo);
+        // 2) Por SUBCATEGORIA
+        if ($modo === 'SUBCATEGORIA' && $p->subcategoria) {
+            $sub = $p->subcategoria->loadMissing('cuentas.tipo'); 
+            foreach ($try as $t) {
+                $id = optional($sub->cuentas->firstWhere('tipo.codigo', $t))->plan_cuentas_id;
+                if ($id) return (int)$id;
+            }
+        }
+
+        // 3) Fallback global (opcional): por clase/tipo genérico en tu PUC
+        return PlanCuentas::where('cuenta_activa',1)
+            ->where(fn($q)=>$q->where('titulo',0)->orWhereNull('titulo'))
+            ->where('clase_cuenta', $tipoCodigo) // si manejas clases homónimas
+            ->value('id');
     }
 
     /* ===================== IVA (Ventas/Compras) ===================== */
@@ -537,6 +558,146 @@ class ContabilidadService
 
             Log::info('Asientos contables revertidos para factura', ['factura_id' => $f->id]);
             return true;
+        });
+    }
+
+
+       public static function asientoDesdeNotaCredito(NotaCredito $nc): Asiento
+    {
+        return DB::transaction(function () use ($nc) {
+            $nc->loadMissing('detalles.producto', 'cliente');
+
+            // Agrupadores
+            $ingresosDevPorCuenta = [];   // DEBE (reversa ingreso)
+            $ivaDevCuentaTarifa   = [];   // DEBE (reversa IVA)
+            $invPorCuenta         = [];   // DEBE (vuelve al inventario)
+            $costoRevPorCuenta    = [];   // HABER (reversa costo)
+
+            $totalNc = 0.0;
+
+            foreach ($nc->detalles as $d) {
+                $cant = (float)$d->cantidad;
+                if ($cant <= 0) continue;
+
+                // Base e IVA de la línea
+                $base = $cant * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100);
+                $tPct = (float)$d->impuesto_pct;
+                $iva  = round($base * $tPct / 100, 2);
+
+                // Reversa Ingreso: (DEBE) a la misma cuenta de ingreso o a cuenta de devoluciones
+                $p = $d->producto; // puede venir cargado por ->loadMissing arriba
+                $ctaIngreso = (int)($d->cuenta_ingreso_id ?: self::cuentaSegunConfiguracion($p, 'INGRESO'));
+                if (!$ctaIngreso) {
+                    throw new \RuntimeException("Detalle {$d->id}: no se pudo resolver cuenta de ingreso para reversa.");
+                }
+                $ingresosDevPorCuenta[$ctaIngreso] = ($ingresosDevPorCuenta[$ctaIngreso] ?? 0) + $base;
+
+                // Reversa IVA (DEBE)
+                if ($iva > 0 && $p) {
+                    $ctaIva = self::cuentaIvaParaProducto($p);
+                    if (!$ctaIva) {
+                        throw new \RuntimeException("Producto {$p->id}: sin cuenta de IVA para reversa.");
+                    }
+                    if (!isset($ivaDevCuentaTarifa[$ctaIva][$tPct])) {
+                        $ivaDevCuentaTarifa[$ctaIva][$tPct] = ['base' => 0, 'iva' => 0, 'impuesto_id' => $p->impuesto?->id];
+                    }
+                    $ivaDevCuentaTarifa[$ctaIva][$tPct]['base'] += $base;
+                    $ivaDevCuentaTarifa[$ctaIva][$tPct]['iva']  += $iva;
+                }
+
+                $totalNc += ($base + $iva);
+
+                // ===== Reversa de Costo / Inventario =====
+                if ($p && ($p->es_inventariable ?? true) && $d->bodega_id) {
+                    $cpu   = self::costoPromedioParaLinea($p, (int)$d->bodega_id);
+                    $costo = round($cpu * $cant, 2);
+
+                    if ($costo > 0) {
+                        $ctaInv   = self::cuentaSegunConfiguracion($p, 'INVENTARIO'); // DEBE
+                        $ctaCosto = self::cuentaSegunConfiguracion($p, 'COSTO');      // HABER
+                        if (!$ctaInv)   throw new \RuntimeException("Producto {$p->id} sin cuenta INVENTARIO.");
+                        if (!$ctaCosto) throw new \RuntimeException("Producto {$p->id} sin cuenta COSTO.");
+
+                        $invPorCuenta[$ctaInv]         = ($invPorCuenta[$ctaInv]         ?? 0) + $costo;
+                        $costoRevPorCuenta[$ctaCosto]  = ($costoRevPorCuenta[$ctaCosto]  ?? 0) + $costo;
+                    }
+                }
+            }
+
+            // Cabecera de asiento
+            $asiento = Asiento::create([
+                'fecha'       => $nc->fecha ?? now(),
+                'tipo'        => 'NC_VENTA',
+                'glosa'       => sprintf('Nota Crédito %s-%s · %s', (string)$nc->prefijo, (string)$nc->numero, optional($nc->cliente)->razon_social),
+                'origen'      => 'nota_credito',
+                'origen_id'   => $nc->id,
+                'tercero_id'  => $nc->socio_negocio_id,
+                'moneda'      => $nc->moneda ?? 'COP',
+                'total_debe'  => 0,
+                'total_haber' => 0,
+            ]);
+
+            $totalDebe = $totalHaber = 0.0;
+            $metaBase  = ['nota_credito_id' => $nc->id, 'tercero_id' => $nc->socio_negocio_id];
+
+            // HABER: reduce CxC (o la cuenta que uses para saldo del cliente)
+            // Por defecto usamos la cuenta_cobro_id de la factura original si la guardas en la NC,
+            // o un fallback 1305:
+            $ctaCxC = self::cuentaPorCodigo('1305') ?: $nc->cuenta_cobro_id;
+            if (!$ctaCxC || !PlanCuentas::whereKey($ctaCxC)->exists()) {
+                throw new \RuntimeException('No se encontró cuenta de CxC (1305) ni cuenta_cobro_id válida para la Nota Crédito.');
+            }
+            $movCxC = self::post($asiento, (int)$ctaCxC, 0.0, round($totalNc, 2), 'Reversa saldo cliente por NC', $metaBase);
+            $totalDebe  += $movCxC->debito;
+            $totalHaber += $movCxC->credito;
+
+            // DEBE: Reversa ingreso (devolución)
+            foreach ($ingresosDevPorCuenta as $cta => $monto) {
+                $mov = self::post($asiento, (int)$cta, round($monto, 2), 0.0, 'Devolución de ventas (reversa ingreso)', $metaBase);
+                $totalDebe  += $mov->debito;
+                $totalHaber += $mov->credito;
+            }
+
+            // DEBE: Reversa IVA
+            foreach ($ivaDevCuentaTarifa as $ctaIva => $porTarifa) {
+                foreach ($porTarifa as $pct => $vals) {
+                    $iva = round($vals['iva'] ?? 0, 2);
+                    if ($iva <= 0) continue;
+                    $mov = self::post(
+                        $asiento, (int)$ctaIva, $iva, 0.0, 'Reversa IVA por NC',
+                        $metaBase + [
+                            'descripcion'    => 'Reversa IVA ventas',
+                            'impuesto_id'    => $vals['impuesto_id'] ?? null,
+                            'base_gravable'  => round($vals['base'] ?? 0, 2),
+                            'tarifa_pct'     => (float)$pct,
+                            'valor_impuesto' => $iva,
+                        ]
+                    );
+                    $totalDebe  += $mov->debito;
+                    $totalHaber += $mov->credito;
+                }
+            }
+
+            // ===== Clave de tu petición: reversa Costo/Inventario =====
+            // DEBE: INVENTARIO (regreso de mercancía)
+            foreach ($invPorCuenta as $cta => $monto) {
+                $mov = self::post($asiento, (int)$cta, round($monto, 2), 0.0, 'Entrada a inventario por NC', $metaBase);
+                $totalDebe  += $mov->debito;
+                $totalHaber += $mov->credito;
+            }
+            // HABER: COSTO (reversa costo de ventas)
+            foreach ($costoRevPorCuenta as $cta => $monto) {
+                $mov = self::post($asiento, (int)$cta, 0.0, round($monto, 2), 'Reversa costo de ventas por NC', $metaBase);
+                $totalDebe  += $mov->debito;
+                $totalHaber += $mov->credito;
+            }
+
+            $asiento->update([
+                'total_debe'  => round($totalDebe, 2),
+                'total_haber' => round($totalHaber, 2),
+            ]);
+
+            return $asiento;
         });
     }
 }

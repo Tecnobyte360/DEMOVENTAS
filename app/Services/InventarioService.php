@@ -15,16 +15,17 @@ use Illuminate\Support\Facades\Schema;
 class InventarioService
 {
     /* =========================================================
-     * VALIDACIÓN DE DISPONIBILIDAD (VENTA)
+     *  VALIDACIÓN DE DISPONIBILIDAD (VENTA)
      * ========================================================= */
     public static function verificarDisponibilidadParaFactura(Factura $f): void
     {
-        // Lanza excepción si falta stock por producto+bodega
         $faltantes = [];
+
         foreach ($f->detalles as $d) {
             if (!$d->producto_id || !$d->bodega_id) {
                 throw new \RuntimeException("Cada línea debe tener producto y bodega.");
             }
+
             $pb = ProductoBodega::lockForUpdate()
                 ->where('producto_id', $d->producto_id)
                 ->where('bodega_id',  $d->bodega_id)
@@ -35,185 +36,125 @@ class InventarioService
                 $faltantes[] = "Prod {$d->producto_id} en bodega {$d->bodega_id}: disp {$disp}, req {$d->cantidad}";
             }
         }
+
         if ($faltantes) {
             throw new \RuntimeException("Stock insuficiente: " . implode(' | ', $faltantes));
         }
     }
 
+    /* =========================================================
+     *  ENTRADA POR FACTURA DE COMPRA (envoltura)
+     * ========================================================= */
     public static function aumentarPorFacturaCompra(Factura $factura): void
     {
-        // Si ya tienes la lógica en aplicarCompraYCosteo(), reúsala:
         static::aplicarCompraYCosteo($factura);
     }
 
     /* =========================================================
-     * DESCUENTO POR FACTURA (VENTA)
+     *  SALIDA POR FACTURA DE VENTA
      * ========================================================= */
     public static function descontarPorFactura(Factura $f): void
     {
         DB::transaction(function () use ($f) {
-            // Si tu Serie tiene el tipo_documento relacionado, úsalo.
             $tipoDocumentoId = optional($f->serie)->tipo_documento_id;
 
             foreach ($f->detalles as $d) {
-                if (!$d->producto_id || !$d->bodega_id || $d->cantidad <= 0) {
-                    continue;
-                }
+                if (!$d->producto_id || !$d->bodega_id || $d->cantidad <= 0) continue;
 
-                // Costo promedio unitario a usar en la salida
+                // CPU (promedio) a usar en la salida
                 $cpu = \App\Services\ContabilidadService::costoPromedioParaLinea(
                     $d->producto()->with('cuentas')->first(),
                     $d->bodega_id
                 );
-                $costoTotal = round($cpu * (float)$d->cantidad, 2);
+                $cant       = (float)$d->cantidad;
+                $costoTotal = round($cpu * $cant, 2);
 
-                // 1) Actualiza stock (SALIDA)
+                // 1) Stock (SALIDA)
                 $pb = ProductoBodega::lockForUpdate()
                     ->where('producto_id', $d->producto_id)
                     ->where('bodega_id',  $d->bodega_id)
                     ->firstOrFail();
 
-                $stockAntes = (float)$pb->stock;
-                $stockDespues = round($stockAntes - (float)$d->cantidad, 6);
-                $pb->stock = $stockDespues;
-                // En salida no se recalcula costo_promedio
-                $pb->save();
+                $stockAntes   = (float)$pb->stock;
+                $stockDespues = round($stockAntes - $cant, 6);
+                $pb->update(['stock' => $stockDespues]); // en salida no se recalcula cpm
 
-                // 2) Kárdex (SALIDA) — usa 'total' (no 'costo_total')
+                // 2) Kárdex (SALIDA) — usa columna 'total'
                 $dataKardex = [
-                    'fecha'             => $f->fecha,
-                    'producto_id'       => $d->producto_id,
-                    'bodega_id'         => $d->bodega_id,
-                    'entrada'           => 0,
-                    'salida'            => (float)$d->cantidad,
-                    'cantidad'          => -1 * (float)$d->cantidad,
-                    'signo'             => -1,
-                    'costo_unitario'    => $cpu,
-                    'total'             => $costoTotal,
-                    'doc_id'            => (string)$f->id,
-                    'ref'               => "FV " . static::refFactura($f),
+                    'fecha'          => $f->fecha,
+                    'producto_id'    => $d->producto_id,
+                    'bodega_id'      => $d->bodega_id,
+                    'entrada'        => 0,
+                    'salida'         => $cant,
+                    'cantidad'       => -$cant,
+                    'signo'          => -1,
+                    'costo_unitario' => $cpu,
+                    'total'          => $costoTotal,
+                    'doc_id'         => (string)$f->id,
+                    'ref'            => 'FV ' . static::refFactura($f),
                 ];
-
-                if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) {
-                    $dataKardex['tipo_documento_id'] = $tipoDocumentoId;
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'metodo')) {
-                    $dataKardex['metodo'] = 'PROMEDIO';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'evento')) {
-                    $dataKardex['evento'] = 'FACTURA_VENTA';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'origen')) {
-                    $dataKardex['origen'] = 'factura';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'origen_id')) {
-                    $dataKardex['origen_id'] = $f->id;
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'documento')) {
-                    $dataKardex['documento'] = "facturaventa #{$f->id} ({$f->prefijo} {$f->numero})";
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'detalle')) {
-                    $dataKardex['detalle'] = "Factura {$f->prefijo}-{$f->numero}";
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'doc_tipo')) {
-                    $dataKardex['doc_tipo'] = 'FACTURA_VENTA';
-                }
+                if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $dataKardex['tipo_documento_id'] = $tipoDocumentoId;
+                if (Schema::hasColumn('kardex_movimientos', 'metodo'))            $dataKardex['metodo']            = 'PROMEDIO';
+                if (Schema::hasColumn('kardex_movimientos', 'evento'))             $dataKardex['evento']             = 'FACTURA_VENTA';
+                if (Schema::hasColumn('kardex_movimientos', 'origen'))             $dataKardex['origen']             = 'factura';
+                if (Schema::hasColumn('kardex_movimientos', 'origen_id'))          $dataKardex['origen_id']          = $f->id;
+                if (Schema::hasColumn('kardex_movimientos', 'doc_tipo'))           $dataKardex['doc_tipo']           = 'FACTURA_VENTA';
+                if (Schema::hasColumn('kardex_movimientos', 'detalle'))            $dataKardex['detalle']            = "Factura {$f->prefijo}-{$f->numero}";
 
                 KardexMovimiento::create($dataKardex);
 
-                // 3) Auditoría de costos (historial) - ✅ COMPLETO
-                $dataCostoMov = [
-                    'fecha'                 => $f->fecha,
-                    'producto_id'           => $d->producto_id,
-                    'bodega_id'             => $d->bodega_id,
-                    'tipo'                  => 'SALIDA',
-                    'cantidad'              => (float)$d->cantidad,
-                    'costo_unitario'        => $cpu,
-                    'costo_total'           => $costoTotal,
-                    'stock_antes'           => $stockAntes,
-                    'stock_despues'         => $stockDespues,
-                    'origen'                => 'factura',
-                    'origen_id'             => $f->id,
-                    'detalle'               => "Factura {$f->prefijo}-{$f->numero}",
-                    'tipo_evento'           => 'VENTA',
-                    'user_id'               => Auth::id(),
+                // 3) Historial de costos (SALIDA)
+                $dataCosto = [
+                    'fecha'          => $f->fecha,
+                    'producto_id'    => $d->producto_id,
+                    'bodega_id'      => $d->bodega_id,
+                    'tipo'           => 'SALIDA',
+                    'cantidad'       => $cant,
+                    'costo_unitario' => $cpu,
+                    'costo_total'    => $costoTotal,
+                    'stock_antes'    => $stockAntes,
+                    'stock_despues'  => $stockDespues,
+                    'origen'         => 'factura',
+                    'origen_id'      => $f->id,
+                    'detalle'        => 'Factura ' . static::refFactura($f),
+                    'tipo_evento'    => 'VENTA',
+                    'user_id'        => Auth::id(),
                 ];
+                if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) $dataCosto['tipo_documento_id'] = $tipoDocumentoId;
+                if (Schema::hasColumn('producto_costo_movimientos', 'doc_id'))           $dataCosto['doc_id']           = (string)$f->id;
+                if (Schema::hasColumn('producto_costo_movimientos', 'ref'))              $dataCosto['ref']              = 'FV ' . static::refFactura($f);
+                if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov'))        $dataCosto['valor_mov']        = $costoTotal;
+                if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov'))   $dataCosto['costo_unit_mov']   = $cpu;
+                if (Schema::hasColumn('producto_costo_movimientos', 'metodo_costeo'))    $dataCosto['metodo_costeo']    = 'PROMEDIO';
 
-                // Agregar campos opcionales si existen
-                if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) {
-                    $dataCostoMov['tipo_documento_id'] = $tipoDocumentoId;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'doc_id')) {
-                    $dataCostoMov['doc_id'] = (string)$f->id;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'ref')) {
-                    $dataCostoMov['ref'] = "FV " . static::refFactura($f);
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov')) {
-                    $dataCostoMov['valor_mov'] = $costoTotal;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov')) {
-                    $dataCostoMov['costo_unit_mov'] = $cpu;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'metodo_costeo')) {
-                    $dataCostoMov['metodo_costeo'] = 'PROMEDIO';
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'costo_prom_anterior')) {
-                    $dataCostoMov['costo_prom_anterior'] = (float)($pb->costo_promedio ?? 0);
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'costo_prom_nuevo')) {
-                    $dataCostoMov['costo_prom_nuevo'] = (float)($pb->costo_promedio ?? 0);
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'ultimo_costo_anterior')) {
-                    $dataCostoMov['ultimo_costo_anterior'] = (float)($pb->ultimo_costo ?? 0);
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'ultimo_costo_nuevo')) {
-                    $dataCostoMov['ultimo_costo_nuevo'] = (float)($pb->ultimo_costo ?? 0);
-                }
-
-                ProductoCostoMovimiento::create($dataCostoMov);
+                ProductoCostoMovimiento::create($dataCosto);
             }
         });
     }
 
     /* =========================================================
-     * REVERSA POR ANULACIÓN DE FACTURA
+     *  REVERSA POR ANULACIÓN DE FACTURA (devuelve stock)
      * ========================================================= */
     public static function revertirPorFactura(Factura $factura): void
     {
         DB::transaction(function () use ($factura) {
             $factura->loadMissing('detalles.producto', 'serie.tipo');
-
             $tipoId = static::tipoDocumentoId('ANULACION_FACTURA');
 
             foreach ($factura->detalles as $d) {
-                if (!$d->producto_id || !$d->bodega_id) {
-                    continue;
-                }
+                if (!$d->producto_id || !$d->bodega_id) continue;
 
-                $pb = ProductoBodega::query()
-                    ->where('producto_id', $d->producto_id)
-                    ->where('bodega_id', $d->bodega_id)
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$pb) {
-                    $pb = new ProductoBodega([
-                        'producto_id' => $d->producto_id,
-                        'bodega_id'   => $d->bodega_id,
-                        'stock'       => 0,
-                        'costo_promedio' => 0,
-                        'ultimo_costo' => 0,
-                    ]);
-                }
+                $pb = ProductoBodega::lockForUpdate()
+                    ->firstOrNew(['producto_id'=>$d->producto_id, 'bodega_id'=>$d->bodega_id],
+                        ['stock'=>0,'costo_promedio'=>0,'ultimo_costo'=>0]);
 
                 $stockAntes = (float)$pb->stock;
-                $pb->stock = (float)$pb->stock + (float)$d->cantidad;
+                $pb->stock  = $stockAntes + (float)$d->cantidad;
                 $pb->save();
 
-                $costoUnit = static::resolverCostoUnitarioReversion($d);
+                $cpu = static::resolverCostoUnitarioReversion($d);
 
-                // Registrar en kárdex
+                // Kárdex (ENTRADA)
                 static::registrarKardex(
                     tipoLogico: 'ANULACION',
                     signo: 1,
@@ -221,27 +162,27 @@ class InventarioService
                     productoId: (int)$d->producto_id,
                     bodegaId: (int)$d->bodega_id,
                     cantidad: (float)$d->cantidad,
-                    costoUnitario: $costoUnit,
+                    costoUnitario: $cpu,
                     tipoDocumentoId: $tipoId,
                     docTipoLegacy: 'ANULACION_FACTURA',
                     docId: (int)$factura->id,
-                    ref: 'Anulación de ' . static::refFactura($factura)
+                    ref: 'Anulación ' . static::refFactura($factura)
                 );
 
-                // ✅ Registrar en producto_costo_movimientos
+                // Historial costo
                 static::registrarCostoMovimiento(
                     fecha: now(),
                     productoId: (int)$d->producto_id,
                     bodegaId: (int)$d->bodega_id,
                     tipo: 'ENTRADA',
                     cantidad: (float)$d->cantidad,
-                    costoUnitario: $costoUnit,
+                    costoUnitario: $cpu,
                     stockAntes: $stockAntes,
                     stockDespues: (float)$pb->stock,
                     tipoDocumentoId: $tipoId,
                     docId: (int)$factura->id,
                     origen: 'factura',
-                    detalle: 'Anulación de ' . static::refFactura($factura),
+                    detalle: 'Anulación ' . static::refFactura($factura),
                     tipoEvento: 'ANULACION'
                 );
             }
@@ -249,213 +190,160 @@ class InventarioService
     }
 
     /* =========================================================
-     * NOTA CRÉDITO (REPONE STOCK)
+     *  NOTA CRÉDITO: repone stock
      * ========================================================= */
-      public static function reponerPorNotaCredito(NotaCredito $nc): void
+    public static function reponerPorNotaCredito(NotaCredito $nc): void
     {
         $nc->loadMissing('detalles.producto');
 
         DB::transaction(function () use ($nc) {
             foreach ($nc->detalles as $d) {
-                $cant = (float) $d->cantidad;
-                if ($cant <= 0 || !$d->producto_id || !$d->bodega_id) {
-                    continue;
-                }
+                $cant = (float)$d->cantidad;
+                if ($cant <= 0 || !$d->producto_id || !$d->bodega_id) continue;
 
-                // CPU por bodega (mismo helper que usas para factura)
-                $cpu = ContabilidadService::costoPromedioParaLinea($d->producto, (int)$d->bodega_id);
+                $cpu        = \App\Services\ContabilidadService::costoPromedioParaLinea($d->producto, (int)$d->bodega_id);
                 $costoTotal = round($cpu * $cant, 2);
 
-                // 1) Actualizar stock y (si manejas) costo_promedio del producto-bodega
-                /** @var ProductoBodega $pb */
                 $pb = ProductoBodega::lockForUpdate()
-                    ->where('producto_id', $d->producto_id)
-                    ->where('bodega_id',  $d->bodega_id)
-                    ->first();
+                    ->firstOrNew(['producto_id'=>$d->producto_id, 'bodega_id'=>$d->bodega_id],
+                        ['stock'=>0,'costo_promedio'=>$cpu ?: 0]);
 
-                if (!$pb) {
-                    $pb = new ProductoBodega([
-                        'producto_id' => $d->producto_id,
-                        'bodega_id'   => $d->bodega_id,
-                        'stock'       => 0,
-                        'costo_promedio' => $cpu ?: 0,
-                    ]);
-                }
-
-                // Si deseas recalcular costo promedio ponderado al reingresar:
-                // nuevo_prom = (stock_act * cpu_act + cant * cpu_nc) / (stock_act + cant)
-                $stockAct = (float) ($pb->stock ?? 0);
-                $cpuAct   = (float) ($pb->costo_promedio ?? 0);
+                $stockAct   = (float)$pb->stock;
+                $cpuAct     = (float)$pb->costo_promedio;
                 $nuevoStock = $stockAct + $cant;
+                $nuevoCPU   = $nuevoStock > 0
+                    ? ($stockAct > 0 ? round((($stockAct*$cpuAct)+($cant*$cpu))/$nuevoStock, 4) : round($cpu,4))
+                    : round($cpu,4);
 
-                if ($nuevoStock > 0) {
-                    $nuevoCPU = $stockAct > 0
-                        ? round((($stockAct * $cpuAct) + ($cant * $cpu)) / $nuevoStock, 4)
-                        : round($cpu, 4);
-                } else {
-                    $nuevoCPU = round($cpu, 4);
-                }
+                $pb->update(['stock'=>$nuevoStock, 'costo_promedio'=>$nuevoCPU]);
 
-                $pb->stock = $nuevoStock;
-                $pb->costo_promedio = $nuevoCPU;
-                $pb->save();
-
-                // 2) Kardex de entrada
+                // Kardex (ENTRADA)
                 KardexMovimiento::create([
-                    'fecha'             => $nc->fecha ?? now(),
-                    'producto_id'       => $d->producto_id,
-                    'bodega_id'         => $d->bodega_id,
-                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id, // si lo manejas
-                    'documento'         => 'nota_credito',
-                    'documento_id'      => $nc->id,
-                    'entrada'           => $cant,
-                    'salida'            => 0,
-                    'cantidad'          => $cant,
-                    'signo'             => +1,
-                    'costo_unitario'    => $cpu,
-                    'costo_total'       => $costoTotal,
-                    'descripcion'       => 'Reposición por Nota Crédito',
+                    'fecha'          => $nc->fecha ?? now(),
+                    'producto_id'    => $d->producto_id,
+                    'bodega_id'      => $d->bodega_id,
+                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id,
+                    'documento'      => 'nota_credito',
+                    'documento_id'   => $nc->id,
+                    'entrada'        => $cant,
+                    'salida'         => 0,
+                    'cantidad'       => $cant,
+                    'signo'          => 1,
+                    'costo_unitario' => $cpu,
+                    'total'          => $costoTotal,
+                    'detalle'        => 'Reposición por Nota Crédito',
                 ]);
 
-                // 3) Traza de costo (opcional pero útil para auditoría)
+                // Historial de costos (ENTRADA_NC)
                 ProductoCostoMovimiento::create([
-                    'fecha'        => $nc->fecha ?? now(),
-                    'producto_id'  => $d->producto_id,
-                    'bodega_id'    => $d->bodega_id,
-                    'documento'    => 'nota_credito',
-                    'documento_id' => $nc->id,
-                    'tipo'         => 'ENTRADA_NC',
-                    'cantidad'     => $cant,
-                    'costo_unit'   => $cpu,
-                    'costo_total'  => $costoTotal,
-                    'meta'         => [
-                        'nota_detalle_id' => $d->id,
-                        'prefijo'         => $nc->prefijo,
-                        'numero'          => $nc->numero,
-                    ],
+                    'fecha'          => $nc->fecha ?? now(),
+                    'producto_id'    => $d->producto_id,
+                    'bodega_id'      => $d->bodega_id,
+                    'tipo'           => 'ENTRADA',
+                    'cantidad'       => $cant,
+                    'costo_unitario' => $cpu,
+                    'costo_total'    => $costoTotal,
+                    'stock_antes'    => $stockAct,
+                    'stock_despues'  => $nuevoStock,
+                    'origen'         => 'nota_credito',
+                    'origen_id'      => $nc->id,
+                    'detalle'        => 'Reposición NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero,
+                    'tipo_evento'    => 'NOTA_CREDITO',
+                    'user_id'        => Auth::id(),
                 ]);
             }
         });
     }
 
     /* =========================================================
-     * REVERSA DE LA REPOSICIÓN POR NC (RESTAR)
+     *  REVERSA de la reposición por NC
      * ========================================================= */
-      public static function revertirReposicionPorNotaCredito(NotaCredito $nc): void
+    public static function revertirReposicionPorNotaCredito(NotaCredito $nc): void
     {
         $nc->loadMissing('detalles.producto');
 
         DB::transaction(function () use ($nc) {
             foreach ($nc->detalles as $d) {
-                $cant = (float) $d->cantidad;
-                if ($cant <= 0 || !$d->producto_id || !$d->bodega_id) {
-                    continue;
-                }
+                $cant = (float)$d->cantidad;
+                if ($cant <= 0 || !$d->producto_id || !$d->bodega_id) continue;
 
-                // CPU que quedó registrado en el Kardex de la NC o, si no, usa helper
-                $cpu = ContabilidadService::costoPromedioParaLinea($d->producto, (int)$d->bodega_id);
+                $cpu        = \App\Services\ContabilidadService::costoPromedioParaLinea($d->producto, (int)$d->bodega_id);
                 $costoTotal = round($cpu * $cant, 2);
 
-                /** @var ProductoBodega $pb */
                 $pb = ProductoBodega::lockForUpdate()
                     ->where('producto_id', $d->producto_id)
                     ->where('bodega_id',  $d->bodega_id)
                     ->first();
 
-                $stockAct = (float) ($pb->stock ?? 0);
+                $stockAct   = (float)($pb->stock ?? 0);
                 $nuevoStock = max(0, $stockAct - $cant);
-                $pb->stock = $nuevoStock;
-                // El CPU lo podrías mantener (no recalcular) al revertir.
-                $pb->save();
+                if ($pb) $pb->update(['stock'=>$nuevoStock]);
 
-                // Kardex de salida (reverso)
+                // Kardex (SALIDA)
                 KardexMovimiento::create([
-                    'fecha'             => $nc->fecha ?? now(),
-                    'producto_id'       => $d->producto_id,
-                    'bodega_id'         => $d->bodega_id,
-                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id, // si lo manejas
-                    'documento'         => 'nota_credito',
-                    'documento_id'      => $nc->id,
-                    'entrada'           => 0,
-                    'salida'            => $cant,
-                    'cantidad'          => -$cant,
-                    'signo'             => -1,
-                    'costo_unitario'    => $cpu,
-                    'costo_total'       => $costoTotal,
-                    'descripcion'       => 'Reverso reposición por anulación de NC',
+                    'fecha'          => $nc->fecha ?? now(),
+                    'producto_id'    => $d->producto_id,
+                    'bodega_id'      => $d->bodega_id,
+                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id,
+                    'documento'      => 'nota_credito_reversion',
+                    'documento_id'   => $nc->id,
+                    'entrada'        => 0,
+                    'salida'         => $cant,
+                    'cantidad'       => -$cant,
+                    'signo'          => -1,
+                    'costo_unitario' => $cpu,
+                    'total'          => $costoTotal,
+                    'detalle'        => 'Reverso reposición NC',
                 ]);
 
+                // Historial (SALIDA)
                 ProductoCostoMovimiento::create([
-                    'fecha'        => $nc->fecha ?? now(),
-                    'producto_id'  => $d->producto_id,
-                    'bodega_id'    => $d->bodega_id,
-                    'documento'    => 'nota_credito',
-                    'documento_id' => $nc->id,
-                    'tipo'         => 'SALIDA_REV_NC',
-                    'cantidad'     => -$cant,
-                    'costo_unit'   => $cpu,
-                    'costo_total'  => -$costoTotal,
-                    'meta'         => [
-                        'nota_detalle_id' => $d->id,
-                        'prefijo'         => $nc->prefijo,
-                        'numero'          => $nc->numero,
-                    ],
+                    'fecha'          => $nc->fecha ?? now(),
+                    'producto_id'    => $d->producto_id,
+                    'bodega_id'      => $d->bodega_id,
+                    'tipo'           => 'SALIDA',
+                    'cantidad'       => $cant,
+                    'costo_unitario' => $cpu,
+                    'costo_total'    => $costoTotal,
+                    'stock_antes'    => $stockAct,
+                    'stock_despues'  => $nuevoStock,
+                    'origen'         => 'nota_credito',
+                    'origen_id'      => $nc->id,
+                    'detalle'        => 'Reverso reposición NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero,
+                    'tipo_evento'    => 'REVERSO_NC',
+                    'user_id'        => Auth::id(),
                 ]);
             }
         });
     }
 
-
     /* =========================================================
-     * COMPRA: Kardex primero + historial costo + actualizar PB
+     *  COMPRA: Kardex + historial costo + actualizar PB
      * ========================================================= */
     public static function aplicarCompraYCosteo(Factura $factura): void
     {
         DB::transaction(function () use ($factura) {
-
-            // id del tipo de documento para "facturacompra"
             $tipoDocId = (int)(TipoDocumento::whereRaw('LOWER(codigo)=?', ['facturacompra'])->value('id') ?? 0);
-
             $factura->loadMissing('detalles.producto');
 
             foreach ($factura->detalles as $d) {
-                if (!$d->producto_id || !$d->bodega_id) {
-                    continue;
-                }
-                $cantidad = (float)$d->cantidad;
-                if ($cantidad <= 0) {
-                    continue;
-                }
+                if (!$d->producto_id || !$d->bodega_id) continue;
 
-                // costo unitario del detalle de compra (neto)
-                $costoUnitMov = static::costoUnitarioCompra($d);
+                $cantidad   = (float)$d->cantidad;
+                if ($cantidad <= 0) continue;
 
-                // Bloqueo de la fila de inventario
-                $pb = ProductoBodega::query()
-                    ->where('producto_id', $d->producto_id)
-                    ->where('bodega_id',  $d->bodega_id)
-                    ->lockForUpdate()
-                    ->first();
+                $costoUnit  = static::costoUnitarioCompra($d);
+                $valorMov   = round($cantidad * $costoUnit, 2);
 
-                if (!$pb) {
-                    $pb = new ProductoBodega([
-                        'producto_id'    => (int)$d->producto_id,
-                        'bodega_id'      => (int)$d->bodega_id,
-                        'stock'          => 0,
-                        'costo_promedio' => 0,
-                        'ultimo_costo'   => 0,
-                        'metodo_costeo'  => 'PROMEDIO',
-                    ]);
-                }
+                $pb = ProductoBodega::lockForUpdate()
+                    ->firstOrNew(['producto_id'=>$d->producto_id,'bodega_id'=>$d->bodega_id],
+                        ['stock'=>0,'costo_promedio'=>0,'ultimo_costo'=>0,'metodo_costeo'=>'PROMEDIO']);
 
-                /* CAPTURA DE VALORES ANTES */
-                $antesProm   = (float)($pb->costo_promedio ?? 0);
-                $antesUltimo = (float)($pb->ultimo_costo   ?? 0);
-                $existCant   = (float)($pb->stock ?? 0);
-                $existVal    = $existCant * $antesProm;
-                $movVal      = $cantidad * $costoUnitMov;
+                // valores previos
+                $existCant = (float)$pb->stock;
+                $existVal  = $existCant * (float)$pb->costo_promedio;
 
-                /* 1) KÁRDEX: ENTRADA */
+                // 1) Kardex (ENTRADA)
                 $dataKx = [
                     'fecha'          => $factura->fecha ?? now(),
                     'producto_id'    => (int)$d->producto_id,
@@ -464,92 +352,53 @@ class InventarioService
                     'salida'         => 0,
                     'cantidad'       => $cantidad,
                     'signo'          => 1,
-                    'costo_unitario' => $costoUnitMov,
-                    'total'          => round($cantidad * $costoUnitMov, 2),
+                    'costo_unitario' => $costoUnit,
+                    'total'          => $valorMov,
                     'doc_id'         => (string)$factura->id,
                     'ref'            => 'FAC COMP ' . static::refFactura($factura),
                 ];
-                if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) {
-                    $dataKx['tipo_documento_id'] = $tipoDocId ?: null;
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'doc_tipo')) {
-                    $dataKx['doc_tipo'] = 'FACTURA_COMPRA';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'metodo')) {
-                    $dataKx['metodo'] = 'PROMEDIO';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'evento')) {
-                    $dataKx['evento'] = 'FACTURA_COMPRA';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'origen')) {
-                    $dataKx['origen'] = 'factura';
-                }
-                if (Schema::hasColumn('kardex_movimientos', 'origen_id')) {
-                    $dataKx['origen_id'] = $factura->id;
-                }
-                
+                if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $dataKx['tipo_documento_id'] = $tipoDocId ?: null;
+                if (Schema::hasColumn('kardex_movimientos', 'doc_tipo'))           $dataKx['doc_tipo']           = 'FACTURA_COMPRA';
+                if (Schema::hasColumn('kardex_movimientos', 'metodo'))             $dataKx['metodo']             = 'PROMEDIO';
+                if (Schema::hasColumn('kardex_movimientos', 'evento'))             $dataKx['evento']             = 'FACTURA_COMPRA';
+                if (Schema::hasColumn('kardex_movimientos', 'origen'))             $dataKx['origen']             = 'factura';
+                if (Schema::hasColumn('kardex_movimientos', 'origen_id'))          $dataKx['origen_id']          = $factura->id;
+
                 KardexMovimiento::create($dataKx);
 
-                /* CÁLCULO DE NUEVOS VALORES */
+                // 2) Historial costo
                 $nuevoCant = $existCant + $cantidad;
-                $nuevoProm = $nuevoCant > 1e-9 ? ($existVal + $movVal) / $nuevoCant : $costoUnitMov;
+                $nuevoProm = $nuevoCant > 1e-9 ? ($existVal + $valorMov) / $nuevoCant : $costoUnit;
 
-                /* 2) ✅ HISTORIAL COSTO COMPLETO */
-                $dataCostoMov = [
-                    'fecha'                 => $factura->fecha ?? now(),
-                    'producto_id'           => (int)$d->producto_id,
-                    'bodega_id'             => (int)$d->bodega_id,
-                    'tipo'                  => 'ENTRADA',
-                    'cantidad'              => $cantidad,
-                    'costo_unitario'        => $costoUnitMov,
-                    'costo_total'           => $movVal,
-                    'stock_antes'           => $existCant,
-                    'stock_despues'         => $nuevoCant,
-                    'origen'                => 'factura',
-                    'origen_id'             => $factura->id,
-                    'detalle'               => 'FAC COMP ' . static::refFactura($factura),
-                    'tipo_evento'           => 'COMPRA',
-                    'user_id'               => Auth::id(),
+                $dataCosto = [
+                    'fecha'          => $factura->fecha ?? now(),
+                    'producto_id'    => (int)$d->producto_id,
+                    'bodega_id'      => (int)$d->bodega_id,
+                    'tipo'           => 'ENTRADA',
+                    'cantidad'       => $cantidad,
+                    'costo_unitario' => $costoUnit,
+                    'costo_total'    => $valorMov,
+                    'stock_antes'    => $existCant,
+                    'stock_despues'  => $nuevoCant,
+                    'origen'         => 'factura',
+                    'origen_id'      => $factura->id,
+                    'detalle'        => 'FAC COMP ' . static::refFactura($factura),
+                    'tipo_evento'    => 'COMPRA',
+                    'user_id'        => Auth::id(),
                 ];
+                if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) $dataCosto['tipo_documento_id'] = $tipoDocId ?: null;
+                if (Schema::hasColumn('producto_costo_movimientos', 'doc_id'))           $dataCosto['doc_id']           = (string)$factura->id;
+                if (Schema::hasColumn('producto_costo_movimientos', 'ref'))              $dataCosto['ref']              = 'FAC COMP ' . static::refFactura($factura);
+                if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov'))        $dataCosto['valor_mov']        = $valorMov;
+                if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov'))   $dataCosto['costo_unit_mov']   = $costoUnit;
+                if (Schema::hasColumn('producto_costo_movimientos', 'metodo_costeo'))    $dataCosto['metodo_costeo']    = $pb->metodo_costeo ?: 'PROMEDIO';
 
-                // Agregar campos opcionales dinámicamente
-                if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) {
-                    $dataCostoMov['tipo_documento_id'] = $tipoDocId ?: null;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'doc_id')) {
-                    $dataCostoMov['doc_id'] = (string)$factura->id;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'ref')) {
-                    $dataCostoMov['ref'] = 'FAC COMP ' . static::refFactura($factura);
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov')) {
-                    $dataCostoMov['valor_mov'] = $movVal;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov')) {
-                    $dataCostoMov['costo_unit_mov'] = $costoUnitMov;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'metodo_costeo')) {
-                    $dataCostoMov['metodo_costeo'] = $pb->metodo_costeo ?: 'PROMEDIO';
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'costo_prom_anterior')) {
-                    $dataCostoMov['costo_prom_anterior'] = $antesProm;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'costo_prom_nuevo')) {
-                    $dataCostoMov['costo_prom_nuevo'] = $nuevoProm;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'ultimo_costo_anterior')) {
-                    $dataCostoMov['ultimo_costo_anterior'] = $antesUltimo;
-                }
-                if (Schema::hasColumn('producto_costo_movimientos', 'ultimo_costo_nuevo')) {
-                    $dataCostoMov['ultimo_costo_nuevo'] = $costoUnitMov;
-                }
+                ProductoCostoMovimiento::create($dataCosto);
 
-                ProductoCostoMovimiento::create($dataCostoMov);
-
-                /* 3) Actualiza producto_bodega */
+                // 3) Actualiza PB
                 $pb->stock          = $nuevoCant;
                 $pb->costo_promedio = round($nuevoProm, 6);
-                $pb->ultimo_costo   = round($costoUnitMov, 6);
+                $pb->ultimo_costo   = round($costoUnit, 6);
                 $pb->metodo_costeo  = $pb->metodo_costeo ?: 'PROMEDIO';
                 $pb->save();
             }
@@ -557,7 +406,7 @@ class InventarioService
     }
 
     /* =========================================================
-     * REGISTRO GENÉRICO EN KARDEX
+     *  REGISTRO GENÉRICO EN KARDEX
      * ========================================================= */
     private static function registrarKardex(
         string $tipoLogico,
@@ -590,27 +439,17 @@ class InventarioService
             'ref'            => $ref ?: $tipoLogico,
         ];
 
-        if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) {
-            $data['tipo_documento_id'] = $tipoDocumentoId;
-        }
-        if ($docTipoLegacy !== null && Schema::hasColumn('kardex_movimientos', 'doc_tipo')) {
-            $data['doc_tipo'] = $docTipoLegacy;
-        }
-        if (Schema::hasColumn('kardex_movimientos', 'metodo')) {
-            $data['metodo'] = 'PROMEDIO';
-        }
-        if (Schema::hasColumn('kardex_movimientos', 'origen')) {
-            $data['origen'] = 'factura';
-        }
-        if (Schema::hasColumn('kardex_movimientos', 'origen_id')) {
-            $data['origen_id'] = $docId;
-        }
+        if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $data['tipo_documento_id'] = $tipoDocumentoId;
+        if ($docTipoLegacy !== null && Schema::hasColumn('kardex_movimientos', 'doc_tipo')) $data['doc_tipo'] = $docTipoLegacy;
+        if (Schema::hasColumn('kardex_movimientos', 'metodo'))  $data['metodo']  = 'PROMEDIO';
+        if (Schema::hasColumn('kardex_movimientos', 'origen'))  $data['origen']  = 'factura';
+        if (Schema::hasColumn('kardex_movimientos', 'origen_id')) $data['origen_id'] = $docId;
 
         KardexMovimiento::create($data);
     }
 
     /* =========================================================
-     * ✅ NUEVO: REGISTRO GENÉRICO EN PRODUCTO_COSTO_MOVIMIENTOS
+     *  REGISTRO GENÉRICO EN HISTORIAL DE COSTOS
      * ========================================================= */
     private static function registrarCostoMovimiento(
         $fecha,
@@ -630,95 +469,52 @@ class InventarioService
         $costoTotal = round($cantidad * $costoUnitario, 2);
 
         $data = [
-            'fecha'         => $fecha ?? now(),
-            'producto_id'   => $productoId,
-            'bodega_id'     => $bodegaId,
-            'tipo'          => $tipo,
-            'cantidad'      => $cantidad,
-            'costo_unitario'=> $costoUnitario,
-            'costo_total'   => $costoTotal,
-            'stock_antes'   => $stockAntes,
-            'stock_despues' => $stockDespues,
-            'origen'        => $origen,
-            'origen_id'     => $docId,
-            'detalle'       => $detalle,
-            'tipo_evento'   => $tipoEvento,
-            'user_id'       => Auth::id(),
+            'fecha'          => $fecha ?? now(),
+            'producto_id'    => $productoId,
+            'bodega_id'      => $bodegaId,
+            'tipo'           => $tipo,
+            'cantidad'       => $cantidad,
+            'costo_unitario' => $costoUnitario,
+            'costo_total'    => $costoTotal,
+            'stock_antes'    => $stockAntes,
+            'stock_despues'  => $stockDespues,
+            'origen'         => $origen,
+            'origen_id'      => $docId,
+            'detalle'        => $detalle,
+            'tipo_evento'    => $tipoEvento,
+            'user_id'        => Auth::id(),
         ];
 
-        // Campos opcionales
-        if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) {
-            $data['tipo_documento_id'] = $tipoDocumentoId;
-        }
-        if (Schema::hasColumn('producto_costo_movimientos', 'doc_id')) {
-            $data['doc_id'] = (string)$docId;
-        }
-        if (Schema::hasColumn('producto_costo_movimientos', 'ref')) {
-            $data['ref'] = $detalle;
-        }
-        if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov')) {
-            $data['valor_mov'] = $costoTotal;
-        }
-        if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov')) {
-            $data['costo_unit_mov'] = $costoUnitario;
-        }
-        if (Schema::hasColumn('producto_costo_movimientos', 'metodo_costeo')) {
-            $data['metodo_costeo'] = 'PROMEDIO';
-        }
+        if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) $data['tipo_documento_id'] = $tipoDocumentoId;
+        if (Schema::hasColumn('producto_costo_movimientos', 'doc_id'))           $data['doc_id']           = (string)$docId;
+        if (Schema::hasColumn('producto_costo_movimientos', 'ref'))              $data['ref']              = $detalle;
+        if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov'))        $data['valor_mov']        = $costoTotal;
+        if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov'))   $data['costo_unit_mov']   = $costoUnitario;
+        if (Schema::hasColumn('producto_costo_movimientos', 'metodo_costeo'))    $data['metodo_costeo']    = 'PROMEDIO';
 
         ProductoCostoMovimiento::create($data);
     }
 
     /* =========================================================
-     * HELPERS: COSTOS / REFERENCIAS / TIPO DOC
+     *  HELPERS
      * ========================================================= */
-    private static function resolverCostoUnitarioSalida($detalle): float
-    {
-        if (!empty($detalle->costo_unitario) && $detalle->costo_unitario > 0) {
-            return (float)$detalle->costo_unitario;
-        }
-
-        $pb = ProductoBodega::query()
-            ->where('producto_id', $detalle->producto_id)
-            ->where('bodega_id', $detalle->bodega_id)
-            ->first();
-
-        if ($pb && $pb->costo_promedio > 0) {
-            return (float)$pb->costo_promedio;
-        }
-
-        if ($detalle->producto && $detalle->producto->costo_promedio > 0) {
-            return (float)$detalle->producto->costo_promedio;
-        }
-
-        return (float)($detalle->producto->costo ?? 0);
-    }
-
-    private static function resolverCostoUnitarioEntrada($detalle): float
-    {
-        $cands = [
-            $detalle->costo_unitario ?? null,
-            $detalle->costo_promedio ?? null,
-            $detalle->producto->costo_promedio ?? null,
-            $detalle->producto->costo ?? null,
-        ];
-        foreach ($cands as $v) {
-            if (!is_null($v) && is_numeric($v) && (float)$v >= 0) {
-                return (float)$v;
-            }
-        }
-        return 0.0;
-    }
-
     private static function resolverCostoUnitarioReversion($detalle): float
     {
-        return static::resolverCostoUnitarioEntrada($detalle);
+        // mismo orden: detalle -> PB -> producto
+        $cand = [
+            $detalle->costo_unitario ?? null,
+            optional(ProductoBodega::where('producto_id',$detalle->producto_id)->where('bodega_id',$detalle->bodega_id)->first())->costo_promedio,
+            optional($detalle->producto)->costo_promedio,
+            optional($detalle->producto)->costo,
+        ];
+        foreach ($cand as $v) if (is_numeric($v) && (float)$v >= 0) return (float)$v;
+        return 0.0;
     }
 
     private static function refFactura(?Factura $f): string
     {
         if (!$f) return '—';
-        $pref = $f->prefijo ? ($f->prefijo . '-') : '';
+        $pref = $f->prefijo ? "{$f->prefijo}-" : '';
         $num  = $f->numero ? (string)$f->numero : '—';
         return $pref . $num;
     }
@@ -726,11 +522,9 @@ class InventarioService
     private static function tipoDocumentoId(string $codigo, ?Factura $factura = null): ?int
     {
         $codigo = strtoupper(trim($codigo));
-
         if ($codigo === 'FACTURA' && $factura && $factura->relationLoaded('serie') && $factura->serie?->tipo) {
             return (int)$factura->serie->tipo->id;
         }
-
         return cache()->remember("tipo_doc_id:$codigo", 600, function () use ($codigo) {
             return (int)(TipoDocumento::query()
                 ->whereRaw('UPPER(codigo) = ?', [$codigo])
@@ -742,18 +536,7 @@ class InventarioService
     {
         $pu   = (float)($detalle->precio_unitario ?? 0);
         $desc = (float)($detalle->descuento_pct   ?? 0);
-
-        // Neto con descuento
-        $puNeto = $pu * (1 - max(0, min(100, $desc)) / 100);
-
-        // Si tu precio viene con IVA y quieres neto sin IVA, descomenta:
-        // $iva = (float)($detalle->impuesto_pct ?? 0);
-        // if ($iva > 0) $puNeto = $puNeto / (1 + $iva / 100);
-
-        if ($puNeto <= 0 && !empty($detalle->costo_unitario)) {
-            $puNeto = (float)$detalle->costo_unitario;
-        }
-
-        return max(0.0, round($puNeto, 6));
+        $puN  = $pu * (1 - max(0, min(100, $desc)) / 100);
+        return max(0.0, round($puN, 6));
     }
 }

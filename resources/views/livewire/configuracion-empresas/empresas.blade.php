@@ -23,6 +23,18 @@
       </div>
     </div>
   </div>
+{{-- Alertas de éxito --}}
+@if ($ok)
+  <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
+              dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
+    <div class="flex items-start gap-3">
+      <span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+        <i class="fa-solid fa-check"></i>
+      </span>
+      <div>{{ $ok }}</div>
+    </div>
+  </div>
+@endif
 
   {{-- Alertas de éxito --}}
   @if (session('ok'))
@@ -512,12 +524,12 @@
 
         const reader = new FileReader();
         reader.onload = e => {
-          const dataUrl = e.target.result; // data:image/*;base64,....
+          const dataUrl = e.target.result; // data:image/*;base64,...
           this[previewKey] = dataUrl;
-          if (window.Livewire) {
-            window.Livewire.find(@this.__instance.id).set(livewireProp, dataUrl);
-          } else if (window.livewire) {
-            window.livewire.find(@this.__instance.id).set(livewireProp, dataUrl);
+
+          // Livewire v3-friendly:
+          if (typeof $wire !== 'undefined') {
+            $wire.set(livewireProp, dataUrl);
           }
         };
         reader.readAsDataURL(file);

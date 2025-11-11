@@ -26,7 +26,7 @@ class Empresas extends Component
     public ?string $direccion = null;
     public bool $is_activa = true;
 
-    // Imágenes en Base64 (recibidas desde Alpine)
+    // Imágenes en Base64
     public ?string $logo_b64 = null;
     public ?string $logo_dark_b64 = null;
     public ?string $favicon_b64 = null;
@@ -49,7 +49,7 @@ class Empresas extends Component
     public string $q = '';
     public int $perPage = 10;
 
-    // Flag de éxito (en lugar de session()->flash para Livewire)
+    // Mensaje de éxito para UI Livewire
     public ?string $ok = null;
 
     public function mount(): void
@@ -73,7 +73,7 @@ class Empresas extends Component
 
             'logo_b64'         => ['nullable','string','starts_with:data:image/'],
             'logo_dark_b64'    => ['nullable','string','starts_with:data:image/'],
-            'favicon_b64'      => ['nullable','string'], // puede ser .ico en base64 con otro mimetype
+            'favicon_b64'      => ['nullable','string'], // puede ser .ico con mimetype distinto
 
             'theme.primary'   => ['required','string','max:32'],
             'theme.base'      => ['required','string','max:32'],
@@ -133,7 +133,7 @@ class Empresas extends Component
                 'pdf_theme'   => $this->theme,
             ]);
 
-            // Guardar imágenes (si llegaron)
+            // Guardar imágenes si llegaron (Base64 → archivo en disk public)
             if ($this->logo_b64) {
                 $empresa->logo_path = $this->storeBase64Image($this->logo_b64, 'logos', 'logo');
             }
@@ -147,7 +147,7 @@ class Empresas extends Component
             $empresa->save();
             $this->empresa = $empresa;
 
-            $this->ok = 'Configuración guardada correctamente.'; // <-- visible en la misma renderización
+            $this->ok = 'Configuración guardada correctamente.'; // ← aparece sin redirect
             $this->resetUploads();
         } catch (Throwable $e) {
             $this->handleException($e, 'No se pudo guardar la configuración de la empresa.');
@@ -171,12 +171,12 @@ class Empresas extends Component
 
     private function storeBase64Image(string $dataUrl, string $folder, string $prefix): string
     {
-        // data:image/png;base64,xxxx
         if (!str_contains($dataUrl, ';base64,')) {
             throw new \RuntimeException('Imagen inválida.');
         }
         [$meta, $encoded] = explode(';base64,', $dataUrl, 2);
         $mime = str_replace('data:', '', $meta);
+
         $ext  = match ($mime) {
             'image/jpeg' => 'jpg',
             'image/png'  => 'png',
@@ -194,7 +194,7 @@ class Empresas extends Component
         $path = "empresas/{$folder}/{$prefix}-".uniqid().".{$ext}";
         Storage::disk('public')->put($path, $binary);
 
-        return $path; // Se guardará como ruta relativa en disk 'public'
+        return $path;
     }
 
     private function fillFromModel(Empresa $m): void

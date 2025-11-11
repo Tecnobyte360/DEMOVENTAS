@@ -4,6 +4,7 @@ namespace App\Livewire\ConfiguracionEmpresas;
 
 use App\Models\ConfiguracionEmpresas\Empresa;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -16,22 +17,21 @@ class Empresas extends Component
 
     public ?Empresa $empresa = null;
 
-    // Formulario base
+    // Datos base
     public string $nombre = '';
     public ?string $nit = null;
     public ?string $email = null;
     public ?string $telefono = null;
     public ?string $sitio_web = null;
     public ?string $direccion = null;
-
     public bool $is_activa = true;
 
-    // Imágenes (Base64)
+    // Imágenes en Base64 (recibidas desde Alpine)
     public ?string $logo_b64 = null;
     public ?string $logo_dark_b64 = null;
     public ?string $favicon_b64 = null;
 
-    // 🎨 Tema PDF — solo los colores reales del pdf_theme
+    // Tema PDF
     public array $theme = [
         'primary'   => '#7666AB',
         'base'      => '#FFFFFF',
@@ -48,6 +48,9 @@ class Empresas extends Component
 
     public string $q = '';
     public int $perPage = 10;
+
+    // Flag de éxito (en lugar de session()->flash para Livewire)
+    public ?string $ok = null;
 
     public function mount(): void
     {
@@ -68,11 +71,10 @@ class Empresas extends Component
             'direccion'        => ['nullable','string','max:255'],
             'is_activa'        => ['boolean'],
 
-            'logo_b64'        => ['nullable','string','starts_with:data:image/'],
-            'logo_dark_b64'   => ['nullable','string','starts_with:data:image/'],
-            'favicon_b64'     => ['nullable','string','starts_with:data:image/'],
+            'logo_b64'         => ['nullable','string','starts_with:data:image/'],
+            'logo_dark_b64'    => ['nullable','string','starts_with:data:image/'],
+            'favicon_b64'      => ['nullable','string'], // puede ser .ico en base64 con otro mimetype
 
-            // 🎨 Validar pdf_theme (sin defaults)
             'theme.primary'   => ['required','string','max:32'],
             'theme.base'      => ['required','string','max:32'],
             'theme.ink'       => ['required','string','max:32'],
@@ -94,6 +96,7 @@ class Empresas extends Component
     {
         $this->resetForm();
         $this->empresa = null;
+        $this->ok = null;
     }
 
     public function edit(int $id): void
@@ -102,6 +105,7 @@ class Empresas extends Component
             $empresa = Empresa::findOrFail($id);
             $this->empresa = $empresa;
             $this->fillFromModel($empresa);
+            $this->ok = null;
         } catch (Throwable $e) {
             $this->handleException($e, 'No se pudo cargar la empresa seleccionada.');
         }
@@ -126,18 +130,24 @@ class Empresas extends Component
                 'sitio_web'   => $this->sitio_web,
                 'direccion'   => $this->direccion,
                 'is_activa'   => $this->is_activa,
-                'pdf_theme'   => $this->theme, // Solo se guarda lo que el usuario definió
+                'pdf_theme'   => $this->theme,
             ]);
 
-            // Imágenes
-            if ($this->logo_b64)      $empresa->logo_path = $this->logo_b64;
-            if ($this->logo_dark_b64) $empresa->logo_dark_path = $this->logo_dark_b64;
-            if ($this->favicon_b64)   $empresa->favicon_path = $this->favicon_b64;
+            // Guardar imágenes (si llegaron)
+            if ($this->logo_b64) {
+                $empresa->logo_path = $this->storeBase64Image($this->logo_b64, 'logos', 'logo');
+            }
+            if ($this->logo_dark_b64) {
+                $empresa->logo_dark_path = $this->storeBase64Image($this->logo_dark_b64, 'logos', 'logo-dark');
+            }
+            if ($this->favicon_b64) {
+                $empresa->favicon_path = $this->storeBase64Image($this->favicon_b64, 'favicons', 'favicon');
+            }
 
             $empresa->save();
             $this->empresa = $empresa;
 
-            session()->flash('ok', 'Configuración guardada correctamente.');
+            $this->ok = 'Configuración guardada correctamente.'; // <-- visible en la misma renderización
             $this->resetUploads();
         } catch (Throwable $e) {
             $this->handleException($e, 'No se pudo guardar la configuración de la empresa.');
@@ -152,11 +162,39 @@ class Empresas extends Component
             if ($this->empresa?->id === $id) {
                 $this->createNew();
             }
-            session()->flash('ok', 'Empresa eliminada.');
+            $this->ok = 'Empresa eliminada.';
             $this->resetPage();
         } catch (Throwable $e) {
             $this->handleException($e, 'No se pudo eliminar la empresa.');
         }
+    }
+
+    private function storeBase64Image(string $dataUrl, string $folder, string $prefix): string
+    {
+        // data:image/png;base64,xxxx
+        if (!str_contains($dataUrl, ';base64,')) {
+            throw new \RuntimeException('Imagen inválida.');
+        }
+        [$meta, $encoded] = explode(';base64,', $dataUrl, 2);
+        $mime = str_replace('data:', '', $meta);
+        $ext  = match ($mime) {
+            'image/jpeg' => 'jpg',
+            'image/png'  => 'png',
+            'image/webp' => 'webp',
+            'image/svg+xml' => 'svg',
+            'image/x-icon', 'image/vnd.microsoft.icon' => 'ico',
+            default => 'png',
+        };
+
+        $binary = base64_decode($encoded);
+        if ($binary === false) {
+            throw new \RuntimeException('No se pudo decodificar la imagen.');
+        }
+
+        $path = "empresas/{$folder}/{$prefix}-".uniqid().".{$ext}";
+        Storage::disk('public')->put($path, $binary);
+
+        return $path; // Se guardará como ruta relativa en disk 'public'
     }
 
     private function fillFromModel(Empresa $m): void
@@ -171,9 +209,7 @@ class Empresas extends Component
             'is_activa'  => (bool) $m->is_activa,
         ]);
 
-        // Carga el theme exactamente como está en BD
         $this->theme = (array) $m->pdf_theme;
-
         $this->resetUploads();
     }
 

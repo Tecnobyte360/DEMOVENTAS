@@ -23,20 +23,21 @@
       </div>
     </div>
   </div>
-{{-- Alertas de éxito --}}
-@if ($ok)
-  <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
-              dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
-    <div class="flex items-start gap-3">
-      <span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
-        <i class="fa-solid fa-check"></i>
-      </span>
-      <div>{{ $ok }}</div>
-    </div>
-  </div>
-@endif
 
-  {{-- Alertas de éxito --}}
+  {{-- Alertas de éxito en propiedad --}}
+  @if ($ok)
+    <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
+                dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
+      <div class="flex items-start gap-3">
+        <span class="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
+          <i class="fa-solid fa-check"></i>
+        </span>
+        <div>{{ $ok }}</div>
+      </div>
+    </div>
+  @endif
+
+  {{-- Alertas de éxito flash (opcional) --}}
   @if (session('ok'))
     <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
                 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
@@ -352,8 +353,8 @@
               <img :src="logoPreview" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo">
             </template>
 
-            @if (!empty($empresa?->logo_url))
-              <img src="{{ $empresa->logo_url }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo actual">
+            @if (!empty($logo_actual))
+              <img src="{{ $logo_actual }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo actual">
             @endif
           </div>
         </div>
@@ -371,8 +372,8 @@
               <img :src="logoDarkPreview" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo dark">
             </template>
 
-            @if (!empty($empresa?->logo_dark_url))
-              <img src="{{ $empresa->logo_dark_url }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo oscuro actual">
+            @if (!empty($logo_dark_actual))
+              <img src="{{ $logo_dark_actual }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo oscuro actual">
             @endif
           </div>
         </div>
@@ -390,8 +391,8 @@
               <img :src="faviconPreview" class="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700" alt="preview favicon">
             </template>
 
-            @if (!empty($empresa?->favicon_url))
-              <img src="{{ $empresa->favicon_url }}" class="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700" alt="favicon actual">
+            @if (!empty($favicon_actual))
+              <img src="{{ $favicon_actual }}" class="h-10 w-10 rounded-lg border border-gray-200 dark:border-gray-700" alt="favicon actual">
             @endif
           </div>
         </div>
@@ -527,7 +528,7 @@
           const dataUrl = e.target.result; // data:image/*;base64,...
           this[previewKey] = dataUrl;
 
-          // Livewire v3-friendly:
+          // Livewire v3
           if (typeof $wire !== 'undefined') {
             $wire.set(livewireProp, dataUrl);
           }

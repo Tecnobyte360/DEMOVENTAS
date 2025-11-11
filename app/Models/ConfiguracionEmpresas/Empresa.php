@@ -11,8 +11,7 @@ class Empresa extends Model
     protected $fillable = [
         'nombre','nit','email','telefono','sitio_web','direccion',
         'logo_path','logo_dark_path','favicon_path',
-        'color_primario','color_secundario','is_activa','extra',
-        'pdf_theme',
+        'color_primario','color_secundario','is_activa','extra','pdf_theme',
     ];
 
     protected $casts = [
@@ -21,7 +20,7 @@ class Empresa extends Model
         'pdf_theme' => 'array',
     ];
 
-    /** Retorna el tema PDF almacenado o arreglo vacío */
+    /** Tema PDF con respaldo por defecto */
     public function pdfTheme(): array
     {
         return (array) ($this->pdf_theme ?? []);
@@ -32,7 +31,7 @@ class Empresa extends Model
         return $this->hasMany(\App\Models\Factura\Factura::class, 'empresa_id');
     }
 
-    // ==== Accessors para mostrar URLs seguras en Blade ====
+    /** === Accessors de URLs === */
     public function getLogoUrlAttribute(): ?string
     {
         return $this->toPublicUrl($this->logo_path);
@@ -51,13 +50,7 @@ class Empresa extends Model
     private function toPublicUrl(?string $path): ?string
     {
         if (!$path) return null;
-
-        // Soporte legado: si quedó Base64 en BD, úsalo tal cual
-        if (str_starts_with($path, 'data:image/')) {
-            return $path;
-        }
-
-        // Disk "public" → /storage/...
-        return asset('storage/'.$path);
+        if (str_starts_with($path, 'data:image/')) return $path;
+        return asset('storage/' . $path);
     }
 }

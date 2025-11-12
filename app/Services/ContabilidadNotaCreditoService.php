@@ -39,6 +39,12 @@ class ContabilidadNotaCreditoService
         // Asegura totales actualizados
         $nc->recalcularTotales();
 
+        // 🔒 Normaliza posibles DECIMAL(string) que vengan del cast de Eloquent
+        $nc->total     = self::round2($nc->total);
+        if (property_exists($nc, 'subtotal'))  { $nc->subtotal  = self::round2($nc->subtotal); }
+        if (property_exists($nc, 'impuestos')) { $nc->impuestos = self::round2($nc->impuestos); }
+        if (property_exists($nc, 'descuento')) { $nc->descuento = self::round2($nc->descuento); }
+
         $fecha    = $nc->fecha;
         $numFmt   = $nc->numero
             ? str_pad((string) $nc->numero, optional($nc->serie)->longitud ?? 6, '0', STR_PAD_LEFT)
@@ -63,34 +69,35 @@ class ContabilidadNotaCreditoService
 
                 if ($totalAsientoFactura > 0.0 && $totalNc > 0.0) {
                     // Ratio global si la NC es parcial
-                    $ratio   = min(1.0, round($totalNc / $totalAsientoFactura, 6));
+                    $ratio   = min(1.0, self::sround($totalNc / $totalAsientoFactura, 6));
                     $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
                     $movsInv = self::consolidarArray($movsInv);
 
                     // Verificación y microajuste por redondeos
-                    $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
-                    $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
+                    $deb = self::sround(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
+                    $cre = self::sround(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
 
                     if (abs($deb - $cre) >= 0.01 && !empty($movsInv)) {
-                        $delta = round($deb - $cre, 2);
+                        $delta = self::sround($deb - $cre, 2);
 
                         // Corrige el mayor movimiento
                         usort(
                             $movsInv,
-                            fn ($a, $b) => (max($b['debito'], $b['credito']) <=> max($a['debito'], $a['credito']))
+                            fn ($a, $b) => (max(self::toFloat($b['debito']), self::toFloat($b['credito']))
+                                <=> max(self::toFloat($a['debito']), self::toFloat($a['credito'])))
                         );
 
                         if ($delta > 0) {
-                            $movsInv[0]['credito'] = round($movsInv[0]['credito'] + $delta, 2);
+                            $movsInv[0]['credito'] = self::sround(self::toFloat($movsInv[0]['credito']) + $delta, 2);
                         } else {
-                            $movsInv[0]['debito'] = round($movsInv[0]['debito'] + abs($delta), 2);
+                            $movsInv[0]['debito']  = self::sround(self::toFloat($movsInv[0]['debito']) + abs($delta), 2);
                         }
 
                         // Revalidar
-                        $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
-                        $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
+                        $deb = self::sround(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
+                        $cre = self::sround(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
 
-                        if (round($deb - $cre, 2) !== 0.0) {
+                        if (self::sround($deb - $cre, 2) !== 0.0) {
                             throw new RuntimeException('El asiento proporcional (fast-path) no cuadra.');
                         }
                     }
@@ -233,15 +240,15 @@ class ContabilidadNotaCreditoService
         // 4) Consolidar y validar
         $movs = self::consolidar($movs);
 
-        $deb = round(array_sum(array_column($movs, 'debito')), 2);
-        $cre = round(array_sum(array_column($movs, 'credito')), 2);
+        $deb = self::sround(array_sum(array_map('floatval', array_column($movs, 'debito'))), 2);
+        $cre = self::sround(array_sum(array_map('floatval', array_column($movs, 'credito'))), 2);
 
         if (abs($deb - $cre) >= 0.01) {
             Log::error('Descuadre en asiento de Nota Crédito', [
                 'nota_credito_id' => $nc->id,
                 'deb'             => $deb,
                 'cre'             => $cre,
-                'diff'            => round($deb - $cre, 2),
+                'diff'            => self::sround($deb - $cre, 2),
                 'movs'            => $movs,
             ]);
 
@@ -280,8 +287,8 @@ class ContabilidadNotaCreditoService
             throw new RuntimeException('No hay movimientos para registrar.');
         }
 
-        $deb = round(array_sum(array_column($movs, 'debito')), 2);
-        $cre = round(array_sum(array_column($movs, 'credito')), 2);
+        $deb = self::sround(array_sum(array_map('floatval', array_column($movs, 'debito'))), 2);
+        $cre = self::sround(array_sum(array_map('floatval', array_column($movs, 'credito'))), 2);
 
         if ($deb !== $cre) {
             throw new RuntimeException('El asiento no cuadra.');
@@ -315,8 +322,8 @@ class ContabilidadNotaCreditoService
             Movimiento::insert($rows);
 
             // Verificación post–insert
-            $deb2 = round($asiento->movimientos()->sum('debito'), 2);
-            $cre2 = round($asiento->movimientos()->sum('credito'), 2);
+            $deb2 = self::sround($asiento->movimientos()->sum('debito'), 2);
+            $cre2 = self::sround($asiento->movimientos()->sum('credito'), 2);
 
             if ($deb2 !== $cre2 || $deb2 !== $deb) {
                 Log::error('Asiento no cuadra tras insertar movimientos', [
@@ -343,8 +350,8 @@ class ContabilidadNotaCreditoService
                 $by[$id] = ['cuenta_id' => $id, 'debito' => 0.0, 'credito' => 0.0, 'glosa' => []];
             }
 
-            $by[$id]['debito']  += (float) $m['debito'];
-            $by[$id]['credito'] += (float) $m['credito'];
+            $by[$id]['debito']  += self::toFloat($m['debito']);
+            $by[$id]['credito'] += self::toFloat($m['credito']);
 
             if (!empty($m['glosa'])) {
                 $by[$id]['glosa'][] = self::recortar($m['glosa']);
@@ -352,8 +359,8 @@ class ContabilidadNotaCreditoService
         }
 
         foreach ($by as $id => &$r) {
-            $d = round($r['debito'], 2);
-            $c = round($r['credito'], 2);
+            $d = self::sround($r['debito'], 2);
+            $c = self::sround($r['credito'], 2);
 
             if (abs($d - $c) < 0.01) {
                 unset($by[$id]);
@@ -379,8 +386,8 @@ class ContabilidadNotaCreditoService
                 $by[$id] = ['cuenta_id' => $id, 'debito' => 0.0, 'credito' => 0.0, 'glosa' => []];
             }
 
-            $by[$id]['debito']  += (float) $m['debito'];
-            $by[$id]['credito'] += (float) $m['credito'];
+            $by[$id]['debito']  += self::toFloat($m['debito']);
+            $by[$id]['credito'] += self::toFloat($m['credito']);
 
             if (!empty($m['glosa'])) {
                 $by[$id]['glosa'][] = self::recortar($m['glosa']);
@@ -388,8 +395,8 @@ class ContabilidadNotaCreditoService
         }
 
         foreach ($by as $id => &$r) {
-            $r['debito']  = round($r['debito'], 2);
-            $r['credito'] = round($r['credito'], 2);
+            $r['debito']  = self::sround($r['debito'], 2);
+            $r['credito'] = self::sround($r['credito'], 2);
             $r['glosa']   = self::recortar(implode(' · ', array_filter($r['glosa'])));
         }
 
@@ -402,8 +409,8 @@ class ContabilidadNotaCreditoService
         $rows  = [];
 
         foreach ($movs as $m) {
-            $deb = round(self::toFloat($m->debito) * $ratio, 2);
-            $cre = round(self::toFloat($m->credito) * $ratio, 2);
+            $deb = self::sround(self::toFloat($m->debito) * $ratio, 2);
+            $cre = self::sround(self::toFloat($m->credito) * $ratio, 2);
 
             // Invierte: lo que fue débito va a crédito y viceversa
             $rows[] = [
@@ -505,7 +512,8 @@ class ContabilidadNotaCreditoService
         $s = (string) $v;
 
         // Quita espacios (incluye NBSP) y símbolos no numéricos salvo , . y -
-        $s = str_replace(["\u{00A0}", ' '], '', $s);
+        $s = str_replace("\u{00A0}", '', $s);
+        $s = str_replace(' ', '', $s);
         $s = preg_replace('/[^\d,.\-]/', '', $s) ?? '';
 
         $hasComma = strpos($s, ',') !== false;
@@ -522,9 +530,15 @@ class ContabilidadNotaCreditoService
         return (float) $s;
     }
 
+    /** Redondeo a N decimales aceptando string o número. */
+    private static function sround($v, int $precision = 2): float
+    {
+        return round(self::toFloat($v), $precision);
+    }
+
     /** Redondeo a 2 decimales aceptando string o número. */
     private static function round2($v): float
     {
-        return round(self::toFloat($v), 2);
+        return self::sround($v, 2);
     }
 }

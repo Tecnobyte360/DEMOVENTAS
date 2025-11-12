@@ -297,7 +297,7 @@
           <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
             @forelse($lineas as $i => $l)
               @php
-                $cant   = max(1, (float)($l['cantidad'] ?? 1));
+                $cant   = max(1, (float)($l['cantidad']));
                 $costo  = max(0, (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0));
                 $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
                 $ivaP   = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));

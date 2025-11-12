@@ -1,4 +1,8 @@
-<div class="w-full px-4 sm:px-6 lg:px-8">
+<div
+  class="w-full px-4 sm:px-6 lg:px-8"
+  x-data
+  x-on:socioCreado.window="$dispatch('cerrarModal')"
+>
   <div class="mx-auto max-w-md md:max-w-lg lg:max-w-3xl xl:max-w-5xl bg-white/90 dark:bg-gray-800/90 border border-gray-200 dark:border-gray-700 p-6 md:p-8 rounded-2xl shadow-xl">
 
     {{-- ALERTAS --}}
@@ -10,7 +14,7 @@
             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10.012 10.012 0 0 0 12 2Zm1 15h-2v-2h2Zm0-4h-2V7h2Z"/></svg>
             <span class="font-medium">{{ session('message') }}</span>
           </div>
-          <button type="button" wire:click="$set('message','')" class="opacity-70 hover:opacity-100">✕</button>
+          <button type="button" x-on:click="show=false" class="opacity-70 hover:opacity-100">✕</button>
         </div>
       @endif
 
@@ -21,7 +25,7 @@
             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2A10 10 0 1 0 22 12 10.012 10.012 0 0 0 12 2Zm1 15h-2v-2h2Zm0-4h-2V7h2Z"/></svg>
             <span class="font-medium">{{ session('error') }}</span>
           </div>
-          <button type="button" wire:click="$set('error','')" class="opacity-70 hover:opacity-100">✕</button>
+          <button type="button" x-on:click="show=false" class="opacity-70 hover:opacity-100">✕</button>
         </div>
       @endif
     </div>
@@ -136,6 +140,7 @@
 
           {{-- ========== Condición de pago (NUEVO) ========== --}}
           @php
+            /** @var \Illuminate\Support\Collection|\App\Models\CondicionPago\CondicionPago[] $condicionesPago */
             $condSel = $condicionesPago->firstWhere('id', (int)($condicion_pago_id ?? 0));
           @endphp
           <div class="sm:col-span-2 lg:col-span-3">
@@ -171,9 +176,10 @@
                       <div>Día corte: <span class="font-medium">{{ $condSel->dia_corte ?? '—' }}</span></div>
                     </div>
                   </div>
+                  @php $activo = property_exists($condSel,'activo') ? (bool)$condSel->activo : true; @endphp
                   <span class="inline-flex items-center text-[11px] px-2 py-0.5 rounded-full
-                    {{ $condSel->activo ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200' }}">
-                    {{ $condSel->activo ? 'Activa' : 'Inactiva' }}
+                    {{ $activo ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200' }}">
+                    {{ $activo ? 'Activa' : 'Inactiva' }}
                   </span>
                 </div>
               </div>

@@ -61,7 +61,7 @@ class InventarioService
             foreach ($f->detalles as $d) {
                 if (!$d->producto_id || !$d->bodega_id || $d->cantidad <= 0) continue;
 
-                // CPU (promedio) a usar en la salida
+                // CPU a usar en la salida
                 $cpu = \App\Services\ContabilidadService::costoPromedioParaLinea(
                     $d->producto()->with('cuentas')->first(),
                     $d->bodega_id
@@ -79,19 +79,17 @@ class InventarioService
                 $stockDespues = round($stockAntes - $cant, 6);
                 $pb->update(['stock' => $stockDespues]); // en salida no se recalcula cpm
 
-                // 2) Kárdex (SALIDA) — usa columna 'total'
+                // 2) Kardex (SALIDA)
                 $dataKardex = [
                     'fecha'          => $f->fecha,
                     'producto_id'    => $d->producto_id,
                     'bodega_id'      => $d->bodega_id,
                     'entrada'        => 0,
                     'salida'         => $cant,
-                    'cantidad'       => -$cant,
+                    'cantidad'       => $cant,           // positivo; separado por entrada/salida
                     'signo'          => -1,
                     'costo_unitario' => $cpu,
                     'total'          => $costoTotal,
-                    'doc_id'         => (string)$f->id,
-                    'ref'            => 'FV ' . static::refFactura($f),
                 ];
                 if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $dataKardex['tipo_documento_id'] = $tipoDocumentoId;
                 if (Schema::hasColumn('kardex_movimientos', 'metodo'))            $dataKardex['metodo']            = 'PROMEDIO';
@@ -99,6 +97,8 @@ class InventarioService
                 if (Schema::hasColumn('kardex_movimientos', 'origen'))             $dataKardex['origen']             = 'factura';
                 if (Schema::hasColumn('kardex_movimientos', 'origen_id'))          $dataKardex['origen_id']          = $f->id;
                 if (Schema::hasColumn('kardex_movimientos', 'doc_tipo'))           $dataKardex['doc_tipo']           = 'FACTURA_VENTA';
+                if (Schema::hasColumn('kardex_movimientos', 'doc_id'))             $dataKardex['doc_id']             = (string)$f->id;
+                if (Schema::hasColumn('kardex_movimientos', 'ref'))                $dataKardex['ref']                = 'FV ' . static::refFactura($f);
                 if (Schema::hasColumn('kardex_movimientos', 'detalle'))            $dataKardex['detalle']            = "Factura {$f->prefijo}-{$f->numero}";
 
                 KardexMovimiento::create($dataKardex);
@@ -217,14 +217,11 @@ class InventarioService
 
                 $pb->update(['stock'=>$nuevoStock, 'costo_promedio'=>$nuevoCPU]);
 
-                // Kardex (ENTRADA)
-                KardexMovimiento::create([
+                // Kardex (ENTRADA) - protegido por columnas opcionales
+                $kx = [
                     'fecha'          => $nc->fecha ?? now(),
                     'producto_id'    => $d->producto_id,
                     'bodega_id'      => $d->bodega_id,
-                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id,
-                    'documento'      => 'nota_credito',
-                    'documento_id'   => $nc->id,
                     'entrada'        => $cant,
                     'salida'         => 0,
                     'cantidad'       => $cant,
@@ -232,10 +229,18 @@ class InventarioService
                     'costo_unitario' => $cpu,
                     'total'          => $costoTotal,
                     'detalle'        => 'Reposición por Nota Crédito',
-                ]);
+                ];
+                if (Schema::hasColumn('kardex_movimientos','tipo_documento_id')) $kx['tipo_documento_id'] = optional($nc->serie)->tipo_documento_id;
+                if (Schema::hasColumn('kardex_movimientos','origen'))             $kx['origen']  = 'nota_credito';
+                if (Schema::hasColumn('kardex_movimientos','origen_id'))          $kx['origen_id']= $nc->id;
+                if (Schema::hasColumn('kardex_movimientos','doc_tipo'))           $kx['doc_tipo']= 'NOTA_CREDITO';
+                if (Schema::hasColumn('kardex_movimientos','doc_id'))             $kx['doc_id']  = (string)$nc->id;
+                if (Schema::hasColumn('kardex_movimientos','ref'))                $kx['ref']     = 'NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero;
 
-                // Historial de costos (ENTRADA_NC)
-                ProductoCostoMovimiento::create([
+                KardexMovimiento::create($kx);
+
+                // Historial de costos (ENTRADA_NC) - protegido por columnas opcionales
+                $hc = [
                     'fecha'          => $nc->fecha ?? now(),
                     'producto_id'    => $d->producto_id,
                     'bodega_id'      => $d->bodega_id,
@@ -250,7 +255,15 @@ class InventarioService
                     'detalle'        => 'Reposición NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero,
                     'tipo_evento'    => 'NOTA_CREDITO',
                     'user_id'        => Auth::id(),
-                ]);
+                ];
+                if (Schema::hasColumn('producto_costo_movimientos','tipo_documento_id')) $hc['tipo_documento_id'] = optional($nc->serie)->tipo_documento_id;
+                if (Schema::hasColumn('producto_costo_movimientos','doc_id'))           $hc['doc_id']           = (string)$nc->id;
+                if (Schema::hasColumn('producto_costo_movimientos','ref'))              $hc['ref']              = 'NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero;
+                if (Schema::hasColumn('producto_costo_movimientos','valor_mov'))        $hc['valor_mov']        = $costoTotal;
+                if (Schema::hasColumn('producto_costo_movimientos','costo_unit_mov'))   $hc['costo_unit_mov']   = $cpu;
+                if (Schema::hasColumn('producto_costo_movimientos','metodo_costeo'))    $hc['metodo_costeo']    = 'PROMEDIO';
+
+                ProductoCostoMovimiento::create($hc);
             }
         });
     }
@@ -280,24 +293,29 @@ class InventarioService
                 if ($pb) $pb->update(['stock'=>$nuevoStock]);
 
                 // Kardex (SALIDA)
-                KardexMovimiento::create([
+                $kx = [
                     'fecha'          => $nc->fecha ?? now(),
                     'producto_id'    => $d->producto_id,
                     'bodega_id'      => $d->bodega_id,
-                    'tipo_documento_id' => optional($nc->serie)->tipo_documento_id,
-                    'documento'      => 'nota_credito_reversion',
-                    'documento_id'   => $nc->id,
                     'entrada'        => 0,
                     'salida'         => $cant,
-                    'cantidad'       => -$cant,
+                    'cantidad'       => $cant,
                     'signo'          => -1,
                     'costo_unitario' => $cpu,
                     'total'          => $costoTotal,
                     'detalle'        => 'Reverso reposición NC',
-                ]);
+                ];
+                if (Schema::hasColumn('kardex_movimientos','tipo_documento_id')) $kx['tipo_documento_id'] = optional($nc->serie)->tipo_documento_id;
+                if (Schema::hasColumn('kardex_movimientos','origen'))             $kx['origen']  = 'nota_credito';
+                if (Schema::hasColumn('kardex_movimientos','origen_id'))          $kx['origen_id']= $nc->id;
+                if (Schema::hasColumn('kardex_movimientos','doc_tipo'))           $kx['doc_tipo']= 'NOTA_CREDITO_REVERSO';
+                if (Schema::hasColumn('kardex_movimientos','doc_id'))             $kx['doc_id']  = (string)$nc->id;
+                if (Schema::hasColumn('kardex_movimientos','ref'))                $kx['ref']     = 'REV NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero;
+
+                KardexMovimiento::create($kx);
 
                 // Historial (SALIDA)
-                ProductoCostoMovimiento::create([
+                $hc = [
                     'fecha'          => $nc->fecha ?? now(),
                     'producto_id'    => $d->producto_id,
                     'bodega_id'      => $d->bodega_id,
@@ -312,7 +330,15 @@ class InventarioService
                     'detalle'        => 'Reverso reposición NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero,
                     'tipo_evento'    => 'REVERSO_NC',
                     'user_id'        => Auth::id(),
-                ]);
+                ];
+                if (Schema::hasColumn('producto_costo_movimientos','tipo_documento_id')) $hc['tipo_documento_id'] = optional($nc->serie)->tipo_documento_id;
+                if (Schema::hasColumn('producto_costo_movimientos','doc_id'))           $hc['doc_id']           = (string)$nc->id;
+                if (Schema::hasColumn('producto_costo_movimientos','ref'))              $hc['ref']              = 'REV NC ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string)$nc->numero;
+                if (Schema::hasColumn('producto_costo_movimientos','valor_mov'))        $hc['valor_mov']        = $costoTotal;
+                if (Schema::hasColumn('producto_costo_movimientos','costo_unit_mov'))   $hc['costo_unit_mov']   = $cpu;
+                if (Schema::hasColumn('producto_costo_movimientos','metodo_costeo'))    $hc['metodo_costeo']    = 'PROMEDIO';
+
+                ProductoCostoMovimiento::create($hc);
             }
         });
     }
@@ -354,8 +380,6 @@ class InventarioService
                     'signo'          => 1,
                     'costo_unitario' => $costoUnit,
                     'total'          => $valorMov,
-                    'doc_id'         => (string)$factura->id,
-                    'ref'            => 'FAC COMP ' . static::refFactura($factura),
                 ];
                 if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $dataKx['tipo_documento_id'] = $tipoDocId ?: null;
                 if (Schema::hasColumn('kardex_movimientos', 'doc_tipo'))           $dataKx['doc_tipo']           = 'FACTURA_COMPRA';
@@ -363,6 +387,8 @@ class InventarioService
                 if (Schema::hasColumn('kardex_movimientos', 'evento'))             $dataKx['evento']             = 'FACTURA_COMPRA';
                 if (Schema::hasColumn('kardex_movimientos', 'origen'))             $dataKx['origen']             = 'factura';
                 if (Schema::hasColumn('kardex_movimientos', 'origen_id'))          $dataKx['origen_id']          = $factura->id;
+                if (Schema::hasColumn('kardex_movimientos', 'doc_id'))             $dataKx['doc_id']             = (string)$factura->id;
+                if (Schema::hasColumn('kardex_movimientos', 'ref'))                $dataKx['ref']                = 'FAC COMP ' . static::refFactura($factura);
 
                 KardexMovimiento::create($dataKx);
 
@@ -431,19 +457,19 @@ class InventarioService
             'bodega_id'      => $bodegaId,
             'entrada'        => $entrada,
             'salida'         => $salida,
-            'cantidad'       => $cantidad,
+            'cantidad'       => $cantidad, // positivo siempre
             'signo'          => $signo,
             'costo_unitario' => (float)$costoUnitario,
             'total'          => round($cantidad * (float)$costoUnitario, 2),
-            'doc_id'         => $docId,
-            'ref'            => $ref ?: $tipoLogico,
         ];
 
         if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $data['tipo_documento_id'] = $tipoDocumentoId;
         if ($docTipoLegacy !== null && Schema::hasColumn('kardex_movimientos', 'doc_tipo')) $data['doc_tipo'] = $docTipoLegacy;
-        if (Schema::hasColumn('kardex_movimientos', 'metodo'))  $data['metodo']  = 'PROMEDIO';
-        if (Schema::hasColumn('kardex_movimientos', 'origen'))  $data['origen']  = 'factura';
+        if (Schema::hasColumn('kardex_movimientos', 'metodo'))    $data['metodo']    = 'PROMEDIO';
+        if (Schema::hasColumn('kardex_movimientos', 'origen'))    $data['origen']    = 'factura';
         if (Schema::hasColumn('kardex_movimientos', 'origen_id')) $data['origen_id'] = $docId;
+        if (Schema::hasColumn('kardex_movimientos', 'doc_id'))    $data['doc_id']    = $docId ? (string)$docId : null;
+        if (Schema::hasColumn('kardex_movimientos', 'ref'))       $data['ref']       = $ref ?: $tipoLogico;
 
         KardexMovimiento::create($data);
     }
@@ -486,7 +512,7 @@ class InventarioService
         ];
 
         if (Schema::hasColumn('producto_costo_movimientos', 'tipo_documento_id')) $data['tipo_documento_id'] = $tipoDocumentoId;
-        if (Schema::hasColumn('producto_costo_movimientos', 'doc_id'))           $data['doc_id']           = (string)$docId;
+        if (Schema::hasColumn('producto_costo_movimientos', 'doc_id'))           $data['doc_id']           = $docId ? (string)$docId : null;
         if (Schema::hasColumn('producto_costo_movimientos', 'ref'))              $data['ref']              = $detalle;
         if (Schema::hasColumn('producto_costo_movimientos', 'valor_mov'))        $data['valor_mov']        = $costoTotal;
         if (Schema::hasColumn('producto_costo_movimientos', 'costo_unit_mov'))   $data['costo_unit_mov']   = $costoUnitario;
@@ -500,7 +526,6 @@ class InventarioService
      * ========================================================= */
     private static function resolverCostoUnitarioReversion($detalle): float
     {
-        // mismo orden: detalle -> PB -> producto
         $cand = [
             $detalle->costo_unitario ?? null,
             optional(ProductoBodega::where('producto_id',$detalle->producto_id)->where('bodega_id',$detalle->bodega_id)->first())->costo_promedio,

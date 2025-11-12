@@ -1,5 +1,4 @@
 <?php
-
 declare(strict_types=1);
 
 namespace App\Services;
@@ -14,28 +13,24 @@ use App\Models\CuentasContables\PlanCuentas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
+use App\Services\ContabilidadService; // necesario para resolver cuentas/costos
 
 class ContabilidadNotaCreditoService
 {
     /* ============================================================
-     * Utilidades numéricas y de texto
+     * Utilidades
      * ============================================================ */
 
-    /**
-     * Normaliza strings numéricos ("1,428.00", " 1200 ") a float seguro.
-     */
+    /** Normaliza strings numéricos ("1,428.00") a float seguro. */
     private static function f(mixed $v): float
     {
         if (is_string($v)) {
-            // Quita separadores de miles y espacios; conserva el punto decimal
             $v = preg_replace('/[^\d\.\-]/', '', str_replace(',', '', $v));
         }
         return (float) $v;
     }
 
-    /**
-     * Acorta una glosa a $max caracteres con ellipsis.
-     */
+    /** Acorta glosas con ellipsis. */
     private static function recortar(string $s, int $max = 120): string
     {
         $s = trim($s);
@@ -47,11 +42,9 @@ class ContabilidadNotaCreditoService
      * ============================================================ */
 
     /**
-     * Genera el asiento contable de una Nota Crédito:
-     * - FAST-PATH: si hay factura origen con asiento, invierte las mismas cuentas total o proporcionalmente.
-     * - FALLBACK: DEVOLUCIÓN + IVA (Debe) / CxC|Caja|Bancos (Haber) y opcionalmente INVENTARIO↔COSTO.
-     *
-     * @throws RuntimeException si faltan datos o el asiento no cuadra.
+     * Genera el asiento contable de una Nota Crédito.
+     * - FAST-PATH: invierte proporcionalmente el asiento de la factura origen.
+     * - FALLBACK : DEV+IVA vs CxC/Caja/Bancos y opcional Inventario↔Costo.
      */
     public static function asientoDesdeNotaCredito(NotaCredito $nc): void
     {
@@ -80,9 +73,13 @@ class ContabilidadNotaCreditoService
         /* ========================= FAST-PATH ========================= */
         if ($nc->factura_id) {
             $asientoFactura = Asiento::with('movimientos')
-                ->where('origen', 'factura')
                 ->where('origen_id', $nc->factura_id)
-                ->orderByDesc('id')
+                ->where(function ($q) {
+                    $q->where('origen', 'factura')
+                      ->orWhere('origen', 'Factura')
+                      ->orWhere('origen_type', 'like', '%Factura%');
+                })
+                ->latest('id')
                 ->first();
 
             if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
@@ -90,25 +87,21 @@ class ContabilidadNotaCreditoService
                 $totalNC             = round(self::f($nc->total), 2);
 
                 if ($totalAsientoFactura > 0.0 && $totalNC > 0.0) {
-                    $ratio  = min(1.0, round($totalNC / $totalAsientoFactura, 6));
+                    $ratio   = min(1.0, round($totalNC / $totalAsientoFactura, 6));
                     $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
                     $movsInv = self::consolidarArray($movsInv);
 
-                    // Sumas robustas
+                    // Verifica cuadratura
                     $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
                     $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
-
                     if (abs($deb - $cre) >= 0.01) {
                         $delta = round($deb - $cre, 2);
                         if ($delta !== 0.0 && !empty($movsInv)) {
                             usort($movsInv, fn($a, $b) =>
                                 (max(self::f($b['debito']), self::f($b['credito'])) <=> max(self::f($a['debito']), self::f($a['credito'])))
                             );
-                            if ($delta > 0) {
-                                $movsInv[0]['credito'] = round(self::f($movsInv[0]['credito']) + $delta, 2);
-                            } else {
-                                $movsInv[0]['debito']  = round(self::f($movsInv[0]['debito']) + abs($delta), 2);
-                            }
+                            if ($delta > 0)  $movsInv[0]['credito'] = round(self::f($movsInv[0]['credito']) + $delta, 2);
+                            else             $movsInv[0]['debito']  = round(self::f($movsInv[0]['debito'])  + abs($delta), 2);
                         }
                         $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
                         $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
@@ -134,7 +127,6 @@ class ContabilidadNotaCreditoService
                             Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
                         }
                     }
-
                     return;
                 }
             }
@@ -169,7 +161,7 @@ class ContabilidadNotaCreditoService
                 ];
             }
 
-            // Debe: Reversar IVA generado (cuenta IVA ventas)
+            // Debe: Reversar IVA generado (IVA ventas)
             if ($iva > 0 && $d->impuesto_id) {
                 $imp    = Impuesto::find($d->impuesto_id);
                 $ctaIva = self::cuentaIvaVentas($d->producto, $imp);
@@ -189,7 +181,10 @@ class ContabilidadNotaCreditoService
         // 2) HABER: CxC/Caja/Bancos por TOTAL NC
         $ctaCobro = self::cuentaCobro($nc->cuenta_cobro_id, $nc->cliente);
         $totalNc  = round(self::f($nc->total), 2);
-        if ($totalNc > 0 && $ctaCobro) {
+        if ($totalNc > 0 && !$ctaCobro) {
+            throw new RuntimeException('No se pudo resolver la cuenta de contrapartida (CxC/Caja/Bancos) para la Nota Crédito.');
+        }
+        if ($totalNc > 0) {
             $movs[] = [
                 'cuenta_id' => $ctaCobro,
                 'debito'    => 0.0,
@@ -266,12 +261,6 @@ class ContabilidadNotaCreditoService
     /* ============================================================
      * Persistencia de asientos
      * ============================================================ */
-
-    /**
-     * Inserta el asiento y sus movimientos, validando cuadratura.
-     *
-     * @throws RuntimeException
-     */
     private static function insertAsiento(array $payload): Asiento
     {
         $movs = $payload['movimientos'] ?? [];
@@ -324,12 +313,10 @@ class ContabilidadNotaCreditoService
     }
 
     /* ============================================================
-     * Consolidaciones / transformaciones
+     * Consolidaciones
      * ============================================================ */
 
-    /**
-     * Consolida por cuenta y netea débitos vs créditos.
-     */
+    /** Consolida por cuenta y netea débitos vs créditos. */
     private static function consolidar(array $movs): array
     {
         $by = [];
@@ -340,18 +327,13 @@ class ContabilidadNotaCreditoService
             }
             $by[$id]['debito']  += self::f($m['debito']);
             $by[$id]['credito'] += self::f($m['credito']);
-            if (!empty($m['glosa'])) {
-                $by[$id]['glosa'][] = self::recortar($m['glosa']);
-            }
+            if (!empty($m['glosa'])) $by[$id]['glosa'][] = self::recortar($m['glosa']);
         }
 
         foreach ($by as $id => &$r) {
             $d = round(self::f($r['debito']), 2);
             $c = round(self::f($r['credito']), 2);
-            if (abs($d - $c) < 0.01) {
-                unset($by[$id]);
-                continue;
-            }
+            if (abs($d - $c) < 0.01) { unset($by[$id]); continue; }
             $r['debito']  = max(0.0, $d - $c);
             $r['credito'] = max(0.0, $c - $d);
             $r['glosa']   = self::recortar(implode(' · ', array_filter($r['glosa'])));
@@ -360,9 +342,7 @@ class ContabilidadNotaCreditoService
         return array_values($by);
     }
 
-    /**
-     * Consolida por cuenta (sin netear), redondea montos y concatena glosas.
-     */
+    /** Consolida por cuenta (sin netear), redondea y concatena glosas. */
     private static function consolidarArray(array $movs): array
     {
         $by = [];
@@ -373,40 +353,31 @@ class ContabilidadNotaCreditoService
             }
             $by[$id]['debito']  += self::f($m['debito']);
             $by[$id]['credito'] += self::f($m['credito']);
-            if (!empty($m['glosa'])) {
-                $by[$id]['glosa'][] = self::recortar($m['glosa']);
-            }
+            if (!empty($m['glosa'])) $by[$id]['glosa'][] = self::recortar($m['glosa']);
         }
-
         foreach ($by as $id => &$r) {
             $r['debito']  = round(self::f($r['debito']), 2);
             $r['credito'] = round(self::f($r['credito']), 2);
             $r['glosa']   = self::recortar(implode(' · ', array_filter($r['glosa'])));
         }
-
         return array_values($by);
     }
 
-    /**
-     * Invierte movimientos existentes proporcionalmente (ratio).
-     */
+    /** Invierte movimientos existentes proporcionalmente (ratio). */
     private static function invertirMovsConRatio($movs, float $ratio): array
     {
         $ratio = max(0.0, $ratio);
         $rows  = [];
-
         foreach ($movs as $m) {
             $deb = round(self::f($m->debito)  * $ratio, 2);
             $cre = round(self::f($m->credito) * $ratio, 2);
-
             $rows[] = [
                 'cuenta_id' => (int) $m->cuenta_id,
-                'debito'    => $cre, // Invertido
-                'credito'   => $deb, // Invertido
+                'debito'    => $cre, // invertido
+                'credito'   => $deb, // invertido
                 'glosa'     => self::recortar('Reverso (NC) · ' . (string) ($m->glosa ?? '')),
             ];
         }
-
         return $rows;
     }
 
@@ -417,7 +388,6 @@ class ContabilidadNotaCreditoService
     private static function cuentaDevolucion(?Producto $p): ?int
     {
         if (!$p) return null;
-
         return ContabilidadService::cuentaSegunConfiguracion($p, 'DEVOLUCION')
             ?? ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO_DEV')
             ?? ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO');
@@ -467,7 +437,6 @@ class ContabilidadNotaCreditoService
                 ->where($col, $val)->value('id');
             if ($id) return (int) $id;
         }
-
         return null;
     }
 
@@ -475,35 +444,23 @@ class ContabilidadNotaCreditoService
      * Reverso de asientos
      * ============================================================ */
 
-    /**
-     * Genera el reverso del asiento de la Nota Crédito (para anulación).
-     *
-     * @throws RuntimeException si no existe el asiento original o no cuadra.
-     */
+    /** Genera el reverso del asiento de la Nota Crédito. */
     public static function revertirAsientoNotaCredito(NotaCredito $nc): Asiento
     {
         return DB::transaction(function () use ($nc) {
             $orig = Asiento::with('movimientos')
                 ->where('origen', 'nota_credito')
                 ->where('origen_id', $nc->id)
-                ->orderByDesc('id')
+                ->latest('id')
                 ->first();
 
-            if (!$orig) {
-                throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
-            }
+            if (!$orig)            throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
+            if ($orig->movimientos->isEmpty()) throw new RuntimeException('El asiento original no tiene movimientos.');
 
             $yaRev = Asiento::where('origen', 'nota_credito_reverso')
                 ->where('origen_id', $nc->id)
                 ->exists();
-
-            if ($yaRev) {
-                throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
-            }
-
-            if ($orig->movimientos->isEmpty()) {
-                throw new RuntimeException('El asiento original no tiene movimientos.');
-            }
+            if ($yaRev)            throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
 
             $reverso = Asiento::create([
                 'fecha'       => now()->toDateString(),
@@ -533,17 +490,11 @@ class ContabilidadNotaCreditoService
             $deb = round(self::f($reverso->movimientos()->sum('debito')), 2);
             $cre = round(self::f($reverso->movimientos()->sum('credito')), 2);
             if ($deb !== $cre) {
-                Log::error('Reverso NC descuadrado', [
-                    'reverso_id' => $reverso->id, 'deb' => $deb, 'cre' => $cre,
-                ]);
+                Log::error('Reverso NC descuadrado', ['reverso_id' => $reverso->id, 'deb' => $deb, 'cre' => $cre]);
                 throw new RuntimeException('El reverso contable no cuadra.');
             }
 
-            $reverso->update([
-                'total_debe'  => $deb,
-                'total_haber' => $cre,
-            ]);
-
+            $reverso->update(['total_debe' => $deb, 'total_haber' => $cre]);
             return $reverso;
         }, 3);
     }

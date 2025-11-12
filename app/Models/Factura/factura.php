@@ -197,6 +197,10 @@ class Factura extends Model
         });
     }
 
-  
+  public function empresa(): BelongsTo
+    {
+        // si tu FK es empresa_id y la tabla empresas, esto basta
+        return $this->belongsTo(Empresa::class, 'empresa_id');
+    }
 
 }

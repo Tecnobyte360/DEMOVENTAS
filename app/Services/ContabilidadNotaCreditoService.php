@@ -50,67 +50,171 @@ class ContabilidadNotaCreditoService
         /* ===========================================================
          * FAST-PATH: Reversar mismas cuentas del asiento de la FACTURA
          * =========================================================== */
-        if ($nc->factura_id) {
-            $asientoFactura = Asiento::with('movimientos')
-                ->where('origen', 'factura')
-                ->where('origen_id', $nc->factura_id)
-                ->orderByDesc('id')
-                ->first();
+       // Dentro de ContabilidadNotaCreditoService::asientoDesdeNotaCredito(), reemplaza el bloque FAST-PATH por esto:
 
-            if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
-                // Suma total del asiento base (referencia de proporcionalidad)
-                $totalAsientoFactura = (float) $asientoFactura->movimientos->sum('debito');
-                $totalNC             = round((float)$nc->total, 2);
+if ($nc->factura_id) {
+    $asientoFactura = Asiento::with('movimientos')
+        ->where('origen', 'factura')
+        ->where('origen_id', $nc->factura_id)
+        ->orderByDesc('id')
+        ->first();
 
-                if ($totalAsientoFactura > 0.0 && $totalNC > 0.0) {
-                    // Ratio global si la NC es parcial
-                    $ratio   = min(1.0, round($totalNC / $totalAsientoFactura, 6));
-                    $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
-                    $movsInv = self::consolidarArray($movsInv);
+    if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
+        // 1) Mapa base por producto en FACTURA (base sin IVA), para poder prorratear por línea
+        $factura = \App\Models\Factura\Factura::with('detalles')->find($nc->factura_id);
+        $baseFacturaPorProducto = [];
+        foreach ($factura->detalles as $d) {
+            $base = round((float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100), 2);
+            $baseFacturaPorProducto[(int)$d->producto_id] = ($baseFacturaPorProducto[(int)$d->producto_id] ?? 0) + $base;
+        }
 
-                    // Verificación y microajuste por redondeos
-                    $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
-                    $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
-                    if (abs($deb - $cre) >= 0.01 && !empty($movsInv)) {
-                        $delta = round($deb - $cre, 2);
-                        // Corrige el mayor movimiento
-                        usort($movsInv, fn($a, $b) =>
-                            (max($b['debito'],$b['credito']) <=> max($a['debito'],$a['credito']))
-                        );
-                        if ($delta > 0) {
-                            $movsInv[0]['credito'] = round($movsInv[0]['credito'] + $delta, 2);
-                        } else {
-                            $movsInv[0]['debito']  = round($movsInv[0]['debito'] + abs($delta), 2);
-                        }
-                        // Revalidar
-                        $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
-                        $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
-                        if (round($deb - $cre, 2) !== 0.0) {
-                            throw new RuntimeException('El asiento proporcional (fast-path) no cuadra.');
-                        }
-                    }
+        // 2) Mapa base por producto en NC (para el ratio por producto)
+        $baseNcPorProducto = [];
+        foreach ($nc->detalles as $d) {
+            $base = round((float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100), 2);
+            $baseNcPorProducto[(int)$d->producto_id] = ($baseNcPorProducto[(int)$d->producto_id] ?? 0) + $base;
+        }
 
-                    self::insertAsiento([
-                        'fecha'       => $fecha,
-                        'glosa'       => $glosaBase,
-                        'origen'      => 'nota_credito',
-                        'origen_id'   => $nc->id,
-                        'referencia'  => $glosaNum,
-                        'movimientos' => $movsInv,
-                        'moneda'      => $nc->moneda ?? 'COP',
-                    ]);
+        // 3) Construye ratios por cuenta de ingreso usando la cuenta_ingreso_id de cada línea
+        //    (si tu asiento de la factura separa ingresos por cuenta, esto alinea 1:1)
+        $ratioPorCuentaIngreso = [];           // cuenta_id => ratio (0..1)
+        $mapeoCuentaPorProducto = [];          // producto_id => cuenta_ingreso_id
+        foreach ($nc->detalles as $d) {
+            $pid       = (int)$d->producto_id;
+            $ctaIngId  = (int)($d->cuenta_ingreso_id ?? 0);
+            if ($pid <= 0 || $ctaIngId <= 0) continue;
 
-                    // Aplicación automática a la factura (si existe servicio)
-                    if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
-                        && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
-                        try { \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc); }
-                        catch (\Throwable $e) { Log::warning('NC no aplicada a factura: '.$e->getMessage(), ['nc_id'=>$nc->id]); }
-                    }
+            $baseFac = (float)($baseFacturaPorProducto[$pid] ?? 0);
+            $baseNc  = (float)($baseNcPorProducto[$pid] ?? 0);
+            if ($baseFac <= 0) continue;
 
-                    return; // ✅ terminado por fast-path
-                }
+            $ratio = max(0.0, min(1.0, round($baseNc / $baseFac, 6)));
+            // Si varias líneas del mismo producto van a la misma cuenta, quédate con el mayor ratio (o suma controlada)
+            $ratioPorCuentaIngreso[$ctaIngId] = max($ratioPorCuentaIngreso[$ctaIngId] ?? 0.0, $ratio);
+            $mapeoCuentaPorProducto[$pid]     = $ctaIngId;
+        }
+
+        // 4) Ratios para IVA de ventas: calcula “ratio promedio ponderado” por cada cuenta de IVA
+        //    (si usas una sola cuenta de IVA, quedará un único ratio equivalente al ponderado por base)
+        $ivaFacturaTotalPorProducto = [];
+        foreach ($factura->detalles as $d) {
+            $base = round((float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100), 2);
+            $iva  = round($base * (float)$d->impuesto_pct / 100, 2);
+            $ivaFacturaTotalPorProducto[(int)$d->producto_id] = ($ivaFacturaTotalPorProducto[(int)$d->producto_id] ?? 0) + $iva;
+        }
+
+        // Identifica cuentas de IVA en el asiento de la factura (créditos)
+        $cuentasIvaFactura = [];
+        foreach ($asientoFactura->movimientos as $m) {
+            // Heurística: son las cuentas que tienen crédito y cuya glosa/plan corresponde a IVA
+            // Si tienes una marca mejor (clase en PlanCuentas), úsala aquí.
+            $esIva = stripos((string)$m->glosa, 'iva') !== false;
+            if ($esIva) $cuentasIvaFactura[(int)$m->cuenta_id] = true;
+        }
+
+        // Ratio IVA ponderado por todo lo devuelto (sumatoria por producto)
+        $ivaFacTotal = array_sum($ivaFacturaTotalPorProducto);
+        $ivaNcTotal  = 0.0;
+        foreach ($nc->detalles as $d) {
+            $base = round((float)$d->cantidad * (float)$d->precio_unitario * (1 - (float)$d->descuento_pct/100), 2);
+            $ivaNcTotal += round($base * (float)$d->impuesto_pct / 100, 2);
+        }
+        $ratioIva = ($ivaFacTotal > 0) ? max(0.0, min(1.0, round($ivaNcTotal / $ivaFacTotal, 6))) : 0.0;
+
+        // 5) Invierte movimientos aplicando:
+        //    - ratioPorCuentaIngreso a las cuentas de ingreso del producto
+        //    - ratioIva a las cuentas de IVA
+        //    - y, si quieres, un ratio específico para otras cuentas si procede
+        $movsInv = [];
+        foreach ($asientoFactura->movimientos as $m) {
+            $ctaId = (int)$m->cuenta_id;
+            $deb   = (float)$m->debito;
+            $cre   = (float)$m->credito;
+
+            $ratio = null;
+
+            // Si la cuenta es una cuenta de ingreso de algún producto que está en la NC
+            if (isset($ratioPorCuentaIngreso[$ctaId])) {
+                $ratio = $ratioPorCuentaIngreso[$ctaId];
+            }
+            // Si es una cuenta de IVA detectada
+            elseif (isset($cuentasIvaFactura[$ctaId])) {
+                $ratio = $ratioIva;
+            }
+            // Si no sabemos clasificarla (por ejemplo, CxC/Caja ya la armamos al final), sáltala aquí.
+            else {
+                continue;
+            }
+
+            if ($ratio !== null && $ratio > 0) {
+                $debP = round($deb * $ratio, 2);
+                $creP = round($cre * $ratio, 2);
+                // Invierte: lo que fue débito en factura va a crédito en NC, y viceversa
+                $movsInv[] = [
+                    'cuenta_id' => $ctaId,
+                    'debito'    => $creP,
+                    'credito'   => $debP,
+                    'glosa'     => self::recortar('Reverso (NC) · '.(string)($m->glosa ?? '')),
+                ];
             }
         }
+
+        // 6) Consolida y micro-ajusta (redondeos)
+        $movsInv = self::consolidarArray($movsInv);
+        $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
+        $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
+
+        if (abs($deb - $cre) >= 0.01 && !empty($movsInv)) {
+            $delta = round($deb - $cre, 2);
+            usort($movsInv, fn($a,$b)=> (max($b['debito'],$b['credito']) <=> max($a['debito'],$a['credito'])));
+            if ($delta > 0) { $movsInv[0]['credito'] = round($movsInv[0]['credito'] + $delta, 2); }
+            else            { $movsInv[0]['debito']  = round($movsInv[0]['debito']  + abs($delta), 2); }
+            $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
+            $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
+            if ($deb !== $cre) { throw new RuntimeException('El asiento proporcional por línea no cuadra.'); }
+        }
+
+        // 7) Inserta asiento de NC con contrapartida CxC/Caja/Bancos por el total de la NC
+        //    (insertAsiento valida que cuadre)
+        //    Agregamos la contrapartida aquí:
+        $totalNc = round((float)$nc->total, 2);
+        $ctaCobro = self::cuentaCobro($nc->cuenta_cobro_id, $nc->cliente);
+        if ($totalNc > 0 && $ctaCobro) {
+            $movsInv[] = [
+                'cuenta_id' => $ctaCobro,
+                'debito'    => 0.0,
+                'credito'   => $totalNc,
+                'glosa'     => self::recortar('Contrapartida (CxC/Caja/Bancos)'),
+            ];
+        }
+
+        // Vuelve a consolidar y valida
+        $movsInv = self::consolidarArray($movsInv);
+        $deb = round(array_sum(array_column($movsInv, 'debito')), 2);
+        $cre = round(array_sum(array_column($movsInv, 'credito')), 2);
+        if ($deb !== $cre) { throw new RuntimeException('El asiento de la NC no cuadra.'); }
+
+        self::insertAsiento([
+            'fecha'       => $fecha,
+            'glosa'       => $glosaBase,
+            'origen'      => 'nota_credito',
+            'origen_id'   => $nc->id,
+            'referencia'  => $glosaNum,
+            'movimientos' => $movsInv,
+            'moneda'      => $nc->moneda ?? 'COP',
+        ]);
+
+        // Aplica a factura si corresponde
+        if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
+            && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
+            try { \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc); }
+            catch (\Throwable $e) { Log::warning('NC no aplicada a factura: '.$e->getMessage(), ['nc_id'=>$nc->id]); }
+        }
+
+        return; 
+    }
+}
+
 
         /* =========================================================
          * FALLBACK: lógica por tipos (DEVOLUCIÓN/IVA/INVENTARIO/COSTO)

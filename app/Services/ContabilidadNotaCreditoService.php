@@ -15,15 +15,6 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
-/**
- * Genera el asiento contable de una Nota Crédito (total o parcial).
- *
- * Estrategia:
- * 1) FAST-PATH: si la NC tiene factura origen con asiento, invierte las
- *    mismas cuentas de ese asiento, proporcionalmente al total de la NC.
- * 2) FALLBACK: si no hay asiento origen, usa la lógica configurable
- *    (DEVOLUCIÓN/IVA/INVENTARIO/COSTO) igual a la de Factura.
- */
 class ContabilidadNotaCreditoService
 {
     public static function asientoDesdeNotaCredito(NotaCredito $nc): void
@@ -48,16 +39,14 @@ class ContabilidadNotaCreditoService
         // Asegura totales actualizados
         $nc->recalcularTotales();
 
-        $fecha   = $nc->fecha;
-        $numFmt  = $nc->numero
+        $fecha    = $nc->fecha;
+        $numFmt   = $nc->numero
             ? str_pad((string) $nc->numero, optional($nc->serie)->longitud ?? 6, '0', STR_PAD_LEFT)
             : (string) $nc->id;
         $glosaNum  = $nc->prefijo ? ($nc->prefijo . '-' . $numFmt) : $numFmt;
         $glosaBase = 'NC Venta ' . $glosaNum . ' — Cliente: ' . ($nc->cliente->razon_social ?? ('ID ' . $nc->socio_negocio_id));
 
-        /* ===========================================================
-         * FAST-PATH: Reversar mismas cuentas del asiento de la FACTURA
-         * =========================================================== */
+        /* ====================== FAST-PATH ====================== */
         if ($nc->factura_id) {
             $asientoFactura = Asiento::with('movimientos')
                 ->where('origen', 'factura')
@@ -67,12 +56,14 @@ class ContabilidadNotaCreditoService
 
             if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
                 // Suma total del asiento base (referencia de proporcionalidad)
-                $totalAsientoFactura = (float) $asientoFactura->movimientos->sum('debito');
-                $totalNC             = round((float) $nc->total, 2);
+                $totalAsientoFactura = (float) $asientoFactura->movimientos->sum(
+                    fn ($m) => self::toFloat($m->debito)
+                );
+                $totalNc = self::round2($nc->total);
 
-                if ($totalAsientoFactura > 0.0 && $totalNC > 0.0) {
+                if ($totalAsientoFactura > 0.0 && $totalNc > 0.0) {
                     // Ratio global si la NC es parcial
-                    $ratio   = min(1.0, round($totalNC / $totalAsientoFactura, 6));
+                    $ratio   = min(1.0, round($totalNc / $totalAsientoFactura, 6));
                     $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
                     $movsInv = self::consolidarArray($movsInv);
 
@@ -123,37 +114,31 @@ class ContabilidadNotaCreditoService
                         try {
                             \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
                         } catch (\Throwable $e) {
-                            Log::warning(
-                                'NC no aplicada a factura: ' . $e->getMessage(),
-                                ['nc_id' => $nc->id]
-                            );
+                            Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
                         }
                     }
 
-                    // ✅ Terminado por fast-path
-                    return;
+                    return; // ✅ Terminado por fast-path
                 }
             }
         }
 
-        /* =========================================================
-         * FALLBACK: lógica por tipos (DEVOLUCIÓN/IVA/INVENTARIO/COSTO)
-         * ========================================================= */
+        /* ====================== FALLBACK ====================== */
         $movs = [];
 
         // 1) DÉBITOS: DEVOLUCIÓN + IVA
         foreach ($nc->detalles as $d) {
-            $cant   = max(0, (float) $d->cantidad);
+            $cant = max(0, self::toFloat($d->cantidad));
             if ($cant <= 0) {
                 continue;
             }
 
-            $precio = max(0, (float) $d->precio_unitario); // neto sin IVA
-            $desc   = min(100, max(0, (float) $d->descuento_pct));
-            $ivaPct = min(100, max(0, (float) $d->impuesto_pct));
+            $precio = max(0, self::toFloat($d->precio_unitario)); // neto sin IVA
+            $desc   = min(100, max(0, self::toFloat($d->descuento_pct)));
+            $ivaPct = min(100, max(0, self::toFloat($d->impuesto_pct)));
 
-            $base = round($cant * $precio * (1 - $desc / 100), 2);
-            $iva  = round($base * $ivaPct / 100, 2);
+            $base = self::round2($cant * $precio * (1 - $desc / 100));
+            $iva  = self::round2($base * $ivaPct / 100);
 
             // Debe: DEVOLUCIÓN EN VENTAS
             $ctaDev = self::cuentaDevolucion($d->producto);
@@ -190,7 +175,7 @@ class ContabilidadNotaCreditoService
 
         // 2) HABER: CxC/Caja/Bancos por TOTAL NC
         $ctaCobro = self::cuentaCobro($nc->cuenta_cobro_id, $nc->cliente);
-        $totalNc  = round((float) $nc->total, 2);
+        $totalNc  = self::round2($nc->total);
 
         if ($totalNc > 0 && $ctaCobro) {
             $movs[] = [
@@ -204,14 +189,14 @@ class ContabilidadNotaCreditoService
         // 3) (OPCIONAL) Reversar COSTO y reingresar INVENTARIO
         if (!empty($nc->reponer_inventario)) {
             foreach ($nc->detalles as $d) {
-                $cant = max(0, (float) $d->cantidad);
+                $cant = max(0, self::toFloat($d->cantidad));
                 if ($cant <= 0 || !$d->producto_id) {
                     continue;
                 }
 
                 // CPU alineado con factura original
-                $cpu   = ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null);
-                $costo = round($cpu * $cant, 2);
+                $cpu   = self::toFloat(ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null));
+                $costo = self::round2($cpu * $cant);
 
                 if ($costo <= 0) {
                     continue;
@@ -288,7 +273,6 @@ class ContabilidadNotaCreditoService
         }
     }
 
-    // ---------- Inserción segura del asiento (cuadrado) ----------
     private static function insertAsiento(array $payload): Asiento
     {
         $movs = $payload['movimientos'] ?? [];
@@ -348,7 +332,6 @@ class ContabilidadNotaCreditoService
         });
     }
 
-    // ---------- Consolidación por cuenta (fallback) ----------
     private static function consolidar(array $movs): array
     {
         $by = [];
@@ -385,7 +368,6 @@ class ContabilidadNotaCreditoService
         return array_values($by);
     }
 
-    // ---------- Consolidación para el fast-path (array simple) ----------
     private static function consolidarArray(array $movs): array
     {
         $by = [];
@@ -414,15 +396,14 @@ class ContabilidadNotaCreditoService
         return array_values($by);
     }
 
-    // ---------- Invierte movimientos de un asiento con un ratio ----------
     private static function invertirMovsConRatio($movs, float $ratio): array
     {
         $ratio = max(0.0, $ratio);
         $rows  = [];
 
         foreach ($movs as $m) {
-            $deb = round((float) $m->debito * $ratio, 2);
-            $cre = round((float) $m->credito * $ratio, 2);
+            $deb = round(self::toFloat($m->debito) * $ratio, 2);
+            $cre = round(self::toFloat($m->credito) * $ratio, 2);
 
             // Invierte: lo que fue débito va a crédito y viceversa
             $rows[] = [
@@ -513,82 +494,37 @@ class ContabilidadNotaCreditoService
         return null;
     }
 
-    /* ============ Reversión del asiento de la NC (anulación) ============ */
+    /* ====================== Helpers numéricos ====================== */
 
-    public static function revertirAsientoNotaCredito(NotaCredito $nc): Asiento
+    /** Normaliza strings numéricos con miles/decimales y retorna float. */
+    private static function toFloat($v): float
     {
-        return DB::transaction(function () use ($nc) {
-            // 1) Encontrar el asiento original de la NC por tu esquema
-            /** @var \App\Models\Asiento\Asiento|null $orig */
-            $orig = Asiento::with('movimientos')
-                ->where('origen', 'nota_credito')
-                ->where('origen_id', $nc->id)
-                ->orderByDesc('id')
-                ->first();
+        if ($v === null) return 0.0;
+        if (is_int($v) || is_float($v)) return (float) $v;
 
-            if (!$orig) {
-                throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
-            }
-            if ($orig->movimientos->isEmpty()) {
-                throw new RuntimeException('El asiento original no tiene movimientos.');
-            }
+        $s = (string) $v;
 
-            // 2) Evitar doble reversión
-            $yaRev = Asiento::where('origen', 'nota_credito_reverso')
-                ->where('origen_id', $nc->id)
-                ->exists();
+        // Quita espacios (incluye NBSP) y símbolos no numéricos salvo , . y -
+        $s = str_replace(["\u{00A0}", ' '], '', $s);
+        $s = preg_replace('/[^\d,.\-]/', '', $s) ?? '';
 
-            if ($yaRev) {
-                throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
-            }
+        $hasComma = strpos($s, ',') !== false;
+        $hasDot   = strpos($s, '.') !== false;
 
-            // 3) Crear cabecera del reverso
-            $reverso = Asiento::create([
-                'fecha'       => now()->toDateString(), // o $nc->fecha si prefieres
-                'glosa'       => 'Reverso de asiento NC ID ' . $nc->id,
-                'origen'      => 'nota_credito_reverso',
-                'origen_id'   => $nc->id,
-                'moneda'      => 'COP',
-                'total_debe'  => 0,
-                'total_haber' => 0,
-            ]);
+        if ($hasComma && !$hasDot) {
+            // Solo coma -> decimal
+            $s = str_replace(',', '.', $s);
+        } else {
+            // Ambos -> asume coma como miles
+            $s = str_replace(',', '', $s);
+        }
 
-            // 4) Insertar movimientos invertidos
-            $now  = now();
-            $rows = $orig->movimientos->map(static function ($m) use ($reverso, $now) {
-                return [
-                    'asiento_id' => $reverso->id,
-                    'cuenta_id'  => (int) $m->cuenta_id,
-                    'debito'     => (float) $m->credito, // invierte
-                    'credito'    => (float) $m->debito,  // invierte
-                    'glosa'      => 'Reverso: ' . (string) ($m->glosa ?? ''),
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            })->toArray();
+        return (float) $s;
+    }
 
-            Movimiento::insert($rows);
-
-            // 5) Calcular y guardar totales del reverso
-            $deb = round($reverso->movimientos()->sum('debito'), 2);
-            $cre = round($reverso->movimientos()->sum('credito'), 2);
-
-            if ($deb !== $cre) {
-                Log::error('Reverso NC descuadrado', [
-                    'reverso_id' => $reverso->id,
-                    'deb'        => $deb,
-                    'cre'        => $cre,
-                ]);
-
-                throw new RuntimeException('El reverso contable no cuadra.');
-            }
-
-            $reverso->update([
-                'total_debe'  => $deb,
-                'total_haber' => $cre,
-            ]);
-
-            return $reverso;
-        }, 3);
+    /** Redondeo a 2 decimales aceptando string o número. */
+    private static function round2($v): float
+    {
+        return round(self::toFloat($v), 2);
     }
 }

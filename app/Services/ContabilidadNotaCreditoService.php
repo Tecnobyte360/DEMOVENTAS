@@ -37,6 +37,45 @@ class ContabilidadNotaCreditoService
         return mb_strlen($s) > $max ? mb_substr($s, 0, $max - 1) . '…' : $s;
     }
 
+    /**
+     * CPU tomado de la factura origen (prioridad: PCM/Kardex -> línea de factura).
+     */
+    private static function costoUnitarioDeFactura(?int $facturaId, int $productoId, ?int $bodegaId): ?float
+    {
+        if (!$facturaId) return null;
+
+        // 1) Si guardaste costo por movimiento al facturar (ProductoCostoMovimiento)
+        $q = \App\Models\Movimiento\ProductoCostoMovimiento::query()
+            ->where('documento_tipo', 'factura') // ajusta si usas otro literal
+            ->where('documento_id', $facturaId)
+            ->where('producto_id', $productoId);
+
+        if ($bodegaId) {
+            $q->where('bodega_id', $bodegaId);
+        }
+
+        if ($row = $q->orderByDesc('id')->first()) {
+            $cant = (float) ($row->cantidad ?? 0);
+            $tot  = (float) ($row->costo_total ?? 0);
+            if ($cant > 0 && $tot > 0) {
+                return round($tot / $cant, 6);
+            }
+        }
+
+        // 2) Campo CPU guardado en la línea de factura (FacturaDetalle)
+        $det = \App\Models\Factura\FacturaDetalle::query()
+            ->where('factura_id', $facturaId)
+            ->where('producto_id', $productoId)
+            ->when($bodegaId, fn($qq) => $qq->where('bodega_id', $bodegaId))
+            ->first();
+
+        if ($det && isset($det->costo_unitario) && $det->costo_unitario > 0) {
+            return round((float)$det->costo_unitario, 6);
+        }
+
+        return null;
+    }
+
     /* ============================================================
      * API principal
      * ============================================================ */
@@ -98,8 +137,7 @@ class ContabilidadNotaCreditoService
                         $delta = round($deb - $cre, 2);
                         if ($delta !== 0.0 && !empty($movsInv)) {
                             usort($movsInv, fn($a, $b) =>
-                                (max(self::f($b['debito']), self::f($b['credito'])) <=> max(self::f($a['debito']), self::f($a['credito'])))
-                            );
+                                (max(self::f($b['debito']), self::f($b['credito'])) <=> max(self::f($a['debito']), self::f($a['credito']))));
                             if ($delta > 0)  $movsInv[0]['credito'] = round(self::f($movsInv[0]['credito']) + $delta, 2);
                             else             $movsInv[0]['debito']  = round(self::f($movsInv[0]['debito'])  + abs($delta), 2);
                         }
@@ -193,13 +231,15 @@ class ContabilidadNotaCreditoService
             ];
         }
 
-        // 3) COSTO / INVENTARIO (opcional)
+        // 3) COSTO / INVENTARIO (opcional) — usa CPU de la factura; si no existe, promedio actual
         if (!empty($nc->reponer_inventario)) {
             foreach ($nc->detalles as $d) {
                 $cant = max(0.0, self::f($d->cantidad));
                 if ($cant <= 0 || !$d->producto_id) continue;
 
-                $cpu   = self::f(ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null));
+                $cpu = self::costoUnitarioDeFactura($nc->factura_id, (int)$d->producto_id, $d->bodega_id ?? null)
+                    ?? self::f(ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null));
+
                 $costo = round($cpu * $cant, 2);
                 if ($costo <= 0) continue;
 

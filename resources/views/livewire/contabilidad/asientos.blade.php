@@ -20,7 +20,7 @@
 
 <div x-data="{}" class="p-6 md:p-8">
   {{-- ================= HERO / HEADER ================= --}}
-  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 text-white shadow-2xl" aria-label="Encabezado de asientos">
+  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-indigo-600 to-gray-600 text-white shadow-2xl" aria-label="Encabezado de asientos">
     <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
       <div class="space-y-1">
         <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">

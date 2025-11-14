@@ -75,100 +75,65 @@ class ContabilidadNotaCreditoService
      * - Si la NC es total ⇒ ratio = 1.0 ⇒ mismos valores.
      * - Si es parcial ⇒ ratio proporcional (total_nc / total_asiento_factura).
      * ============================================================ */
-    if ($nc->factura_id) {
-        $asientoFactura = Asiento::with('movimientos')
-            ->where('origen_id', $nc->factura_id)
-            ->where(function ($q) {
-                $q->where('origen', 'factura')
-                  ->orWhere('origen', 'Factura')
-                  ->orWhere('origen_type', 'like', '%Factura%');
-            })
-            ->latest('id')
-            ->first();
+      if ($nc->factura_id) {
+            $asientoFactura = Asiento::with('movimientos')
+                ->where('origen_id', $nc->factura_id)
+                ->where(function ($q) {
+                    $q->where('origen', 'factura')
+                      ->orWhere('origen', 'Factura')
+                      ->orWhere('origen_type', 'like', '%Factura%');
+                })
+                ->latest('id')
+                ->first();
 
-        if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
+            if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
+                $totalAsientoFactura = self::f($asientoFactura->movimientos->sum('debito'));
+                $totalNC             = round(self::f($nc->total), 2);
 
-            // Total "base" del asiento de la factura (usamos total_debe si está,
-            // o la suma de débitos como backup).
-            $totalAsiento = self::f(
-                $asientoFactura->total_debe
-                ?: $asientoFactura->movimientos->sum('debito')
-            );
+                if ($totalAsientoFactura > 0.0 && $totalNC > 0.0) {
+                    // Solo usamos fast-path si la NC es prácticamente el 100% de la factura
+                    $ratio = round($totalNC / $totalAsientoFactura, 6);
 
-            $totalNc = round(self::f($nc->total), 2);
+                    if (abs($ratio - 1.0) < 0.000001) {
+                        // 🔹 Reverso TOTAL: mismas cuentas, mismos valores
+                        $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, 1.0);
+                        $movsInv = self::consolidarArray($movsInv);
 
-            if ($totalAsiento > 0.0 && $totalNc > 0.0) {
-                // Ratio proporcional
-                $ratio = round($totalNc / $totalAsiento, 8);
-
-                // 👌 Si la NC es prácticamente igual al total del asiento,
-                // forzamos ratio 1.0 para que los valores sean EXACTOS.
-                if (abs($totalNc - $totalAsiento) < 0.01) {
-                    $ratio = 1.0;
-                }
-
-                // Por seguridad nunca dejamos que pase de 1.0
-                if ($ratio > 1.0) {
-                    $ratio = 1.0;
-                } elseif ($ratio < 0.0) {
-                    $ratio = 0.0;
-                }
-
-                // Invertimos cada movimiento con el ratio calculado
-                $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
-                $movsInv = self::consolidarArray($movsInv);
-
-                // Verificación de cuadratura
-                $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
-                $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
-
-                if (abs($deb - $cre) >= 0.01) {
-                    // Ajuste fino al mayor movimiento
-                    $delta = round($deb - $cre, 2);
-                    if ($delta !== 0.0 && !empty($movsInv)) {
-                        usort($movsInv, fn($a, $b) =>
-                            (max(self::f($b['debito']), self::f($b['credito'])) <=> max(self::f($a['debito']), self::f($a['credito'])))
-                        );
-                        if ($delta > 0) {
-                            $movsInv[0]['credito'] = round(self::f($movsInv[0]['credito']) + $delta, 2);
-                        } else {
-                            $movsInv[0]['debito']  = round(self::f($movsInv[0]['debito'])  + abs($delta), 2);
-                        }
-
+                        // Verificar cuadratura
                         $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
                         $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
-                        if (round($deb - $cre, 2) !== 0.0) {
-                            throw new RuntimeException('El asiento proporcional (fast-path) no cuadra.');
+                        if ($deb !== $cre) {
+                            throw new RuntimeException('El asiento inverso total de la factura no cuadra.');
                         }
+
+                        self::insertAsiento([
+                            'fecha'       => $fecha,
+                            'glosa'       => $glosaBase,
+                            'origen'      => 'nota_credito',
+                            'origen_id'   => $nc->id,
+                            'referencia'  => $glosaNum,
+                            'movimientos' => $movsInv,
+                        ]);
+
+                        // Aplicar la NC sobre la factura (si existe el servicio)
+                        if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
+                            && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
+                            try {
+                                \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
+                            } catch (\Throwable $e) {
+                                Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
+                            }
+                        }
+                        // Ya hicimos el asiento → salimos sin pasar por el fallback
+                        return;
                     }
+
+                    // 🔸 Si la NC es parcial (ratio < 1), NO usamos fast-path,
+                    // dejamos seguir al bloque FALLBACK de abajo, que calcula
+                    // DEV + IVA + COSTO + INVENTARIO por líneas.
                 }
-
-                // Insertamos el asiento de la NC con los movimientos ya invertidos
-                self::insertAsiento([
-                    'fecha'       => $fecha,
-                    'glosa'       => $glosaBase,
-                    'origen'      => 'nota_credito',
-                    'origen_id'   => $nc->id,
-                    'referencia'  => $glosaNum,
-                    'movimientos' => $movsInv,
-                ]);
-
-                // Aplica contablemente la NC sobre la factura (si tienes ese servicio)
-                if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
-                    && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
-                    try {
-                        \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
-                    } catch (\Throwable $e) {
-                        Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
-                    }
-                }
-
-                // ✅ IMPORTANTE: como el fast-path funcionó, SALIMOS aquí.
-                return;
             }
         }
-    }
-
     /* ========================= FALLBACK =========================
      * Si no hay asiento de factura, o no cuadra, usamos el esquema:
      *  - DEV + IVA (DEBE)

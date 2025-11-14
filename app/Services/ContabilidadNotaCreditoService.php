@@ -10,6 +10,7 @@ use App\Models\Impuestos\Impuesto;
 use App\Models\Productos\Producto;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\CuentasContables\PlanCuentas;
+use App\Models\Movimiento\ProductoCostoMovimiento;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -194,26 +195,40 @@ class ContabilidadNotaCreditoService
         }
 
         // 3) COSTO / INVENTARIO (opcional)
-        if (!empty($nc->reponer_inventario)) {
+          if (!empty($nc->reponer_inventario)) {
             foreach ($nc->detalles as $d) {
                 $cant = max(0.0, self::f($d->cantidad));
-                if ($cant <= 0 || !$d->producto_id) continue;
+                if ($cant <= 0 || !$d->producto_id) {
+                    continue;
+                }
 
-                $cpu   = self::f(ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null));
+                // 🔹 NUEVO: intentar usar el MISMO costo que usó la factura
+                $cpu = self::resolverCostoHistoricoParaNC($nc, $d);
+
                 $costo = round($cpu * $cant, 2);
-                if ($costo <= 0) continue;
+                if ($costo <= 0) {
+                    continue;
+                }
 
                 $ctaInv   = self::cuentaInventario($d->producto);
                 $ctaCosto = self::cuentaCosto($d->producto);
-                if (!$ctaInv)   throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de INVENTARIO.");
-                if (!$ctaCosto) throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de COSTO.");
 
+                if (!$ctaInv) {
+                    throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de INVENTARIO.");
+                }
+                if (!$ctaCosto) {
+                    throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de COSTO.");
+                }
+
+                // Debe: INVENTARIO (reingreso)
                 $movs[] = [
                     'cuenta_id' => $ctaInv,
                     'debito'    => $costo,
                     'credito'   => 0.0,
                     'glosa'     => self::recortar('Reingreso inventario · ' . ($d->producto->nombre ?? '')),
                 ];
+
+                // Haber: COSTO (reversión costo de venta)
                 $movs[] = [
                     'cuenta_id' => $ctaCosto,
                     'debito'    => 0.0,
@@ -222,7 +237,6 @@ class ContabilidadNotaCreditoService
                 ];
             }
         }
-
         // 4) Consolidar y validar
         $movs = self::consolidar($movs);
         $deb  = round(array_sum(array_map('floatval', array_column($movs, 'debito'))), 2);
@@ -258,6 +272,42 @@ class ContabilidadNotaCreditoService
         }
     }
 
+    private static function resolverCostoHistoricoParaNC(NotaCredito $nc, $detalle): float
+    {
+        try {
+            if (
+                $nc->factura_id &&
+                $detalle->producto_id &&
+                !empty($detalle->bodega_id)
+            ) {
+                $row = ProductoCostoMovimiento::where('producto_id', $detalle->producto_id)
+                    ->where('bodega_id', $detalle->bodega_id)
+                    ->where('doc_id', $nc->factura_id)
+                    ->orderByDesc('id')
+                    ->first();
+
+                if ($row && $row->costo_unit_mov !== null) {
+                    return self::f($row->costo_unit_mov);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('NC: no se pudo resolver costo histórico, usando promedio.', [
+                'nc_id'        => $nc->id ?? null,
+                'detalle_id'   => $detalle->id ?? null,
+                'producto_id'  => $detalle->producto_id ?? null,
+                'bodega_id'    => $detalle->bodega_id ?? null,
+                'msg'          => $e->getMessage(),
+            ]);
+        }
+
+        // Fallback: comportamiento original (costo promedio por bodega)
+        return self::f(
+            ContabilidadService::costoPromedioParaLinea(
+                $detalle->producto,
+                $detalle->bodega_id ?? null
+            )
+        );
+    }
     /* ============================================================
      * Persistencia de asientos
      * ============================================================ */

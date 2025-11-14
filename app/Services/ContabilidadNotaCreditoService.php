@@ -13,15 +13,29 @@ use App\Models\CuentasContables\PlanCuentas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
-use App\Services\ContabilidadService; // necesario para resolver cuentas/costos
+use App\Services\ContabilidadService;
 
+/**
+ * Servicio contable para Notas Crédito.
+ *
+ * Reglas:
+ *  - FAST-PATH: si la NC tiene factura origen y el valor es
+ *    proporcional al asiento de la factura, invierte ese asiento
+ *    (total o proporcional).
+ *  - FALLBACK : si no hay asiento de factura o no aplica el fast-path,
+ *    construye el asiento así:
+ *      * Debe : Devolución en ventas + reversa de IVA.
+ *      * Haber: CxC / Caja / Bancos por el TOTAL de la NC.
+ *      * Opcional: Reingreso de Inventario y reversa del Costo,
+ *        cuando $nc->reponer_inventario = 1.
+ */
 class ContabilidadNotaCreditoService
 {
     /* ============================================================
      * Utilidades
      * ============================================================ */
 
-    /** Normaliza strings numéricos ("1,428.00") a float seguro. */
+    /** Normaliza strings numéricos ("1,428.00") a float. */
     private static function f(mixed $v): float
     {
         if (is_string($v)) {
@@ -43,39 +57,43 @@ class ContabilidadNotaCreditoService
 
     /**
      * Genera el asiento contable de una Nota Crédito.
-     * - FAST-PATH: invierte proporcionalmente el asiento de la factura origen.
-     * - FALLBACK : DEV+IVA vs CxC/Caja/Bancos y opcional Inventario↔Costo.
      */
-   public static function asientoDesdeNotaCredito(NotaCredito $nc): void
-{
-    $nc->loadMissing(
-        'detalles.producto.cuentas.tipo',
-        'detalles.producto.impuesto',
-        'cliente',
-        'serie'
-    );
+    public static function asientoDesdeNotaCredito(NotaCredito $nc): void
+    {
+        $nc->loadMissing(
+            'detalles.producto.cuentas.tipo',
+            'detalles.producto.impuesto',
+            'cliente',
+            'serie'
+        );
 
-    if ($nc->detalles->isEmpty())  throw new RuntimeException('La nota crédito no tiene líneas.');
-    if (!$nc->fecha)               throw new RuntimeException('La nota crédito no tiene fecha.');
-    if (!$nc->cuenta_cobro_id)     throw new RuntimeException('Seleccione una cuenta contable de cobro para la nota crédito.');
+        if ($nc->detalles->isEmpty()) {
+            throw new RuntimeException('La nota crédito no tiene líneas.');
+        }
+        if (!$nc->fecha) {
+            throw new RuntimeException('La nota crédito no tiene fecha.');
+        }
+        if (!$nc->cuenta_cobro_id) {
+            throw new RuntimeException('Seleccione una cuenta contable de cobro para la nota crédito.');
+        }
 
-    if (method_exists($nc, 'recalcularTotales')) {
-        $nc->recalcularTotales();
-    }
+        // Aseguramos totales coherentes
+        if (method_exists($nc, 'recalcularTotales')) {
+            $nc->recalcularTotales();
+        }
 
-    $fecha     = $nc->fecha;
-    $numFmt    = $nc->numero
-        ? str_pad((string) $nc->numero, optional($nc->serie)->longitud ?? 6, '0', STR_PAD_LEFT)
-        : (string) $nc->id;
-    $glosaNum  = $nc->prefijo ? ($nc->prefijo . '-' . $numFmt) : $numFmt;
-    $glosaBase = 'NC Venta ' . $glosaNum . ' — Cliente: ' . ($nc->cliente->razon_social ?? ('ID ' . $nc->socio_negocio_id));
+        $fecha     = $nc->fecha;
+        $numFmt    = $nc->numero
+            ? str_pad((string) $nc->numero, optional($nc->serie)->longitud ?? 6, '0', STR_PAD_LEFT)
+            : (string) $nc->id;
+        $glosaNum  = $nc->prefijo ? ($nc->prefijo . '-' . $numFmt) : $numFmt;
+        $glosaBase = 'NC Venta ' . $glosaNum . ' — Cliente: ' . ($nc->cliente->razon_social ?? ('ID ' . $nc->socio_negocio_id));
 
-    /* ========================= FAST-PATH =========================
-     * Reversa las MISMAS cuentas del asiento de la factura:
-     * - Si la NC es total ⇒ ratio = 1.0 ⇒ mismos valores.
-     * - Si es parcial ⇒ ratio proporcional (total_nc / total_asiento_factura).
-     * ============================================================ */
-      if ($nc->factura_id) {
+        /* ========================= FAST-PATH =========================
+         * Intenta construir la NC como reverso proporcional del asiento
+         * de la factura origen.
+         */
+        if ($nc->factura_id) {
             $asientoFactura = Asiento::with('movimientos')
                 ->where('origen_id', $nc->factura_id)
                 ->where(function ($q) {
@@ -91,185 +109,213 @@ class ContabilidadNotaCreditoService
                 $totalNC             = round(self::f($nc->total), 2);
 
                 if ($totalAsientoFactura > 0.0 && $totalNC > 0.0) {
-                    // Solo usamos fast-path si la NC es prácticamente el 100% de la factura
-                    $ratio = round($totalNC / $totalAsientoFactura, 6);
+                    $ratio   = min(1.0, round($totalNC / $totalAsientoFactura, 6));
+                    $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
+                    $movsInv = self::consolidarArray($movsInv);
 
-                    if (abs($ratio - 1.0) < 0.000001) {
-                        // 🔹 Reverso TOTAL: mismas cuentas, mismos valores
-                        $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, 1.0);
-                        $movsInv = self::consolidarArray($movsInv);
+                    // Verifica cuadratura
+                    $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
+                    $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
 
-                        // Verificar cuadratura
-                        $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
-                        $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
-                        if ($deb !== $cre) {
-                            throw new RuntimeException('El asiento inverso total de la factura no cuadra.');
-                        }
+                    if (abs($deb - $cre) >= 0.01) {
+                        // Ajuste fino sobre la línea más grande
+                        $delta = round($deb - $cre, 2);
+                        if ($delta !== 0.0 && !empty($movsInv)) {
+                            usort($movsInv, fn($a, $b) =>
+                                (max(self::f($b['debito']), self::f($b['credito'])) <=> max(self::f($a['debito']), self::f($a['credito']))));
 
-                        self::insertAsiento([
-                            'fecha'       => $fecha,
-                            'glosa'       => $glosaBase,
-                            'origen'      => 'nota_credito',
-                            'origen_id'   => $nc->id,
-                            'referencia'  => $glosaNum,
-                            'movimientos' => $movsInv,
-                        ]);
-
-                        // Aplicar la NC sobre la factura (si existe el servicio)
-                        if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
-                            && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
-                            try {
-                                \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
-                            } catch (\Throwable $e) {
-                                Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
+                            if ($delta > 0) {
+                                $movsInv[0]['credito'] = round(self::f($movsInv[0]['credito']) + $delta, 2);
+                            } else {
+                                $movsInv[0]['debito']  = round(self::f($movsInv[0]['debito'])  + abs($delta), 2);
                             }
                         }
-                        // Ya hicimos el asiento → salimos sin pasar por el fallback
-                        return;
+
+                        $deb = round(array_sum(array_map('floatval', array_column($movsInv, 'debito'))), 2);
+                        $cre = round(array_sum(array_map('floatval', array_column($movsInv, 'credito'))), 2);
+
+                        if (round($deb - $cre, 2) !== 0.0) {
+                            throw new RuntimeException('El asiento proporcional (fast-path) no cuadra.');
+                        }
                     }
 
-                    // 🔸 Si la NC es parcial (ratio < 1), NO usamos fast-path,
-                    // dejamos seguir al bloque FALLBACK de abajo, que calcula
-                    // DEV + IVA + COSTO + INVENTARIO por líneas.
+                    self::insertAsiento([
+                        'fecha'       => $fecha,
+                        'glosa'       => $glosaBase,
+                        'origen'      => 'nota_credito',
+                        'origen_id'   => $nc->id,
+                        'referencia'  => $glosaNum,
+                        'movimientos' => $movsInv,
+                    ]);
+
+                    // Aplica NC como pago/ajuste sobre la factura
+                    if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
+                        && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
+                        try {
+                            \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
+                        } catch (\Throwable $e) {
+                            Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
+                        }
+                    }
+                    return;
                 }
             }
         }
-    /* ========================= FALLBACK =========================
-     * Si no hay asiento de factura, o no cuadra, usamos el esquema:
-     *  - DEV + IVA (DEBE)
-     *  - CxC / Caja / Bancos (HABER)
-     *  - Opcional: Inventario (DEBE) vs Costo (HABER) si reponer_inventario
-     * ============================================================ */
 
-    $movs = [];
+        /* ========================= FALLBACK =========================
+         * Se arma manualmente el asiento:
+         *   - Debe : Devolución en ventas + IVA.
+         *   - Haber: Cuenta de cobro (CxC/Caja/Bancos) por TOTAL NC.
+         *   - Opcional: Inventario / Costo (si reponer_inventario = 1).
+         */
+        $movs = [];
 
-    // 1) DÉBITOS: DEVOLUCIÓN + IVA
-    foreach ($nc->detalles as $d) {
-        $cant   = max(0.0, self::f($d->cantidad));
-        if ($cant <= 0) continue;
-
-        $precio = max(0.0, self::f($d->precio_unitario)); // neto sin IVA
-        $desc   = min(100.0, max(0.0, self::f($d->descuento_pct)));
-        $ivaPct = min(100.0, max(0.0, self::f($d->impuesto_pct)));
-
-        $base = round($cant * $precio * (1 - $desc / 100), 2);
-        $iva  = round($base * $ivaPct / 100, 2);
-
-        // Debe: DEVOLUCIÓN EN VENTAS
-        $ctaDev = self::cuentaDevolucion($d->producto);
-        if ($base > 0 && !$ctaDev) {
-            throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de 'Ingreso por devolución'.");
-        }
-        if ($base > 0) {
-            $movs[] = [
-                'cuenta_id' => $ctaDev,
-                'debito'    => $base,
-                'credito'   => 0.0,
-                'glosa'     => self::recortar('Devolución en ventas · ' . ($d->descripcion ?? '')),
-            ];
-        }
-
-        // Debe: Reversar IVA generado (IVA ventas)
-        if ($iva > 0 && $d->impuesto_id) {
-            $imp    = Impuesto::find($d->impuesto_id);
-            $ctaIva = self::cuentaIvaVentas($d->producto, $imp);
-            if (!$ctaIva) {
-                $n = $imp->nombre ?? 'IVA';
-                throw new RuntimeException("No se encontró cuenta contable para {$n} (ventas).");
-            }
-            $movs[] = [
-                'cuenta_id' => $ctaIva,
-                'debito'    => $iva,
-                'credito'   => 0.0,
-                'glosa'     => self::recortar('Reversa IVA generado'),
-            ];
-        }
-    }
-
-    // 2) HABER: CxC/Caja/Bancos por TOTAL NC
-    $ctaCobro = self::cuentaCobro($nc->cuenta_cobro_id, $nc->cliente);
-    $totalNc  = round(self::f($nc->total), 2);
-    if ($totalNc > 0 && !$ctaCobro) {
-        throw new RuntimeException('No se pudo resolver la cuenta de contrapartida (CxC/Caja/Bancos) para la Nota Crédito.');
-    }
-    if ($totalNc > 0) {
-        $movs[] = [
-            'cuenta_id' => $ctaCobro,
-            'debito'    => 0.0,
-            'credito'   => $totalNc,
-            'glosa'     => self::recortar('Contrapartida (CxC/Caja/Bancos)'),
-        ];
-    }
-
-    // 3) COSTO / INVENTARIO (opcional)
-    if (!empty($nc->reponer_inventario)) {
+        // 1) DÉBITOS: DEVOLUCIÓN + IVA
         foreach ($nc->detalles as $d) {
             $cant = max(0.0, self::f($d->cantidad));
-            if ($cant <= 0 || !$d->producto_id) continue;
+            if ($cant <= 0) {
+                continue;
+            }
 
-            $cpu   = self::f(ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null));
-            $costo = round($cpu * $cant, 2);
-            if ($costo <= 0) continue;
+            $precio = max(0.0, self::f($d->precio_unitario)); // neto sin IVA
+            $desc   = min(100.0, max(0.0, self::f($d->descuento_pct)));
+            $ivaPct = min(100.0, max(0.0, self::f($d->impuesto_pct)));
 
-            $ctaInv   = self::cuentaInventario($d->producto);
-            $ctaCosto = self::cuentaCosto($d->producto);
-            if (!$ctaInv)   throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de INVENTARIO.");
-            if (!$ctaCosto) throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de COSTO.");
+            $base = round($cant * $precio * (1 - $desc / 100), 2);
+            $iva  = round($base * $ivaPct / 100, 2);
 
+            // Debe: DEVOLUCIÓN EN VENTAS
+            $ctaDev = self::cuentaDevolucion($d->producto);
+            if ($base > 0 && !$ctaDev) {
+                throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de 'Ingreso por devolución'.");
+            }
+            if ($base > 0) {
+                $movs[] = [
+                    'cuenta_id' => $ctaDev,
+                    'debito'    => $base,
+                    'credito'   => 0.0,
+                    'glosa'     => self::recortar('Devolución en ventas · ' . ($d->descripcion ?? '')),
+                ];
+            }
+
+            // Debe: Reversar IVA generado
+            if ($iva > 0 && $d->impuesto_id) {
+                $imp    = Impuesto::find($d->impuesto_id);
+                $ctaIva = self::cuentaIvaVentas($d->producto, $imp);
+
+                if (!$ctaIva) {
+                    $n = $imp->nombre ?? 'IVA';
+                    throw new RuntimeException("No se encontró cuenta contable para {$n} (ventas).");
+                }
+
+                $movs[] = [
+                    'cuenta_id' => $ctaIva,
+                    'debito'    => $iva,
+                    'credito'   => 0.0,
+                    'glosa'     => self::recortar('Reversa IVA generado'),
+                ];
+            }
+        }
+
+        // 2) HABER: CxC/Caja/Bancos por TOTAL NC
+        $ctaCobro = self::cuentaCobro($nc->cuenta_cobro_id, $nc->cliente);
+        $totalNc  = round(self::f($nc->total), 2);
+
+        if ($totalNc > 0 && !$ctaCobro) {
+            throw new RuntimeException('No se pudo resolver la cuenta de contrapartida (CxC/Caja/Bancos) para la Nota Crédito.');
+        }
+        if ($totalNc > 0) {
             $movs[] = [
-                'cuenta_id' => $ctaInv,
-                'debito'    => $costo,
-                'credito'   => 0.0,
-                'glosa'     => self::recortar('Reingreso inventario · ' . ($d->producto->nombre ?? '')),
-            ];
-            $movs[] = [
-                'cuenta_id' => $ctaCosto,
+                'cuenta_id' => $ctaCobro,
                 'debito'    => 0.0,
-                'credito'   => $costo,
-                'glosa'     => self::recortar('Reversión costo de venta · ' . ($d->producto->nombre ?? '')),
+                'credito'   => $totalNc,
+                'glosa'     => self::recortar('Contrapartida (CxC/Caja/Bancos)'),
             ];
         }
-    }
 
-    // 4) Consolidar y validar
-    $movs = self::consolidar($movs);
-    $deb  = round(array_sum(array_map('floatval', array_column($movs, 'debito'))), 2);
-    $cre  = round(array_sum(array_map('floatval', array_column($movs, 'credito'))), 2);
-    if (abs($deb - $cre) >= 0.01) {
-        Log::error('Descuadre en asiento de Nota Crédito', [
-            'nota_credito_id' => $nc->id,
-            'deb' => $deb,
-            'cre' => $cre,
-            'diff' => round($deb - $cre, 2),
-            'movs' => $movs,
+        // 3) COSTO / INVENTARIO (opcional)
+        if (!empty($nc->reponer_inventario)) {
+            foreach ($nc->detalles as $d) {
+                $cant = max(0.0, self::f($d->cantidad));
+                if ($cant <= 0 || !$d->producto_id) {
+                    continue;
+                }
+
+                $cpu   = self::f(ContabilidadService::costoPromedioParaLinea($d->producto, $d->bodega_id ?? null));
+                $costo = round($cpu * $cant, 2);
+                if ($costo <= 0) {
+                    continue;
+                }
+
+                $ctaInv   = self::cuentaInventario($d->producto);
+                $ctaCosto = self::cuentaCosto($d->producto);
+
+                if (!$ctaInv) {
+                    throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de INVENTARIO.");
+                }
+                if (!$ctaCosto) {
+                    throw new RuntimeException("Producto {$d->producto_id}: falta cuenta de COSTO.");
+                }
+
+                // Debe: Inventario
+                $movs[] = [
+                    'cuenta_id' => $ctaInv,
+                    'debito'    => $costo,
+                    'credito'   => 0.0,
+                    'glosa'     => self::recortar('Reingreso inventario · ' . ($d->producto->nombre ?? '')),
+                ];
+
+                // Haber: Reversa Costo
+                $movs[] = [
+                    'cuenta_id' => $ctaCosto,
+                    'debito'    => 0.0,
+                    'credito'   => $costo,
+                    'glosa'     => self::recortar('Reversión costo de venta · ' . ($d->producto->nombre ?? '')),
+                ];
+            }
+        }
+
+        // 4) Consolidar y validar
+        $movs = self::consolidar($movs);
+        $deb  = round(array_sum(array_map('floatval', array_column($movs, 'debito'))), 2);
+        $cre  = round(array_sum(array_map('floatval', array_column($movs, 'credito'))), 2);
+
+        if (abs($deb - $cre) >= 0.01) {
+            Log::error('Descuadre en asiento de Nota Crédito', [
+                'nota_credito_id' => $nc->id,
+                'deb'             => $deb,
+                'cre'             => $cre,
+                'diff'            => round($deb - $cre, 2),
+                'movs'            => $movs,
+            ]);
+            throw new RuntimeException('El asiento de la NC no cuadra.');
+        }
+
+        // 5) Insertar asiento
+        self::insertAsiento([
+            'fecha'       => $fecha,
+            'glosa'       => $glosaBase,
+            'origen'      => 'nota_credito',
+            'origen_id'   => $nc->id,
+            'referencia'  => $glosaNum,
+            'movimientos' => $movs,
         ]);
-        throw new RuntimeException('El asiento de la NC no cuadra.');
-    }
 
-    // 5) Insertar asiento
-    self::insertAsiento([
-        'fecha'       => $fecha,
-        'glosa'       => $glosaBase,
-        'origen'      => 'nota_credito',
-        'origen_id'   => $nc->id,
-        'referencia'  => $glosaNum,
-        'movimientos' => $movs,
-    ]);
-
-    if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
-        && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
-        try {
-            \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
-        } catch (\Throwable $e) {
-            Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
+        // Aplica NC como pago/ajuste sobre la factura
+        if ($nc->factura_id && class_exists(\App\Services\PagosService::class)
+            && method_exists(\App\Services\PagosService::class, 'aplicarNotaCreditoSobreFactura')) {
+            try {
+                \App\Services\PagosService::aplicarNotaCreditoSobreFactura($nc);
+            } catch (\Throwable $e) {
+                Log::warning('NC no aplicada a factura: ' . $e->getMessage(), ['nc_id' => $nc->id]);
+            }
         }
     }
-}
-
 
     /* ============================================================
      * Persistencia de asientos
      * ============================================================ */
+
     private static function insertAsiento(array $payload): Asiento
     {
         $movs = $payload['movimientos'] ?? [];
@@ -279,18 +325,19 @@ class ContabilidadNotaCreditoService
 
         $deb = round(array_sum(array_map('floatval', array_column($movs, 'debito'))), 2);
         $cre = round(array_sum(array_map('floatval', array_column($movs, 'credito'))), 2);
+
         if ($deb !== $cre) {
             throw new RuntimeException('El asiento no cuadra.');
         }
 
         return DB::transaction(function () use ($payload, $movs, $deb, $cre) {
             $asiento = Asiento::create([
-                'fecha'       => $payload['fecha'] ?? now()->toDateString(),
-                'glosa'       => $payload['glosa'] ?? null,
-                'origen'      => $payload['origen'] ?? null,
-                'origen_id'   => $payload['origen_id'] ?? null,
+                'fecha'       => $payload['fecha']      ?? now()->toDateString(),
+                'glosa'       => $payload['glosa']      ?? null,
+                'origen'      => $payload['origen']     ?? null,
+                'origen_id'   => $payload['origen_id']  ?? null,
                 'referencia'  => $payload['referencia'] ?? null,
-                'moneda'      => $payload['moneda'] ?? 'COP',
+                'moneda'      => $payload['moneda']     ?? 'COP',
                 'total_debe'  => $deb,
                 'total_haber' => $cre,
             ]);
@@ -310,9 +357,12 @@ class ContabilidadNotaCreditoService
 
             $deb2 = round(self::f($asiento->movimientos()->sum('debito')), 2);
             $cre2 = round(self::f($asiento->movimientos()->sum('credito')), 2);
+
             if ($deb2 !== $cre2 || $deb2 !== $deb) {
                 Log::error('Asiento no cuadra tras insertar movimientos', [
-                    'asiento_id' => $asiento->id, 'deb' => $deb2, 'cre' => $cre2,
+                    'asiento_id' => $asiento->id,
+                    'deb'        => $deb2,
+                    'cre'        => $cre2,
                 ]);
                 throw new RuntimeException('El asiento no cuadra tras insertar movimientos.');
             }
@@ -329,20 +379,36 @@ class ContabilidadNotaCreditoService
     private static function consolidar(array $movs): array
     {
         $by = [];
+
         foreach ($movs as $m) {
             $id = (int) $m['cuenta_id'];
+
             if (!isset($by[$id])) {
-                $by[$id] = ['cuenta_id' => $id, 'debito' => 0.0, 'credito' => 0.0, 'glosa' => []];
+                $by[$id] = [
+                    'cuenta_id' => $id,
+                    'debito'    => 0.0,
+                    'credito'   => 0.0,
+                    'glosa'     => [],
+                ];
             }
+
             $by[$id]['debito']  += self::f($m['debito']);
             $by[$id]['credito'] += self::f($m['credito']);
-            if (!empty($m['glosa'])) $by[$id]['glosa'][] = self::recortar($m['glosa']);
+
+            if (!empty($m['glosa'])) {
+                $by[$id]['glosa'][] = self::recortar($m['glosa']);
+            }
         }
 
         foreach ($by as $id => &$r) {
             $d = round(self::f($r['debito']), 2);
             $c = round(self::f($r['credito']), 2);
-            if (abs($d - $c) < 0.01) { unset($by[$id]); continue; }
+
+            if (abs($d - $c) < 0.01) {
+                unset($by[$id]);
+                continue;
+            }
+
             $r['debito']  = max(0.0, $d - $c);
             $r['credito'] = max(0.0, $c - $d);
             $r['glosa']   = self::recortar(implode(' · ', array_filter($r['glosa'])));
@@ -355,20 +421,33 @@ class ContabilidadNotaCreditoService
     private static function consolidarArray(array $movs): array
     {
         $by = [];
+
         foreach ($movs as $m) {
             $id = (int) $m['cuenta_id'];
+
             if (!isset($by[$id])) {
-                $by[$id] = ['cuenta_id' => $id, 'debito' => 0.0, 'credito' => 0.0, 'glosa' => []];
+                $by[$id] = [
+                    'cuenta_id' => $id,
+                    'debito'    => 0.0,
+                    'credito'   => 0.0,
+                    'glosa'     => [],
+                ];
             }
+
             $by[$id]['debito']  += self::f($m['debito']);
             $by[$id]['credito'] += self::f($m['credito']);
-            if (!empty($m['glosa'])) $by[$id]['glosa'][] = self::recortar($m['glosa']);
+
+            if (!empty($m['glosa'])) {
+                $by[$id]['glosa'][] = self::recortar($m['glosa']);
+            }
         }
+
         foreach ($by as $id => &$r) {
             $r['debito']  = round(self::f($r['debito']), 2);
             $r['credito'] = round(self::f($r['credito']), 2);
             $r['glosa']   = self::recortar(implode(' · ', array_filter($r['glosa'])));
         }
+
         return array_values($by);
     }
 
@@ -377,9 +456,11 @@ class ContabilidadNotaCreditoService
     {
         $ratio = max(0.0, $ratio);
         $rows  = [];
+
         foreach ($movs as $m) {
             $deb = round(self::f($m->debito)  * $ratio, 2);
             $cre = round(self::f($m->credito) * $ratio, 2);
+
             $rows[] = [
                 'cuenta_id' => (int) $m->cuenta_id,
                 'debito'    => $cre, // invertido
@@ -387,6 +468,7 @@ class ContabilidadNotaCreditoService
                 'glosa'     => self::recortar('Reverso (NC) · ' . (string) ($m->glosa ?? '')),
             ];
         }
+
         return $rows;
     }
 
@@ -396,7 +478,10 @@ class ContabilidadNotaCreditoService
 
     private static function cuentaDevolucion(?Producto $p): ?int
     {
-        if (!$p) return null;
+        if (!$p) {
+            return null;
+        }
+
         return ContabilidadService::cuentaSegunConfiguracion($p, 'DEVOLUCION')
             ?? ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO_DEV')
             ?? ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO');
@@ -405,13 +490,17 @@ class ContabilidadNotaCreditoService
     private static function cuentaIvaVentas(?Producto $p, ?Impuesto $imp): ?int
     {
         $cta = ContabilidadService::cuentaSegunConfiguracion($p, 'IVA');
-        if ($cta) return $cta;
+        if ($cta) {
+            return $cta;
+        }
 
+        // Fallback: usar cuenta del impuesto
         foreach (['plan_cuenta_id', 'plan_cuenta_pasivo_id', 'cuenta_id'] as $f) {
             if ($imp && isset($imp->{$f}) && $imp->{$f} && PlanCuentas::whereKey($imp->{$f})->exists()) {
                 return (int) $imp->{$f};
             }
         }
+
         return null;
     }
 
@@ -427,10 +516,12 @@ class ContabilidadNotaCreditoService
 
     private static function cuentaCobro(?int $seleccionada, ?SocioNegocio $cliente): ?int
     {
+        // 1) Cuenta seleccionada explícitamente en la NC
         if ($seleccionada && PlanCuentas::whereKey($seleccionada)->exists()) {
             return (int) $seleccionada;
         }
 
+        // 2) Cuenta del cliente
         if ($cliente) {
             foreach (['plan_cuenta_id', 'cuenta_cxc_id'] as $f) {
                 if (isset($cliente->{$f}) && $cliente->{$f} && PlanCuentas::whereKey($cliente->{$f})->exists()) {
@@ -439,13 +530,18 @@ class ContabilidadNotaCreditoService
             }
         }
 
-        // Fallback: Caja / Bancos
+        // 3) Fallback: alguna cuenta de Caja / Bancos
         foreach ([['clase_cuenta', 'CAJA_GENERAL'], ['clase_cuenta', 'BANCOS']] as [$col, $val]) {
             $id = PlanCuentas::where('cuenta_activa', 1)
                 ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
-                ->where($col, $val)->value('id');
-            if ($id) return (int) $id;
+                ->where($col, $val)
+                ->value('id');
+
+            if ($id) {
+                return (int) $id;
+            }
         }
+
         return null;
     }
 
@@ -463,13 +559,20 @@ class ContabilidadNotaCreditoService
                 ->latest('id')
                 ->first();
 
-            if (!$orig)            throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
-            if ($orig->movimientos->isEmpty()) throw new RuntimeException('El asiento original no tiene movimientos.');
+            if (!$orig) {
+                throw new RuntimeException('No se encontró el asiento original de la Nota Crédito.');
+            }
+            if ($orig->movimientos->isEmpty()) {
+                throw new RuntimeException('El asiento original no tiene movimientos.');
+            }
 
             $yaRev = Asiento::where('origen', 'nota_credito_reverso')
                 ->where('origen_id', $nc->id)
                 ->exists();
-            if ($yaRev)            throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
+
+            if ($yaRev) {
+                throw new RuntimeException('El asiento de la Nota Crédito ya fue revertido.');
+            }
 
             $reverso = Asiento::create([
                 'fecha'       => now()->toDateString(),
@@ -498,12 +601,21 @@ class ContabilidadNotaCreditoService
 
             $deb = round(self::f($reverso->movimientos()->sum('debito')), 2);
             $cre = round(self::f($reverso->movimientos()->sum('credito')), 2);
+
             if ($deb !== $cre) {
-                Log::error('Reverso NC descuadrado', ['reverso_id' => $reverso->id, 'deb' => $deb, 'cre' => $cre]);
+                Log::error('Reverso NC descuadrado', [
+                    'reverso_id' => $reverso->id,
+                    'deb'        => $deb,
+                    'cre'        => $cre,
+                ]);
                 throw new RuntimeException('El reverso contable no cuadra.');
             }
 
-            $reverso->update(['total_debe' => $deb, 'total_haber' => $cre]);
+            $reverso->update([
+                'total_debe'  => $deb,
+                'total_haber' => $cre,
+            ]);
+
             return $reverso;
         }, 3);
     }

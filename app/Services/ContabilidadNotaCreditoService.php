@@ -38,7 +38,7 @@ class ContabilidadNotaCreditoService
     }
 
     /* ============================================================
-     * API principal - REORGANIZADO
+     * API principal - CORREGIDO
      * ============================================================ */
 
     public static function asientoDesdeNotaCredito(NotaCredito $nc): void
@@ -47,7 +47,8 @@ class ContabilidadNotaCreditoService
             'detalles.producto.cuentas.tipo',
             'detalles.producto.impuesto',
             'cliente',
-            'serie'
+            'serie',
+            'factura' // 🔥 IMPORTANTE: cargar la factura
         );
 
         if ($nc->detalles->isEmpty())  throw new RuntimeException('La nota crédito no tiene líneas.');
@@ -69,7 +70,7 @@ class ContabilidadNotaCreditoService
          * ESTRATEGIA 1: Inversión proporcional del asiento de la factura original
          * ======================================================================== */
         if ($nc->factura_id) {
-            $asientoFactura = Asiento::with('movimientos')
+            $asientoFactura = Asiento::with('movimientos.cuenta')
                 ->where('origen_id', $nc->factura_id)
                 ->where(function ($q) {
                     $q->where('origen', 'factura')
@@ -80,16 +81,56 @@ class ContabilidadNotaCreditoService
                 ->first();
 
             if ($asientoFactura && $asientoFactura->movimientos->isNotEmpty()) {
-                $totalAsientoFactura = self::f($asientoFactura->movimientos->sum('debito'));
-                $totalNC             = round(self::f($nc->total), 2);
+                // 🔥 CORRECCIÓN CRÍTICA: Usar el monto de CxC (cuenta 1305 o similar)
+                $cuentaCobro = $nc->factura->cuenta_cobro_id ?? $nc->cuenta_cobro_id;
+                
+                // Buscar el movimiento DEBE de la cuenta de cobro (es el total real de la factura)
+                $movCxC = $asientoFactura->movimientos
+                    ->where('cuenta_id', $cuentaCobro)
+                    ->where('debito', '>', 0)
+                    ->first();
+
+                if (!$movCxC) {
+                    // Fallback: buscar cualquier CxC
+                    $cuentasCxC = PlanCuentas::where('clase_cuenta', 'CXC_CLIENTES')
+                        ->where('cuenta_activa', 1)
+                        ->pluck('id');
+                    
+                    $movCxC = $asientoFactura->movimientos
+                        ->whereIn('cuenta_id', $cuentasCxC)
+                        ->where('debito', '>', 0)
+                        ->first();
+                }
+
+                // Si encontramos el movimiento CxC, usamos ese monto; si no, suma de débitos
+                $totalAsientoFactura = $movCxC 
+                    ? self::f($movCxC->debito)
+                    : self::f($asientoFactura->movimientos->sum('debito'));
+
+                $totalNC = round(self::f($nc->total), 2);
+
+                Log::info('🔍 Cálculo de ratio NC', [
+                    'nc_id' => $nc->id,
+                    'factura_id' => $nc->factura_id,
+                    'total_factura_original' => $totalAsientoFactura,
+                    'total_nc' => $totalNC,
+                    'cuenta_cobro_usada' => $cuentaCobro,
+                    'mov_cxc_encontrado' => $movCxC ? 'SI' : 'NO',
+                ]);
 
                 if ($totalAsientoFactura > 0.0 && $totalNC > 0.0) {
                     $ratio = min(1.0, round($totalNC / $totalAsientoFactura, 6));
 
+                    Log::info('✅ Ratio calculado', [
+                        'nc_id' => $nc->id,
+                        'ratio' => $ratio,
+                        'porcentaje' => round($ratio * 100, 2) . '%',
+                    ]);
+
                     // Invertir TODOS los movimientos (incluye costo/inventario)
                     $movsInv = self::invertirMovsConRatio($asientoFactura->movimientos, $ratio);
                     
-                    // 🔥 NUEVO: Si NO se repone inventario, excluir cuentas de inventario/costo
+                    // 🔥 Si NO se repone inventario, excluir cuentas de inventario/costo
                     if (empty($nc->reponer_inventario)) {
                         $movsInv = array_filter($movsInv, function ($mov) {
                             $cuenta = PlanCuentas::find($mov['cuenta_id']);
@@ -100,6 +141,11 @@ class ContabilidadNotaCreditoService
                             return !in_array($clase, ['INVENTARIO', 'COSTO', 'COSTOS', 'COSTO_VENTAS']);
                         });
                         $movsInv = array_values($movsInv); // reindexar
+                        
+                        Log::info('⚠️ Excluidos movimientos de inventario/costo (reponer_inventario = false)', [
+                            'nc_id' => $nc->id,
+                            'movs_filtrados' => count($movsInv),
+                        ]);
                     }
                     
                     $movsInv = self::consolidarArray($movsInv);
@@ -139,6 +185,13 @@ class ContabilidadNotaCreditoService
                     }
 
                     // ✅ Asiento cuadrado, insertarlo
+                    Log::info('✅ Asiento NC creado por fast-path', [
+                        'nc_id' => $nc->id,
+                        'movimientos' => count($movsInv),
+                        'debe' => $deb,
+                        'haber' => $cre,
+                    ]);
+
                     self::insertAsiento([
                         'fecha'       => $fecha,
                         'glosa'       => $glosaBase,
@@ -158,6 +211,8 @@ class ContabilidadNotaCreditoService
          * ESTRATEGIA 2 (FALLBACK): Construcción manual con costo de la factura
          * ======================================================================== */
         fallback:
+        Log::info('⚠️ Usando fallback para NC', ['nc_id' => $nc->id]);
+        
         $movs = [];
 
         // 1) DÉBITOS: DEVOLUCIÓN + IVA
@@ -340,8 +395,7 @@ class ContabilidadNotaCreditoService
             return self::f($movCosto->costo_unit_mov);
         }
 
-        // 2) Calcular desde asiento contable de la factura (más complejo)
-        // Buscar movimiento de COSTO de este producto en el asiento de la factura
+        // 2) Calcular desde asiento contable de la factura
         $asientoFactura = Asiento::with('movimientos.cuenta')
             ->where('origen_id', $nc->factura_id)
             ->where(function ($q) {
@@ -353,7 +407,6 @@ class ContabilidadNotaCreditoService
             ->first();
 
         if ($asientoFactura) {
-            // Buscar la cuenta de COSTO del producto
             $ctaCosto = self::cuentaCosto($detalle->producto);
             
             if ($ctaCosto) {
@@ -363,7 +416,6 @@ class ContabilidadNotaCreditoService
                     ->first();
 
                 if ($movCosto) {
-                    // Buscar detalle de factura para obtener cantidad
                     $detalleFactura = DB::table('factura_detalles')
                         ->where('factura_id', $nc->factura_id)
                         ->where('producto_id', $productoId)
@@ -386,7 +438,6 @@ class ContabilidadNotaCreditoService
             }
         }
 
-        // 3) No se encontró, retornar null para usar fallback
         return null;
     }
 
@@ -448,7 +499,6 @@ class ContabilidadNotaCreditoService
 
             Movimiento::insert($rows);
 
-            // Verificar inserción
             $deb2 = round(self::f($asiento->movimientos()->sum('debito')), 2);
             $cre2 = round(self::f($asiento->movimientos()->sum('credito')), 2);
             if (abs($deb2 - $cre2) >= 0.01 || abs($deb2 - $deb) >= 0.01) {

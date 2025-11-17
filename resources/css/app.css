@@ -8,21 +8,53 @@
 @custom-variant sidebar-expanded (&:is(.sidebar-expanded *));
 
 /* =========================================================
-   BASE COMPACT GLOBAL + ACCESIBILIDAD
+   TIPOGRAFÍA GLOBAL - INTER
    ======================================================= */
 @layer base {
-  :root {
-    /* Escala de densidad (puedes ajustarla) */
-    --ui-font-size: 14px;
-    --ui-font-size-xl: 13px;  /* >= 1536px */
-    --ui-radius: 1rem;        /* ≈ rounded-2xl */
-    --ui-gap: 1rem;           /* base gap */
-    --ui-gap-compact: .5rem;  /* gap en compacto */
+  /* Aplicar Inter globalmente */
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    letter-spacing: -0.011em;
   }
 
-  html { font-size: var(--ui-font-size); }
+  /* Optimización de renderizado */
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Variables de densidad UI */
+  :root {
+    --ui-font-size: 15px;        /* Base global aumentado */
+    --ui-font-size-xl: 14px;     /* Para pantallas grandes */
+    --ui-radius: 1rem;
+    --ui-gap: 1rem;
+    --ui-gap-compact: .5rem;
+  }
+
+  html { 
+    font-size: var(--ui-font-size);
+  }
+  
   @media (min-width: 1536px) {
     html { font-size: var(--ui-font-size-xl); }
+  }
+
+  /* Tipografía base mejorada */
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  p, span, div {
+    font-weight: 400;
+  }
+
+  strong, b {
+    font-weight: 600;
   }
 
   /* Mejor foco por accesibilidad */
@@ -30,13 +62,88 @@
     outline: 2px solid theme('colors.indigo.500');
     outline-offset: 2px;
   }
+  
   .dark :focus-visible {
     outline-color: theme('colors.indigo.400');
   }
 
   /* Respeto por usuarios con reducción de movimiento */
   @media (prefers-reduced-motion: reduce) {
-    * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+    * { 
+      animation-duration: 0.01ms !important; 
+      animation-iteration-count: 1 !important; 
+      transition-duration: 0.01ms !important; 
+      scroll-behavior: auto !important; 
+    }
+  }
+}
+
+/* =========================================================
+   ESTILOS ESPECÍFICOS PARA SIDEBAR
+   ======================================================= */
+@layer components {
+  /* Tipografía del sidebar */
+  #sidebar {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Items del sidebar - menús principales */
+  #sidebar nav a,
+  #sidebar nav button {
+    font-size: 0.9375rem; /* 15px */
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.4;
+  }
+
+  /* Submenú items (segundo nivel) */
+  #sidebar nav a.text-sm {
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500;
+  }
+
+  /* Items nested (tercer nivel) */
+  #sidebar nav a.text-xs {
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 500;
+  }
+
+  /* Labels de sección (PAGES, MORE) */
+  #sidebar .text-xs.font-semibold {
+    font-size: 0.75rem; /* 12px */
+    font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+
+  /* Título del sistema */
+  #sidebar h1 {
+    font-size: 1rem; /* 16px */
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  /* Subtítulo del sistema */
+  #sidebar h1 + p {
+    font-size: 0.8125rem; /* 13px */
+    font-weight: 400;
+  }
+
+  /* Footer user info - nombre */
+  #sidebar .flex-none p {
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500;
+  }
+
+  /* Footer user info - email */
+  #sidebar .flex-none p.text-xs {
+    font-size: 0.75rem; /* 12px */
+    font-weight: 400;
+  }
+
+  /* Botón de cerrar sesión */
+  #sidebar form button span {
+    font-size: 0.875rem; /* 14px */
+    font-weight: 500;
   }
 }
 
@@ -44,82 +151,119 @@
    UTILIDADES UI-COMPACT Y COZY
    ======================================================= */
 @layer utilities {
-  /* ---------- Toggle de densidad ---------- */
+  /* Toggle de densidad */
   .ui-compact { --ui-gap: var(--ui-gap-compact); }
-  .ui-cozy    { --ui-gap: 1.25rem; } /* una opción más aireada */
+  .ui-cozy    { --ui-gap: 1.25rem; }
 
-  /* ---------- Inputs / selects / textareas / TomSelect ---------- */
+  /* Inputs / selects / textareas / TomSelect */
   .ui-compact :is(input, select, textarea, [role="combobox"], .ts-control) {
     @apply h-9 text-sm;
     border-radius: calc(var(--ui-radius) - .5rem);
+    font-weight: 400;
   }
+  
   .ui-compact :is(input, select, textarea) {
     @apply py-2 px-2;
   }
+  
   /* TomSelect */
   .ui-compact .ts-control {
     @apply min-h-0 py-1.5 px-2 text-sm;
     border-radius: calc(var(--ui-radius) - .5rem);
   }
-  .ui-compact .ts-dropdown .option { @apply py-1.5 px-2 text-sm; }
+  
+  .ui-compact .ts-dropdown .option { 
+    @apply py-1.5 px-2 text-sm; 
+    font-weight: 400;
+  }
 
-  /* ---------- Botones ---------- */
+  /* Botones */
   .ui-compact :is(button,.btn,[type="button"],[type="submit"]) {
     @apply h-9 px-3 text-sm;
     border-radius: calc(var(--ui-radius) - .5rem);
+    font-weight: 500;
   }
 
-  /* ---------- Tablas densas ---------- */
-  .ui-compact table :is(th, td) { @apply py-2 px-2 text-sm; }
-  .ui-compact table thead th    { @apply font-semibold; }
+  /* Tablas densas */
+  .ui-compact table :is(th, td) { 
+    @apply py-2 px-2 text-sm; 
+    font-weight: 400;
+  }
+  
+  .ui-compact table thead th { 
+    @apply font-semibold; 
+    font-weight: 600;
+  }
 
-  /* ---------- Cards / secciones ---------- */
+  /* Cards / secciones */
   .ui-compact .card {
     @apply rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow;
     border-radius: var(--ui-radius);
   }
 
-  /* Sobrescribe padding comunes p-6/p-8 → p-4 (y variantes x/y) */
+  /* Sobrescribe padding comunes */
   .ui-compact :is(.p-6,.p-8,.py-6,.py-8,.px-6,.px-8) { @apply p-4; }
 
-  /* ---------- Encabezados / hero ---------- */
+  /* Encabezados / hero */
   .ui-compact :is(.hero, [data-hero]) { @apply py-5; }
 
-  /* ---------- Grids con menos espacios ---------- */
+  /* Grids con menos espacios */
   .ui-compact .gap-6 { gap: var(--ui-gap); }
   .ui-compact .gap-4 { gap: calc(var(--ui-gap) * .75); }
 
-  /* ---------- Listas, chips, badges densos ---------- */
-  .ui-compact .badge { @apply text-xs py-1 px-2 rounded-lg; }
-  .ui-compact .chip  { @apply text-xs py-1 px-2 rounded-lg; }
-
-  /* ---------- Toolbars / headers de sección ---------- */
-  .ui-compact .section-header {
-    @apply flex items-center justify-between;
-    @apply py-3;
+  /* Listas, chips, badges densos */
+  .ui-compact .badge { 
+    @apply text-xs py-1 px-2 rounded-lg; 
+    font-weight: 500;
+  }
+  
+  .ui-compact .chip { 
+    @apply text-xs py-1 px-2 rounded-lg; 
+    font-weight: 500;
   }
 
-  /* ---------- Altura de selects “nativos” en forms plugin ---------- */
+  /* Toolbars / headers de sección */
+  .ui-compact .section-header {
+    @apply flex items-center justify-between py-3;
+  }
+
+  /* Altura de selects nativos */
   .ui-compact select {
     @apply leading-none;
   }
 }
 
 /* =========================================================
-   COMPONENTES OPCIONALES (layer: components)
+   COMPONENTES OPCIONALES
    ======================================================= */
 @layer components {
-  /* Botón primario coherente en ambos modos */
+  /* Botón primario */
   .btn-primary {
-    @apply inline-flex items-center justify-center font-semibold;
+    @apply inline-flex items-center justify-center;
     @apply bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800;
     @apply disabled:opacity-60 disabled:cursor-not-allowed;
     border-radius: var(--ui-radius);
-    min-height: 2.5rem; /* fallback si no hay h-* */
+    min-height: 2.5rem;
     padding-inline: .875rem;
+    font-weight: 500;
+    font-size: 0.875rem;
   }
+  
   .dark .btn-primary {
     @apply bg-indigo-500 hover:bg-indigo-600 active:bg-indigo-700;
+  }
+
+  /* Botón secundario */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center;
+    @apply bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400;
+    @apply dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600;
+    @apply disabled:opacity-60 disabled:cursor-not-allowed;
+    border-radius: var(--ui-radius);
+    min-height: 2.5rem;
+    padding-inline: .875rem;
+    font-weight: 500;
+    font-size: 0.875rem;
   }
 
   /* Card estándar */
@@ -128,20 +272,88 @@
     border-radius: var(--ui-radius);
   }
 
-  /* Header de card compacto */
+  /* Card sections */
   .card-header {
     @apply flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800;
+    font-weight: 600;
+    font-size: 0.9375rem; /* 15px */
   }
-  .card-body   { @apply p-4; }
-  .card-footer { @apply px-4 py-3 border-t border-gray-100 dark:border-gray-800; }
+  
+  .card-body { 
+    @apply p-4; 
+    font-weight: 400;
+    font-size: 0.875rem; /* 14px */
+  }
+  
+  .card-footer { 
+    @apply px-4 py-3 border-t border-gray-100 dark:border-gray-800;
+    font-size: 0.875rem; /* 14px */
+  }
+
+  /* Modal */
+  .modal-header {
+    @apply px-6 py-4 border-b border-gray-200 dark:border-gray-700;
+    font-weight: 600;
+    font-size: 1rem; /* 16px */
+  }
+
+  .modal-body {
+    @apply px-6 py-4;
+    font-size: 0.875rem; /* 14px */
+  }
+
+  .modal-footer {
+    @apply px-6 py-4 border-t border-gray-200 dark:border-gray-700;
+  }
 }
 
 /* =========================================================
    LAYOUTS ESPECIALES
    ======================================================= */
 @layer utilities {
-  /* Sidebar expanded variant ya declarada con @custom-variant
-     aquí puedes ajustar medidas cuando el layout expande el aside */
-  .sidebar-expanded .sidebar-width        { width: 18rem; }
-  .sidebar-expanded .main-with-sidebar    { margin-left: 18rem; }
+  .sidebar-expanded .sidebar-width { width: 18rem; }
+  .sidebar-expanded .main-with-sidebar { margin-left: 18rem; }
+}
+
+/* =========================================================
+   SCROLLBAR PERSONALIZADO
+   ======================================================= */
+@layer utilities {
+  /* Scrollbar para contenido principal */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(156, 163, 175, 0.3);
+    border-radius: 10px;
+    transition: background-color 0.2s;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(156, 163, 175, 0.5);
+  }
+
+  /* Dark mode scrollbar */
+  .dark .custom-scrollbar {
+    scrollbar-color: rgba(75, 85, 99, 0.5) transparent;
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(75, 85, 99, 0.5);
+  }
+
+  .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(75, 85, 99, 0.7);
+  }
 }

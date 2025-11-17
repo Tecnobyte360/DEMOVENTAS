@@ -2,7 +2,6 @@
 
 namespace App\Models\Factura;
 
-use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Models\MediosPago\MedioPagos;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
@@ -196,11 +195,4 @@ class Factura extends Model
             $this->recalcularTotales()->save();
         });
     }
-
-  public function empresa(): BelongsTo
-    {
-        // si tu FK es empresa_id y la tabla empresas, esto basta
-        return $this->belongsTo(Empresa::class, 'empresa_id');
-    }
-
 }

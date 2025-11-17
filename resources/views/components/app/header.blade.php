@@ -1,42 +1,63 @@
 <header 
-   class="sticky top-0 before:absolute before:inset-0 before:backdrop-blur-md before:bg-transparent
-         before:-z-10 z-30
-         {{ $variant === 'v2' || $variant === 'v3'
-              ? 'after:absolute after:h-px after:inset-x-0 after:top-full after:bg-gray-200 dark:after:bg-gray-700/60 after:-z-10'
-              : 'max-lg:shadow-xs' }}"
- class="sticky top-0 z-30 shadow-md rounded-b-3xl"
-    style="background-color: {{ $empresaActual?->color_secundario }};"
+    x-data="{
+        bgColor: '#{{ $empresaActual?->color_secundario ?? 'FFFFFF' }}',
+        textColor: '#000000',
+        isLight: false,
+        
+        hexToRgb(hex) {
+            const h = (hex || '').trim().replace('#', '');
+            const s = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+            const r = parseInt(s.substring(0, 2), 16) || 255;
+            const g = parseInt(s.substring(2, 4), 16) || 255;
+            const b = parseInt(s.substring(4, 6), 16) || 255;
+            return { r, g, b };
+        },
+        
+        luminance({ r, g, b }) {
+            const srgb = [r, g, b].map(v => v / 255).map(v => 
+                v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+            );
+            return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+        },
+        
+        init() {
+            const rgb = this.hexToRgb(this.bgColor);
+            const L = this.luminance(rgb);
+            this.isLight = L > 0.5;
+            this.textColor = this.isLight ? '#111827' : '#FFFFFF';
+        }
+    }"
+    x-init="init()"
+    class="sticky top-0 z-30 backdrop-blur-lg transition-all duration-300"
+    :style="`
+        background: ${bgColor}f8;
+        color: ${textColor};
+        border-bottom: 1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'};
+    `"
 >
     <div class="px-4 sm:px-6 lg:px-8">
-        <div class="flex items-center justify-between h-16 
-                    {{ $variant === 'v2' || $variant === 'v3' 
-                        ? '' 
-                        : 'lg:border-b border-gray-200 dark:border-gray-700/60' }}">
+        <div class="flex items-center justify-between h-14">
             
-            <!-- Header: Left side -->
-            <div class="flex">
-    <button
-        class="text-gray-600 hover:text-gray-800 lg:hidden transition-colors duration-200"
-        @click.stop="sidebarOpen = !sidebarOpen"
-        aria-controls="sidebar"
-        :aria-expanded="sidebarOpen"
-    >
-        <span class="sr-only">Open sidebar</span>
-        <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24">
-            <rect x="4" y="5" width="16" height="2" />
-            <rect x="4" y="11" width="16" height="2" />
-            <rect x="4" y="17" width="16" height="2" />
-        </svg>
-    </button>
-</div>
+            <!-- Left -->
+            <div class="flex items-center gap-3">
+                <button
+                    class="p-2 rounded-lg lg:hidden hover:bg-white/10 transition-all"
+                    :style="`color: ${textColor};`"
+                    @click.stop="sidebarOpen = !sidebarOpen"
+                >
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
 
-            <!-- Header: Right side -->
-            <div class="flex items-center space-x-3">
+            <!-- Right -->
+            <div class="flex items-center gap-1">
                 <x-modal-search />
                 <x-dropdown-notifications align="right" />
                 <x-dropdown-help align="right" />
                 <x-theme-toggle />
-                <hr class="w-px h-6 bg-white/40 border-none" />
+                <div class="w-px h-6 mx-2 bg-white/20"></div>
                 <x-dropdown-profile align="right" />
             </div>
         </div>

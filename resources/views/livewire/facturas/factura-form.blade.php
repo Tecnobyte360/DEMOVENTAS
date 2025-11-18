@@ -31,14 +31,53 @@
 >
 
   {{-- ================= PREVISUALIZADOR DE IMÁGENES (Lightbox) ================= --}}
+{{-- ================= PREVISUALIZADOR DE IMÁGENES (Lightbox) ================= --}}
+<div
+  x-data="{ open:false, src:null, title:'' }"
+  x-on:preview-image.window="
+      src   = $event.detail.src;
+      title = $event.detail.title || '';
+      open  = true;
+  "
+  x-id="['imgviewer']"
+>
   <div
-    x-data="{ open:false, src:null, title:'' }"
-    x-on:preview-image.window="src = $event.detail.src; title = $event.detail.title || ''; open = true;"
-    x-id="['imgviewer']"
+    x-show="open"
+    x-transition.opacity
+    x-cloak
+    class="fixed inset-0 z-[200] flex items-center justify-center"
+    @keydown.escape.window="open = false"
   >
-    
+    {{-- Fondo oscuro --}}
+    <div class="absolute inset-0 bg-black/70" @click="open = false"></div>
+
+    {{-- Contenedor de la imagen --}}
+    <div class="relative z-10 max-w-4xl w-[90vw] max-h-[90vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
+      {{-- Header --}}
+      <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
+        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100" x-text="title || 'Imagen de producto'"></h3>
+        <button
+          type="button"
+          class="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+          @click="open = false"
+          aria-label="Cerrar"
+        >
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      {{-- Imagen --}}
+      <div class="p-3 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <img
+          :src="src"
+          :alt="title || 'Imagen de producto'"
+          class="max-h-[80vh] w-auto object-contain rounded-xl"
+        >
+      </div>
+    </div>
   </div>
-  {{-- ================= FIN PREVISUALIZADOR ================= --}}
+</div>
+{{-- ================= FIN PREVISUALIZADOR ================= --}}
 
 
 

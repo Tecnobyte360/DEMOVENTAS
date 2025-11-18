@@ -70,7 +70,7 @@ class FacturaCompra extends Component
         // Permite que se autogenere desde el producto:
         'lineas.*.descripcion'           => 'nullable|string|max:255',
         'lineas.*.cantidad'              => 'required|numeric|min:1',
-        'lineas.*.precio_unitario'       => 'required|numeric|min:0',
+    'lineas.*.precio_unitario'       => 'required|numeric|gt:0',
         'lineas.*.descuento_pct'         => 'required|numeric|min:0|max:100',
         'lineas.*.impuesto_id'           => 'nullable|integer|exists:impuestos,id',
         'lineas.*.impuesto_pct'          => 'required|numeric|min:0|max:100',

@@ -565,5 +565,153 @@ class InventarioService
         return max(0.0, round($puN, 6));
     }
 
-    
+      public static function salidaPorNotaCreditoCompra(NotaCredito $nc): void
+    {
+        $nc->loadMissing('detalles.producto', 'serie.tipo');
+
+        DB::transaction(function () use ($nc) {
+            $tipoDocId = static::tipoDocumentoId('NOTA_CREDITO_COMPRA');
+
+            foreach ($nc->detalles as $d) {
+                if (!$d->producto_id || !$d->bodega_id) {
+                    continue;
+                }
+
+                $cantidad = (float) $d->cantidad;
+                if ($cantidad <= 0) {
+                    continue;
+                }
+
+                // 🔹 Costo unitario de referencia para la salida (mismo criterio que compra)
+                $costoUnit = static::costoUnitarioCompra($d);
+                $valorMov  = round($cantidad * $costoUnit, 2);
+
+                // 🔹 Stock: SALIDA
+                $pb = ProductoBodega::lockForUpdate()
+                    ->firstOrNew(
+                        ['producto_id' => $d->producto_id, 'bodega_id' => $d->bodega_id],
+                        ['stock' => 0, 'costo_promedio' => 0, 'ultimo_costo' => 0, 'metodo_costeo' => 'PROMEDIO']
+                    );
+
+                $stockAntes   = (float) $pb->stock;
+                $stockDespues = $stockAntes - $cantidad;
+
+                $pb->stock        = $stockDespues;
+                // 👇 En salida por NC compra NO recalculamos costo_promedio, solo movemos stock
+                $pb->ultimo_costo = $costoUnit;
+                $pb->metodo_costeo = $pb->metodo_costeo ?: 'PROMEDIO';
+                $pb->save();
+
+                $refNc = 'NC COMPRA ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string) $nc->numero;
+
+                // 🔹 Kardex (SALIDA)
+                static::registrarKardex(
+                    tipoLogico: 'NC_COMPRA_SALIDA',
+                    signo: -1,
+                    fecha: $nc->fecha ?? now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    cantidad: $cantidad,
+                    costoUnitario: $costoUnit,
+                    tipoDocumentoId: $tipoDocId,
+                    docTipoLegacy: 'NOTA_CREDITO_COMPRA',
+                    docId: (int) $nc->id,
+                    ref: $refNc
+                );
+
+                // 🔹 Historial de costos (SALIDA)
+                static::registrarCostoMovimiento(
+                    fecha: $nc->fecha ?? now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    tipo: 'SALIDA',
+                    cantidad: $cantidad,
+                    costoUnitario: $costoUnit,
+                    stockAntes: $stockAntes,
+                    stockDespues: $stockDespues,
+                    tipoDocumentoId: $tipoDocId,
+                    docId: (int) $nc->id,
+                    origen: 'nota_credito_compra',
+                    detalle: $refNc,
+                    tipoEvento: 'NC_COMPRA'
+                );
+            }
+        });
+    }
+
+    /* =========================================================
+     *  REVERSA de la salida por Nota Crédito de compra
+     *     (por anulación de la NC de compra)
+     * ========================================================= */
+    public static function revertirSalidaPorNotaCreditoCompra(NotaCredito $nc): void
+    {
+        $nc->loadMissing('detalles.producto', 'serie.tipo');
+
+        DB::transaction(function () use ($nc) {
+            $tipoDocId = static::tipoDocumentoId('REVERSO_NC_COMPRA');
+
+            foreach ($nc->detalles as $d) {
+                if (!$d->producto_id || !$d->bodega_id) {
+                    continue;
+                }
+
+                $cantidad = (float) $d->cantidad;
+                if ($cantidad <= 0) {
+                    continue;
+                }
+
+                $costoUnit = static::costoUnitarioCompra($d);
+                $valorMov  = round($cantidad * $costoUnit, 2);
+
+                $pb = ProductoBodega::lockForUpdate()
+                    ->firstOrNew(
+                        ['producto_id' => $d->producto_id, 'bodega_id' => $d->bodega_id],
+                        ['stock' => 0, 'costo_promedio' => 0, 'ultimo_costo' => 0, 'metodo_costeo' => 'PROMEDIO']
+                    );
+
+                $stockAntes   = (float) $pb->stock;
+                $stockDespues = $stockAntes + $cantidad;
+
+                $pb->stock        = $stockDespues;
+                // Tampoco tocamos costo_promedio aquí, solo devolvemos el stock
+                $pb->ultimo_costo = $costoUnit;
+                $pb->metodo_costeo = $pb->metodo_costeo ?: 'PROMEDIO';
+                $pb->save();
+
+                $refNc = 'REV NC COMPRA ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string) $nc->numero;
+
+                // 🔹 Kardex (ENTRADA)
+                static::registrarKardex(
+                    tipoLogico: 'REVERSO_NC_COMPRA',
+                    signo: 1,
+                    fecha: $nc->fecha ?? now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    cantidad: $cantidad,
+                    costoUnitario: $costoUnit,
+                    tipoDocumentoId: $tipoDocId,
+                    docTipoLegacy: 'REVERSO_NC_COMPRA',
+                    docId: (int) $nc->id,
+                    ref: $refNc
+                );
+
+                // 🔹 Historial de costos (ENTRADA)
+                static::registrarCostoMovimiento(
+                    fecha: $nc->fecha ?? now(),
+                    productoId: (int) $d->producto_id,
+                    bodegaId: (int) $d->bodega_id,
+                    tipo: 'ENTRADA',
+                    cantidad: $cantidad,
+                    costoUnitario: $costoUnit,
+                    stockAntes: $stockAntes,
+                    stockDespues: $stockDespues,
+                    tipoDocumentoId: $tipoDocId,
+                    docId: (int) $nc->id,
+                    origen: 'nota_credito_compra',
+                    detalle: $refNc,
+                    tipoEvento: 'REVERSO_NC_COMPRA'
+                );
+            }
+        });
+    }
 }

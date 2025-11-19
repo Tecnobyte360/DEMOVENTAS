@@ -7,6 +7,7 @@ use App\Models\NotaCredito;
 use App\Models\Productos\Producto;
 use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\CuentasContables\PlanCuentas;
+use App\Models\Movimiento\Movimiento;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -369,5 +370,67 @@ class ContabilidadNotaCreditoCompraService
             ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
             ->orderBy('codigo')
             ->value('id');
+    }
+
+    public static function revertirAsientoNotaCreditoCompra(NotaCredito $nc): void
+    {
+        if (!$nc->id) {
+            throw new RuntimeException('La nota crédito de compra no tiene ID.');
+        }
+
+        DB::transaction(function () use ($nc) {
+            // Ajusta estos campos según tu modelo de Asiento 👇
+            $asientos = Asiento::query()
+                ->where('documento', 'NOTA_CREDITO_COMPRA')   // o el código que uses
+                ->where('documento_id', $nc->id)
+                ->get();
+
+            if ($asientos->isEmpty()) {
+                // No hay asiento que revertir: salimos suave
+                Log::warning('No se encontraron asientos para revertir en NC compra', [
+                    'nota_credito_id' => $nc->id,
+                ]);
+                return;
+            }
+
+            foreach ($asientos as $a) {
+                // Si ya está anulado/revertido, lo saltamos
+                if (in_array($a->estado, ['ANULADO','REVERTIDO'], true) || $a->anulado) {
+                    continue;
+                }
+
+                // Creamos asiento de reversa
+                $asientoReverso = Asiento::create([
+                    'fecha'        => $nc->fecha ?? now(),
+                    'glosa'        => 'Reverso NC COMPRA #'.$nc->id.' (Asiento '.$a->id.')',
+                    'moneda'       => $a->moneda ?? 'COP',
+                    'documento'    => 'REVERSO_NC_COMPRA',
+                    'documento_id' => $nc->id,
+                    'estado'       => 'EMITIDO',
+                    'anulado'      => 0,
+                    // si usas campos como empresa_id, usuario_id, etc. añádelos acá
+                ]);
+
+                // Invertimos movimientos
+                $a->loadMissing('movimientos');
+
+                foreach ($a->movimientos as $m) {
+                    Movimiento::create([
+                        'asiento_id'  => $asientoReverso->id,
+                        'cuenta_id'   => $m->cuenta_id,
+                        'detalle'     => 'Reverso: '.$m->detalle,
+                        'debe'        => (float)$m->haber,
+                        'haber'       => (float)$m->debe,
+                        'centro_costo_id' => $m->centro_costo_id ?? null,
+                        // agrega aquí cualquier otro campo obligatorio de tu tabla movimientos
+                    ]);
+                }
+
+                // Marcamos el asiento original como revertido/anulado
+                $a->estado  = 'REVERTIDO';
+                $a->anulado = 1;
+                $a->save();
+            }
+        });
     }
 }

@@ -10,6 +10,7 @@ use App\Models\Productos\Producto;
 use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
+use App\Models\TiposDocumento\TipoDocumento;
 use App\Services\ContabilidadNotaCreditoCompraService;
 use App\Services\InventarioService;
 use Carbon\Carbon;
@@ -23,7 +24,7 @@ use Masmerise\Toaster\PendingToast;
 class NotaCreditoCompraForm extends Component
 {
     public ?NotaCredito $nota = null;
-    public string $documento = 'nota_credito_compra';
+  public string $documento = 'NOTACREDITOCOMPRA'; 
     public ?Serie $serieDefault = null;
 
     public ?int $serie_id = null;
@@ -108,28 +109,30 @@ class NotaCreditoCompraForm extends Component
         $this->cargarNota($id);
     }
 
-    public function mount(?int $id = null, ?int $factura_compra_id = null): void
-    {
-        try {
-            $this->fecha = now()->toDateString();
-            $this->serieDefault = Serie::defaultParaCodigo($this->documento);
-            $this->serie_id = $this->serieDefault?->id;
+   public function mount(?int $id = null, ?int $factura_compra_id = null): void
+{
+    try {
+        $this->fecha = now()->toDateString();
 
-            if ($id) {
-                $this->cargarNota($id);
-            } else {
-                $this->addLinea();
-                $this->terminos_pago = 'Nota crédito de compra';
+        // Ahora sí va a encontrar la serie default
+        $this->serieDefault = Serie::defaultParaCodigo($this->documento);
+        $this->serie_id     = $this->serieDefault?->id;
 
-                if ($factura_compra_id) {
-                    $this->factura_compra_id = $factura_compra_id;
-                    $this->precargarDesdeFacturaCompra($factura_compra_id);
-                }
+        if ($id) {
+            $this->cargarNota($id);
+        } else {
+            $this->addLinea();
+            $this->terminos_pago = 'Nota crédito de compra';
+
+            if ($factura_compra_id) {
+                $this->factura_compra_id = $factura_compra_id;
+                $this->precargarDesdeFacturaCompra($factura_compra_id);
             }
+        }
 
-            $this->setCuentaCxPPorDefecto();
-            $this->refrescarFacturasProveedor();
-        } catch (\Throwable $e) {
+        $this->setCuentaCxPPorDefecto();
+        $this->refrescarFacturasProveedor();
+    } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo inicializar la NC de compra.')->duration(7000);
         }
@@ -1004,4 +1007,14 @@ class NotaCreditoCompraForm extends Component
             ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
             ->value('id');
     }
+
+    public static function defaultParaCodigo(string $codigo): ?self
+{
+    $tipoId = TipoDocumento::whereRaw('LOWER(codigo) = ?', [strtolower($codigo)])->value('id');
+
+    return static::where('tipo_documento_id', $tipoId)
+        ->where('es_default', 1)
+        ->first();
+}
+
 }

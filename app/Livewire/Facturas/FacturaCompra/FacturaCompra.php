@@ -358,86 +358,94 @@ class FacturaCompra extends Component
     }
 
     /** Resolver cuenta INVENTARIO por artículo/subcategoría */
-    private function resolveCuentaInventarioParaProducto(Producto $p): ?int
-    {
-        if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
+  private function resolveCuentaInventarioParaProducto(Producto $p): ?int
+{
+    // Si tiene cuenta directa en el producto
+    if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
 
-        $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
-            ProductoCuentaTipo::query()->where('codigo', 'INVENTARIO')->value('id')
-        );
-        if (!$tipoInvId) return null;
+    // Orden de prioridad según TU base de datos
+    $tiposInventario = ['INVENTARIO', 'COSTO'];
 
-        if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-            $cuenta = $p->relationLoaded('cuentas')
-                ? $p->cuentas->firstWhere('tipo_id', (int)$tipoInvId)
-                : $p->cuentas()->where('tipo_id', (int)$tipoInvId)->first();
-
-            return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
-        }
-
-        if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
-            if (!$p->subcategoria_id) return null;
-
-            if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
-                $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoInvId);
-                return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
-            }
-
-            $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
-                ->where('subcategoria_id', (int)$p->subcategoria_id)
-                ->where('tipo_id', (int)$tipoInvId)
-                ->first();
-
-            return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
-        }
-
-        return null;
-    }
-
-    /** 🔑 NUEVO: Resolver cuenta GASTO para servicios (compras) */
-    private function resolveCuentaGastoParaProducto(Producto $p): ?int
-    {
-        // Buscar cuenta de GASTO_COMPRAS o GASTO
-        $tipoGastoId = cache()->remember('producto_cuenta_tipo_gasto_compras_id', 600, fn () =>
-            ProductoCuentaTipo::query()->where('codigo', 'GASTO_COMPRAS')->value('id')
+    foreach ($tiposInventario as $codigoTipo) {
+        $tipoId = cache()->remember("producto_cuenta_tipo_{$codigoTipo}_id", 600, fn () =>
+            ProductoCuentaTipo::query()->where('codigo', $codigoTipo)->value('id')
         );
         
-        if (!$tipoGastoId) {
-            $tipoGastoId = cache()->remember('producto_cuenta_tipo_gasto_id', 600, fn () =>
-                ProductoCuentaTipo::query()->where('codigo', 'GASTO')->value('id')
-            );
-        }
-        
-        if (!$tipoGastoId) return null;
+        if (!$tipoId) continue;
 
-        // Por artículo
-        if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-            $cuenta = $p->relationLoaded('cuentas')
-                ? $p->cuentas->firstWhere('tipo_id', (int)$tipoGastoId)
-                : $p->cuentas()->where('tipo_id', (int)$tipoGastoId)->first();
-
-            return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
-        }
-
-        // Por subcategoría
-        if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
-            if (!$p->subcategoria_id) return null;
-
-            if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
-                $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoGastoId);
-                return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
-            }
-
-            $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
-                ->where('subcategoria_id', (int)$p->subcategoria_id)
-                ->where('tipo_id', (int)$tipoGastoId)
-                ->first();
-
-            return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
-        }
-
-        return null;
+        $cuenta = $this->resolverCuentaPorTipo($p, (int)$tipoId);
+        if ($cuenta) return $cuenta;
     }
+
+    return null;
+}
+
+private function resolveCuentaGastoParaProducto(Producto $p): ?int
+{
+    // Orden de prioridad según TU base de datos
+    $tiposGasto = ['GASTO', 'COSTO'];
+
+    foreach ($tiposGasto as $codigoTipo) {
+        $tipoId = cache()->remember("producto_cuenta_tipo_{$codigoTipo}_id", 600, fn () =>
+            ProductoCuentaTipo::query()->where('codigo', $codigoTipo)->value('id')
+        );
+        
+        if (!$tipoId) continue;
+
+        $cuenta = $this->resolverCuentaPorTipo($p, (int)$tipoId);
+        if ($cuenta) return $cuenta;
+    }
+
+    return null;
+}
+
+/**
+ * 🔑 Helper: Resuelve cuenta por tipo según MOV_SEGUN (ARTICULO o SUBCATEGORIA)
+ */
+private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
+{
+    // Estrategia 1: Por ARTÍCULO (busca en producto_cuentas)
+    if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+        // Intentar con relaciones cargadas
+        if ($p->relationLoaded('cuentas')) {
+            $cuenta = $p->cuentas->firstWhere('tipo_id', $tipoId);
+            if ($cuenta && $cuenta->plan_cuentas_id) {
+                return (int)$cuenta->plan_cuentas_id;
+            }
+        }
+
+        // Consulta directa si no está cargado
+        $cuenta = \App\Models\Productos\ProductoCuenta::query()
+            ->where('producto_id', $p->id)
+            ->where('tipo_id', $tipoId)
+            ->first();
+
+        return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
+    }
+
+    // Estrategia 2: Por SUBCATEGORÍA (busca en subcategoria_cuentas)
+    if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
+        if (!$p->subcategoria_id) return null;
+
+        // Intentar con relaciones cargadas
+        if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
+            $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', $tipoId);
+            if ($sc && $sc->plan_cuentas_id) {
+                return (int)$sc->plan_cuentas_id;
+            }
+        }
+
+        // Consulta directa si no está cargado
+        $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
+            ->where('subcategoria_id', (int)$p->subcategoria_id)
+            ->where('tipo_id', $tipoId)
+            ->first();
+
+        return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+    }
+
+    return null;
+}
 
     private function normalizeLinea(array &$l): void
     {

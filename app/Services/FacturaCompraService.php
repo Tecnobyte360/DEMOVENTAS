@@ -127,55 +127,57 @@ class FacturaCompraService
      * 🔑 NUEVO: Si el producto NO es inventariable (servicio), busca GASTO en lugar de INVENTARIO
      */
     protected static function resolveCuentaBaseCompra(?int $cuentaLinea, ?Producto $p, int $proveedorId): ?int
-    {
-        // 1) Si la línea ya tiene cuenta explícita, usarla
-        if ($cuentaLinea && PlanCuentas::whereKey($cuentaLinea)->exists()) {
-            return (int)$cuentaLinea;
-        }
+{
+    // 1) Si la línea ya tiene cuenta explícita, usarla
+    if ($cuentaLinea && PlanCuentas::whereKey($cuentaLinea)->exists()) {
+        return (int) $cuentaLinea;
+    }
 
-        // 2) Si es un SERVICIO (NO inventariable), buscar GASTO
-        if ($p && !($p->es_inventariable ?? true)) {
-            $ctaGasto = self::cuentaDeProductoPorTipo($p, 'GASTO_COMPRAS')
-                ?? self::cuentaDeProductoPorTipo($p, 'GASTO');
-            
-            if ($ctaGasto && PlanCuentas::whereKey($ctaGasto)->exists()) {
-                return (int)$ctaGasto;
-            }
-            
-            // Fallback: cuenta de gasto del proveedor
-            $prov = self::cuentasProveedor($proveedorId);
-            if (!empty($prov['gasto']) && PlanCuentas::whereKey($prov['gasto'])->exists()) {
-                return (int)$prov['gasto'];
-            }
-            
-            // Fallback global de config
-            $fallbackCodigo = (string) config('conta.cta_gasto_compras_default', '');
-            $fallback = self::cuentaPorCodigo($fallbackCodigo);
-            return $fallback ?: null;
-        }
+    // 2) SERVICIO (es_inventariable = 0) -> cuenta de GASTO
+    if ($p && !($p->es_inventariable ?? true)) {
 
-        // 3) Si es INVENTARIABLE, buscar cuenta de INVENTARIO
-        $ctaProd = self::cuentaDeProductoPorTipo($p, 'INVENTARIO')
-            ?? self::cuentaDeProductoPorTipo($p, 'GASTO_COMPRAS')
+        // Prioridad: GASTO, luego COSTO
+        $ctaGasto = self::cuentaDeProductoPorTipo($p, 'GASTO')
             ?? self::cuentaDeProductoPorTipo($p, 'COSTO');
-        
-        if ($ctaProd && PlanCuentas::whereKey($ctaProd)->exists()) {
-            return (int)$ctaProd;
+
+        if ($ctaGasto && PlanCuentas::whereKey($ctaGasto)->exists()) {
+            return (int) $ctaGasto;
         }
 
-        // 4) Fallback: cuentas del proveedor
+        // Fallback: cuenta de gasto parametrizada en el proveedor
         $prov = self::cuentasProveedor($proveedorId);
-        foreach (['inventario', 'gasto'] as $k) {
-            if (!empty($prov[$k]) && PlanCuentas::whereKey($prov[$k])->exists()) {
-                return (int)$prov[$k];
-            }
+        if (!empty($prov['gasto']) && PlanCuentas::whereKey($prov['gasto'])->exists()) {
+            return (int) $prov['gasto'];
         }
 
-        // 5) Fallback global
+        // Fallback global (config)
         $fallbackCodigo = (string) config('conta.cta_gasto_compras_default', '');
         $fallback = self::cuentaPorCodigo($fallbackCodigo);
         return $fallback ?: null;
     }
+
+    // 3) PRODUCTO INVENTARIABLE -> cuenta INVENTARIO (o COSTO/GASTO si no hay)
+    $ctaProd = self::cuentaDeProductoPorTipo($p, 'INVENTARIO')
+        ?? self::cuentaDeProductoPorTipo($p, 'COSTO')
+        ?? self::cuentaDeProductoPorTipo($p, 'GASTO');
+
+    if ($ctaProd && PlanCuentas::whereKey($ctaProd)->exists()) {
+        return (int) $ctaProd;
+    }
+
+    // 4) Fallback: cuentas del proveedor
+    $prov = self::cuentasProveedor($proveedorId);
+    foreach (['inventario', 'gasto'] as $k) {
+        if (!empty($prov[$k]) && PlanCuentas::whereKey($prov[$k])->exists()) {
+            return (int) $prov[$k];
+        }
+    }
+
+    // 5) Fallback global
+    $fallbackCodigo = (string) config('conta.cta_gasto_compras_default', '');
+    $fallback = self::cuentaPorCodigo($fallbackCodigo);
+    return $fallback ?: null;
+}
 
     /**
      * Cuenta de IVA compras (descontable).

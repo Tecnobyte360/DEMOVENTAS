@@ -493,25 +493,23 @@ class NotaCreditoCompraForm extends Component
 
             $serieId = $this->serie_id ?? ($this->serieDefault?->id ?? $this->nota?->serie_id);
 
-            $dataCab = [
-                'serie_id'          => $serieId,
-                'socio_negocio_id'  => $this->socio_negocio_id,
-                'factura_id'        => $this->factura_compra_id,
-                'fecha'             => $this->fecha,
-                'vencimiento'       => $this->vencimiento,
-                'moneda'            => $this->moneda,
-                'tipo_pago'         => $this->tipo_pago,
-                'plazo_dias'        => $this->plazo_dias,
-                'terminos_pago'     => $this->terminos_pago,
-                'notas'             => $this->notas,
-                'motivo'            => $this->motivo,
-                'estado'            => 'borrador',
-                'cuenta_cobro_id'   => $this->cuenta_cobro_id,
-                'condicion_pago_id' => $this->condicion_pago_id,
-                'es_compra'         => 1,
-                'reponer_inventario'=> 0,
-            ];
-
+          $dataCab = [
+    'serie_id'          => $serieId,
+    'socio_negocio_id'  => $this->socio_negocio_id,
+    'factura_id'        => $this->factura_compra_id,
+    'fecha'             => $this->fecha,
+    'vencimiento'       => $this->vencimiento,
+    'moneda'            => $this->moneda,
+    'tipo_pago'         => $this->tipo_pago,
+    'plazo_dias'        => $this->plazo_dias,
+    'terminos_pago'     => $this->terminos_pago,
+    'notas'             => $this->notas,
+    'motivo'            => $this->motivo,
+    'estado'            => 'borrador',
+    'cuenta_cobro_id'   => $this->cuenta_cobro_id,
+    'condicion_pago_id' => $this->condicion_pago_id,
+    'reponer_inventario'=> 0,
+];
             \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
                 $this->nota->forceFill($dataCab)->save();
             });

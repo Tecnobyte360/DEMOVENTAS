@@ -987,12 +987,12 @@ class FacturaCompra extends Component
         }
     }
 
-   public function emitir(): void
+  public function emitir(): void
 {
     if ($this->abortIfLocked('emitir')) return;
 
     try {
-        $this->normalizarPagoAntesDeValidar();
+        // 👇 Ya no llamamos a normalizarPagoAntesDeValidar()
         $this->sanearLineasAntesDeValidar();
         if (!$this->validarConToast()) return;
 
@@ -1070,12 +1070,14 @@ class FacturaCompra extends Component
 
     } catch (\Throwable $e) {
         Log::error('NC COMPRA EMITIR ERROR', ['msg' => $e->getMessage()]);
+
         PendingToast::create()
             ->error()
             ->message(config('app.debug') ? $e->getMessage() : 'No se pudo emitir.')
             ->duration(9000);
     }
 }
+
 
 
     public function validarAntesDeEmitir(): void

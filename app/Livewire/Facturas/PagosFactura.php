@@ -38,6 +38,9 @@ class PagosFactura extends Component
     public float $sumMonto = 0.0;
     public float $diff     = 0.0;
 
+    // 🔍 para buscar factura en el modal
+    public string $buscarFactura = '';
+
     protected $rules = [
         'fecha'                      => 'required|date',
         'items'                      => 'required|array|min:1',
@@ -46,6 +49,8 @@ class PagosFactura extends Component
         'items.*.monto'              => 'required|numeric|min:0.01',
         'items.*.referencia'         => 'nullable|string|max:120',
         'notas'                      => 'nullable|string',
+        // cuando se abre sin factura, obliga a seleccionar una:
+        'facturaId'                  => 'nullable|integer',
     ];
 
     public function mount(): void
@@ -59,25 +64,56 @@ class PagosFactura extends Component
 
     public function render()
     {
+        // Catálogo de medios
         $this->medios = MedioPagos::query()
             ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
             ->orderBy('nombre')
             ->get(['id','codigo','nombre','requiere_turno','contar_en_total','crear_movimiento','tipo_movimiento','clave_turno']);
 
+        // Datos de la factura si está seleccionada
+        $factura = null;
         if ($this->facturaId) {
-            $f = Factura::find($this->facturaId);
-            if ($f) {
-                $this->fac_total  = (float) $f->total;
-                $this->fac_pagado = (float) $f->pagado;
-                $this->fac_saldo  = (float) $f->saldo;
+            $factura = Factura::with('socioNegocio')
+                ->find($this->facturaId);
+
+            if ($factura) {
+                $this->fac_total  = (float) $factura->total;
+                $this->fac_pagado = (float) $factura->pagado;
+                $this->fac_saldo  = (float) $factura->saldo;
             }
+        }
+
+        // 🔍 Facturas pendientes para el selector (solo cuando no viene desde FacturaForm)
+        $facturasPendientes = collect();
+        if (!$this->facturaId) {
+            $q = Factura::query()
+                ->with(['socioNegocio', 'serie'])
+                ->where('saldo', '>', 0);
+
+            if (trim($this->buscarFactura) !== '') {
+                $b = '%' . trim($this->buscarFactura) . '%';
+                $q->where(function ($w) use ($b) {
+                    $w->whereHas('socioNegocio', fn($qq) =>
+                        $qq->where('razon_social', 'like', $b)
+                           ->orWhere('numero_documento', 'like', $b)
+                    )
+                    ->orWhere('numero', 'like', $b)
+                    ->orWhere('prefijo', 'like', $b);
+                });
+            }
+
+            $facturasPendientes = $q
+                ->orderByDesc('id')
+                ->limit(100)
+                ->get(['id','numero','prefijo','serie_id','socio_negocio_id','fecha','total','saldo']);
         }
 
         $this->recalc();
 
         return view('livewire.facturas.pagos-factura', [
-            'factura' => $this->facturaId ? Factura::with('pagos')->find($this->facturaId) : null,
-            'medios'  => $this->medios,
+            'factura'            => $factura,
+            'medios'             => $this->medios,
+            'facturasPendientes' => $facturasPendientes,
         ]);
     }
 
@@ -88,6 +124,7 @@ class PagosFactura extends Component
         $this->show      = true;
         $this->fecha     = now()->toDateString();
         $this->notas     = null;
+        $this->buscarFactura = '';
 
         // cargar medios
         $this->medios = MedioPagos::query()
@@ -110,7 +147,7 @@ class PagosFactura extends Component
                 'referencia'    => null,
             ]];
         } else {
-            // pago manual (sin factura)
+            // pago manual (sin factura seleccionada aún)
             $this->fac_total = $this->fac_pagado = $this->fac_saldo = 0;
             $this->items = [[
                 'medio_pago_id' => null,
@@ -195,7 +232,13 @@ class PagosFactura extends Component
     {
         $this->validate();
 
-        if (!$this->facturaId) return;
+        if (!$this->facturaId) {
+            PendingToast::create()->warning()
+                ->message('Debe seleccionar una factura antes de registrar el pago.')
+                ->duration(6000);
+            return;
+        }
+
         $factura = Factura::findOrFail($this->facturaId);
 
         // Debe cuadrar con el saldo
@@ -235,7 +278,6 @@ class PagosFactura extends Component
                     $medio = $mediosUsados->firstWhere('id', (int)($row['medio_pago_id'] ?? 0))
                           ?: (($row['medio_pago_id'] ?? null) ? MedioPagos::find((int)$row['medio_pago_id']) : null);
 
-                    // Si no existe el medio, salta
                     if (!$medio) continue;
 
                     $asociaTurno = $this->medioRequiereTurno($medio) && $turno;
@@ -244,7 +286,7 @@ class PagosFactura extends Component
                     $pago = $factura->registrarPago([
                         'fecha'         => $this->fecha,
                         'medio_pago_id' => (int)($row['medio_pago_id'] ?? 0),
-                        'metodo'        => $this->metodoDesdeMedio($medio), // opcional/display
+                        'metodo'        => $this->metodoDesdeMedio($medio),
                         'referencia'    => $row['referencia'] ?? null,
                         'monto'         => $monto,
                         'notas'         => $this->notas,
@@ -258,7 +300,6 @@ class PagosFactura extends Component
 
                     $pagos[] = $pago;
 
-                    // Reflejo dinámico en el turno (solo si hay turno y corresponde según flags del medio)
                     if ($asociaTurno) {
                         $this->acumularEnTurnoDinamico($turno, $medio, $monto, (int)$factura->id);
                     }
@@ -286,14 +327,12 @@ class PagosFactura extends Component
         // ✅ Éxito
         $factura->refresh();
 
-        // 🚀 Emisión automática si corresponde (el Form escucha 'pago-registrado')
         if ($factura->tipo_pago === 'contado' && $factura->saldo <= 0.01) {
             PendingToast::create()->info()
                 ->message('Factura de contado: pago completo recibido, emitiendo automáticamente...')
                 ->duration(4000);
         }
 
-        // 🔄 Notificar al formulario principal
         $this->dispatch('pago-registrado', facturaId: $factura->id)
             ->to(\App\Livewire\Facturas\FacturaForm::class);
 
@@ -307,26 +346,7 @@ class PagosFactura extends Component
         $this->show = false;
     }
 
-    private function safeMetodo(int $medioId, int $maxLen = 60): ?string
-    {
-        if ($this->medios->isNotEmpty()) {
-            $m = $this->medios->firstWhere('id', $medioId);
-            if ($m) {
-                $texto = trim(($m->codigo ? "{$m->codigo} - " : '').($m->nombre ?? ''));
-                return $texto !== '' ? mb_strimwidth($texto, 0, $maxLen, '') : null;
-            }
-        }
-
-        $m = MedioPagos::find($medioId);
-        if (!$m) return null;
-
-        $texto = trim(($m->codigo ? "{$m->codigo} - " : '').($m->nombre ?? ''));
-        return $texto !== '' ? mb_strimwidth($texto, 0, $maxLen, '') : null;
-    }
-
-    /* ============================================================
-     *                HELPERS DINÁMICOS (sin heurísticas)
-     * ============================================================ */
+    // ==== helpers de config de medios / turno (igual que ya tenías) ====
 
     private function col(string $table, string $column): bool
     {
@@ -350,51 +370,42 @@ class PagosFactura extends Component
         return $v !== '' ? $v : $default;
     }
 
-    /** ¿este medio exige turno? -> usa solo DB */
     private function medioRequiereTurno(?MedioPagos $medio): bool
     {
         return $this->boolCfg($medio, 'requiere_turno', false);
     }
 
-    /** ¿contar en total_ventas? (default true) */
     private function medioContarEnTotal(?MedioPagos $medio): bool
     {
         return $this->boolCfg($medio, 'contar_en_total', true);
     }
 
-    /** ¿crear CajaMovimiento? (default false) */
     private function medioCrearMovimiento(?MedioPagos $medio): bool
     {
         return $this->boolCfg($medio, 'crear_movimiento', false);
     }
 
-    /** tipo de movimiento de caja (default INGRESO) */
     private function medioTipoMovimiento(?MedioPagos $medio): string
     {
         return $this->strCfg($medio, 'tipo_movimiento', 'INGRESO') ?: 'INGRESO';
     }
 
-    /** nombre de la columna en turnos_caja (SIN fallback) */
     private function medioClaveTurno(?MedioPagos $medio): ?string
     {
         return $this->strCfg($medio, 'clave_turno', null);
     }
 
-    /** Reflejo en turno: total, columna, resumen y movimiento - solo según flags del medio */
     private function acumularEnTurnoDinamico(turnos_caja $turno, MedioPagos $medio, float $monto, int $facturaId): void
     {
-        // 1) total_ventas
         if ($this->medioContarEnTotal($medio) && $this->col('turnos_caja', 'total_ventas')) {
             $turno->increment('total_ventas', $monto);
         }
 
-        // 2) columna específica si se configuró y existe
         $col = $this->medioClaveTurno($medio);
         if ($col && $this->col('turnos_caja', $col)) {
             $turno->increment($col, $monto);
         }
 
-        // 3) resumen JSON por medio
         $resumen = (array) ($turno->resumen ?? []);
         $resumen['medios'] = $resumen['medios'] ?? [];
         $mid = (string)$medio->id;
@@ -412,12 +423,11 @@ class PagosFactura extends Component
 
         $turno->update(['resumen' => $resumen]);
 
-        // 4) movimiento de caja si corresponde
         if ($this->medioCrearMovimiento($medio)) {
             CajaMovimiento::create([
                 'turno_id' => $turno->id,
                 'user_id'  => Auth::id(),
-                'tipo'     => $this->medioTipoMovimiento($medio), // 'INGRESO' o 'EGRESO'
+                'tipo'     => $this->medioTipoMovimiento($medio),
                 'monto'    => $monto,
                 'motivo'   => 'Pago factura ID '.$facturaId.' ('.$this->metodoDesdeMedio($medio).')',
             ]);

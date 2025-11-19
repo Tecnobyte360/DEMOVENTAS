@@ -21,32 +21,23 @@
   class="p-6 md:p-8 space-y-6"
 >
   {{-- ================= HEADER / HERO ================= --}}
-  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 text-white shadow-2xl">
+<section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-200 via-gray-300 to-gray-400 
+                text-gray-900 shadow-2xl border border-gray-300">
     <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div class="space-y-1">
-        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
-          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/15 backdrop-blur">
-            <i class="fa-solid fa-layer-group text-2xl"></i>
-          </span>
-          Administrar Subcategorías
-        </h1>
-        <p class="text-white/80 text-xs">Crea, edita y asigna cuentas contables por subcategoría</p>
-      </div>
+        
+        <div class="space-y-1">
+            <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
+                <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl 
+                             bg-white/70 shadow-inner border border-gray-300">
+                    <i class="fa-solid fa-layer-group text-xl text-gray-700"></i>
+                </span>
+                Administrar Subcategorías
+            </h1>
+        </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 font-semibold text-xs md:text-sm">
-          <i class="fa-solid fa-list"></i> Total: {{ $subcategorias->count() }}
-        </span>
-
-        <button
-          wire:click="$set('isEdit', false)"
-          class="h-11 px-4 rounded-2xl bg-white/90 hover:bg-white text-violet-700 font-semibold shadow"
-        >
-          <i class="fa-solid fa-plus mr-2"></i> Nueva subcategoría
-        </button>
-      </div>
     </div>
-  </section>
+</section>
+
 
   {{-- ================= CARD PRINCIPAL (Formulario + Tabla) ================= --}}
   <section class="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 shadow-2xl overflow-hidden">

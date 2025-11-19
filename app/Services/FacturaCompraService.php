@@ -124,21 +124,46 @@ class FacturaCompraService
 
     /**
      * Cuenta base de la línea (Inventario / Gasto / Costo).
-     * Prioridad: línea.cuenta_inventario_id → producto(INVENTARIO|GASTO_COMPRAS|COSTO) → proveedor(inventario|gasto) → fallback de config.
+     * 🔑 NUEVO: Si el producto NO es inventariable (servicio), busca GASTO en lugar de INVENTARIO
      */
     protected static function resolveCuentaBaseCompra(?int $cuentaLinea, ?Producto $p, int $proveedorId): ?int
     {
+        // 1) Si la línea ya tiene cuenta explícita, usarla
         if ($cuentaLinea && PlanCuentas::whereKey($cuentaLinea)->exists()) {
             return (int)$cuentaLinea;
         }
 
+        // 2) Si es un SERVICIO (NO inventariable), buscar GASTO
+        if ($p && !($p->es_inventariable ?? true)) {
+            $ctaGasto = self::cuentaDeProductoPorTipo($p, 'GASTO_COMPRAS')
+                ?? self::cuentaDeProductoPorTipo($p, 'GASTO');
+            
+            if ($ctaGasto && PlanCuentas::whereKey($ctaGasto)->exists()) {
+                return (int)$ctaGasto;
+            }
+            
+            // Fallback: cuenta de gasto del proveedor
+            $prov = self::cuentasProveedor($proveedorId);
+            if (!empty($prov['gasto']) && PlanCuentas::whereKey($prov['gasto'])->exists()) {
+                return (int)$prov['gasto'];
+            }
+            
+            // Fallback global de config
+            $fallbackCodigo = (string) config('conta.cta_gasto_compras_default', '');
+            $fallback = self::cuentaPorCodigo($fallbackCodigo);
+            return $fallback ?: null;
+        }
+
+        // 3) Si es INVENTARIABLE, buscar cuenta de INVENTARIO
         $ctaProd = self::cuentaDeProductoPorTipo($p, 'INVENTARIO')
             ?? self::cuentaDeProductoPorTipo($p, 'GASTO_COMPRAS')
             ?? self::cuentaDeProductoPorTipo($p, 'COSTO');
+        
         if ($ctaProd && PlanCuentas::whereKey($ctaProd)->exists()) {
             return (int)$ctaProd;
         }
 
+        // 4) Fallback: cuentas del proveedor
         $prov = self::cuentasProveedor($proveedorId);
         foreach (['inventario', 'gasto'] as $k) {
             if (!empty($prov[$k]) && PlanCuentas::whereKey($prov[$k])->exists()) {
@@ -146,6 +171,7 @@ class FacturaCompraService
             }
         }
 
+        // 5) Fallback global
         $fallbackCodigo = (string) config('conta.cta_gasto_compras_default', '');
         $fallback = self::cuentaPorCodigo($fallbackCodigo);
         return $fallback ?: null;
@@ -266,6 +292,7 @@ class FacturaCompraService
 
     /**
      * Aumenta inventario por cada línea de la factura y calcula costo promedio.
+     * 🔑 NUEVO: Salta servicios (NO inventariables)
      */
     protected static function entrarInventarioPorFactura(Factura $f): void
     {
@@ -274,6 +301,16 @@ class FacturaCompraService
         foreach ($f->detalles as $d) {
             if (!$d->producto_id || !$d->bodega_id) {
                 throw new \RuntimeException("Cada línea debe tener producto y bodega.");
+            }
+
+            // 🔑 NUEVO: Saltar servicios (no inventariables)
+            $producto = Producto::find($d->producto_id);
+            if (!$producto || !($producto->es_inventariable ?? true)) {
+                Log::info('COMPRA::entrarInventario - saltando servicio', [
+                    'producto_id' => $d->producto_id,
+                    'nombre'      => $producto?->nombre ?? 'N/A',
+                ]);
+                continue; // Los servicios NO mueven inventario
             }
 
             $cantidad = (float)$d->cantidad;
@@ -311,6 +348,14 @@ class FacturaCompraService
             $pb->ultimo_costo   = round($pu, 4);
             $pb->save();
 
+            Log::info('COMPRA::inventario actualizado', [
+                'producto_id' => $d->producto_id,
+                'bodega_id'   => $d->bodega_id,
+                'cantidad'    => $cantidad,
+                'stock_nuevo' => $stockNuevo,
+                'cpu_nuevo'   => $cpuNuevo,
+            ]);
+
             // (Opcional) refrescar costo global del producto
             // Producto::whereKey($d->producto_id)->update(['costo_promedio' => $cpuNuevo]);
         }
@@ -318,6 +363,7 @@ class FacturaCompraService
 
     /**
      * Revierte el aumento de inventario (ajuste simple por cantidad).
+     * 🔑 NUEVO: También salta servicios
      */
     protected static function revertirEntradaInventarioPorFactura(Factura $f): void
     {
@@ -325,6 +371,12 @@ class FacturaCompraService
 
         foreach ($f->detalles as $d) {
             if (!$d->producto_id || !$d->bodega_id) continue;
+
+            // 🔑 NUEVO: Saltar servicios
+            $producto = Producto::find($d->producto_id);
+            if (!$producto || !($producto->es_inventariable ?? true)) {
+                continue;
+            }
 
             $pb = ProductoBodega::query()
                 ->where('producto_id', $d->producto_id)
@@ -346,6 +398,7 @@ class FacturaCompraService
 
     /**
      * Valida que la factura esté lista para generar asiento.
+     * 🔑 NUEVO: Validación diferenciada para inventariables y servicios
      */
     public static function validarFacturaCompraParaAsiento(Factura $f): array
     {
@@ -396,14 +449,27 @@ class FacturaCompraService
             /** @var Producto|null $p */
             $p = $d->producto_id ? Producto::with(['cuentas','impuesto'])->find($d->producto_id) : null;
 
-            // Cuenta base (prioriza cuenta_inventario_id de la línea)
-            $ctaBase = self::resolveCuentaBaseCompra(
-                 $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null,
-                $p,
-                (int)$f->socio_negocio_id
-            );
-            if (!$ctaBase) {
-                $errores[] = "Fila #{$row}: sin cuenta base (producto/proveedor).";
+            // 🔑 NUEVO: Validar cuenta base según tipo de producto
+            if ($p && ($p->es_inventariable ?? true)) {
+                // Producto inventariable: debe tener cuenta de inventario/gasto
+                $ctaBase = self::resolveCuentaBaseCompra(
+                    $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null,
+                    $p,
+                    (int)$f->socio_negocio_id
+                );
+                if (!$ctaBase) {
+                    $errores[] = "Fila #{$row}: producto inventariable sin cuenta base (inventario/gasto).";
+                }
+            } else {
+                // Servicio: debe tener cuenta de GASTO
+                $ctaBase = self::resolveCuentaBaseCompra(
+                    $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null,
+                    $p,
+                    (int)$f->socio_negocio_id
+                );
+                if (!$ctaBase) {
+                    $errores[] = "Fila #{$row}: servicio sin cuenta de gasto configurada.";
+                }
             }
 
             $base = $cantidad * $costo * (1 - $descPct / 100);
@@ -437,6 +503,9 @@ class FacturaCompraService
 
     /**
      * Genera (o reutiliza) el asiento contable para la compra.
+     * 🔑 La función resolveCuentaBaseCompra() ya maneja servicios:
+     *    - Si es_inventariable = 0 → busca GASTO
+     *    - Si es_inventariable = 1 → busca INVENTARIO
      */
     public static function asientoDesdeFacturaCompra(Factura $f): Asiento
     {
@@ -479,6 +548,7 @@ class FacturaCompraService
                 $ivaPct = (float)$d->impuesto_pct;
                 $ivaVal = round($base * $ivaPct / 100, 2);
 
+                // 🔑 resolveCuentaBaseCompra() ya maneja la lógica de servicio/inventariable
                 $ctaInvOGasto = self::resolveCuentaBaseCompra(
                     $d->cuenta_inventario_id ? (int)$d->cuenta_inventario_id : null, 
                     $p, 
@@ -629,7 +699,4 @@ class FacturaCompraService
             Log::info('COMPRA::revertirPorFacturaCompra -> FIN', ['factura_id' => $f->id]);
         }, 3);
     }
-
-
-    
 }

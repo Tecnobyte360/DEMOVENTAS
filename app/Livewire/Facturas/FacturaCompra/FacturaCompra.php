@@ -65,12 +65,11 @@ class FacturaCompra extends Component
 
         'lineas'                         => 'required|array|min:1',
         'lineas.*.producto_id'           => 'required|integer|exists:productos,id',
-        'lineas.*.cuenta_inventario_id'  => 'required|integer|exists:plan_cuentas,id',
+        'lineas.*.cuenta_inventario_id'  => 'nullable|integer|exists:plan_cuentas,id', // 🔑 CAMBIO: nullable
         'lineas.*.bodega_id'             => 'required|integer|exists:bodegas,id',
-        // Permite que se autogenere desde el producto:
         'lineas.*.descripcion'           => 'nullable|string|max:255',
         'lineas.*.cantidad'              => 'required|numeric|min:1',
-    'lineas.*.precio_unitario'       => 'required|numeric|gt:0',
+        'lineas.*.precio_unitario'       => 'required|numeric|gt:0',
         'lineas.*.descuento_pct'         => 'required|numeric|min:0|max:100',
         'lineas.*.impuesto_id'           => 'nullable|integer|exists:impuestos,id',
         'lineas.*.impuesto_pct'          => 'required|numeric|min:0|max:100',
@@ -85,7 +84,7 @@ class FacturaCompra extends Component
         'plazo_dias'                     => 'plazo (días)',
         'lineas'                         => 'líneas',
         'lineas.*.producto_id'           => 'producto',
-        'lineas.*.cuenta_inventario_id'  => 'cuenta de inventario',
+        'lineas.*.cuenta_inventario_id'  => 'cuenta de inventario/gasto',
         'lineas.*.bodega_id'             => 'bodega',
         'lineas.*.descripcion'           => 'descripción',
         'lineas.*.cantidad'              => 'cantidad',
@@ -395,6 +394,51 @@ class FacturaCompra extends Component
         return null;
     }
 
+    /** 🔑 NUEVO: Resolver cuenta GASTO para servicios (compras) */
+    private function resolveCuentaGastoParaProducto(Producto $p): ?int
+    {
+        // Buscar cuenta de GASTO_COMPRAS o GASTO
+        $tipoGastoId = cache()->remember('producto_cuenta_tipo_gasto_compras_id', 600, fn () =>
+            ProductoCuentaTipo::query()->where('codigo', 'GASTO_COMPRAS')->value('id')
+        );
+        
+        if (!$tipoGastoId) {
+            $tipoGastoId = cache()->remember('producto_cuenta_tipo_gasto_id', 600, fn () =>
+                ProductoCuentaTipo::query()->where('codigo', 'GASTO')->value('id')
+            );
+        }
+        
+        if (!$tipoGastoId) return null;
+
+        // Por artículo
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+            $cuenta = $p->relationLoaded('cuentas')
+                ? $p->cuentas->firstWhere('tipo_id', (int)$tipoGastoId)
+                : $p->cuentas()->where('tipo_id', (int)$tipoGastoId)->first();
+
+            return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
+        }
+
+        // Por subcategoría
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
+            if (!$p->subcategoria_id) return null;
+
+            if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
+                $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoGastoId);
+                return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+            }
+
+            $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
+                ->where('subcategoria_id', (int)$p->subcategoria_id)
+                ->where('tipo_id', (int)$tipoGastoId)
+                ->first();
+
+            return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+        }
+
+        return null;
+    }
+
     private function normalizeLinea(array &$l): void
     {
         if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
@@ -517,7 +561,12 @@ class FacturaCompra extends Component
                         'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                         'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
                     ])->find($d->producto_id);
-                    if ($p) $cuentaId = $this->resolveCuentaInventarioParaProducto($p);
+                    if ($p) {
+                        // Usar lógica según tipo
+                        $cuentaId = ($p->es_inventariable ?? true)
+                            ? $this->resolveCuentaInventarioParaProducto($p)
+                            : $this->resolveCuentaGastoParaProducto($p);
+                    }
                 }
 
                 $l = [
@@ -614,8 +663,14 @@ class FacturaCompra extends Component
                 return;
             }
 
-            // Sugerir cuenta INVENTARIO
-            $this->lineas[$i]['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
+            // 🔑 NUEVO: Sugerir cuenta según tipo de producto
+            if ($p->es_inventariable ?? true) {
+                // Producto físico → cuenta INVENTARIO
+                $this->lineas[$i]['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
+            } else {
+                // Servicio → cuenta GASTO
+                $this->lineas[$i]['cuenta_inventario_id'] = $this->resolveCuentaGastoParaProducto($p);
+            }
 
             // Precio base/costeo
             $precioBase = (float)($this->lineas[$i]['precio_unitario'] ?? 0);
@@ -949,7 +1004,13 @@ class FacturaCompra extends Component
                     'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                     'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
                 ])->find($l['producto_id']);
-                if ($p) $l['cuenta_inventario_id'] = $this->resolveCuentaInventarioParaProducto($p);
+                
+                if ($p) {
+                    // Usar lógica según tipo
+                    $l['cuenta_inventario_id'] = ($p->es_inventariable ?? true)
+                        ? $this->resolveCuentaInventarioParaProducto($p)
+                        : $this->resolveCuentaGastoParaProducto($p);
+                }
             }
         }
         unset($l);
@@ -958,6 +1019,21 @@ class FacturaCompra extends Component
     private function validarConToast(): bool
     {
         try {
+            // 🔑 NUEVO: Validación personalizada para cuenta_inventario_id
+            foreach ($this->lineas as $i => $l) {
+                if (empty($l['producto_id'])) continue;
+                
+                $p = Producto::find($l['producto_id']);
+                if (!$p) continue;
+                
+                // Si es inventariable, debe tener cuenta
+                if (($p->es_inventariable ?? true) && empty($l['cuenta_inventario_id'])) {
+                    throw ValidationException::withMessages([
+                        "lineas.{$i}.cuenta_inventario_id" => 'Los productos inventariables requieren cuenta de inventario/gasto.'
+                    ]);
+                }
+            }
+            
             $this->validate($this->rules, [], $this->validationAttributes);
             return true;
         } catch (ValidationException $e) {
@@ -1012,8 +1088,9 @@ class FacturaCompra extends Component
                     'prefijo'  => $this->serieDefault->prefijo,
                     'estado'   => 'emitida',
                 ]);
-            \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
-               InventarioService::aumentarPorFacturaCompra($this->factura);
+                
+                \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
+                InventarioService::aumentarPorFacturaCompra($this->factura);
 
                 $this->estado = $this->factura->estado;
             }, 3);

@@ -288,15 +288,23 @@ public function mount(?int $id = null): void
         });
     }
 
-  private function resolveCuentaIngresoParaProducto(Producto $p): ?int
+ private function resolveCuentaIngresoParaProducto(Producto $p): ?int
 {
-    // Si el producto ya tiene cuenta_ingreso_id explícita, la respetamos siempre
+    // 🔑 PRIMERO: respetar la configuración mov_contable_segun
+    // Si está en SUBCATEGORIA, no usar el campo directo del producto
+    $modo = strtoupper((string)($p->mov_contable_segun ?? 'ARTICULO'));
+    
+    // Si está configurado para usar SUBCATEGORIA, delegar al servicio
+    if ($modo === 'SUBCATEGORIA') {
+        return \App\Services\ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO');
+    }
+    
+    // Si está en ARTICULO, primero verificar si tiene cuenta directa
     if (!empty($p->cuenta_ingreso_id)) {
         return (int) $p->cuenta_ingreso_id;
     }
 
-    // Usa el mismo criterio del servicio: SUBCATEGORIA -> subcat, si no -> artículo
-    // Tipo de cuenta: 'INGRESO'
+    // Fallback: delegar al servicio (buscará en relaciones o subcategoría)
     return \App\Services\ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO');
 }
 

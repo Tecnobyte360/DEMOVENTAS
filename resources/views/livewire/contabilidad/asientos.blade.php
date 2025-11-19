@@ -20,24 +20,32 @@
 
 <div x-data="{}" class="p-6 md:p-8">
   {{-- ================= HERO / HEADER ================= --}}
-  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-indigo-600 to-gray-600 text-white shadow-2xl" aria-label="Encabezado de asientos">
+<section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300 text-gray-900 shadow-xl" aria-label="Encabezado de asientos">
     <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      
       <div class="space-y-1">
         <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
-          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/15 backdrop-blur">
-            <i class="fa-solid fa-book text-2xl"></i>
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/60 shadow-sm backdrop-blur">
+            <i class="fa-solid fa-book text-2xl text-gray-700"></i>
           </span>
           Asientos contables
         </h1>
-        <p class="text-white/80 text-sm">Consulta, filtra y revisa los movimientos (débito / crédito) de cada asiento.</p>
+
+        <p class="text-gray-600 text-sm">
+          Consulta, filtra y revisa los movimientos (débito / crédito) de cada asiento.
+        </p>
       </div>
+
       <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 font-semibold text-xs md:text-sm">
-          <i class="fa-solid fa-shield-halved"></i> Doble partida
+        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/50 shadow-sm text-gray-700 font-semibold text-xs md:text-sm">
+          <i class="fa-solid fa-shield-halved text-gray-700"></i> Doble partida
         </span>
       </div>
+
     </div>
-  </section>
+</section>
+
+
 
   {{-- ================= CARD FILTROS ================= --}}
   <section class="mt-6 md:mt-8 rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-2xl overflow-hidden p-6 md:p-8" aria-label="Filtros">

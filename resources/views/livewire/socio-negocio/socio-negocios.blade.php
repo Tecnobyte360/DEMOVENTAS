@@ -37,31 +37,43 @@
 
   {{-- ================= HERO ================= --}}
   @php $sociosTotal = collect($clientes)->concat($proveedores)->count(); @endphp
-  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 text-white shadow-2xl">
+<section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300 text-gray-900 shadow-xl">
     <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+
+      <!-- Título -->
       <div class="space-y-1">
         <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
-          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/15 backdrop-blur">
-            <i class="fas fa-users text-2xl"></i>
+          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/60 shadow-sm backdrop-blur">
+            <i class="fas fa-users text-2xl text-gray-700"></i>
           </span>
           Socios de Negocio
         </h1>
-        <p class="text-sm text-white/80">Clientes y Proveedores en una sola lista.</p>
+        <p class="text-sm text-gray-600">Clientes y Proveedores en una sola lista.</p>
       </div>
 
+      <!-- Botones y badge -->
       <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 font-semibold text-xs md:text-sm">
-          <i class="fa-solid fa-list"></i> Total: {{ $sociosTotal }}
+
+        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/50 shadow-sm text-gray-700 font-semibold text-xs md:text-sm">
+          <i class="fa-solid fa-list text-gray-700"></i> Total: {{ $sociosTotal }}
         </span>
-        <button @click="showCreateModal=true" class="h-11 px-4 rounded-2xl bg-white/90 hover:bg-white text-violet-700 font-semibold shadow">
+
+        <button 
+            @click="showCreateModal=true"
+            class="h-11 px-4 rounded-2xl bg-white hover:bg-gray-100 text-gray-700 font-semibold shadow">
           <i class="fas fa-plus mr-2"></i> Nuevo socio
         </button>
-       <button @click="showImportModal=true" class="h-11 px-4 rounded-2xl bg-white/20 hover:bg-white/25 text-white font-semibold shadow ring-1 ring-white/30">
+
+        <button 
+            @click="showImportModal=true"
+            class="h-11 px-4 rounded-2xl bg-white/60 hover:bg-white/75 text-gray-800 font-semibold shadow ring-1 ring-gray-300">
           <i class="fas fa-file-import mr-2"></i> Importar
         </button>
+
       </div>
     </div>
-  </section>
+</section>
+
 
   {{-- ================= FILTROS ================= --}}
   <section class="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 shadow-2xl overflow-hidden">

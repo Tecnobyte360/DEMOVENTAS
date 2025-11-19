@@ -190,10 +190,10 @@
           <div class="mt-1">
             <input type="file" accept="image/*" @change="onFile"
                    class="block w-full text-sm file:text-sm file:font-medium
-                          file:bg-violet-600 file:hover:bg-violet-700 file:text-white
+                          file:bg-gray-600 file:hover:bg-gray-700 file:text-white
                           file:border-0 file:px-4 file:py-2 file:rounded-xl
                           px-3 py-2.5 rounded-xl border bg-white dark:bg-gray-800 dark:text-white
-                          focus:ring-2 focus:ring-violet-600 focus:outline-none
+                          focus:ring-2 focus:ring-gray-600 focus:outline-none
                           @error('imagen_base64') border-red-500 @else border-gray-300 dark:border-gray-700 @enderror"/>
             {{-- Mantiene el valor sincronizado con Livewire --}}
             <input type="hidden" wire:model="imagen_base64">
@@ -251,21 +251,27 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50 dark:bg-gray-800">
 
             {{-- Activo --}}
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-gray-700 dark:text-gray-300">Estado</span>
-              <label class="relative inline-flex items-center cursor-pointer select-none">
-                <input type="checkbox" wire:model.lazy="activo" class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-violet-600 transition"></div>
-                <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-5"></div>
-              </label>
-            </div>
+           <div class="flex items-center justify-between">
+    <span class="text-sm text-gray-700 dark:text-gray-300">Estado</span>
+
+    <label class="relative inline-flex items-center cursor-pointer select-none">
+        <input type="checkbox" wire:model.lazy="activo" class="sr-only peer">
+        
+        <!-- Fondo del switch -->
+        <div class="w-11 h-6 bg-gray-300 rounded-full transition peer-checked:bg-gray-500"></div>
+
+        <!-- Bolita -->
+        <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition peer-checked:translate-x-5"></div>
+    </label>
+</div>
+
 
             {{-- Inventariable / Servicio --}}
             <div class="flex items-center justify-between">
               <span class="text-sm text-gray-700 dark:text-gray-300">Tipo de artículo</span>
               <label class="relative inline-flex items-center cursor-pointer select-none">
                 <input type="checkbox" wire:model.lazy="es_inventariable" class="sr-only peer">
-                <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-violet-600 transition"></div>
+                <div class="w-11 h-6 bg-gray-300 rounded-full peer peer-checked:bg-gray-600 transition"></div>
                 <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-5"></div>
               </label>
             </div>
@@ -273,7 +279,7 @@
             {{-- Etiqueta del tipo seleccionado --}}
             <div class="sm:col-span-2 flex items-center gap-2">
               <span class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold
-                           {{ $es_inventariable ? 'bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-200' : 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-200' }}">
+                           {{ $es_inventariable ? 'bg-gray-50 text-gray-700 dark:bg-ray-900/30 dark:text-gray-200' : 'bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-200' }}">
                 <i class="fas {{ $es_inventariable ? 'fa-box' : 'fa-concierge-bell' }}"></i>
                 {{ $es_inventariable ? 'Artículo inventariable' : 'Artículo de servicio' }}
               </span>
@@ -310,7 +316,7 @@
           @endif
 
           <button type="button" wire:click="abrirModalCuentas"
-                  class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm shadow">
+                  class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-600 hover:bg-violet-700 text-white text-sm shadow">
             <i class="fas fa-cog"></i> Configurar
           </button>
         </div>
@@ -370,7 +376,7 @@
           </button>
 
           <button type="submit"
-                  class="flex items-center gap-1 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-xl shadow hover:shadow-md transition"
+                  class="flex items-center gap-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-xs font-semibold rounded-xl shadow hover:shadow-md transition"
                   wire:loading.attr="disabled">
             <i class="fas fa-save text-sm"></i>
             <span>{{ $isEdit ? 'Actualizar' : 'Guardar' }}</span>
@@ -438,8 +444,8 @@
       <h3 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Inventario Actual</h3>
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
         <input wire:model.defer="search" type="text" placeholder="Buscar producto..."
-               class="w-full sm:w-64 px-4 py-2 border rounded-xl dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-violet-600 focus:border-violet-600"/>
-        <button wire:click="$refresh" class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow transition-all text-sm">
+               class="w-full sm:w-64 px-4 py-2 border rounded-xl dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-gray-600 focus:border-violet-600"/>
+        <button wire:click="$refresh" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl shadow transition-all text-sm">
           <i class="fas fa-search mr-1"></i> Buscar
         </button>
       </div>
@@ -447,7 +453,7 @@
 
     <div class="w-full overflow-x-auto">
       <table class="min-w-[1500px] w-full bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden text-sm text-gray-700 dark:text-gray-300">
-        <thead class="bg-violet-600 text-white">
+        <thead class="bg-gray-600 text-white">
           <tr>
             <th class="p-3 text-left font-semibold">#ID</th>
             <th class="p-3 text-left font-semibold">Imagen</th>

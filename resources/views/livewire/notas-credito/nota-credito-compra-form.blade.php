@@ -81,12 +81,13 @@
           </span>
         </div>
 
-        <select
-          wire:model.number="factura_compra_id"
-          wire:key="facturas-proveedor-select-{{ $socio_negocio_id ?? 0 }}-{{ count($facturasProveedor) }}"
-          class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-60"
-          @disabled(empty($socio_negocio_id))
-        >
+       <select
+  wire:model.live.number="factura_compra_id"
+  wire:key="facturas-proveedor-select-{{ $socio_negocio_id ?? 0 }}-{{ count($facturasProveedor) }}"
+  class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-60"
+  @disabled(empty($socio_negocio_id))
+>
+
           @if(empty($socio_negocio_id))
             <option value="">— Seleccione un proveedor primero —</option>
           @else
@@ -252,26 +253,7 @@
                   @endforeach
                 </select>
 
-                {{-- Stock visible --}}
-                <div class="mt-2 flex items-center justify-between gap-2">
-                  <div
-                    wire:loading.flex
-                    wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                    class="items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600"
-                  >
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <span class="text-sm italic">Consultando stock…</span>
-                  </div>
-
-                  <span
-                    wire:loading.remove
-                    wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                    class="inline-flex items-center gap-2 text-xs px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
-                  >
-                    <i class="fa-solid fa-boxes-stacked"></i>
-                    Stock: <strong>{{ number_format($this->getStockDeLinea($i), 2) }}</strong>
-                  </span>
-                </div>
+                
               </td>
 
               {{-- Cantidad --}}

@@ -54,12 +54,12 @@
 
       {{-- Devoluciones a proveedor (placeholder) --}}
       <button
-        @click="setTab('ret_form')"
-        :class="tab === 'ret_form'
+        @click="setTab('notascreditoproveedores')"
+        :class="tab === 'notascreditoproveedores'
           ? 'bg-indigo-600 text-white shadow'
           : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
         class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
-        <i class="fa-solid fa-rotate-left"></i> Devoluciones a proveedor
+        <i class="fa-solid fa-rotate-left"></i> Notas credito de proveedores
       </button>
     </nav>
 
@@ -81,13 +81,10 @@
       </div>
 
       {{-- TAB: Devoluciones a proveedor (puedes reemplazar por tu componente real) --}}
-      <div x-show="tab === 'ret_form'" x-cloak>
-        {{-- Reemplaza por tu componente real cuando lo tengas --}}
-        {{-- <livewire:compras.devoluciones.devolucion-proveedor :key="'devoluciones-proveedor-form'" /> --}}
-        <div class="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-6 text-sm text-gray-600 dark:text-gray-300">
-          <p class="font-semibold mb-2">Devoluciones a proveedor</p>
-          <p>Placeholder del módulo. Aquí puedes montar tu componente de devoluciones.</p>
-        </div>
+      <div x-show="tab === 'notascreditoproveedores'" x-cloak>
+       
+        <livewire:notas-credito.nota-credito-compra :key="'devoluciones-proveedor-form'" />
+        
       </div>
     </div>
   </section>

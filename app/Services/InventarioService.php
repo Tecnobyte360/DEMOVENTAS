@@ -564,4 +564,6 @@ class InventarioService
         $puN  = $pu * (1 - max(0, min(100, $desc)) / 100);
         return max(0.0, round($puN, 6));
     }
+
+    
 }

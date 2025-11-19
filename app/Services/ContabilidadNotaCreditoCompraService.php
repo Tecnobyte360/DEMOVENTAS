@@ -3,8 +3,9 @@
 namespace App\Services;
 
 use App\Models\Asiento\Asiento;
-use App\Models\NotaCredito;      // <- tu modelo de NC de COMPRA
+use App\Models\NotaCredito;
 use App\Models\Productos\Producto;
+use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\CuentasContables\PlanCuentas;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -24,30 +25,41 @@ class ContabilidadNotaCreditoCompraService
      */
     public static function asientoDesdeNotaCreditoCompra(NotaCredito $nc): Asiento
     {
-        // Carga relaciones necesarias (ajusta si tu modelo usa otros nombres)
+        // 🔥 Carga relaciones necesarias - maneja tanto 'proveedor' como 'cliente'
+        $relacionProveedor = method_exists($nc, 'proveedor') ? 'proveedor' : 'cliente';
+        
         $nc->loadMissing([
             'detalles.producto.cuentas.cuentaPUC',
+            'detalles.producto.cuentas.tipo',
+            'detalles.producto.subcategoria.cuentas',
             'detalles.producto.impuesto',
-            'proveedor',   // <- si tu relación se llama cliente(), cambia por proveedor()
+            $relacionProveedor,
             'serie',
         ]);
 
-        if ($nc->detalles->isEmpty())   throw new RuntimeException('La nota crédito de compra no tiene líneas.');
-        if (!$nc->fecha)                throw new RuntimeException('La nota crédito de compra no tiene fecha.');
+        // Validaciones básicas
+        if ($nc->detalles->isEmpty()) {
+            throw new RuntimeException('La nota crédito de compra no tiene líneas.');
+        }
+        if (!$nc->fecha) {
+            throw new RuntimeException('La nota crédito de compra no tiene fecha.');
+        }
 
         // Asegura totales (por si aún no han sido recalculados)
         if (method_exists($nc, 'recalcularTotales')) {
-            $nc->recalcularTotales();
+            $nc->recalcularTotales()->save();
         }
 
         // Glosa bonita
         $numStr = $nc->prefijo
-            ? ($nc->prefijo.'-'.str_pad((string)($nc->numero ?? $nc->id), ($nc->serie->longitud ?? 6), '0', STR_PAD_LEFT))
+            ? ($nc->prefijo . '-' . str_pad((string)($nc->numero ?? $nc->id), ($nc->serie->longitud ?? 6), '0', STR_PAD_LEFT))
             : (string)($nc->numero ?? $nc->id);
-        $tercero = ($nc->proveedor->razon_social ?? $nc->proveedor->nombre ?? 'Proveedor #'.$nc->socio_negocio_id);
-        $glosa   = 'NC Compra '.$numStr.' · '.$tercero;
+        
+        $proveedor = $nc->{$relacionProveedor} ?? null;
+        $terceroNombre = $proveedor->razon_social ?? $proveedor->nombre ?? 'Proveedor #' . $nc->socio_negocio_id;
+        $glosa = 'NC Compra ' . $numStr . ' · ' . $terceroNombre;
 
-        return DB::transaction(function () use ($nc, $glosa) {
+        return DB::transaction(function () use ($nc, $glosa, $relacionProveedor) {
 
             // ===============================
             // 1) Cabecera de asiento
@@ -58,7 +70,7 @@ class ContabilidadNotaCreditoCompraService
                 'glosa'       => $glosa,
                 'origen'      => 'nota_credito_compra',
                 'origen_id'   => $nc->id,
-                'tercero_id'  => $nc->socio_negocio_id,          // proveedor
+                'tercero_id'  => $nc->socio_negocio_id,
                 'moneda'      => $nc->moneda ?? 'COP',
                 'total_debe'  => 0,
                 'total_haber' => 0,
@@ -80,38 +92,44 @@ class ContabilidadNotaCreditoCompraService
 
             foreach ($nc->detalles as $d) {
                 $cant   = max(0, (float)$d->cantidad);
-                $pu     = max(0, (float)$d->precio_unitario);   // precio neto (sin IVA)
+                $pu     = max(0, (float)$d->precio_unitario);
                 $desc   = min(100, max(0, (float)$d->descuento_pct));
                 $ivaPct = min(100, max(0, (float)$d->impuesto_pct));
 
-                $base = round($cant * $pu * (1 - $desc/100), 2);
-                $iva  = round($base * $ivaPct/100, 2);
+                $base = round($cant * $pu * (1 - $desc / 100), 2);
+                $iva  = round($base * $ivaPct / 100, 2);
 
                 // ==== INVENTARIO (HABER): sale del inventario lo devuelto
                 if ($d->producto_id && $base > 0) {
-                    $p = $d->relationLoaded('producto') ? $d->producto : Producto::with('cuentas')->find($d->producto_id);
-                    if (!$p) throw new RuntimeException("Producto {$d->producto_id} no existe.");
+                    $p = $d->relationLoaded('producto') ? $d->producto : Producto::with([
+                        'cuentas.cuentaPUC',
+                        'cuentas.tipo',
+                        'subcategoria.cuentas',
+                    ])->find($d->producto_id);
+                    
+                    if (!$p) {
+                        throw new RuntimeException("Producto {$d->producto_id} no existe.");
+                    }
 
-                    // Cuenta de INVENTARIO del artículo (según tu configuración SUBCATEGORIA/ARTICULO)
-                    $ctaInv = ContabilidadService::cuentaSegunConfiguracion($p, 'INVENTARIO');
-                    if (!$ctaInv) throw new RuntimeException("Producto {$p->id} sin cuenta de INVENTARIO configurada.");
+                    // 🔥 Resolver cuenta de INVENTARIO con fallback robusto
+                    $ctaInv = self::resolveCuentaInventario($p, $d);
+                    
+                    if (!$ctaInv) {
+                        throw new RuntimeException("Producto {$p->id} ({$p->nombre}) sin cuenta de INVENTARIO configurada.");
+                    }
 
                     $inventarioPorCuenta[$ctaInv] = ($inventarioPorCuenta[$ctaInv] ?? 0) + $base;
                 }
 
                 // ==== IVA descontable (HABER): reversa del IVA compra
                 if ($iva > 0 && $d->producto_id) {
-                    $p = isset($p) && $p?->id === $d->producto_id ? $p : Producto::with('impuesto')->find($d->producto_id);
+                    $p = isset($p) && $p?->id === $d->producto_id 
+                        ? $p 
+                        : Producto::with('impuesto')->find($d->producto_id);
 
-                    // Resolver cuenta de IVA compra:
-                    // 1) por config (tipo 'IVA'), 2) por cuenta del propio impuesto
-                    $ctaIva = ContabilidadService::cuentaSegunConfiguracion($p, 'IVA');
-                    if (!$ctaIva) {
-                        $imp = $p?->impuesto;
-                        if ($imp && !empty($imp->cuenta_id) && PlanCuentas::whereKey($imp->cuenta_id)->exists()) {
-                            $ctaIva = (int)$imp->cuenta_id;
-                        }
-                    }
+                    // 🔥 Resolver cuenta de IVA compra con fallback robusto
+                    $ctaIva = self::resolveCuentaIVACompra($p, $d);
+                    
                     if (!$ctaIva) {
                         throw new RuntimeException("No se pudo resolver la cuenta de IVA compra para el producto {$d->producto_id}.");
                     }
@@ -164,45 +182,18 @@ class ContabilidadNotaCreditoCompraService
 
             // ===================================================
             // 5) DEBE: Proveedores (CxP) por el TOTAL de la NC
-            //     (si ya estaba pagada y tu flujo es con devoluciones,
-            //      podrías usar una cuenta de deudores/anticipos del proveedor)
             // ===================================================
             $totalNc = round((float)$nc->total, 2);
             if ($totalNc <= 0) {
                 throw new RuntimeException('El total de la Nota Crédito de compra es cero.');
             }
 
-            // Resolver cuenta CxP Proveedores:
-            $ctaCxp = null;
-
-            // a) si el usuario selecciona una cuenta explícita en la NC (opcional)
-            if (!empty($nc->cuenta_cobro_id) && PlanCuentas::whereKey($nc->cuenta_cobro_id)->exists()) {
-                $ctaCxp = (int)$nc->cuenta_cobro_id;
-            }
-
-            // b) CxP del proveedor (si la tienes en sus cuentas)
-            if (!$ctaCxp && $nc->relationLoaded('proveedor')) {
-                foreach (['cuenta_cxp_id', 'plan_cuenta_id'] as $f) {
-                    if (!empty($nc->proveedor->{$f}) && PlanCuentas::whereKey($nc->proveedor->{$f})->exists()) {
-                        $ctaCxp = (int)$nc->proveedor->{$f};
-                        break;
-                    }
-                }
-                if (!$ctaCxp && method_exists($nc->proveedor, 'cuentas')) {
-                    $id = $nc->proveedor->cuentas()->value('cuenta_cxp_id');
-                    if ($id && PlanCuentas::whereKey($id)->exists()) $ctaCxp = (int)$id;
-                }
-            }
-
-            // c) Fallback por clase de cuenta
+            // 🔥 Resolver cuenta CxP Proveedores con fallback robusto
+            $ctaCxp = self::resolveCuentaCxPProveedor($nc, $relacionProveedor);
+            
             if (!$ctaCxp) {
-                $ctaCxp = PlanCuentas::where('clase_cuenta', 'CXP_PROVEEDORES')
-                    ->where('cuenta_activa', 1)
-                    ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
-                    ->value('id');
+                throw new RuntimeException('No se encontró una cuenta de Proveedores (CxP) para la NC de compra.');
             }
-
-            if (!$ctaCxp) throw new RuntimeException('No se encontró una cuenta de Proveedores (CxP) para la NC de compra.');
 
             $movDebe = ContabilidadService::post(
                 $asiento,
@@ -226,12 +217,157 @@ class ContabilidadNotaCreditoCompraService
             // Check cuadratura
             if (round($totalDebe - $totalHaber, 2) !== 0.0) {
                 Log::error('Asiento NC compra descuadrado', [
-                    'nc_id' => $nc->id, 'debe' => $totalDebe, 'haber' => $totalHaber
+                    'nc_id' => $nc->id,
+                    'debe'  => $totalDebe,
+                    'haber' => $totalHaber,
+                    'diff'  => round($totalDebe - $totalHaber, 2),
                 ]);
-                throw new RuntimeException('El asiento de la NC de compra no cuadra.');
+                throw new RuntimeException('El asiento de la NC de compra no cuadra (diferencia: $' . round($totalDebe - $totalHaber, 2) . ').');
             }
 
             return $asiento;
         });
+    }
+
+    /**
+     * 🔥 Resolver cuenta de inventario con múltiples fallbacks
+     */
+    private static function resolveCuentaInventario(Producto $p, $detalle): ?int
+    {
+        // 1. Si el detalle tiene cuenta_inventario_id directamente
+        if (!empty($detalle->cuenta_inventario_id) && PlanCuentas::whereKey($detalle->cuenta_inventario_id)->exists()) {
+            return (int) $detalle->cuenta_inventario_id;
+        }
+
+        // 2. Si el producto tiene cuenta_inventario_id directa
+        if (!empty($p->cuenta_inventario_id) && PlanCuentas::whereKey($p->cuenta_inventario_id)->exists()) {
+            return (int) $p->cuenta_inventario_id;
+        }
+
+        // 3. Usar ContabilidadService si existe
+        if (method_exists(ContabilidadService::class, 'cuentaSegunConfiguracion')) {
+            $cta = ContabilidadService::cuentaSegunConfiguracion($p, 'INVENTARIO');
+            if ($cta) return (int) $cta;
+        }
+
+        // 4. Buscar en cuentas del producto por tipo "INVENTARIO"
+        $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
+            ProductoCuentaTipo::where('codigo', 'INVENTARIO')->value('id')
+        );
+
+        if ($tipoInvId) {
+            // Según artículo
+            if ($p->mov_contable_segun === 'ARTICULO' || $p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+                $cuenta = $p->relationLoaded('cuentas')
+                    ? $p->cuentas->firstWhere('tipo_id', (int)$tipoInvId)
+                    : $p->cuentas()->where('tipo_id', (int)$tipoInvId)->first();
+
+                if ($cuenta && !empty($cuenta->plan_cuentas_id)) {
+                    return (int) $cuenta->plan_cuentas_id;
+                }
+            }
+
+            // Según subcategoría
+            if (($p->mov_contable_segun === 'SUBCATEGORIA' || $p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA)
+                && !empty($p->subcategoria_id)) {
+                
+                if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
+                    $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoInvId);
+                    if ($sc && !empty($sc->plan_cuentas_id)) {
+                        return (int) $sc->plan_cuentas_id;
+                    }
+                }
+
+                $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
+                    ->where('subcategoria_id', (int)$p->subcategoria_id)
+                    ->where('tipo_id', (int)$tipoInvId)
+                    ->first();
+
+                if ($sc && !empty($sc->plan_cuentas_id)) {
+                    return (int) $sc->plan_cuentas_id;
+                }
+            }
+        }
+
+        // 5. Fallback: buscar cualquier cuenta de inventario genérica clase 14 (Inventarios)
+        return PlanCuentas::query()
+            ->where('cuenta_activa', 1)
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+            ->where('codigo', 'like', '14%')
+            ->orderBy('codigo')
+            ->value('id');
+    }
+
+    /**
+     * 🔥 Resolver cuenta de IVA compra con múltiples fallbacks
+     */
+    private static function resolveCuentaIVACompra(Producto $p, $detalle): ?int
+    {
+        // 1. Si el detalle tiene cuenta_iva_id directamente
+        if (!empty($detalle->cuenta_iva_id) && PlanCuentas::whereKey($detalle->cuenta_iva_id)->exists()) {
+            return (int) $detalle->cuenta_iva_id;
+        }
+
+        // 2. Usar ContabilidadService si existe
+        if (method_exists(ContabilidadService::class, 'cuentaSegunConfiguracion')) {
+            $cta = ContabilidadService::cuentaSegunConfiguracion($p, 'IVA');
+            if ($cta) return (int) $cta;
+        }
+
+        // 3. Cuenta del propio impuesto
+        $imp = $p?->impuesto;
+        if ($imp && !empty($imp->cuenta_id) && PlanCuentas::whereKey($imp->cuenta_id)->exists()) {
+            return (int) $imp->cuenta_id;
+        }
+
+        // 4. Fallback: buscar cualquier cuenta de IVA descontable (2408 en Colombia)
+        return PlanCuentas::query()
+            ->where('cuenta_activa', 1)
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+            ->where(function ($q) {
+                $q->where('codigo', 'like', '2408%')  // IVA descontable Colombia
+                  ->orWhere('codigo', 'like', '1355%'); // Anticipo IVA
+            })
+            ->orderBy('codigo')
+            ->value('id');
+    }
+
+    /**
+     * 🔥 Resolver cuenta CxP Proveedores con múltiples fallbacks
+     */
+    private static function resolveCuentaCxPProveedor(NotaCredito $nc, string $relacionProveedor): ?int
+    {
+        // 1. Si el usuario seleccionó una cuenta explícita en la NC
+        if (!empty($nc->cuenta_cobro_id) && PlanCuentas::whereKey($nc->cuenta_cobro_id)->exists()) {
+            return (int) $nc->cuenta_cobro_id;
+        }
+
+        // 2. CxP del proveedor en sus cuentas
+        if ($nc->relationLoaded($relacionProveedor)) {
+            $proveedor = $nc->{$relacionProveedor};
+            
+            // Intentar varios campos posibles
+            foreach (['cuenta_cxp_id', 'plan_cuenta_id', 'cuenta_id'] as $field) {
+                if (!empty($proveedor->{$field}) && PlanCuentas::whereKey($proveedor->{$field})->exists()) {
+                    return (int) $proveedor->{$field};
+                }
+            }
+
+            // Si tiene relación cuentas
+            if (method_exists($proveedor, 'cuentas')) {
+                $cuentas = $proveedor->relationLoaded('cuentas') ? $proveedor->cuentas : $proveedor->cuentas()->first();
+                if ($cuentas && !empty($cuentas->cuenta_cxp_id) && PlanCuentas::whereKey($cuentas->cuenta_cxp_id)->exists()) {
+                    return (int) $cuentas->cuenta_cxp_id;
+                }
+            }
+        }
+
+        // 3. Fallback por clase de cuenta
+        return PlanCuentas::query()
+            ->where('clase_cuenta', 'CXP_PROVEEDORES')
+            ->where('cuenta_activa', 1)
+            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+            ->orderBy('codigo')
+            ->value('id');
     }
 }

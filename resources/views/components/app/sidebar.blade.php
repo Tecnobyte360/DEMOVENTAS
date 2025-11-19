@@ -89,7 +89,7 @@
             <!-- System title -->
             <div class="text-center mb-6 lg:hidden lg:sidebar-expanded:block 2xl:block">
                 <h1 class="font-bold text-base" :style="`color: ${fg}`">{{ $empresaActual?->nombre }}</h1>
-                <p class="text-xs mt-1" :style="`color: ${fgMuted}`">WMS + TMS</p>
+                <p class="text-xs mt-1" :style="`color: ${fgMuted}`"></p>
             </div>
 
             <!-- Section label -->

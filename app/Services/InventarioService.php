@@ -714,4 +714,37 @@ class InventarioService
             }
         });
     }
+
+      public static function verificarDisponibilidadParaNotaCreditoCompra(NotaCredito $nc): void
+{
+    $nc->loadMissing('detalles');
+
+    $faltantes = [];
+
+    foreach ($nc->detalles as $d) {
+        if (!$d->producto_id || !$d->bodega_id) {
+            throw new \RuntimeException("Cada línea debe tener producto y bodega.");
+        }
+
+        $pb = ProductoBodega::lockForUpdate()
+            ->where('producto_id', $d->producto_id)
+            ->where('bodega_id',  $d->bodega_id)
+            ->first();
+
+        $disp = (float)($pb->stock ?? 0);
+        $cant = (float)$d->cantidad;
+
+        if ($disp < $cant) {
+            $faltantes[] =
+                "Prod {$d->producto_id} en bodega {$d->bodega_id}: " .
+                "disponible {$disp}, nota crédito por {$cant}";
+        }
+    }
+
+    if ($faltantes) {
+        throw new \RuntimeException(
+            "Stock insuficiente para Nota Crédito de compra: " . implode(' | ', $faltantes)
+        );
+    }
+}
 }

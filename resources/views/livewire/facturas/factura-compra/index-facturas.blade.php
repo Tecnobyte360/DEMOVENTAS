@@ -26,11 +26,17 @@
     }
   }"
   x-init="
-    // Cuando se guarda/emite factura → ir a lista de facturas
+    // ✅ Cuando se guarda/emite FACTURA → ir a lista de facturas
     window.addEventListener('refrescar-lista-facturas', () => setTab('list'));
 
-    // Cuando se guarda/emite NC compra → ir a lista de NC
+    // ✅ Cuando se guarda/emite NC COMPRA → ir a lista de NC
     window.addEventListener('refrescar-lista-nc-compra', () => setTab('nc-list'));
+
+    // ✅ Cuando desde la lista se hace 'Abrir factura' → ir al form de factura
+    window.addEventListener('abrir-factura', () => setTab('form'));
+
+    // ✅ Cuando desde la lista se hace 'Abrir NC compra' → ir al form de NC compra
+    window.addEventListener('abrir-nc-compra', () => setTab('nc-form'));
   "
   class="space-y-8"
 >
@@ -78,7 +84,7 @@
         :class="tab === 'nc-list'
           ? 'bg-indigo-600 text-white shadow'
           : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
-        class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
+        class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transición-all duration-200">
         <i class="fa-solid fa-list-check"></i>
         Notas crédito registradas
       </button>

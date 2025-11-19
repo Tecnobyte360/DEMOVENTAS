@@ -560,80 +560,109 @@ class NotaCreditoCompraForm extends Component
         }
     }
 
-    public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+   public function emitir(): void
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-        try {
-            $this->normalizarPagoAntesDeValidar();
-            $this->sanearLineasAntesDeValidar();
-            if (!$this->validarConToast()) return;
+    try {
+        $this->normalizarPagoAntesDeValidar();
+        $this->sanearLineasAntesDeValidar();
+        if (!$this->validarConToast()) return;
 
-            DB::transaction(function () {
-                $this->persistirBorrador();
-                $this->nota->refresh()->loadMissing(['detalles', 'cliente']);
+        DB::transaction(function () {
 
-                // ✅ Validar que todas las líneas tengan producto y bodega
-                foreach ($this->nota->detalles as $idx => $d) {
-                    if (!$d->producto_id || !$d->bodega_id) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
-                    }
+            // 1) Guardamos borrador antes de validar inventario
+            $this->persistirBorrador();
+            $this->nota->refresh()->loadMissing(['detalles', 'cliente']);
+
+            // 2) Validar líneas con producto y bodega
+            foreach ($this->nota->detalles as $idx => $d) {
+                if (!$d->producto_id || !$d->bodega_id) {
+                    throw new \RuntimeException(
+                        "La fila #" . ($idx + 1) . " debe tener producto y bodega."
+                    );
                 }
+            }
 
-                $serie = null;
-                if ($this->serie_id) {
-                    $serie = Serie::find((int)$this->serie_id);
-                }
-                if (!$serie) {
-                    $serie = $this->serieDefault;
-                }
-                if (!$serie) {
-                    throw new \RuntimeException('No hay serie activa para Nota Crédito de Compra.');
-                }
+            // 3) VALIDAR INVENTARIO (nuevo)
+            if ($this->descontar_inventario) {
+                \App\Services\InventarioService::verificarDisponibilidadParaNotaCreditoCompra(
+                    $this->nota
+                );
+            }
 
-                if ((int)($serie->activa ?? 0) !== 1) {
-                    throw new \RuntimeException('La serie seleccionada no está activa.');
-                }
+            // 4) Validar/obtener serie
+            $serie = null;
+            if ($this->serie_id) {
+                $serie = Serie::find((int)$this->serie_id);
+            }
+            if (!$serie) {
+                $serie = $this->serieDefault;
+            }
+            if (!$serie) {
+                throw new \RuntimeException('No hay serie activa para Nota Crédito de Compra.');
+            }
 
-                $len     = (int)($serie->longitud ?? 6);
-                $proximo = (int)($serie->proximo ?? 0);
-                $hasta   = (int)($serie->hasta ?? 0);
-                if ($hasta > 0 && $proximo > $hasta) {
-                    throw new \RuntimeException('La serie seleccionada está agotada.');
-                }
+            if ((int)($serie->activa ?? 0) !== 1) {
+                throw new \RuntimeException('La serie seleccionada no está activa.');
+            }
 
-                $numero = $serie->tomarConsecutivo();
+            // Validación de rango de serie
+            $len     = (int)($serie->longitud ?? 6);
+            $proximo = (int)($serie->proximo ?? 0);
+            $hasta   = (int)($serie->hasta ?? 0);
+            if ($hasta > 0 && $proximo > $hasta) {
+                throw new \RuntimeException('La serie seleccionada está agotada.');
+            }
 
-                $this->nota->update([
-                    'serie_id' => $serie->id,
-                    'numero'   => $numero,
-                    'prefijo'  => (string)($serie->prefijo ?? ''),
-                    'estado'   => 'emitida',
-                ]);
+            // 5) Tomar consecutivo
+            $numero = $serie->tomarConsecutivo();
 
-                if ($this->descontar_inventario && method_exists(InventarioService::class, 'salidaPorNotaCreditoCompra')) {
-                    InventarioService::salidaPorNotaCreditoCompra($this->nota);
-                }
+            // 6) Actualizar NC
+            $this->nota->update([
+                'serie_id' => $serie->id,
+                'numero'   => $numero,
+                'prefijo'  => (string)($serie->prefijo ?? ''),
+                'estado'   => 'emitida',
+            ]);
 
-                ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
+            // 7) Salida de inventario (si procede)
+            if (
+                $this->descontar_inventario &&
+                method_exists(InventarioService::class, 'salidaPorNotaCreditoCompra')
+            ) {
+                InventarioService::salidaPorNotaCreditoCompra($this->nota);
+            }
 
-                $this->estado = $this->nota->estado;
-            }, 3);
+            // 8) Contabilidad
+            ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
 
-            PendingToast::create()
-                ->success()
-                ->message('Nota Crédito de compra emitida correctamente.')
-                ->duration(6000);
+            // 9) Actualizar estado local
+            $this->estado = $this->nota->estado;
 
-            $this->dispatch('refrescar-lista-nc-compra');
-        } catch (\Throwable $e) {
-            Log::error('NC COMPRA EMITIR ERROR', ['msg' => $e->getMessage()]);
-            PendingToast::create()
-                ->error()
-                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo emitir.')
-                ->duration(9000);
-        }
+        }, 3);
+
+        // Mensaje OK
+        PendingToast::create()
+            ->success()
+            ->message('Nota Crédito de compra emitida correctamente.')
+            ->duration(6000);
+
+        // Refrescar lista
+        $this->dispatch('refrescar-lista-nc-compra');
+
+    } catch (\Throwable $e) {
+
+        Log::error('NC COMPRA EMITIR ERROR', [
+            'msg' => $e->getMessage()
+        ]);
+
+        PendingToast::create()
+            ->error()
+            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo emitir.')
+            ->duration(9000);
     }
+}
 
     public function anular(): void
     {

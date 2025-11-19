@@ -24,7 +24,7 @@ use Masmerise\Toaster\PendingToast;
 use App\Models\Impuestos\Impuesto;
 use App\Services\InventarioService;
 use App\Models\TiposDocumento\TipoDocumento;
-
+use Illuminate\Support\Facades\Schema;
 
 class FacturaForm extends Component
 {
@@ -167,91 +167,92 @@ public function mount(?int $id = null): void
 }
 
 
-    public function render()
-    {
-        try {
-            $clientes = SocioNegocio::clientes()
-                ->orderBy('razon_serial')->orderBy('razon_social')->take(200)->get();
-        } catch (\Throwable $e) {
-            // en algunos entornos no existe razon_serial
-            $clientes = SocioNegocio::clientes()->orderBy('razon_social')->take(200)->get();
-        }
-
-        try {
-            $productos = Producto::with([
-                'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-                'cuentaIngreso:id,codigo,nombre',
-                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-                'cuentas.cuentaPUC:id,codigo,nombre',
-                'cuentas.tipo:id,codigo,nombre',
-            ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
-
-            $bodegas = Bodega::orderBy('nombre')->get();
-
-            $cuentasIngresos = PlanCuentas::query()
-                ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
-                ->where('cuenta_activa', 1)
-                ->orderBy('codigo')
-                ->get(['id', 'codigo', 'nombre']);
-
-            $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->where('clase_cuenta', 'CXC_CLIENTES')
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
-
-            $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
-
-            $impuestosVentas = Impuesto::activos()
-                ->whereIn('aplica_sobre', ['VENTAS','VENTA','AMBOS','TODOS'])
-                ->orderBy('prioridad')
-                ->orderBy('nombre')
-                ->get(['id','codigo','nombre','porcentaje','monto_fijo','incluido_en_precio']);
-
-            // Filtra condiciones por tipo actual
-            $condicionesPagoQuery = CondicionPago::query()
-                ->orderBy('nombre')
-                ->select(['id','nombre','tipo','plazo_dias']);
-
-            if ($this->tipo_pago === 'contado') {
-                $condicionesPagoQuery->where('tipo', 'contado');
-            } elseif ($this->tipo_pago === 'credito') {
-                $condicionesPagoQuery->where('tipo', 'credito');
-            }
-            $condicionesPago = $condicionesPagoQuery->get();
-
-            return view('livewire.facturas.factura-form', [
-                'clientes'         => $clientes,
-                'productos'        => $productos,
-                'bodegas'          => $bodegas,
-                'series'           => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,
-                'cuentasCXC'       => $cuentasCXC,
-                'cuentasCaja'      => $cuentasCaja,
-                'impuestosVentas'  => $impuestosVentas,
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => $condicionesPago,
-            ]);
-        } catch (Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
-
-            return view('livewire.facturas.factura-form', [
-                'clientes'         => collect(),
-                'productos'        => collect(),
-                'bodegas'          => collect(),
-                'series'           => collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => collect(),
-                'cuentasCXC'       => collect(),
-                'cuentasCaja'      => collect(),
-                'impuestosVentas'  => collect(),
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => collect(),
-            ]);
-        }
+  public function render()
+{
+    try {
+        $clientes = SocioNegocio::clientes()
+            ->orderBy('razon_serial')->orderBy('razon_social')->take(200)->get();
+    } catch (\Throwable $e) {
+        // en algunos entornos no existe razon_serial
+        $clientes = SocioNegocio::clientes()->orderBy('razon_social')->take(200)->get();
     }
+
+    try {
+        $productos = Producto::with([
+            'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+            'cuentaIngreso:id,codigo,nombre',
+            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+            'cuentas.cuentaPUC:id,codigo,nombre',
+            'cuentas.tipo:id,codigo,nombre',
+        ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
+
+        $bodegas = Bodega::orderBy('nombre')->get();
+
+        $cuentasIngresos = PlanCuentas::query()
+            ->where(function ($q) { $q->where('titulo', 0)->orWhereNull('titulo'); })
+            ->where('cuenta_activa', 1)
+            ->orderBy('codigo')
+            ->get(['id', 'codigo', 'nombre']);
+
+        $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
+            ->where('clase_cuenta', 'CXC_CLIENTES')
+            ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
+
+        $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
+            ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
+            ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
+
+        $impuestosVentas = Impuesto::activos()
+            ->whereIn('aplica_sobre', ['VENTAS','VENTA','AMBOS','TODOS'])
+            ->orderBy('prioridad')
+            ->orderBy('nombre')
+            ->get(['id','codigo','nombre','porcentaje','monto_fijo','incluido_en_precio']);
+
+        // 🔄 CAMBIO: Obtener TODAS las condiciones de pago (sin filtrar por tipo actual)
+        $condicionesPagoQuery = CondicionPago::query()
+            ->orderBy('tipo')      // Agrupa por tipo (contado primero, luego crédito)
+            ->orderBy('nombre')    // Luego ordena por nombre
+            ->select(['id','nombre','tipo','plazo_dias']);
+
+        // Si existe el campo 'activo', filtra solo las activas
+        if (Schema::hasColumn('condicion_pagos', 'activo')) {
+            $condicionesPagoQuery->where('activo', 1);
+        }
+        
+        $condicionesPago = $condicionesPagoQuery->get();
+
+        return view('livewire.facturas.factura-form', [
+            'clientes'         => $clientes,
+            'productos'        => $productos,
+            'bodegas'          => $bodegas,
+            'series'           => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
+            'serieDefault'     => $this->serieDefault,
+            'cuentasIngresos'  => $cuentasIngresos,
+            'cuentasCXC'       => $cuentasCXC,
+            'cuentasCaja'      => $cuentasCaja,
+            'impuestosVentas'  => $impuestosVentas,
+            'bloqueada'        => $this->bloqueada,
+            'condicionesPago'  => $condicionesPago,
+        ]);
+    } catch (Throwable $e) {
+        report($e);
+        PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
+
+        return view('livewire.facturas.factura-form', [
+            'clientes'         => collect(),
+            'productos'        => collect(),
+            'bodegas'          => collect(),
+            'series'           => collect(),
+            'serieDefault'     => $this->serieDefault,
+            'cuentasIngresos'  => collect(),
+            'cuentasCXC'       => collect(),
+            'cuentasCaja'      => collect(),
+            'impuestosVentas'  => collect(),
+            'bloqueada'        => $this->bloqueada,
+            'condicionesPago'  => collect(),
+        ]);
+    }
+}
 
     /* =========================
      *  BLOQUEO / SOLO LECTURA

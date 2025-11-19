@@ -149,6 +149,7 @@ class Productos extends Component
             $this->unidad_medida_id   = $producto->unidad_medida_id;
             $this->imagen_base64      = null; // no precargamos la dataURL (ya se muestra desde BD)
             $this->mov_contable_segun = $producto->mov_contable_segun ?? Producto::MOV_SEGUN_ARTICULO;
+              $this->es_inventariable   = (bool) ($producto->es_inventariable ?? 0);
             $this->isEdit             = true;
 
             // Cuentas actuales

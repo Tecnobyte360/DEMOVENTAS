@@ -1,6 +1,9 @@
 @once
   @push('styles')
+    {{-- FontAwesome --}}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    {{-- TomSelect para buscar facturas --}}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
   @endpush
 @endonce
 
@@ -12,6 +15,51 @@
       }
     </script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    {{-- TomSelect --}}
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
+
+    <script>
+      document.addEventListener('livewire:load', () => {
+        const initFacturaSelect = () => {
+          const el = document.getElementById('factura-select');
+          if (!el) return;
+
+          // destruir instancia previa (por re-render de Livewire)
+          if (el.tomselect) {
+            el.tomselect.destroy();
+          }
+
+          const ts = new TomSelect(el, {
+            placeholder: '— Selecciona una factura —',
+            allowEmptyOption: true,
+            maxOptions: 500,
+            closeAfterSelect: true,
+            plugins: ['dropdown_input'],
+            onChange(value) {
+              // sincronizar con Livewire
+              @this.set('facturaId', value || null);
+            },
+          });
+
+          // si Livewire ya tiene factura seleccionada, reflejarla
+          const current = @this.get('facturaId');
+          if (current) {
+            ts.setValue(String(current), false);
+          }
+        };
+
+        // primera inicialización
+        initFacturaSelect();
+
+        // re-inicializar cada vez que se procesa un mensaje de este componente
+        Livewire.hook('message.processed', (message, component) => {
+          if (component.fingerprint && component.fingerprint.name === 'facturas.pagos-factura') {
+            initFacturaSelect();
+          }
+        });
+      });
+    </script>
   @endpush
 @endonce
 
@@ -40,43 +88,39 @@
       {{-- Cuerpo --}}
       <div class="p-5 space-y-5">
 
-        {{-- 🧾 Selector de factura --}}
-       {{-- 🧾 Selector de factura --}}
-@if(!$facturaId)
-  <div class="space-y-2">
-    <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 block">
-      Seleccionar factura (solo con saldo pendiente)
-    </label>
-
-    {{-- 🔍 Buscador --}}
-    <input type="text"
-           wire:model.debounce.400ms="buscarFactura"
-           placeholder="Buscar por cliente, NIT, #factura..."
-           class="w-full h-9 rounded-xl border-2 border-gray-200 dark:border-gray-700 
-                  dark:bg-gray-800 dark:text-white px-3 text-sm">
-
-    <select wire:model="facturaId"
-            class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
-                   dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
-      <option value="">— Selecciona una factura —</option>
-      @foreach($facturasPendientes as $f)
-        @php
-          $pref = $f->prefijo ?: $f->serie?->prefijo;
-          $num  = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
-        @endphp
-        <option value="{{ $f->id }}">
-          {{ $pref ? $pref.'-' : '' }}{{ $num }}
-          — {{ $f->socioNegocio?->razon_social ?? 'Sin cliente' }}
-          — {{ \Carbon\Carbon::parse($f->fecha)->format('Y-m-d') }}
-          — Total: ${{ number_format($f->total, 0, ',', '.') }}
-          — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
-        </option>
-      @endforeach
-    </select>
-    @error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
-  </div>
-@endif
-
+        {{-- 🧾 Selector de factura (con búsqueda) --}}
+        @if(!$facturaId)
+          <div wire:ignore>
+            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+              Seleccionar factura
+            </label>
+            <select id="factura-select"
+                    class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
+                           dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
+              <option value="">— Selecciona una factura —</option>
+              @foreach(
+                \App\Models\Factura\Factura::with(['socioNegocio','serie'])
+                  ->where('saldo', '>', 0)
+                  ->orderByDesc('id')
+                  ->limit(200)
+                  ->get(['id','numero','prefijo','serie_id','socio_negocio_id','fecha','total','saldo']) as $f
+              )
+                @php
+                  $numero = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
+                  $codigo = trim(($f->prefijo ? $f->prefijo.'-' : '').$numero);
+                  $cliente = $f->socioNegocio?->razon_social ?? 'Sin cliente';
+                  $fecha   = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
+                @endphp
+                <option value="{{ $f->id }}">
+                  {{ $codigo }} — {{ $cliente }} — {{ $fecha }}
+                  — Total: ${{ number_format($f->total, 0, ',', '.') }}
+                  — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
+                </option>
+              @endforeach
+            </select>
+            @error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
+          </div>
+        @endif
 
         {{-- 🧮 Resumen de montos --}}
         <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-800/40">

@@ -460,13 +460,21 @@ class NotaCreditoCompraForm extends Component
         }
     }
 
-    private function sanearLineasAntesDeValidar(): void
-    {
-        foreach ($this->lineas as $i=>$l) {
-            $this->lineas[$i]['bodega_id']   = isset($l['bodega_id']) && $l['bodega_id']!=='' ? (int)$l['bodega_id'] : null;
-            $this->lineas[$i]['producto_id'] = isset($l['producto_id']) && $l['producto_id']!=='' ? (int)$l['producto_id'] : null;
-        }
+   private function sanearLineasAntesDeValidar(): void
+{
+    // Ajusta "lineas" si en FacturaCompra se llama distinto (por ej. "detalles")
+    foreach ($this->lineas as $i => $l) {
+        $this->lineas[$i]['bodega_id'] = 
+            isset($l['bodega_id']) && $l['bodega_id'] !== '' 
+                ? (int) $l['bodega_id'] 
+                : null;
+
+        $this->lineas[$i]['producto_id'] = 
+            isset($l['producto_id']) && $l['producto_id'] !== '' 
+                ? (int) $l['producto_id'] 
+                : null;
     }
+}
 
     private function validarConToast(): bool
     {

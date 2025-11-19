@@ -56,7 +56,7 @@ class NotaCreditoCompraForm extends Component
         'socio_negocio_id'          => 'required|integer|exists:socio_negocios,id',
         'fecha'                     => 'required|date',
         'vencimiento'               => 'nullable|date|after_or_equal:fecha',
-        'tipo_pago'                 => 'required|in:contado,credito',
+      
         'plazo_dias'                => 'nullable|integer|min:1|max:365|required_if:tipo_pago,credito',
         'terminos_pago'             => 'nullable|string|max:255',
         'moneda'                    => 'required|string|size:3',

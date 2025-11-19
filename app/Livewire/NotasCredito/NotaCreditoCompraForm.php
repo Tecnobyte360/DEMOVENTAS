@@ -69,7 +69,8 @@ class NotaCreditoCompraForm extends Component
 
         'lineas'                    => 'required|array|min:1',
         'lineas.*.producto_id'      => 'required|integer|exists:productos,id',
-        'lineas.*.bodega_id'        => 'required|integer|exists:bodegas,id',
+      'lineas.*.bodega_id'        => 'nullable|integer|exists:bodegas,id',
+
         'lineas.*.descripcion'      => 'required|string|max:255',
         'lineas.*.cantidad'         => 'required|numeric|min:1',
         'lineas.*.precio_unitario'  => 'required|numeric|min:0',
@@ -567,7 +568,8 @@ class NotaCreditoCompraForm extends Component
             PendingToast::create()->error()->message(config('app.debug')?$e->getMessage():'No se pudo guardar.')->duration(9000);
         }
     }
-public function emitir(): void
+
+    public function emitir(): void
 {
     if ($this->abortIfLocked('emitir')) return;
 
@@ -580,19 +582,57 @@ public function emitir(): void
 
             // 1) Guardar borrador
             $this->persistirBorrador();
-            $this->nota->refresh()->loadMissing(['detalles', 'cliente']);
 
-            // 2) Validar líneas
+            // Asegurarnos de tener productos cargados
+            $this->nota->refresh()->loadMissing(['detalles.producto', 'cliente']);
+
+            // 2) Validar líneas (producto obligatorio, bodega solo para inventariables)
+            $hayInventariables = false;
+
             foreach ($this->nota->detalles as $idx => $d) {
-                if (!$d->producto_id || !$d->bodega_id) {
+
+                if (!$d->producto_id) {
                     throw new \RuntimeException(
-                        "La fila #" . ($idx + 1) . " debe tener producto y bodega."
+                        "La fila #" . ($idx + 1) . " debe tener producto."
                     );
                 }
+
+                // Cargar producto (por si no viene cargado)
+                $producto = $d->relationLoaded('producto')
+                    ? $d->producto
+                    : \App\Models\Productos\Producto::find($d->producto_id);
+
+                if (!$producto) {
+                    throw new \RuntimeException(
+                        "La fila #" . ($idx + 1) . " tiene un producto inválido."
+                    );
+                }
+
+                // 🔥 Detectar si es inventariable o servicio
+                // Ajusta estos campos a como lo tengas en tu modelo:
+                // es_inventariable / maneja_inventario / tipo_articulo, etc.
+                $esInventariable = (bool) (
+                    $producto->es_inventariable
+                    ?? $producto->maneja_inventario
+                    ?? true     // Por defecto asumimos que sí es inventariable si no hay campo
+                );
+
+                if ($esInventariable) {
+                    $hayInventariables = true;
+
+                    // Si es inventariable y se va a descontar inventario → obligo bodega
+                    if ($this->descontar_inventario && !$d->bodega_id) {
+                        throw new \RuntimeException(
+                            "La fila #" . ($idx + 1) .
+                            " es un producto inventariable y debe tener bodega para descontar inventario."
+                        );
+                    }
+                }
+                // Si NO es inventariable (servicio) → NO obligamos bodega
             }
 
-            // 3) Validar stock
-            if ($this->descontar_inventario) {
+            // 3) Validar stock SOLO si hay productos inventariables
+            if ($this->descontar_inventario && $hayInventariables) {
                 \App\Services\InventarioService::verificarDisponibilidadParaNotaCreditoCompra(
                     $this->nota
                 );
@@ -629,12 +669,13 @@ public function emitir(): void
             ]);
 
             // 7) 🔥 SALIDA de inventario por NC COMPRA
-            if ($this->descontar_inventario) {
-                InventarioService::salidaPorNotaCreditoCompra($this->nota);
+            // Solo si hay productos inventariables
+            if ($this->descontar_inventario && $hayInventariables) {
+                \App\Services\InventarioService::salidaPorNotaCreditoCompra($this->nota);
             }
 
             // 8) Contabilidad
-            ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
+            \App\Services\ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
 
             // 9) Estado local
             $this->estado = $this->nota->estado;
@@ -657,6 +698,7 @@ public function emitir(): void
             ->duration(9000);
     }
 }
+
 
 
     public function anular(): void

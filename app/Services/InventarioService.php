@@ -435,44 +435,60 @@ class InventarioService
      *  REGISTRO GENÉRICO EN KARDEX
      * ========================================================= */
     private static function registrarKardex(
-        string $tipoLogico,
-        int $signo,
-        $fecha,
-        int $productoId,
-        int $bodegaId,
-        float $cantidad,
-        float $costoUnitario,
-        ?int $tipoDocumentoId = null,
-        ?string $docTipoLegacy = null,
-        ?int $docId = null,
-        ?string $ref = null
-    ): void {
-        $cantidad = max(0.0, $cantidad);
-        $entrada  = $signo >= 0 ? $cantidad : 0.0;
-        $salida   = $signo <  0 ? $cantidad : 0.0;
+    string $tipoLogico,
+    int $signo,
+    $fecha,
+    int $productoId,
+    int $bodegaId,
+    float $cantidad,
+    float $costoUnitario,
+    ?int $tipoDocumentoId = null,
+    ?string $docTipoLegacy = null,
+    ?int $docId = null,
+    ?string $ref = null,
+    ?string $origen = null
+): void {
+    $cantidad = max(0.0, $cantidad);
+    $entrada  = $signo >= 0 ? $cantidad : 0.0;
+    $salida   = $signo <  0 ? $cantidad : 0.0;
 
-        $data = [
-            'fecha'          => $fecha ?? now(),
-            'producto_id'    => $productoId,
-            'bodega_id'      => $bodegaId,
-            'entrada'        => $entrada,
-            'salida'         => $salida,
-            'cantidad'       => $cantidad, // positivo siempre
-            'signo'          => $signo,
-            'costo_unitario' => (float)$costoUnitario,
-            'total'          => round($cantidad * (float)$costoUnitario, 2),
-        ];
+    $data = [
+        'fecha'          => $fecha ?? now(),
+        'producto_id'    => $productoId,
+        'bodega_id'      => $bodegaId,
+        'entrada'        => $entrada,
+        'salida'         => $salida,
+        'cantidad'       => $cantidad, // positivo siempre
+        'signo'          => $signo,
+        'costo_unitario' => (float)$costoUnitario,
+        'total'          => round($cantidad * (float)$costoUnitario, 2),
+    ];
 
-        if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) $data['tipo_documento_id'] = $tipoDocumentoId;
-        if ($docTipoLegacy !== null && Schema::hasColumn('kardex_movimientos', 'doc_tipo')) $data['doc_tipo'] = $docTipoLegacy;
-        if (Schema::hasColumn('kardex_movimientos', 'metodo'))    $data['metodo']    = 'PROMEDIO';
-        if (Schema::hasColumn('kardex_movimientos', 'origen'))    $data['origen']    = 'factura';
-        if (Schema::hasColumn('kardex_movimientos', 'origen_id')) $data['origen_id'] = $docId;
-        if (Schema::hasColumn('kardex_movimientos', 'doc_id'))    $data['doc_id']    = $docId ? (string)$docId : null;
-        if (Schema::hasColumn('kardex_movimientos', 'ref'))       $data['ref']       = $ref ?: $tipoLogico;
-
-        KardexMovimiento::create($data);
+    if (Schema::hasColumn('kardex_movimientos', 'tipo_documento_id')) {
+        $data['tipo_documento_id'] = $tipoDocumentoId;
     }
+    if ($docTipoLegacy !== null && Schema::hasColumn('kardex_movimientos', 'doc_tipo')) {
+        $data['doc_tipo'] = $docTipoLegacy;
+    }
+    if (Schema::hasColumn('kardex_movimientos', 'metodo')) {
+        $data['metodo'] = 'PROMEDIO';
+    }
+    if (Schema::hasColumn('kardex_movimientos', 'origen')) {
+        $data['origen'] = $origen ?? 'factura';   
+    }
+    if (Schema::hasColumn('kardex_movimientos', 'origen_id')) {
+        $data['origen_id'] = $docId;
+    }
+    if (Schema::hasColumn('kardex_movimientos', 'doc_id')) {
+        $data['doc_id'] = $docId ? (string)$docId : null;
+    }
+    if (Schema::hasColumn('kardex_movimientos', 'ref')) {
+        $data['ref'] = $ref ?: $tipoLogico;
+    }
+
+    KardexMovimiento::create($data);
+}
+
 
     /* =========================================================
      *  REGISTRO GENÉRICO EN HISTORIAL DE COSTOS
@@ -603,19 +619,21 @@ class InventarioService
             $refNc = 'NC COMPRA ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string) $nc->numero;
 
            
-            static::registrarKardex(
-                tipoLogico: 'NC_COMPRA_SALIDA',
-                signo: -1,                          
-                fecha: $nc->fecha ?? now(),
-                productoId: (int) $d->producto_id,
-                bodegaId: (int) $d->bodega_id,
-                cantidad: $cantidad,
-                costoUnitario: $costoUnit,
-                tipoDocumentoId: $tipoDocId,
-                docTipoLegacy: 'NOTA_CREDITO_COMPRA',
-                docId: (int) $nc->id,
-                ref: $refNc
-            );
+           static::registrarKardex(
+    tipoLogico: 'NC_COMPRA_SALIDA',
+    signo: -1,
+    fecha: $nc->fecha ?? now(),
+    productoId: (int) $d->producto_id,
+    bodegaId: (int) $d->bodega_id,
+    cantidad: $cantidad,
+    costoUnitario: $costoUnit,
+    tipoDocumentoId: $tipoDocId,
+    docTipoLegacy: 'NOTA_CREDITO_COMPRA',
+    docId: (int) $nc->id,
+    ref: $refNc,
+    origen: 'nota_credito_compra'   
+);
+
 
             // 🔹 Historial de costos (SALIDA)
             static::registrarCostoMovimiento(
@@ -678,19 +696,20 @@ class InventarioService
                 $refNc = 'REV NC COMPRA ' . ($nc->prefijo ? "{$nc->prefijo}-" : '') . (string) $nc->numero;
 
                 // 🔹 Kardex (ENTRADA)
-                static::registrarKardex(
-                    tipoLogico: 'REVERSO_NC_COMPRA',
-                    signo: 1,
-                    fecha: $nc->fecha ?? now(),
-                    productoId: (int) $d->producto_id,
-                    bodegaId: (int) $d->bodega_id,
-                    cantidad: $cantidad,
-                    costoUnitario: $costoUnit,
-                    tipoDocumentoId: $tipoDocId,
-                    docTipoLegacy: 'REVERSO_NC_COMPRA',
-                    docId: (int) $nc->id,
-                    ref: $refNc
-                );
+               static::registrarKardex(
+    tipoLogico: 'REVERSO_NC_COMPRA',
+    signo: 1,
+    fecha: $nc->fecha ?? now(),
+    productoId: (int) $d->producto_id,
+    bodegaId: (int) $d->bodega_id,
+    cantidad: $cantidad,
+    costoUnitario: $costoUnit,
+    tipoDocumentoId: $tipoDocId,
+    docTipoLegacy: 'REVERSO_NC_COMPRA',
+    docId: (int) $nc->id,
+    ref: $refNc,
+    origen: 'nota_credito_compra'  // misma familia de origen
+);
 
                 // 🔹 Historial de costos (ENTRADA)
                 static::registrarCostoMovimiento(

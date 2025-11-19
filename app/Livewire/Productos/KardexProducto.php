@@ -40,8 +40,8 @@ class KardexProducto extends Component
 
     public function mount(?int $productoId = null): void
     {
-        $this->productos = Producto::orderBy('nombre')->get(['id','nombre']);
-        $this->bodegas   = Bodega::orderBy('nombre')->get(['id','nombre']);
+        $this->productos = Producto::orderBy('nombre')->get(['id', 'nombre']);
+        $this->bodegas   = Bodega::orderBy('nombre')->get(['id', 'nombre']);
 
         $this->producto_id = $productoId ?: $this->producto_id;
         $this->desde = $this->desde ?: Carbon::now()->subDays(90)->toDateString();
@@ -56,7 +56,7 @@ class KardexProducto extends Component
     public function render()
     {
         // Sanitiza perPage
-        $this->perPage = in_array((int)$this->perPage, [10,25,50,100], true) ? (int)$this->perPage : 25;
+        $this->perPage = in_array((int)$this->perPage, [10, 25, 50, 100], true) ? (int)$this->perPage : 25;
 
         $filas = ProductoCostoMovimiento::query()
             ->with('tipoDocumento:id,codigo,nombre')
@@ -68,10 +68,12 @@ class KardexProducto extends Component
                 $txt = '%' . (string) Str::of($this->buscarDoc)->trim() . '%';
                 $q->where(function ($x) use ($txt) {
                     $x->orWhere('doc_id', 'like', $txt)
-                      ->orWhere('ref', 'like', $txt)
-                      ->orWhereHas('tipoDocumento', fn($qq) =>
-                          $qq->where('nombre','like',$txt)->orWhere('codigo','like',$txt)
-                      );
+                        ->orWhere('ref', 'like', $txt)
+                        ->orWhereHas(
+                            'tipoDocumento',
+                            fn($qq) =>
+                            $qq->where('nombre', 'like', $txt)->orWhere('codigo', 'like', $txt)
+                        );
                 });
             })
             ->orderBy('fecha')
@@ -80,11 +82,11 @@ class KardexProducto extends Component
 
         // 🔽 MAPEO CORRECTO: usar campo 'tipo_evento' para determinar entrada/salida
         $bodegasIndex = $this->bodegas->keyBy('id');
-        
+
         $items = collect($filas->items())->map(function ($m) use ($bodegasIndex) {
             // Cantidad siempre positiva
             $cant = abs((float) ($m->cantidad ?? 0));
-            
+
             // Lee el campo 'tipo_evento' de la BD
             $tipoEvento = strtoupper(trim((string) ($m->tipo_evento ?? '')));
 
@@ -92,16 +94,26 @@ class KardexProducto extends Component
             $entrada = null;
             $salida  = null;
 
-            // Eventos que son ENTRADAS (aumentan stock)
-            if (in_array($tipoEvento, ['COMPRA', 'ENTRADA', 'ENTRADA_MERCANCIA', 'ANULACION', 'NOTA_CREDITO'], true)) {
+
+            if (in_array($tipoEvento, [
+                'COMPRA',
+                'ENTRADA',
+                'ENTRADA_MERCANCIA',
+                'ANULACION_FV',
+            ], true)) {
                 $entrada = $cant;
                 $salida = null;
-            } 
-            // Eventos que son SALIDAS (disminuyen stock)
-            elseif (in_array($tipoEvento, ['VENTA', 'SALIDA', 'REV_NOTA_CREDITO'], true)) {
+            } elseif (in_array($tipoEvento, [
+                'VENTA',
+                'SALIDA',
+                'NC_COMPRA',
+                'DEVOLUCION_VENTA',
+                'REVERSO_ENTRADA',
+            ], true)) {
                 $entrada = null;
                 $salida = $cant;
-            } 
+            }
+
             // Fallback por si el tipo_evento no está definido o es desconocido
             else {
                 // Usar el signo de cantidad como último recurso
@@ -114,8 +126,8 @@ class KardexProducto extends Component
 
             // Construir texto del documento
             $tipoDoc = $m->tipoDocumento?->codigo ?: $m->tipoDocumento?->nombre;
-            $docTxt  = trim(($tipoDoc ? $tipoDoc.' ' : '') . ($m->doc_id ? '#'.$m->doc_id : ''));
-            if ($m->ref) $docTxt .= ' ('.$m->ref.')';
+            $docTxt  = trim(($tipoDoc ? $tipoDoc . ' ' : '') . ($m->doc_id ? '#' . $m->doc_id : ''));
+            if ($m->ref) $docTxt .= ' (' . $m->ref . ')';
             $docTxt = $docTxt ?: '—';
 
             return [

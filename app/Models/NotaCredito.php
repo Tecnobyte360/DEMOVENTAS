@@ -111,4 +111,9 @@ class NotaCredito extends Model
 
         return $this;
     }
+    public function socioNegocio()
+{
+    return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
+}
+
 }

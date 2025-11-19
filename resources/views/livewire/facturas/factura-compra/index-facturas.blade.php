@@ -20,10 +20,17 @@
 <div
   x-data="{
     tab: localStorage.getItem('tab-facturas-compra') || 'form',
-    setTab(v){ this.tab = v; localStorage.setItem('tab-facturas-compra', v); }
+    setTab(v){
+      this.tab = v;
+      localStorage.setItem('tab-facturas-compra', v);
+    }
   }"
   x-init="
+    // Cuando se guarda/emite factura → ir a lista de facturas
     window.addEventListener('refrescar-lista-facturas', () => setTab('list'));
+
+    // Cuando se guarda/emite NC compra → ir a lista de NC
+    window.addEventListener('refrescar-lista-nc-compra', () => setTab('nc-list'));
   "
   class="space-y-8"
 >
@@ -32,7 +39,7 @@
   <section class="bg-white dark:bg-gray-900 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
     <nav class="flex flex-wrap gap-3 px-6 py-4 border-b border-gray-200 dark:border-gray-700" aria-label="Tabs de compras">
 
-      {{-- Nueva factura de compra --}}
+      {{-- Nueva factura --}}
       <button
         @click="setTab('form')"
         :class="tab === 'form'
@@ -54,15 +61,26 @@
         Facturas registradas
       </button>
 
-      {{-- Notas crédito proveedores --}}
+      {{-- Nueva nota crédito de compra --}}
       <button
-        @click="setTab('notascreditoproveedores')"
-        :class="tab === 'notascreditoproveedores'
+        @click="setTab('nc-form')"
+        :class="tab === 'nc-form'
           ? 'bg-indigo-600 text-white shadow'
           : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
         class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
         <i class="fa-solid fa-rotate-left"></i>
-        Notas crédito de proveedores
+        Nueva nota crédito de compra
+      </button>
+
+      {{-- Notas crédito registradas --}}
+      <button
+        @click="setTab('nc-list')"
+        :class="tab === 'nc-list'
+          ? 'bg-indigo-600 text-white shadow'
+          : 'bg-indigo-50 dark:bg-gray-800 text-indigo-700 dark:text-gray-300 hover:bg-indigo-100 dark:hover:bg-gray-700'"
+        class="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all duration-200">
+        <i class="fa-solid fa-list-check"></i>
+        Notas crédito registradas
       </button>
 
     </nav>
@@ -70,7 +88,7 @@
     {{-- ======= Contenido ======= --}}
     <div class="p-6 md:p-8">
 
-      {{-- TAB: Nueva factura --}}
+      {{-- FORM: Nueva factura --}}
       <div x-show="tab === 'form'" x-cloak>
         <livewire:facturas.factura-compra.factura-compra
           :modo="'compra'"
@@ -78,17 +96,24 @@
         />
       </div>
 
-      {{-- TAB: Listado de facturas --}}
+      {{-- LIST: Facturas registradas --}}
       <div x-show="tab === 'list'" x-cloak>
         <livewire:facturas.factura-compra.lista-facturas-compra
           :key="'factura-compra-list'"
         />
       </div>
 
-      {{-- TAB: Notas crédito de proveedores --}}
-      <div x-show="tab === 'notascreditoproveedores'" x-cloak>
+      {{-- FORM: Nueva Nota crédito de compra --}}
+      <div x-show="tab === 'nc-form'" x-cloak>
         <livewire:notas-credito.nota-credito-compra-form
           :key="'nota-credito-compra-form'"
+        />
+      </div>
+
+      {{-- LIST: Notas crédito de compra registradas --}}
+      <div x-show="tab === 'nc-list'" x-cloak>
+        <livewire:notas-credito.lista-notas-credito-compra
+          :key="'lista-notas-credito-compra'"
         />
       </div>
 

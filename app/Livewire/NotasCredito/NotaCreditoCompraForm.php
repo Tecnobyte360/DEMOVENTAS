@@ -57,7 +57,7 @@ class NotaCreditoCompraForm extends Component
         'fecha'                     => 'required|date',
         'vencimiento'               => 'nullable|date|after_or_equal:fecha',
       
-        'plazo_dias'                => 'nullable|integer|min:1|max:365|required_if:tipo_pago,credito',
+       
         'terminos_pago'             => 'nullable|string|max:255',
         'moneda'                    => 'required|string|size:3',
         'cuenta_cobro_id'           => 'required|integer|exists:plan_cuentas,id',
@@ -85,7 +85,7 @@ class NotaCreditoCompraForm extends Component
         'fecha'                        => 'fecha',
         'vencimiento'                  => 'vencimiento',
         'tipo_pago'                    => 'tipo de pago',
-        'plazo_dias'                   => 'plazo en días',
+       
         'terminos_pago'                => 'términos de pago',
         'moneda'                       => 'moneda',
         'cuenta_cobro_id'              => 'cuenta CxP proveedor',

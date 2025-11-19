@@ -230,75 +230,156 @@ class ContabilidadNotaCreditoCompraService
         });
     }
 
+
+private static function resolveCuentaInventario(Producto $p, $detalle): ?int
+{
+    // 0) Si la línea ya trae explícita la cuenta de devolución, la respetamos
+    if (!empty($detalle->cuenta_devolucion_id) && PlanCuentas::whereKey($detalle->cuenta_devolucion_id)->exists()) {
+        return (int) $detalle->cuenta_devolucion_id;
+    }
+
+    // 1) Si el detalle tiene cuenta_inventario_id directamente
+    if (!empty($detalle->cuenta_inventario_id) && PlanCuentas::whereKey($detalle->cuenta_inventario_id)->exists()) {
+        return (int) $detalle->cuenta_inventario_id;
+    }
+
+    // === Detectar si el producto es inventariable o de servicio ===
+    $esInventariable = true;
+
+    if (isset($p->inventariable)) {
+        $esInventariable = (bool) $p->inventariable;
+    } elseif (isset($p->maneja_inventario)) {
+        $esInventariable = (bool) $p->maneja_inventario;
+    } elseif (isset($p->tipo_articulo)) {
+        // Si tienes un campo tipo_articulo = 'SERVICIO'
+        $esInventariable = strtoupper((string) $p->tipo_articulo) !== 'SERVICIO';
+    }
+
     /**
-     * 🔥 Resolver cuenta de inventario con múltiples fallbacks
+     * ============================================================
+     * CASO 1: NO INVENTARIABLE (servicio / gasto)
+     *  -> Usar tipo de cuenta GASTO_DEV (gasto por devolución)
+     * ============================================================
      */
-    private static function resolveCuentaInventario(Producto $p, $detalle): ?int
-    {
-        // 1. Si el detalle tiene cuenta_inventario_id directamente
-        if (!empty($detalle->cuenta_inventario_id) && PlanCuentas::whereKey($detalle->cuenta_inventario_id)->exists()) {
-            return (int) $detalle->cuenta_inventario_id;
-        }
-
-        // 2. Si el producto tiene cuenta_inventario_id directa
-        if (!empty($p->cuenta_inventario_id) && PlanCuentas::whereKey($p->cuenta_inventario_id)->exists()) {
-            return (int) $p->cuenta_inventario_id;
-        }
-
-        // 3. Usar ContabilidadService si existe
-        if (method_exists(ContabilidadService::class, 'cuentaSegunConfiguracion')) {
-            $cta = ContabilidadService::cuentaSegunConfiguracion($p, 'INVENTARIO');
-            if ($cta) return (int) $cta;
-        }
-
-        // 4. Buscar en cuentas del producto por tipo "INVENTARIO"
-        $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
-            ProductoCuentaTipo::where('codigo', 'INVENTARIO')->value('id')
+    if (!$esInventariable) {
+        // Buscar el tipo de cuenta GASTO_DEV
+        $tipoGastoDevId = cache()->remember(
+            'producto_cuenta_tipo_gasto_dev_id',
+            600,
+            fn () => ProductoCuentaTipo::where('codigo', 'GASTO_DEV')->value('id')
         );
 
-        if ($tipoInvId) {
-            // Según artículo
-            if ($p->mov_contable_segun === 'ARTICULO' || $p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-                $cuenta = $p->relationLoaded('cuentas')
-                    ? $p->cuentas->firstWhere('tipo_id', (int)$tipoInvId)
-                    : $p->cuentas()->where('tipo_id', (int)$tipoInvId)->first();
+        if ($tipoGastoDevId) {
+            // a) Según ARTÍCULO
+            $cuenta = $p->relationLoaded('cuentas')
+                ? $p->cuentas->firstWhere('tipo_id', (int) $tipoGastoDevId)
+                : $p->cuentas()->where('tipo_id', (int) $tipoGastoDevId)->first();
 
-                if ($cuenta && !empty($cuenta->plan_cuentas_id)) {
-                    return (int) $cuenta->plan_cuentas_id;
-                }
+            if ($cuenta && !empty($cuenta->plan_cuentas_id) && PlanCuentas::whereKey($cuenta->plan_cuentas_id)->exists()) {
+                return (int) $cuenta->plan_cuentas_id;
             }
 
-            // Según subcategoría
-            if (($p->mov_contable_segun === 'SUBCATEGORIA' || $p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA)
-                && !empty($p->subcategoria_id)) {
-                
-                if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
-                    $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoInvId);
-                    if ($sc && !empty($sc->plan_cuentas_id)) {
-                        return (int) $sc->plan_cuentas_id;
-                    }
-                }
-
+            // b) Según SUBCATEGORÍA
+            if (!empty($p->subcategoria_id)) {
                 $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
-                    ->where('subcategoria_id', (int)$p->subcategoria_id)
-                    ->where('tipo_id', (int)$tipoInvId)
+                    ->where('subcategoria_id', (int) $p->subcategoria_id)
+                    ->where('tipo_id', (int) $tipoGastoDevId)
                     ->first();
 
-                if ($sc && !empty($sc->plan_cuentas_id)) {
+                if ($sc && !empty($sc->plan_cuentas_id) && PlanCuentas::whereKey($sc->plan_cuentas_id)->exists()) {
                     return (int) $sc->plan_cuentas_id;
                 }
             }
         }
 
-        // 5. Fallback: buscar cualquier cuenta de inventario genérica clase 14 (Inventarios)
-        return PlanCuentas::query()
+        // c) Fallback: alguna cuenta de GASTOS (51 / 52) si no hay nada configurado
+        $ctaGasto = PlanCuentas::query()
             ->where('cuenta_activa', 1)
-            ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
-            ->where('codigo', 'like', '14%')
+            ->where(fn ($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+            ->where(function ($q) {
+                $q->where('codigo', 'like', '51%')
+                  ->orWhere('codigo', 'like', '52%');
+            })
             ->orderBy('codigo')
             ->value('id');
+
+        if ($ctaGasto) {
+            return (int) $ctaGasto;
+        }
+
+        // Si llegamos acá, no encontramos nada → dejamos que falle arriba con mensaje claro
     }
 
+    /**
+     * ============================================================
+     * CASO 2: INVENTARIABLE
+     *  -> Mantener la lógica original de cuenta de INVENTARIO
+     * ============================================================
+     */
+
+    // 2. Si el producto tiene cuenta_inventario_id directa
+    if (!empty($p->cuenta_inventario_id) && PlanCuentas::whereKey($p->cuenta_inventario_id)->exists()) {
+        return (int) $p->cuenta_inventario_id;
+    }
+
+    // 3. Usar ContabilidadService si existe
+    if (method_exists(ContabilidadService::class, 'cuentaSegunConfiguracion')) {
+        $cta = ContabilidadService::cuentaSegunConfiguracion($p, 'INVENTARIO');
+        if ($cta) return (int) $cta;
+    }
+
+    // 4. Buscar en cuentas del producto por tipo "INVENTARIO"
+    $tipoInvId = cache()->remember(
+        'producto_cuenta_tipo_inventario_id',
+        600,
+        fn () => ProductoCuentaTipo::where('codigo', 'INVENTARIO')->value('id')
+    );
+
+    if ($tipoInvId) {
+        // Según ARTÍCULO
+        if ($p->mov_contable_segun === 'ARTICULO' || $p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+            $cuenta = $p->relationLoaded('cuentas')
+                ? $p->cuentas->firstWhere('tipo_id', (int) $tipoInvId)
+                : $p->cuentas()->where('tipo_id', (int) $tipoInvId)->first();
+
+            if ($cuenta && !empty($cuenta->plan_cuentas_id)) {
+                return (int) $cuenta->plan_cuentas_id;
+            }
+        }
+
+        // Según SUBCATEGORÍA
+        if (($p->mov_contable_segun === 'SUBCATEGORIA' || $p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA)
+            && !empty($p->subcategoria_id)) {
+
+            if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
+                $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int) $tipoInvId);
+                if ($sc && !empty($sc->plan_cuentas_id)) {
+                    return (int) $sc->plan_cuentas_id;
+                }
+            }
+
+            $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
+                ->where('subcategoria_id', (int) $p->subcategoria_id)
+                ->where('tipo_id', (int) $tipoInvId)
+                ->first();
+
+            if ($sc && !empty($sc->plan_cuentas_id)) {
+                return (int) $sc->plan_cuentas_id;
+            }
+        }
+    }
+
+    // 5. Fallback final: alguna cuenta genérica de inventario (14…)
+    return PlanCuentas::query()
+        ->where('cuenta_activa', 1)
+        ->where(fn ($q) => $q->where('titulo', 0)->orWhereNull('titulo'))
+        ->where('codigo', 'like', '14%')
+        ->orderBy('codigo')
+        ->value('id');
+}
+
+
+    
     /**
      * 🔥 Resolver cuenta de IVA compra con múltiples fallbacks
      */

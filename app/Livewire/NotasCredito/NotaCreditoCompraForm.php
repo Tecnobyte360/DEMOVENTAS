@@ -559,23 +559,22 @@ class NotaCreditoCompraForm extends Component
             PendingToast::create()->error()->message(config('app.debug')?$e->getMessage():'No se pudo guardar.')->duration(9000);
         }
     }
-
-   public function emitir(): void
+public function emitir(): void
 {
     if ($this->abortIfLocked('emitir')) return;
 
     try {
-        $this->normalizarPagoAntesDeValidar();
+        // 👇 Ya no llamamos a normalizarPagoAntesDeValidar()
         $this->sanearLineasAntesDeValidar();
         if (!$this->validarConToast()) return;
 
         DB::transaction(function () {
 
-            // 1) Guardamos borrador antes de validar inventario
+            // 1) Guardar borrador
             $this->persistirBorrador();
             $this->nota->refresh()->loadMissing(['detalles', 'cliente']);
 
-            // 2) Validar líneas con producto y bodega
+            // 2) Validar líneas
             foreach ($this->nota->detalles as $idx => $d) {
                 if (!$d->producto_id || !$d->bodega_id) {
                     throw new \RuntimeException(
@@ -584,30 +583,25 @@ class NotaCreditoCompraForm extends Component
                 }
             }
 
-            // 3) VALIDAR INVENTARIO (nuevo)
+            // 3) Validar stock
             if ($this->descontar_inventario) {
                 \App\Services\InventarioService::verificarDisponibilidadParaNotaCreditoCompra(
                     $this->nota
                 );
             }
 
-            // 4) Validar/obtener serie
-            $serie = null;
-            if ($this->serie_id) {
-                $serie = Serie::find((int)$this->serie_id);
-            }
-            if (!$serie) {
-                $serie = $this->serieDefault;
-            }
+            // 4) Serie
+            $serie = $this->serie_id
+                ? Serie::find((int)$this->serie_id)
+                : $this->serieDefault;
+
             if (!$serie) {
                 throw new \RuntimeException('No hay serie activa para Nota Crédito de Compra.');
             }
-
             if ((int)($serie->activa ?? 0) !== 1) {
                 throw new \RuntimeException('La serie seleccionada no está activa.');
             }
 
-            // Validación de rango de serie
             $len     = (int)($serie->longitud ?? 6);
             $proximo = (int)($serie->proximo ?? 0);
             $hasta   = (int)($serie->hasta ?? 0);
@@ -615,7 +609,7 @@ class NotaCreditoCompraForm extends Component
                 throw new \RuntimeException('La serie seleccionada está agotada.');
             }
 
-            // 5) Tomar consecutivo
+            // 5) Consecutivo
             $numero = $serie->tomarConsecutivo();
 
             // 6) Actualizar NC
@@ -626,36 +620,28 @@ class NotaCreditoCompraForm extends Component
                 'estado'   => 'emitida',
             ]);
 
-            // 7) Salida de inventario (si procede)
-            if (
-                $this->descontar_inventario &&
-                method_exists(InventarioService::class, 'salidaPorNotaCreditoCompra')
-            ) {
+            // 7) 🔥 SALIDA de inventario por NC COMPRA
+            if ($this->descontar_inventario) {
                 InventarioService::salidaPorNotaCreditoCompra($this->nota);
             }
 
             // 8) Contabilidad
             ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
 
-            // 9) Actualizar estado local
+            // 9) Estado local
             $this->estado = $this->nota->estado;
 
         }, 3);
 
-        // Mensaje OK
         PendingToast::create()
             ->success()
             ->message('Nota Crédito de compra emitida correctamente.')
             ->duration(6000);
 
-        // Refrescar lista
         $this->dispatch('refrescar-lista-nc-compra');
 
     } catch (\Throwable $e) {
-
-        Log::error('NC COMPRA EMITIR ERROR', [
-            'msg' => $e->getMessage()
-        ]);
+        Log::error('NC COMPRA EMITIR ERROR', ['msg' => $e->getMessage()]);
 
         PendingToast::create()
             ->error()
@@ -663,6 +649,7 @@ class NotaCreditoCompraForm extends Component
             ->duration(9000);
     }
 }
+
 
     public function anular(): void
     {

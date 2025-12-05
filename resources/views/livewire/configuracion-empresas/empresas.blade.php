@@ -353,45 +353,23 @@
         </div>
 
         {{-- Logo claro --}}
-       <div class="group">
-  <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
-    Logo (claro)
-  </label>
+        <div class="group">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
+          <input type="file" accept="image/*"
+                 @change="toBase64($event, 'logoPreview', 'logo_b64')"
+                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
+          @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
 
-  <input
-      type="file"
-      accept="image/*"
-      @change="toBase64($event, 'logoPreview', 'logo_b64')"
-      class="mt-1 block w-full text-sm
-             file:mr-4 file:py-2 file:px-4
-             file:rounded-xl file:border-0
-             file:text-sm file:font-semibold
-             file:bg-indigo-50 file:text-indigo-700
-             hover:file:bg-indigo-100
-             dark:file:bg-indigo-950 dark:file:text-indigo-200"
-  >
+          <div class="mt-3 flex items-center gap-3">
+            <template x-if="logoPreview">
+              <img :src="logoPreview" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo">
+            </template>
 
-  @error('logo_b64')
-    <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
-  @enderror
-
-  <div class="mt-3 flex items-center gap-3">
-    {{-- Preview nuevo (archivo recién cargado) --}}
-    <template x-if="logoPreview">
-      <img :src="logoPreview"
-           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700"
-           alt="preview logo">
-    </template>
-
-    {{-- Logo ya guardado en BD --}}
-    @if (!empty($logo_actual))
-      <img src="{{ $logo_actual }}"
-           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700"
-           alt="logo actual">
-    @endif
-  </div>
-</div>
-
+            @if (!empty($logo_actual))
+              <img src="{{ $logo_actual }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo actual">
+            @endif
+          </div>
+        </div>
 
         {{-- Logo oscuro --}}
         <div class="group">
@@ -558,20 +536,22 @@
         if (!file) return;
 
         const reader = new FileReader();
-
-        reader.onload = (e) => {
+        reader.onload = e => {
           const dataUrl = e.target.result; // data:image/*;base64,...
-
-          // Preview en pantalla
           this[previewKey] = dataUrl;
 
-          // 🔥 Gracias a @entangle, esto actualiza directamente
-          // la propiedad Livewire (logo_b64, logo_dark_b64, favicon_b64)
-          this[livewireProp] = dataUrl;
+          // ✅ Livewire 3: usar $set
+          if (typeof $wire !== 'undefined') {
+            if (typeof $wire.$set === 'function') {
+              $wire.$set(livewireProp, dataUrl);
+            } else if (typeof $wire.set === 'function') {
+              // por si en algún lado sigue usando la API vieja
+              $wire.set(livewireProp, dataUrl);
+            }
+          }
         };
-
         reader.readAsDataURL(file);
-      },
+      }
     }
   }
 </script>

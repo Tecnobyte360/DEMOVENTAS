@@ -1,9 +1,21 @@
 {{-- resources/views/livewire/configuracion-empresas/empresas.blade.php --}}
-<div class="relative p-8 md:p-10 rounded-3xl shadow-2xl
-            bg-gradient-to-br from-violet-50 via-white to-indigo-50
-            dark:from-gray-900 dark:via-gray-900 dark:to-gray-800
-            border border-violet-100/50 dark:border-gray-700"
-     x-data="{ ...logoUploader(), theme: @entangle('theme'), usarGrad: @entangle('usar_gradiente'), gradAngle: @entangle('grad_angle') }">
+<div
+  class="relative p-8 md:p-10 rounded-3xl shadow-2xl
+         bg-gradient-to-br from-violet-50 via-white to-indigo-50
+         dark:from-gray-900 dark:via-gray-900 dark:to-gray-800
+         border border-violet-100/50 dark:border-gray-700"
+  x-data="{
+      ...logoUploader(),
+      theme: @entangle('theme'),
+      usarGrad: @entangle('usar_gradiente'),
+      gradAngle: @entangle('grad_angle'),
+      // 🔽 entangle de las imágenes
+      logo_b64: @entangle('logo_b64'),
+      logo_dark_b64: @entangle('logo_dark_b64'),
+      favicon_b64: @entangle('favicon_b64'),
+  }"
+>
+
 
   {{-- Fondos decorativos --}}
   <div aria-hidden="true" class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-indigo-400/20 blur-3xl"></div>
@@ -341,23 +353,45 @@
         </div>
 
         {{-- Logo claro --}}
-        <div class="group">
-          <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Logo (claro)</label>
-          <input type="file" accept="image/*"
-                 @change="toBase64($event, 'logoPreview', 'logo_b64')"
-                 class="mt-1 block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-950 dark:file:text-indigo-200">
-          @error('logo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+       <div class="group">
+  <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
+    Logo (claro)
+  </label>
 
-          <div class="mt-3 flex items-center gap-3">
-            <template x-if="logoPreview">
-              <img :src="logoPreview" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="preview logo">
-            </template>
+  <input
+      type="file"
+      accept="image/*"
+      @change="toBase64($event, 'logoPreview', 'logo_b64')"
+      class="mt-1 block w-full text-sm
+             file:mr-4 file:py-2 file:px-4
+             file:rounded-xl file:border-0
+             file:text-sm file:font-semibold
+             file:bg-indigo-50 file:text-indigo-700
+             hover:file:bg-indigo-100
+             dark:file:bg-indigo-950 dark:file:text-indigo-200"
+  >
 
-            @if (!empty($logo_actual))
-              <img src="{{ $logo_actual }}" class="h-12 rounded-xl border border-gray-200 dark:border-gray-700" alt="logo actual">
-            @endif
-          </div>
-        </div>
+  @error('logo_b64')
+    <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+  @enderror
+
+  <div class="mt-3 flex items-center gap-3">
+    {{-- Preview nuevo (archivo recién cargado) --}}
+    <template x-if="logoPreview">
+      <img :src="logoPreview"
+           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700"
+           alt="preview logo">
+    </template>
+
+    {{-- Logo ya guardado en BD --}}
+    @if (!empty($logo_actual))
+      <img src="{{ $logo_actual }}"
+           class="h-12 rounded-xl border border-gray-200 dark:border-gray-700"
+           alt="logo actual">
+    @endif
+  </div>
+</div>
+
 
         {{-- Logo oscuro --}}
         <div class="group">
@@ -524,22 +558,20 @@
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = e => {
+
+        reader.onload = (e) => {
           const dataUrl = e.target.result; // data:image/*;base64,...
+
+          // Preview en pantalla
           this[previewKey] = dataUrl;
 
-          // ✅ Livewire 3: usar $set
-          if (typeof $wire !== 'undefined') {
-            if (typeof $wire.$set === 'function') {
-              $wire.$set(livewireProp, dataUrl);
-            } else if (typeof $wire.set === 'function') {
-              // por si en algún lado sigue usando la API vieja
-              $wire.set(livewireProp, dataUrl);
-            }
-          }
+          // 🔥 Gracias a @entangle, esto actualiza directamente
+          // la propiedad Livewire (logo_b64, logo_dark_b64, favicon_b64)
+          this[livewireProp] = dataUrl;
         };
+
         reader.readAsDataURL(file);
-      }
+      },
     }
   }
 </script>

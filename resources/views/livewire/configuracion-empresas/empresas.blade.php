@@ -542,10 +542,8 @@
         reader.onload = (e) => {
           const dataUrl = e.target.result; // data:image/*;base64,...
 
-          // Preview en el front
+          // Dispara el entangle hacia Livewire
           this[previewKey] = dataUrl;
-
-          // 🔗 Esto dispara el @entangle hacia Livewire
           this[livewireProp] = dataUrl;
         };
         reader.readAsDataURL(file);

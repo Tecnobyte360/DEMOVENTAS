@@ -16,7 +16,6 @@
   }"
 >
 
-
   {{-- Fondos decorativos --}}
   <div aria-hidden="true" class="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full bg-indigo-400/20 blur-3xl"></div>
   <div aria-hidden="true" class="pointer-events-none absolute -bottom-20 -left-20 w-96 h-96 rounded-full bg-violet-400/20 blur-3xl"></div>
@@ -49,7 +48,7 @@
     </div>
   @endif
 
-  {{-- Alertas de éxito flash (opcional) --}}
+  {{-- Alertas de éxito flash --}}
   @if (session('ok'))
     <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
                 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
@@ -144,7 +143,7 @@
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Color primario</label>
             <div class="mt-2 flex items-center gap-2">
               <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
-                     x-model="theme.primary" @input="$wire.set('theme.primary', theme.primary)">
+                     x-model="theme.primary">
               <input type="text" wire:model.defer="color_primario"
                      x-model.lazy="theme.primary"
                      class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
@@ -157,7 +156,7 @@
             <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Color secundario</label>
             <div class="mt-2 flex items-center gap-2">
               <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
-                     x-model="theme.theadBg" @input="$wire.set('theme.theadBg', theme.theadBg)">
+                     x-model="theme.theadBg">
               <input type="text" wire:model.defer="color_secundario"
                      class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                      placeholder="#eef2f8">
@@ -200,7 +199,7 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</label>
                 <div class="mt-2 flex items-center gap-2">
                   <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
-                         x-model="theme.{{ $key }}" @input="$wire.set('theme.{{ $key }}', theme.{{ $key }})">
+                         x-model="theme.{{ $key }}">
                   <input type="text" class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                          x-model.lazy="theme.{{ $key }}" placeholder="#000000">
                 </div>
@@ -223,7 +222,7 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</label>
                 <div class="mt-2 flex items-center gap-2">
                   <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
-                         x-model="theme.{{ $key }}" @input="$wire.set('theme.{{ $key }}', theme.{{ $key }})">
+                         x-model="theme.{{ $key }}">
                   <input type="text" class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                          x-model.lazy="theme.{{ $key }}" placeholder="#000000">
                 </div>
@@ -244,7 +243,7 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">{{ $label }}</label>
                 <div class="mt-2 flex items-center gap-2">
                   <input type="color" class="h-10 w-10 rounded-lg cursor-pointer border border-gray-300 dark:border-gray-700"
-                         x-model="theme.{{ $key }}" @input="$wire.set('theme.{{ $key }}', theme.{{ $key }})">
+                         x-model="theme.{{ $key }}">
                   <input type="text" class="flex-1 rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                          x-model.lazy="theme.{{ $key }}" placeholder="#000000">
                 </div>
@@ -267,8 +266,7 @@
               <div class="flex items-center gap-3" x-show="usarGrad">
                 <input type="range" min="0" max="360" step="1"
                        class="w-full"
-                       x-model.number="gradAngle"
-                       @input="$wire.set('grad_angle', gradAngle)">
+                       x-model.number="gradAngle">
                 <span class="text-xs text-gray-600 dark:text-gray-300 w-12 text-right" x-text="gradAngle + '°'"></span>
               </div>
             </div>
@@ -495,6 +493,11 @@
                     <i class="fa-solid fa-pen"></i>
                     Editar
                   </button>
+                  <button type="button" wire:click="delete({{ $row->id }})"
+                          class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 shadow-sm hover:bg-red-100 transition dark:bg-red-900/20 dark:text-red-300 dark:border-red-800/60">
+                    <i class="fa-solid fa-trash"></i>
+                    Eliminar
+                  </button>
                 </div>
               </td>
             </tr>
@@ -536,23 +539,17 @@
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = e => {
+        reader.onload = (e) => {
           const dataUrl = e.target.result; // data:image/*;base64,...
+
+          // Preview en el front
           this[previewKey] = dataUrl;
 
-          // ✅ Livewire 3: usar $set
-          if (typeof $wire !== 'undefined') {
-            if (typeof $wire.$set === 'function') {
-              $wire.$set(livewireProp, dataUrl);
-            } else if (typeof $wire.set === 'function') {
-              // por si en algún lado sigue usando la API vieja
-              $wire.set(livewireProp, dataUrl);
-            }
-          }
+          // 🔗 Esto dispara el @entangle hacia Livewire
+          this[livewireProp] = dataUrl;
         };
         reader.readAsDataURL(file);
       }
     }
   }
 </script>
-

@@ -9,9 +9,20 @@ class Empresa extends Model
     protected $table = 'empresas';
 
     protected $fillable = [
-        'nombre','nit','email','telefono','sitio_web','direccion',
-        'logo_path','logo_dark_path','favicon_path',
-        'color_primario','color_secundario','is_activa','extra','pdf_theme',
+        'nombre',
+        'nit',
+        'email',
+        'telefono',
+        'sitio_web',
+        'direccion',
+        'logo_path',
+        'logo_dark_path',
+        'favicon_path',
+        'color_primario',
+        'color_secundario',
+        'is_activa',
+        'extra',
+        'pdf_theme',
     ];
 
     protected $casts = [
@@ -49,8 +60,14 @@ class Empresa extends Model
 
     private function toPublicUrl(?string $path): ?string
     {
-        if (!$path) return null;
-        if (str_starts_with($path, 'data:image/')) return $path;
+        if (!$path) {
+            return null;
+        }
+
+        if (str_starts_with($path, 'data:image/')) {
+            return $path;
+        }
+
         return asset('storage/' . $path);
     }
 }

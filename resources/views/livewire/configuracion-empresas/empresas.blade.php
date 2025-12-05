@@ -528,9 +528,14 @@
           const dataUrl = e.target.result; // data:image/*;base64,...
           this[previewKey] = dataUrl;
 
-          // Livewire v3
+          // ✅ Livewire 3: usar $set
           if (typeof $wire !== 'undefined') {
-            $wire.set(livewireProp, dataUrl);
+            if (typeof $wire.$set === 'function') {
+              $wire.$set(livewireProp, dataUrl);
+            } else if (typeof $wire.set === 'function') {
+              // por si en algún lado sigue usando la API vieja
+              $wire.set(livewireProp, dataUrl);
+            }
           }
         };
         reader.readAsDataURL(file);
@@ -538,3 +543,4 @@
     }
   }
 </script>
+

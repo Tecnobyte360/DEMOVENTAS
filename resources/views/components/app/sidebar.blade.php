@@ -157,53 +157,7 @@
                         </svg>
                     </button>
 
-                    <div x-show="open" 
-                         x-collapse
-                         class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                        <a href="{{ route('SociosNegocio') }}" 
-                           class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
-                                  transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if(Route::is('SociosNegocio')) bg-white/20 pl-5 @endif"
-                           :style="`color: ${fgMuted}`">
-                            <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
-                            <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Cotizaciones</span>
-                        </a>
-                        <a href="{{ route('SociosNegocio') }}" 
-                           class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
-                                  transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                           :style="`color: ${fgMuted}`">
-                            <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
-                            <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Ordenes de venta</span>
-                        </a>
-                        <a href="{{ route('Facturacion') }}" 
-                           class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
-                                  transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if(Route::is('Facturacion')) bg-white/20 pl-5 @endif"
-                           :style="`color: ${fgMuted}`">
-                            <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
-                            <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Factura de venta</span>
-                        </a>
-                        <a href="{{ route('notascreditoclientes') }}" 
-                           class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
-                                  transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if(Route::is('notascreditoclientes')) bg-white/20 pl-5 @endif"
-                           :style="`color: ${fgMuted}`">
-                            <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
-                            <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Notas crédito de ventas</span>
-                        </a>
-                        <a href="#" 
-                           class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
-                                  transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                           :style="`color: ${fgMuted}`">
-                            <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
-                            <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Listas de precios</span>
-                        </a>
-                    </div>
+                
                 </div>
 
                 <!-- Compras -->

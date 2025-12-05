@@ -8,24 +8,45 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('productos', function (Blueprint $table) {
-            // FK a unidades_medida (nullable para no romper datos existentes)
-            $table->foreignId('unidad_medida_id')
-                  ->nullable()
-                  ->constrained('unidades_medida')
-                  ->nullOnDelete(); 
+        // 👉 Agregar unidad_medida_id solo si no existe
+        if (!Schema::hasColumn('productos', 'unidad_medida_id')) {
+            Schema::table('productos', function (Blueprint $table) {
+                $table->foreignId('unidad_medida_id')
+                    ->nullable()
+                    ->constrained('unidades_medida')
+                    ->nullOnDelete();
+            });
+        }
 
-           
-        $table->longText('imagen_path')->nullable()->change();
-        });
+        // 👉 Manejar imagen_path según exista o no
+        if (Schema::hasColumn('productos', 'imagen_path')) {
+            // Si ya existe, la convertimos a longText nullable
+            Schema::table('productos', function (Blueprint $table) {
+                $table->longText('imagen_path')->nullable()->change();
+            });
+        } else {
+            // Si no existe, la creamos
+            Schema::table('productos', function (Blueprint $table) {
+                $table->longText('imagen_path')
+                    ->nullable()
+                    ->after('unidad_medida_id'); // ajusta posición si quieres
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('productos', function (Blueprint $table) {
-            // Elimina FK y columna
-            $table->dropConstrainedForeignId('unidad_medida_id');
-            $table->dropColumn('imagen_path');
-        });
+        // 👉 Eliminar FK y columna solo si existen
+        if (Schema::hasColumn('productos', 'unidad_medida_id')) {
+            Schema::table('productos', function (Blueprint $table) {
+                $table->dropConstrainedForeignId('unidad_medida_id');
+            });
+        }
+
+        if (Schema::hasColumn('productos', 'imagen_path')) {
+            Schema::table('productos', function (Blueprint $table) {
+                $table->dropColumn('imagen_path');
+            });
+        }
     }
 };

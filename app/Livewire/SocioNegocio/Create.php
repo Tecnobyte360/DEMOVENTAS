@@ -38,17 +38,6 @@ class Create extends Component
     public array $municipios = [];
 
     // ===== Repeater de direcciones =====
-    /**
-     * cada item:
-     * [
-     *   'id'           => null,
-     *   'nombre'       => null,
-     *   'direccion'    => null,
-     *   'referencia'   => null,
-     *   'municipio_id' => int|null,
-     *   'es_principal' => bool,
-     * ]
-     */
     public array $direcciones = [];
 
     public function mount(): void
@@ -57,10 +46,10 @@ class Create extends Component
 
         // arranque con una fila de dirección vacía
         $this->direcciones = [[
-            'id' => null,
-            'nombre' => null,
-            'direccion' => null,
-            'referencia' => null,
+            'id'           => null,
+            'nombre'       => null,
+            'direccion'    => null,
+            'referencia'   => null,
             'municipio_id' => null,
             'es_principal' => true, // la primera por defecto
         ]];
@@ -89,10 +78,10 @@ class Create extends Component
     public function addDireccion(): void
     {
         $this->direcciones[] = [
-            'id' => null,
-            'nombre' => null,
-            'direccion' => null,
-            'referencia' => null,
+            'id'           => null,
+            'nombre'       => null,
+            'direccion'    => null,
+            'referencia'   => null,
             'municipio_id' => $this->municipio_id, // sugiere el principal
             'es_principal' => false,
         ];
@@ -107,7 +96,9 @@ class Create extends Component
         $this->direcciones = array_values($this->direcciones);
 
         if ($removedWasPrincipal && count($this->direcciones) > 0) {
-            foreach ($this->direcciones as $i => $d) { $this->direcciones[$i]['es_principal'] = false; }
+            foreach ($this->direcciones as $i => $d) {
+                $this->direcciones[$i]['es_principal'] = false;
+            }
             $this->direcciones[0]['es_principal'] = true;
         }
     }
@@ -155,12 +146,12 @@ class Create extends Component
     }
 
     protected array $messages = [
-        'nit.unique'          => 'Ya existe un socio con ese NIT.',
-        'nit.regex'           => 'El NIT/Cédula debe tener entre 6 y 20 dígitos.',
-        'Tipo.required'       => 'Debes seleccionar el tipo (Cliente/Proveedor).',
-        'tipo_persona.required'=> 'Debes seleccionar el tipo de persona.',
-        'regimen_iva.required'=> 'Debes seleccionar el régimen de IVA.',
-        'condicion_pago_id.exists' => 'La condición de pago seleccionada no existe.',
+        'nit.unique'              => 'Ya existe un socio con ese NIT.',
+        'nit.regex'               => 'El NIT/Cédula debe tener entre 6 y 20 dígitos.',
+        'Tipo.required'           => 'Debes seleccionar el tipo (Cliente/Proveedor).',
+        'tipo_persona.required'   => 'Debes seleccionar el tipo de persona.',
+        'regimen_iva.required'    => 'Debes seleccionar el régimen de IVA.',
+        'condicion_pago_id.exists'=> 'La condición de pago seleccionada no existe.',
     ];
 
     // ====== Guardar ======
@@ -172,23 +163,23 @@ class Create extends Component
 
             // Base del socio
             $data = [
-                'razon_social'               => $this->razon_social,
-                'nit'                        => $this->nit,
-                'Tipo'                       => strtoupper($this->Tipo ?? 'C'),
-                'telefono_fijo'              => $this->telefono_fijo,
-                'telefono_movil'             => $this->telefono_movil,
-                'correo'                     => $this->correo,
-                'direccion'                  => $this->direccion,
-                'municipio_barrio'           => $this->municipio_barrio,
-                'saldo_pendiente'            => $this->saldo_pendiente ?: 0,
+                'razon_social'                => $this->razon_social,
+                'nit'                         => $this->nit,
+                'Tipo'                        => strtoupper($this->Tipo ?? 'C'),
+                'telefono_fijo'               => $this->telefono_fijo,
+                'telefono_movil'              => $this->telefono_movil,
+                'correo'                      => $this->correo,
+                'direccion'                   => $this->direccion,
+                'municipio_barrio'            => $this->municipio_barrio,
+                'saldo_pendiente'             => $this->saldo_pendiente ?: 0,
 
                 // nuevos
-                'tipo_persona'               => $this->tipo_persona,
-                'regimen_iva'                => $this->regimen_iva,
-                'regimen_simple'             => (bool) $this->regimen_simple,
-                'municipio_id'               => $this->municipio_id,
-                'actividad_economica'        => $this->actividad_economica,
-                'direccion_medios_magneticos'=> $this->direccion_medios_magneticos,
+                'tipo_persona'                => $this->tipo_persona,
+                'regimen_iva'                 => $this->regimen_iva,
+                'regimen_simple'              => (bool) $this->regimen_simple,
+                'municipio_id'                => $this->municipio_id,
+                'actividad_economica'         => $this->actividad_economica,
+                'direccion_medios_magneticos' => $this->direccion_medios_magneticos,
             ];
 
             // FK condición de pago (si la columna existe)
@@ -196,29 +187,37 @@ class Create extends Component
                 $data['condicion_pago_id'] = $this->condicion_pago_id;
             }
 
-            // Sincroniza LEGADO con la FK (o pone contado por defecto)
-            $legacy = [
-                'condicion_pago'       => 'contado',
-                'plazo_dias'           => null,
-                'interes_mora_pct'     => null,
-                'limite_credito'       => null,
-                'tolerancia_mora_dias' => null,
-                'dia_corte'            => null,
-            ];
+            // ============================
+            //  LEGACY solo si existen columnas
+            // ============================
+            $legacy = [];
+            $tieneLegacy = Schema::hasColumn('socio_negocios', 'condicion_pago');
 
-            if ($this->condicion_pago_id) {
-                $cp = CondicionPago::find($this->condicion_pago_id);
-                if ($cp) {
-                    $legacy['condicion_pago']       = $cp->tipo; // 'contado' | 'credito'
-                    $legacy['plazo_dias']           = $cp->tipo === 'credito' ? $cp->plazo_dias : null;
-                    $legacy['interes_mora_pct']     = $cp->tipo === 'credito' ? $cp->interes_mora_pct : null;
-                    $legacy['limite_credito']       = $cp->tipo === 'credito' ? $cp->limite_credito : null;
-                    $legacy['tolerancia_mora_dias'] = $cp->tipo === 'credito' ? $cp->tolerancia_mora_dias : null;
-                    $legacy['dia_corte']            = $cp->tipo === 'credito' ? $cp->dia_corte : null;
+            if ($tieneLegacy) {
+                // valores por defecto
+                $legacy = [
+                    'condicion_pago'       => 'contado',
+                    'plazo_dias'           => null,
+                    'interes_mora_pct'     => null,
+                    'limite_credito'       => null,
+                    'tolerancia_mora_dias' => null,
+                    'dia_corte'            => null,
+                ];
+
+                if ($this->condicion_pago_id) {
+                    $cp = CondicionPago::find($this->condicion_pago_id);
+                    if ($cp) {
+                        $legacy['condicion_pago']       = $cp->tipo; // 'contado' | 'credito'
+                        $legacy['plazo_dias']           = $cp->tipo === 'credito' ? $cp->plazo_dias : null;
+                        $legacy['interes_mora_pct']     = $cp->tipo === 'credito' ? $cp->interes_mora_pct : null;
+                        $legacy['limite_credito']       = $cp->tipo === 'credito' ? $cp->limite_credito : null;
+                        $legacy['tolerancia_mora_dias'] = $cp->tipo === 'credito' ? $cp->tolerancia_mora_dias : null;
+                        $legacy['dia_corte']            = $cp->tipo === 'credito' ? $cp->dia_corte : null;
+                    }
                 }
             }
 
-            // Mezcla base + legado
+            // Mezcla base + legado (si aplica)
             $data = array_merge($data, $legacy);
 
             // Crear socio
@@ -226,7 +225,7 @@ class Create extends Component
 
             // Snapshot JSON (si existe columna condiciones_pago)
             if (Schema::hasColumn('socio_negocios', 'condiciones_pago') && $this->condicion_pago_id) {
-                $cp = $cp ?? CondicionPago::find($this->condicion_pago_id);
+                $cp = isset($cp) ? $cp : CondicionPago::find($this->condicion_pago_id);
                 if ($cp) {
                     $socio->condiciones_pago = [
                         'id'                   => $cp->id,
@@ -244,7 +243,7 @@ class Create extends Component
             }
 
             // Crear direcciones (solo las que tengan texto en 'direccion')
-            $primerCreadoId = null;
+            $primerCreadoId   = null;
             $marcadaPrincipal = false;
 
             foreach ($this->direcciones as $d) {
@@ -253,21 +252,21 @@ class Create extends Component
 
                 $fila = SocioDireccion::create([
                     'socio_negocio_id' => $socio->id,
-                    'tipo'        => 'entrega',
-                    'nombre'      => $d['nombre'] ?? null,
-                    'direccion'   => $direccionTxt,
-                    'referencia'  => $d['referencia'] ?? null,
-                    'municipio_id'=> $d['municipio_id'] ?? null,
-                    'es_principal'=> (bool)($d['es_principal'] ?? false),
+                    'tipo'             => 'entrega',
+                    'nombre'           => $d['nombre'] ?? null,
+                    'direccion'        => $direccionTxt,
+                    'referencia'       => $d['referencia'] ?? null,
+                    'municipio_id'     => $d['municipio_id'] ?? null,
+                    'es_principal'     => (bool)($d['es_principal'] ?? false),
                 ]);
 
-                $primerCreadoId ??= $fila->id;
+                $primerCreadoId   ??= $fila->id;
                 $marcadaPrincipal = $marcadaPrincipal || (bool)$fila->es_principal;
             }
 
             // Si ninguna quedó como principal, marca la primera creada
             if (!$marcadaPrincipal && $primerCreadoId) {
-                SocioDireccion::where('id',$primerCreadoId)->update(['es_principal'=>true]);
+                SocioDireccion::where('id', $primerCreadoId)->update(['es_principal' => true]);
             }
         });
 
@@ -281,7 +280,12 @@ class Create extends Component
         ]);
         $this->Tipo = 'C';
         $this->direcciones = [[
-            'id'=>null,'nombre'=>null,'direccion'=>null,'referencia'=>null,'municipio_id'=>null,'es_principal'=>true
+            'id'           => null,
+            'nombre'       => null,
+            'direccion'    => null,
+            'referencia'   => null,
+            'municipio_id' => null,
+            'es_principal' => true,
         ]];
 
         // Notificar al padre (para refrescar lista y cerrar modal)
@@ -292,14 +296,19 @@ class Create extends Component
     {
         // Trae condiciones de pago activas para el select
         $condicionesPago = CondicionPago::query()
-            ->when(Schema::hasColumn('condicion_pagos','activo'), fn($q)=>$q->where('activo', true))
+            ->when(
+                Schema::hasColumn('condicion_pagos','activo'),
+                fn($q)=>$q->where('activo', true)
+            )
             ->orderBy('tipo')
             ->orderByRaw('COALESCE(plazo_dias,0)')
             ->orderBy('nombre')
             ->get([
                 'id','nombre','tipo','plazo_dias','interes_mora_pct',
                 'limite_credito','tolerancia_mora_dias','dia_corte',
-                Schema::hasColumn('condicion_pagos','activo') ? 'activo' : DB::raw('1 as activo')
+                Schema::hasColumn('condicion_pagos','activo')
+                    ? 'activo'
+                    : DB::raw('1 as activo'),
             ]);
 
         return view('livewire.socio-negocio.create', [

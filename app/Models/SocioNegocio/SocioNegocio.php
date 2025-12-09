@@ -35,7 +35,7 @@ class SocioNegocio extends Model
     ];
 
     /* ====== Atributo Tipo (C/P) ====== */
-    public function getTipoAttribute(): ?string
+    public function getTipoAttribute(): ?string 
     {
         return isset($this->attributes['Tipo'])
             ? strtoupper(trim($this->attributes['Tipo']))
@@ -84,34 +84,42 @@ class SocioNegocio extends Model
      * - Prefiere FK `condicion_pago_id` (lee `dias`).
      * - Si no hay FK, cae a los campos legado (`condicion_pago`, `plazo_dias`).
      */
-    public function getCondicionesPagoEfectivasAttribute(): array
-    {
-        if ($this->relationLoaded('condicionPago') || $this->condicion_pago_id) {
-            $cp = $this->condicionPago; // withDefault()
-            return [
-                'id'         => $cp->id,
-                'nombre'     => $cp->nombre,
-                'dias'       => (int) ($cp->dias ?? 0),
-                'tipo'       => ((int)($cp->dias ?? 0) > 0) ? 'credito' : 'contado',
-                'source'     => 'fk',
-            ];
-        }
+   public function getCondicionesPagoEfectivasAttribute(): array
+{
+    if ($this->relationLoaded('condicionPago') || $this->condicion_pago_id) {
+        $cp   = $this->condicionPago; // withDefault()
+        $dias = (int) ($cp->plazo_dias ?? 0);
 
-        // Legado
-        $dias = (int) ($this->plazo_dias ?? 0);
         return [
-            'id'     => null,
-            'nombre' => $this->condicion_pago,        // puede ser 'contado'/'crédito' o texto libre
-            'dias'   => $dias,
-            'tipo'   => $dias > 0 ? 'credito' : 'contado',
-            'source' => 'legacy',
+            'id'                 => $cp->id,
+            'nombre'             => $cp->nombre,
+            'dias'               => $dias,
+            'tipo'               => $dias > 0 ? 'credito' : 'contado',
+            'limite_credito'     => (float) ($cp->limite_credito ?? 0),
+            'interes_mora_pct'   => (float) ($cp->interes_mora_pct ?? 0),
+            'tolerancia_mora_dias' => (int) ($cp->tolerancia_mora_dias ?? 0),
+            'dia_corte'          => (int) ($cp->dia_corte ?? 0),
+            'source'             => 'fk',
         ];
     }
 
-    public function admiteCredito(): bool
-    {
-        return (int) data_get($this, 'condiciones_pago_efectivas.dias', 0) > 0;
-    }
+    // Legado
+    $dias = (int) ($this->plazo_dias ?? 0);
+    return [
+        'id'     => null,
+        'nombre' => $this->condicion_pago,
+        'dias'   => $dias,
+        'tipo'   => $dias > 0 ? 'credito' : 'contado',
+        'source' => 'legacy',
+    ];
+}
+
+
+   public function admiteCredito(): bool
+{
+    return (int) data_get($this, 'condiciones_pago_efectivas.dias', 0) > 0;
+}
+
 
     public function plazoEfectivo(): int
     {

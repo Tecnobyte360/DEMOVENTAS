@@ -31,7 +31,7 @@
 @endonce
 
 @php
-  $fmt = fn($v) => number_format(max(0,(float)$v), 0, ',', '.');
+  $fmt = fn($v) => number_format((float)$v, 0, ',', '.');
 @endphp
 
 <div class="p-6 md:p-8 space-y-8 bg-white dark:bg-gray-900 rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700"

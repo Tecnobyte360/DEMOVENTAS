@@ -1,124 +1,212 @@
-<form wire:submit.prevent="guardarGasto" class="space-y-16">
-    <section class="bg-gradient-to-br from-white to-gray-100 dark:from-gray-900 dark:to-gray-800 p-10 rounded-3xl shadow-2xl space-y-10">
+<form wire:submit.prevent="guardarGasto" class="space-y-10">
 
-        <!-- ENCABEZADO -->
-        <div class="flex justify-between items-center border-b pb-6">
-            <h2 class="text-3xl font-bold text-gray-800 dark:text-white flex items-center gap-3">
-                <i class="fas fa-hand-holding-usd text-violet-600 text-2xl"></i> Registrar Gasto
-            </h2>
+    {{-- HEADER --}}
+    <section
+        class="bg-gradient-to-br from-white to-gray-100 dark:from-gray-900 dark:to-gray-800 p-8 rounded-3xl shadow-2xl space-y-8">
+
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-4">
+            <div class="flex items-center gap-3">
+                <div
+                    class="h-10 w-10 rounded-2xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-violet-700 dark:text-violet-300">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Gastos de la Empresa</h1>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                        Registra gastos por ruta o administrativos y visualiza el historial filtrado.
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <span class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Filtro de vista</span>
+                <select wire:model="filtroTipo"
+                        class="px-3 py-1.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-100 focus:ring-2 focus:ring-violet-500">
+                    <option value="todos">Todos los gastos</option>
+                    <option value="ruta">Solo con ruta</option>
+                    <option value="admin">Solo administrativos</option>
+                </select>
+            </div>
         </div>
 
-        <!-- MENSAJES -->
+        {{-- CARDS RESUMEN --}}
+        @php
+            $total   = $gastosFiltrados->sum('monto');
+            $conRuta = $gastosFiltrados->whereNotNull('ruta_id')->sum('monto');
+            $admin   = $gastosFiltrados->whereNull('ruta_id')->sum('monto');
+        @endphp
+
+        <div class="grid md:grid-cols-3 gap-4">
+            <div
+                class="bg-white/80 dark:bg-gray-900/80 rounded-2xl p-5 shadow border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase">Total gastos</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                        ${{ number_format($total, 0, ',', '.') }}
+                    </p>
+                </div>
+                <div
+                    class="h-10 w-10 rounded-2xl bg-violet-100 dark:bg-violet-900/40 flex items-center justify-center text-violet-700 dark:text-violet-300">
+                    <i class="fas fa-coins"></i>
+                </div>
+            </div>
+
+            <div
+                class="bg-white/80 dark:bg-gray-900/80 rounded-2xl p-5 shadow border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase">Con ruta</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                        ${{ number_format($conRuta, 0, ',', '.') }}
+                    </p>
+                </div>
+                <div
+                    class="h-10 w-10 rounded-2xl bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center text-emerald-700 dark:text-emerald-300">
+                    <i class="fas fa-route"></i>
+                </div>
+            </div>
+
+            <div
+                class="bg-white/80 dark:bg-gray-900/80 rounded-2xl p-5 shadow border border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                <div>
+                    <p class="text-xs font-semibold text-gray-500 uppercase">Administrativos</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                        ${{ number_format($admin, 0, ',', '.') }}
+                    </p>
+                </div>
+                <div
+                    class="h-10 w-10 rounded-2xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-700 dark:text-amber-300">
+                    <i class="fas fa-building"></i>
+                </div>
+            </div>
+        </div>
+
+        {{-- MENSAJES (opcional, además del toaster) --}}
         @if (session()->has('message'))
-            <div class="bg-green-100 border border-green-300 text-green-800 px-5 py-3 rounded-2xl shadow-sm animate-fade-in flex items-center gap-2">
+            <div
+                class="bg-emerald-50 border border-emerald-200 text-emerald-800 px-5 py-3 rounded-2xl shadow-sm flex items-center gap-2 mt-4">
                 <i class="fas fa-check-circle"></i> <span>{{ session('message') }}</span>
             </div>
         @endif
         @if (session()->has('error'))
-            <div class="bg-red-100 border border-red-300 text-red-800 px-5 py-3 rounded-2xl shadow-sm animate-fade-in flex items-center gap-2">
+            <div
+                class="bg-red-50 border border-red-200 text-red-800 px-5 py-3 rounded-2xl shadow-sm flex items-center gap-2 mt-4">
                 <i class="fas fa-times-circle"></i> <span>{{ session('error') }}</span>
             </div>
         @endif
 
-        <!-- FORMULARIO -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <!-- Selección de Ruta -->
-            <div class="space-y-1">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Ruta (opcional)</label>
-                <select wire:model="ruta_id"
-                    class="w-full px-4 py-2 rounded-xl border @error('ruta_id') border-red-500 @else border-gray-300 @enderror dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-500">
-                    <option value="">-- Gasto Administrativo (sin ruta) --</option>
-                    @foreach ($rutas as $ruta)
-                        <option value="{{ $ruta->id }}">{{ $ruta->ruta }}</option>
-                    @endforeach
-                </select>
-                @error('ruta_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+        {{-- FORMULARIO --}}
+        <div class="space-y-4 mt-4">
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {{-- Concepto contable --}}
+                <div class="space-y-1 md:col-span-2">
+                    <label class="text-xs font-semibold text-gray-600 dark:text-gray-300">Concepto contable *</label>
+                    <select wire:model="concepto_documento_id"
+                            class="w-full px-4 py-2 rounded-xl border @error('concepto_documento_id') border-red-500 @else border-violet-400 @enderror dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500">
+                        <option value="">-- Selecciona concepto --</option>
+                        @foreach ($conceptosContables as $c)
+                            <option value="{{ $c->id }}">{{ $c->codigo }} — {{ $c->nombre }}</option>
+                        @endforeach
+                    </select>
+                    @error('concepto_documento_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
+
+                {{-- Tipo de gasto --}}
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-gray-600 dark:text-gray-300">Tipo de gasto *</label>
+                    <select wire:model="tipo_gasto_id"
+                            class="w-full px-4 py-2 rounded-xl border @error('tipo_gasto_id') border-red-500 @else border-gray-300 @enderror dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500">
+                        <option value="">-- Selecciona tipo --</option>
+                        @foreach ($tiposGasto as $tg)
+                            <option value="{{ $tg->id }}">{{ $tg->nombre }}</option>
+                        @endforeach
+                    </select>
+                    @error('tipo_gasto_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
+
+                {{-- Monto --}}
+                <div class="space-y-1">
+                    <label class="text-xs font-semibold text-gray-600 dark:text-gray-300">Monto *</label>
+                    <input type="number" wire:model="monto" step="0.01"
+                           class="w-full px-4 py-2 rounded-xl border @error('monto') border-red-500 @else border-gray-300 @enderror dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"
+                           placeholder="0.00">
+                    @error('monto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                </div>
             </div>
 
-            <!-- Selección de Tipo de Gasto -->
+            {{-- Observación --}}
             <div class="space-y-1">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Tipo de Gasto *</label>
-                <select wire:model="tipo_gasto_id"
-                    class="w-full px-4 py-2 rounded-xl border @error('tipo_gasto_id') border-red-500 @else border-gray-300 @enderror dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-500">
-                    <option value="">-- Selecciona Tipo de Gasto --</option>
-                    @foreach ($tiposGasto as $tipo)
-                        <option value="{{ $tipo->id }}">{{ $tipo->nombre }}</option>
-                    @endforeach
-                </select>
-                @error('tipo_gasto_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                <label class="text-xs font-semibold text-gray-600 dark:text-gray-300">Observación</label>
+                <textarea wire:model="observacion" rows="3"
+                          class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500"
+                          placeholder="Detalles del gasto..."></textarea>
             </div>
 
-            <!-- Monto -->
-            <div class="space-y-1">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Monto *</label>
-                <input type="number" wire:model="monto" step="0.01"
-                    class="w-full px-4 py-2 rounded-xl border @error('monto') border-red-500 @else border-gray-300 @enderror dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                    placeholder="0.00">
-                @error('monto') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+            {{-- Botones --}}
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-3">
+                <button type="button" wire:click="$reset"
+                        class="px-5 py-2 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-medium shadow-sm">
+                    <i class="fas fa-eraser mr-1"></i> Limpiar formulario
+                </button>
+
+                <button type="submit"
+                        class="px-6 py-2 rounded-full bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold shadow-md flex items-center gap-2"
+                        wire:loading.attr="disabled">
+                    <i class="fas fa-save"></i>
+                    <span wire:loading.remove>Guardar gasto</span>
+                    <span wire:loading>Guardando...</span>
+                </button>
             </div>
         </div>
 
-        <!-- Observación -->
-        <div class="space-y-1">
-            <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Observación</label>
-            <textarea wire:model="observacion" rows="3"
-                class="w-full px-4 py-3 rounded-xl border border-gray-300 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-500"
-                placeholder="Detalles del gasto..."></textarea>
-        </div>
+        {{-- HISTORIAL --}}
+        <div class="mt-10">
+            <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <i class="fas fa-list text-violet-500"></i> Historial de gastos
+            </h3>
 
-        <!-- BOTONES -->
-        <div class="flex justify-between items-center pt-6">
-            <button type="reset" wire:click="$refresh"
-                class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-full shadow-md">
-                <i class="fas fa-times mr-1"></i> Cancelar
-            </button>
-
-            <button type="submit"
-                class="px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-full shadow-md"
-                wire:loading.attr="disabled">
-                <i class="fas fa-save mr-1"></i>
-                <span wire:loading.remove>Guardar Gasto</span>
-                <span wire:loading>Guardando...</span>
-            </button>
-        </div>
-
-        <!-- FILTRO -->
-        <div class="flex justify-end">
-            <select wire:model="filtroTipo" class="px-4 py-2 rounded-xl border border-gray-300 dark:bg-gray-800 dark:text-white mb-4">
-                <option value="todos">Todos</option>
-                <option value="ruta">Solo con Ruta</option>
-                <option value="admin">Solo Administrativos</option>
-            </select>
-        </div>
-
-        <!-- HISTORIAL -->
-        <table class="min-w-full bg-gradient-to-br from-gray-100 to-gray-50 dark:from-gray-800 dark:to-gray-900 text-sm text-gray-700 dark:text-gray-300 rounded-2xl">
-            <thead class="bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-white text-xs uppercase tracking-wider">
-                <tr>
-                    <th class="p-4 text-left"><i class="fas fa-calendar-alt"></i> Fecha</th>
-                    <th class="p-4 text-left"><i class="fas fa-road"></i> Ruta / Área</th>
-                    <th class="p-4 text-left"><i class="fas fa-dollar-sign"></i> Monto</th>
-                    <th class="p-4 text-left"><i class="fas fa-file-alt"></i> Tipo</th>
-                    <th class="p-4 text-left"><i class="fas fa-comment-dots"></i> Observación</th>
-                </tr>
-            </thead>
-            <tbody>
-                @forelse ($gastosFiltrados as $gasto)
-                    <tr class="border-t dark:border-gray-700 hover:bg-indigo-50 dark:hover:bg-gray-700 transition">
-                        <td class="p-4">{{ $gasto->created_at->format('Y-m-d') }}</td>
-                        <td class="p-4">{{ $gasto->ruta->ruta ?? 'Administración' }}</td>
-                        <td class="p-4">${{ number_format($gasto->monto, 2) }}</td>
-                        <td class="p-4">{{ $gasto->tipoGasto->nombre ?? '—' }}</td>
-                        <td class="p-4">{{ $gasto->observacion }}</td>
-                    </tr>
-                @empty
+            <div
+                class="overflow-hidden rounded-2xl border border-gray-200 dark:border-gray-700 bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-800">
+                <table class="min-w-full text-sm text-gray-700 dark:text-gray-200">
+                    <thead class="bg-gray-100 dark:bg-gray-800 text-xs uppercase tracking-wide">
                     <tr>
-                        <td colspan="5" class="p-6 text-center text-gray-500 dark:text-gray-400 italic">
-                            <i class="fas fa-info-circle"></i> No hay gastos registrados con el filtro seleccionado.
-                        </td>
+                        <th class="px-4 py-3 text-left"><i class="fas fa-calendar-alt mr-1"></i>Fecha</th>
+                        <th class="px-4 py-3 text-left"><i class="fas fa-road mr-1"></i>Ruta / área</th>
+                        <th class="px-4 py-3 text-left"><i class="fas fa-file-alt mr-1"></i>Tipo gasto</th>
+                        <th class="px-4 py-3 text-left"><i class="fas fa-book mr-1"></i>Concepto</th>
+                        <th class="px-4 py-3 text-right"><i class="fas fa-dollar-sign mr-1"></i>Monto</th>
+                        <th class="px-4 py-3 text-left"><i class="fas fa-comment-dots mr-1"></i>Observación</th>
                     </tr>
-                @endforelse
-            </tbody>
-        </table>
+                    </thead>
+                    <tbody>
+                    @forelse ($gastosFiltrados as $gasto)
+                        <tr
+                            class="border-t border-gray-100 dark:border-gray-700 hover:bg-violet-50/60 dark:hover:bg-gray-800 transition">
+                            <td class="px-4 py-3">{{ $gasto->created_at->format('Y-m-d') }}</td>
+                            <td class="px-4 py-3">{{ $gasto->ruta->ruta ?? 'Administración' }}</td>
+                            <td class="px-4 py-3">{{ $gasto->tipoGasto->nombre ?? '—' }}</td>
+                            <td class="px-4 py-3">
+                                {{ $gasto->conceptoDocumento->codigo ?? '—' }}
+                                {{ $gasto->conceptoDocumento ? ' — '.$gasto->conceptoDocumento->nombre : '' }}
+                            </td>
+                            <td class="px-4 py-3 text-right font-semibold">
+                                ${{ number_format($gasto->monto, 2, ',', '.') }}
+                            </td>
+                            <td class="px-4 py-3">{{ $gasto->observacion }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="6"
+                                class="px-6 py-6 text-center text-gray-500 dark:text-gray-400 text-sm italic">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                No hay gastos registrados con el filtro seleccionado.
+                            </td>
+                        </tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </section>
 </form>

@@ -13,7 +13,6 @@ use Livewire\Component;
 class TurnoCaja extends Component
 {
     // Form apertura
-    public ?int $bodega_id = null;
     public float $base_inicial = 0;
 
     // Form movimientos
@@ -24,38 +23,46 @@ class TurnoCaja extends Component
     // Estado
     public ?turnos_caja $turno = null;
 
-    // Resúmenes para la vista
-    public array $resumen = [];
-    public array $porTipo = [];   // EFECTIVO/DEBITO/...
-    public array $porMedio = [];  // cada medio
+    // Resúmenes para la vista (turno actual)
+    public array $resumen  = [];
+    public array $porTipo  = [];   // EFECTIVO / DEBITO / ...
+    public array $porMedio = [];   // cada medio
+
+    // 🔹 Filtros e informe histórico
+    public ?string $filtro_desde = null;
+    public ?string $filtro_hasta = null;
+
+    public array $totalesInforme = [];
+    public $turnosInforme = [];
 
     protected $rules = [
-        'bodega_id'    => 'nullable|integer',
         'base_inicial' => 'required|numeric|min:0',
         'tipo_mov'     => 'required|in:INGRESO,RETIRO,DEVOLUCION',
         'monto'        => 'nullable|numeric|min:0.01',
         'motivo'       => 'nullable|string|max:255',
+        'filtro_desde' => 'nullable|date',
+        'filtro_hasta' => 'nullable|date|after_or_equal:filtro_desde',
     ];
 
     public function mount(): void
     {
-        $this->turno = turnos_caja::query()
-            ->where('user_id', Auth::id())
+        // turno abierto del usuario (único por usuario)
+        $this->turno = turnos_caja::where('user_id', Auth::id())
             ->where('estado', 'abierto')
             ->latest('id')
             ->first();
 
-        $this->refrescarResumenes(); // ✅ nombre correcto
+        // rango de fechas por defecto: últimos 30 días
+        $this->filtro_desde = now()->subDays(30)->toDateString();
+        $this->filtro_hasta = now()->toDateString();
+
+        $this->refrescarResumenes();
+        $this->actualizarInforme();   // carga informe inicial
     }
 
     public function render()
     {
-        return view('livewire.turnos-caja.turno-caja', [
-            'turno'    => $this->turno,
-            'resumen'  => $this->resumen,
-            'porTipo'  => $this->porTipo,
-            'porMedio' => $this->porMedio,
-        ]);
+        return view('livewire.turnos-caja.turno-caja');
     }
 
     /** Abrir turno */
@@ -70,7 +77,6 @@ class TurnoCaja extends Component
 
         $this->turno = turnos_caja::create([
             'user_id'      => Auth::id(),
-            'bodega_id'    => $this->bodega_id,
             'fecha_inicio' => now(),
             'base_inicial' => $this->base_inicial,
             'estado'       => 'abierto',
@@ -79,6 +85,7 @@ class TurnoCaja extends Component
 
         session()->flash('message', 'Turno abierto.');
         $this->refrescarResumenes();
+        $this->actualizarInforme(); // se actualiza el informe
     }
 
     /** Registrar ingreso/retiro/devolución manual */
@@ -88,10 +95,11 @@ class TurnoCaja extends Component
             session()->flash('error', 'No hay turno abierto.');
             return;
         }
+
         $this->validate([
-            'tipo_mov',
-            'monto'  => 'required|numeric|min:0.01',
-            'motivo' => 'nullable|string|max:255',
+            'tipo_mov' => 'required|in:INGRESO,RETIRO,DEVOLUCION',
+            'monto'    => 'required|numeric|min:0.01',
+            'motivo'   => 'nullable|string|max:255',
         ]);
 
         DB::transaction(function () {
@@ -103,14 +111,25 @@ class TurnoCaja extends Component
                 'motivo'   => $this->motivo,
             ]);
 
-            if ($this->tipo_mov === 'INGRESO')    $this->turno->increment('ingresos_efectivo', $this->monto);
-            if ($this->tipo_mov === 'RETIRO')     $this->turno->increment('retiros_efectivo',  $this->monto);
-            if ($this->tipo_mov === 'DEVOLUCION') $this->turno->increment('devoluciones',     $this->monto);
+            if ($this->tipo_mov === 'INGRESO') {
+                $this->turno->increment('ingresos_efectivo', $this->monto);
+            }
+
+            if ($this->tipo_mov === 'RETIRO') {
+                $this->turno->increment('retiros_efectivo', $this->monto);
+            }
+
+            if ($this->tipo_mov === 'DEVOLUCION') {
+                $this->turno->increment('devoluciones', $this->monto);
+            }
         });
 
-        $this->monto = $this->motivo = null;
+        $this->monto  = null;
+        $this->motivo = null;
+
         session()->flash('message', 'Movimiento registrado.');
         $this->refrescarResumenes();
+        $this->actualizarInforme();
     }
 
     /** Cerrar turno con arqueo */
@@ -150,102 +169,124 @@ class TurnoCaja extends Component
             ];
 
             $this->turno->update([
-                'estado'        => 'cerrado',
-                'fecha_cierre'  => now(),
-                'total_ventas'  => $totalVentas,
+                'estado'                 => 'cerrado',
+                'fecha_cierre'           => now(),
+                'total_ventas'           => $totalVentas,
                 'ventas_efectivo'        => (float)($byTipo['EFECTIVO'] ?? 0),
                 'ventas_debito'          => (float)($byTipo['DEBITO'] ?? 0),
                 'ventas_credito_tarjeta' => (float)($byTipo['CREDITO'] ?? 0),
                 'ventas_transferencias'  => (float)($byTipo['TRANSFERENCIA'] ?? 0),
                 'ventas_a_credito'       => (float)($byTipo['CREDITO_CLIENTE'] ?? 0),
-                'resumen'       => $resumen,
+                'resumen'                => $resumen,
             ]);
         });
 
         session()->flash('message', 'Turno cerrado.');
         $this->turno = null;
+
         $this->refrescarResumenes();
+        $this->actualizarInforme();
     }
 
-   private function refrescarResumenes(): void
-{
-    $this->resumen = $this->porTipo = $this->porMedio = [];
-    if (!$this->turno) return;
-
-    // Detectar columnas reales en factura_pagos
-    $tipoColCandidates   = ['medio_tipo', 'tipo', 'tipo_medio', 'metodo', 'forma_pago'];
-    $codigoColCandidates = ['medio_codigo', 'codigo', 'medio', 'metodo_codigo', 'referencia', 'ref'];
-
-    $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
-    $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
-
-    // Envoltorio portátil de identificadores (produce [] en SQL Server y ` ` en MySQL)
-    $wrap = fn(string $c) => DB::getQueryGrammar()->wrap($c);
-
-    // Construir expresiones y bindings para selectRaw SIN backticks ni CAST no-portátiles
-    $bindings = [];
-
-    if ($tipoCol) {
-        $tipoExpr = $wrap($tipoCol);
-    } else {
-        $tipoExpr = '?';
-        $bindings[] = 'OTRO';
-    }
-
-    if ($codigoCol) {
-        $codigoExpr = $wrap($codigoCol);
-    } else {
-        $codigoExpr = '?';
-        $bindings[] = '-';
-    }
-
-    $pagos = FacturaPago::query()
-        ->selectRaw(
-            "monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo",
-            $bindings
-        )
-        ->where('turno_id', $this->turno->id)
-        ->get();
-
-    $this->resumen = [
-        'base_inicial'       => (float) $this->turno->base_inicial,
-        'total_ventas'       => (float) $pagos->sum('monto'),
-        'devoluciones'       => (float) $this->turno->devoluciones,
-        'ingresos'           => (float) $this->turno->ingresos_efectivo,
-        'retiros'            => (float) $this->turno->retiros_efectivo,
-        'ventas_credito_cxc' => (float) $this->turno->ventas_a_credito,
-    ];
-
-    $this->porTipo = $pagos->groupBy('medio_tipo')
-        ->map(fn($g) => (float) $g->sum('monto'))
-        ->sortDesc()
-        ->toArray();
-
-    $this->porMedio = $pagos->groupBy('medio_codigo')
-        ->map(function ($g) {
-            return [
-                'codigo' => $g->first()->medio_codigo,
-                'nombre' => $g->first()->medio_codigo,
-                'tipo'   => $g->first()->medio_tipo,
-                'total'  => (float) $g->sum('monto'),
-            ];
-        })
-        ->values()
-        ->all();
-}
-
-    /** 🔁 Alias por si quedó alguna llamada antigua con “resumenses” */
-    private function refrescarResumenses(): void
+    /** Resumen del turno ACTUAL */
+    private function refrescarResumenes(): void
     {
-        $this->refrescarResumenes();
+        $this->resumen = $this->porTipo = $this->porMedio = [];
+        if (!$this->turno) {
+            return;
+        }
+
+        // Detectar columnas reales en factura_pagos
+        $tipoColCandidates   = ['medio_tipo', 'tipo', 'tipo_medio', 'metodo', 'forma_pago'];
+        $codigoColCandidates = ['medio_codigo', 'codigo', 'medio', 'metodo_codigo', 'referencia', 'ref'];
+
+        $tipoCol   = collect($tipoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
+        $codigoCol = collect($codigoColCandidates)->first(fn($c) => Schema::hasColumn('factura_pagos', $c));
+
+        $wrap = fn(string $c) => DB::getQueryGrammar()->wrap($c);
+        $bindings = [];
+
+        if ($tipoCol) {
+            $tipoExpr = $wrap($tipoCol);
+        } else {
+            $tipoExpr   = '?';
+            $bindings[] = 'OTRO';
+        }
+
+        if ($codigoCol) {
+            $codigoExpr = $wrap($codigoCol);
+        } else {
+            $codigoExpr = '?';
+            $bindings[] = '-';
+        }
+
+        $pagos = FacturaPago::query()
+            ->selectRaw(
+                "monto, {$tipoExpr} AS medio_tipo, {$codigoExpr} AS medio_codigo",
+                $bindings
+            )
+            ->where('turno_id', $this->turno->id)
+            ->get();
+
+        $this->resumen = [
+            'base_inicial'       => (float) $this->turno->base_inicial,
+            'total_ventas'       => (float) $pagos->sum('monto'),
+            'devoluciones'       => (float) $this->turno->devoluciones,
+            'ingresos'           => (float) $this->turno->ingresos_efectivo,
+            'retiros'            => (float) $this->turno->retiros_efectivo,
+            'ventas_credito_cxc' => (float) $this->turno->ventas_a_credito,
+        ];
+
+        $this->porTipo = $pagos->groupBy('medio_tipo')
+            ->map(fn($g) => (float) $g->sum('monto'))
+            ->sortDesc()
+            ->toArray();
+
+        $this->porMedio = $pagos->groupBy('medio_codigo')
+            ->map(function ($g) {
+                return [
+                    'codigo' => $g->first()->medio_codigo,
+                    'nombre' => $g->first()->medio_codigo,
+                    'tipo'   => $g->first()->medio_tipo,
+                    'total'  => (float) $g->sum('monto'),
+                ];
+            })
+            ->values()
+            ->all();
     }
 
-    /** Helper público para otros flujos */
-    public static function turnoAbiertoDe(int $userId): ?turnos_caja
+    /** Informe histórico por rango de fechas */
+    public function actualizarInforme(): void
     {
-        return turnos_caja::where('user_id', $userId)
-            ->where('estado', 'abierto')
-            ->latest('id')
-            ->first();
+        $this->validate([
+            'filtro_desde' => 'nullable|date',
+            'filtro_hasta' => 'nullable|date|after_or_equal:filtro_desde',
+        ]);
+
+        $query = turnos_caja::query()
+            ->where('user_id', Auth::id());
+
+        if ($this->filtro_desde) {
+            $query->whereDate('fecha_inicio', '>=', $this->filtro_desde);
+        }
+
+        if ($this->filtro_hasta) {
+            $query->whereDate('fecha_inicio', '<=', $this->filtro_hasta);
+        }
+
+        $query->orderByDesc('fecha_inicio');
+
+        $turnos = $query->get();
+        $this->turnosInforme = $turnos;
+
+        $this->totalesInforme = [
+            'conteo'         => $turnos->count(),
+            'total_base'     => (float) $turnos->sum('base_inicial'),
+            'total_ventas'   => (float) $turnos->sum('total_ventas'),
+            'total_efectivo' => (float) $turnos->sum('ventas_efectivo'),
+            'total_ingresos' => (float) $turnos->sum('ingresos_efectivo'),
+            'total_retiros'  => (float) $turnos->sum('retiros_efectivo'),
+            'total_devol'    => (float) $turnos->sum('devoluciones'),
+        ];
     }
 }

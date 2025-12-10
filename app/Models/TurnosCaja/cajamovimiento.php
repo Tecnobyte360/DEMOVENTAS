@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CajaMovimiento extends Model
 {
-    protected $table = 'caja_movimientos';
+    protected $table = 'cajamovimientos';
 
     protected $fillable = [
         'turno_id',

@@ -4,7 +4,6 @@ namespace App\Models\TurnosCaja;
 
 use App\Models\Factura\FacturaPago;
 use App\Models\User;
-use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +14,6 @@ class turnos_caja extends Model
 
     protected $fillable = [
         'user_id',
-        'bodega_id',
         'fecha_inicio',
         'fecha_cierre',
         'base_inicial',
@@ -33,30 +31,30 @@ class turnos_caja extends Model
     ];
 
     protected $casts = [
-        'fecha_inicio' => 'datetime',
-        'fecha_cierre' => 'datetime',
-        'base_inicial' => 'decimal:2',
-        'total_ventas' => 'decimal:2',
-        'ventas_efectivo' => 'decimal:2',
-        'ventas_debito' => 'decimal:2',
+        'fecha_inicio'           => 'datetime',
+        'fecha_cierre'           => 'datetime',
+        'base_inicial'           => 'decimal:2',
+        'total_ventas'           => 'decimal:2',
+        'ventas_efectivo'        => 'decimal:2',
+        'ventas_debito'          => 'decimal:2',
         'ventas_credito_tarjeta' => 'decimal:2',
-        'ventas_transferencias' => 'decimal:2',
-        'ventas_a_credito' => 'decimal:2',
-        'devoluciones' => 'decimal:2',
-        'ingresos_efectivo' => 'decimal:2',
-        'retiros_efectivo' => 'decimal:2',
-        'resumen' => 'array',
+        'ventas_transferencias'  => 'decimal:2',
+        'ventas_a_credito'       => 'decimal:2',
+        'devoluciones'           => 'decimal:2',
+        'ingresos_efectivo'      => 'decimal:2',
+        'retiros_efectivo'       => 'decimal:2',
+        'resumen'                => 'array',
     ];
 
-    // Relaciones
+    /*
+    |--------------------------------------------------------------------------
+    | Relaciones
+    |--------------------------------------------------------------------------
+    */
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function bodega(): BelongsTo
-    {
-        return $this->belongsTo(Bodega::class);
     }
 
     public function pagos(): HasMany
@@ -69,7 +67,12 @@ class turnos_caja extends Model
         return $this->hasMany(CajaMovimiento::class, 'turno_id');
     }
 
-    // Scopes
+    /*
+    |--------------------------------------------------------------------------
+    | Scopes
+    |--------------------------------------------------------------------------
+    */
+
     public function scopeAbierto($query)
     {
         return $query->where('estado', 'abierto');
@@ -85,12 +88,12 @@ class turnos_caja extends Model
         return $query->where('user_id', $userId);
     }
 
-    public function scopeDeBodega($query, int $bodegaId)
-    {
-        return $query->where('bodega_id', $bodegaId);
-    }
+    /*
+    |--------------------------------------------------------------------------
+    | Helpers
+    |--------------------------------------------------------------------------
+    */
 
-    // Helpers
     public function estaAbierto(): bool
     {
         return $this->estado === 'abierto';
@@ -102,7 +105,7 @@ class turnos_caja extends Model
     }
 
     /**
-     * Calcula el efectivo esperado en caja
+     * Calcula el efectivo esperado en caja.
      */
     public function efectivoEsperado(): float
     {
@@ -114,7 +117,7 @@ class turnos_caja extends Model
     }
 
     /**
-     * Calcula el total de ventas cobradas (sin CXC)
+     * Calcula el total de ventas cobradas (sin CxC).
      */
     public function totalCobrado(): float
     {
@@ -122,5 +125,16 @@ class turnos_caja extends Model
             + (float) $this->ventas_debito
             + (float) $this->ventas_credito_tarjeta
             + (float) $this->ventas_transferencias;
+    }
+
+    /**
+     * 🔹 Turno abierto único por usuario.
+     */
+    public static function turnoAbiertoDe(int $userId): ?self
+    {
+        return self::where('user_id', $userId)
+            ->where('estado', 'abierto')
+            ->latest('id')
+            ->first();
     }
 }

@@ -13,6 +13,7 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\FacturaPosPrintController;
 use App\Http\Controllers\FacturaTicketController;
 use App\Http\Controllers\Usuarios\UsuariosController;
+use App\Http\Livewire\GrabarVideo;
 use App\Livewire\Bodegas\Bodega;
 use App\Livewire\Bodegas\Edit;
 use App\Livewire\Catalogos\CiiuActividades;
@@ -36,6 +37,7 @@ use App\Livewire\Facturas\NotaCreditoForm;
 use App\Livewire\Finanzas\Finanzas;
 use App\Livewire\Finanzas\GastosEmpresa;
 use App\Livewire\Finanzas\TiposGasto;
+use App\Livewire\GrabarVideo as LivewireGrabarVideo;
 use App\Livewire\Impuesto\Impuesto;
 use App\Livewire\Inventario\DevolucionesMercancia;
 use App\Livewire\Inventario\EntradasMercancia;
@@ -307,4 +309,7 @@ Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocu
         ->name('Mediospagos');
     Route::get('/Pagos-recibidos', Listapagosrecibidos::class)
         ->name('PagosRecibidos');
+
+     Route::get('/grabar-video', LivewireGrabarVideo::class);
+        
 });

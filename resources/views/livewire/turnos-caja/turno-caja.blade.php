@@ -38,8 +38,9 @@
      wire:poll.8s
      x-data="{ tab: 'resumen' }">
 
-  {{-- ============================ SIN TURNO ============================ --}}
+  {{-- ============================ BLOQUE TURNO ACTUAL ============================ --}}
   @if(!$turno || $turno->estado === 'cerrado')
+    {{-- SIN TURNO --}}
     <div class="max-w-2xl mx-auto text-center space-y-6">
       <div class="flex items-center justify-center gap-3">
         <i class="fa-solid fa-cash-register text-3xl text-indigo-600"></i>
@@ -47,13 +48,7 @@
       </div>
 
       <div class="card p-6 text-left">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="text-sm muted mb-1 block">Bodega (opcional)</label>
-            <input type="number" wire:model.defer="bodega_id"
-              class="w-full rounded-xl border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-4 py-2.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-            @error('bodega_id') <div class="text-xs text-rose-600 mt-1">{{ $message }}</div> @enderror
-          </div>
+        <div class="grid grid-cols-1 gap-4">
           <div>
             <label class="text-sm muted mb-1 block">Base inicial</label>
             <input type="number" step="0.01" wire:model.defer="base_inicial"
@@ -77,12 +72,12 @@
         @endif
       </div>
 
-      <p class="muted text-sm">Cuando abras el turno, todos los <strong>pagos</strong> que registres en facturas/notas quedarán vinculados a este turno.</p>
+      <p class="muted text-sm">
+        Cuando abras el turno, todos los <strong>pagos</strong> que registres en facturas/notas quedarán vinculados a este turno.
+      </p>
     </div>
-
-  {{-- ============================ CON TURNO ============================ --}}
   @else
-    {{-- Header del turno --}}
+    {{-- CON TURNO --}}
     <section class="card p-5">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="space-y-1">
@@ -91,8 +86,10 @@
             Turno de Caja #{{ $turno->id }}
           </h2>
           <div class="text-sm muted">
-            Inicio: <span class="font-medium text-gray-700 dark:text-gray-200">{{ $turno->fecha_inicio }}</span>
-            @if($turno->bodega) · Bodega: <span class="font-medium text-gray-700 dark:text-gray-200">{{ $turno->bodega->nombre }}</span>@endif
+            Inicio:
+            <span class="font-medium text-gray-700 dark:text-gray-200">
+              {{ $turno->fecha_inicio }}
+            </span>
           </div>
         </div>
 
@@ -127,7 +124,6 @@
 
     {{-- ===== TAB: RESUMEN ===== --}}
     <section x-show="tab==='resumen'" x-cloak class="space-y-6">
-      {{-- Cards principales --}}
       <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card p-4">
           <div class="muted text-xs">Base inicial</div>
@@ -149,7 +145,6 @@
         </div>
       </div>
 
-      {{-- Por Tipo de Medio --}}
       <div class="grid md:grid-cols-2 gap-4">
         <div class="card p-4">
           <h3 class="title mb-2 flex items-center gap-2">
@@ -167,7 +162,6 @@
           </div>
         </div>
 
-        {{-- Por medio --}}
         <div class="card p-4">
           <h3 class="title mb-2 flex items-center gap-2">
             <i class="fa-solid fa-credit-card text-indigo-500"></i> Por medio de pago
@@ -215,7 +209,9 @@
               <tr>
                 <td class="td muted">{{ $p->created_at }}</td>
                 <td class="td">
-                  <span class="font-medium">{{ $p->factura?->prefijo }}-{{ str_pad($p->factura?->numero ?? 0, 6, '0', STR_PAD_LEFT) }}</span>
+                  <span class="font-medium">
+                    {{ $p->factura?->prefijo }}-{{ str_pad($p->factura?->numero ?? 0, 6, '0', STR_PAD_LEFT) }}
+                  </span>
                 </td>
                 <td class="td">
                   <span class="text-gray-800 dark:text-gray-100">{{ $p->factura?->cliente?->razon_social ?? '—' }}</span>
@@ -238,7 +234,6 @@
 
     {{-- ===== TAB: MOVIMIENTOS ===== --}}
     <section x-show="tab==='movs'" x-cloak class="space-y-4">
-      {{-- Form registrar movimiento --}}
       <div class="card p-4">
         <h3 class="title mb-3 flex items-center gap-2">
           <i class="fa-solid fa-wallet text-indigo-500"></i> Registrar movimiento
@@ -288,7 +283,6 @@
         @endif
       </div>
 
-      {{-- Tabla de movimientos --}}
       <div class="card p-4 overflow-x-auto">
         <h3 class="title mb-3 flex items-center gap-2">
           <i class="fa-solid fa-list"></i> Movimientos de caja
@@ -296,35 +290,36 @@
 
         <table class="w-full text-sm">
           <thead class="thead">
-          <tr>
-            <th class="th">Fecha</th>
-            <th class="th">Tipo</th>
-            <th class="th">Motivo</th>
-            <th class="th text-right">Monto</th>
-            <th class="th">Usuario</th>
-          </tr>
+            <tr>
+              <th class="th">Fecha</th>
+              <th class="th">Tipo</th>
+              <th class="th">Motivo</th>
+              <th class="th text-right">Monto</th>
+              <th class="th">Usuario</th>
+            </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-          {{-- @forelse($turno->movimientos()->with('user')->latest()->take(200)->get() as $m)
-            <tr>
-              <td class="td muted">{{ $m->created_at }}</td>
-              <td class="td">
-                @php
-                  $tone = match($m->tipo){
-                    'INGRESO' => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
-                    'RETIRO' => 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
-                    default => 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                  };
-                @endphp
-                <span class="chip {{ $tone }}">{{ $m->tipo }}</span>
-              </td>
-              <td class="td text-gray-700 dark:text-gray-200">{{ $m->motivo ?? '—' }}</td>
-              <td class="td text-right font-semibold ${}">${{ $fmt($m->monto) }}</td>
-              <td class="td muted">{{ $m->user?->name ?? '—' }}</td>
-            </tr>
-          @empty
-            <tr><td class="td muted" colspan="5">Sin movimientos…</td></tr>
-          @endforelse --}}
+            @forelse($turno->movimientos()->with('user')->latest()->take(200)->get() as $m)
+              <tr>
+                <td class="td muted">{{ $m->created_at }}</td>
+                <td class="td">
+                  @php
+                    $tone = match($m->tipo){
+                      'INGRESO'    => 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+                      'RETIRO'     => 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300',
+                      'DEVOLUCION' => 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+                      default      => 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+                    };
+                  @endphp
+                  <span class="chip {{ $tone }}">{{ $m->tipo }}</span>
+                </td>
+                <td class="td text-gray-700 dark:text-gray-200">{{ $m->motivo ?? '—' }}</td>
+                <td class="td text-right font-semibold">${{ $fmt($m->monto) }}</td>
+                <td class="td muted">{{ $m->user?->name ?? '—' }}</td>
+              </tr>
+            @empty
+              <tr><td class="td muted" colspan="5">Sin movimientos…</td></tr>
+            @endforelse
           </tbody>
         </table>
       </div>
@@ -333,18 +328,32 @@
     {{-- ===== TAB: CIERRE ===== --}}
     <section x-show="tab==='cierre'" x-cloak class="space-y-4">
       <div class="grid md:grid-cols-3 gap-4">
-        {{-- Resumen derecho/izq --}}
         <div class="md:col-span-2 card p-4">
           <h3 class="title mb-3 flex items-center gap-2">
             <i class="fa-solid fa-scale-balanced text-indigo-500"></i> Resumen de cierre
           </h3>
 
           <div class="grid sm:grid-cols-2 gap-3 text-sm">
-            <div class="flex justify-between"><span class="muted">Base inicial</span><span class="font-semibold">${{ $fmt($resumen['base_inicial'] ?? 0) }}</span></div>
-            <div class="flex justify-between"><span class="muted">Cobrado (todos los medios)</span><span class="font-semibold">${{ $fmt($resumen['total_ventas'] ?? 0) }}</span></div>
-            <div class="flex justify-between"><span class="muted">Ingresos</span><span class="font-semibold">${{ $fmt($resumen['ingresos'] ?? 0) }}</span></div>
-            <div class="flex justify-between"><span class="muted">Retiros</span><span class="font-semibold text-rose-600">-${{ $fmt($resumen['retiros'] ?? 0) }}</span></div>
-            <div class="flex justify-between"><span class="muted">Devoluciones</span><span class="font-semibold">-${{ $fmt($resumen['devoluciones'] ?? 0) }}</span></div>
+            <div class="flex justify-between">
+              <span class="muted">Base inicial</span>
+              <span class="font-semibold">${{ $fmt($resumen['base_inicial'] ?? 0) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="muted">Cobrado (todos los medios)</span>
+              <span class="font-semibold">${{ $fmt($resumen['total_ventas'] ?? 0) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="muted">Ingresos</span>
+              <span class="font-semibold">${{ $fmt($resumen['ingresos'] ?? 0) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="muted">Retiros</span>
+              <span class="font-semibold text-rose-600">-${{ $fmt($resumen['retiros'] ?? 0) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="muted">Devoluciones</span>
+              <span class="font-semibold">-${{ $fmt($resumen['devoluciones'] ?? 0) }}</span>
+            </div>
           </div>
 
           <div class="border-t border-gray-200 dark:border-gray-700 my-3"></div>
@@ -368,7 +377,6 @@
           </div>
         </div>
 
-        {{-- Por tipo en cierre --}}
         <div class="card p-4">
           <h3 class="title mb-3">Cobrado por tipo</h3>
           <div class="space-y-2 text-sm">
@@ -383,4 +391,90 @@
       </div>
     </section>
   @endif
+
+  {{-- ============================ INFORME HISTÓRICO (SIEMPRE) ============================ --}}
+  <section class="mt-8 space-y-4">
+    <div class="card p-4">
+      <h3 class="title mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-file-lines text-indigo-500"></i> Informe de turnos por rango de fechas
+      </h3>
+
+      <div class="grid md:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="text-sm muted mb-1 block">Desde</label>
+          <input type="date" wire:model.defer="filtro_desde"
+            class="w-full rounded-xl border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+          @error('filtro_desde') <div class="text-xs text-rose-600 mt-1">{{ $message }}</div> @enderror
+        </div>
+        <div>
+          <label class="text-sm muted mb-1 block">Hasta</label>
+          <input type="date" wire:model.defer="filtro_hasta"
+            class="w-full rounded-xl border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+          @error('filtro_hasta') <div class="text-xs text-rose-600 mt-1">{{ $message }}</div> @enderror
+        </div>
+        <div class="md:col-span-2 flex gap-2">
+          <button wire:click="actualizarInforme"
+            class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow">
+            <i class="fa-solid fa-magnifying-glass mr-2"></i> Aplicar filtro
+          </button>
+        </div>
+      </div>
+    </div>
+
+   
+
+    
+
+    {{-- Tabla de turnos --}}
+    <div class="card p-4 overflow-x-auto">
+      <h3 class="title mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-table"></i> Detalle de turnos
+      </h3>
+
+      <table class="w-full text-sm">
+        <thead class="thead">
+          <tr>
+            <th class="th">#</th>
+            <th class="th">Inicio</th>
+            <th class="th">Cierre</th>
+            <th class="th text-right">Base inicial</th>
+            <th class="th text-right">Ventas</th>
+            <th class="th text-right">Efectivo</th>
+            <th class="th text-right">Ingresos</th>
+            <th class="th text-right">Retiros</th>
+            <th class="th text-right">Devoluciones</th>
+            <th class="th">Estado</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+          @forelse($turnosInforme as $t)
+            <tr>
+              <td class="td">{{ $t->id }}</td>
+              <td class="td muted">{{ $t->fecha_inicio }}</td>
+              <td class="td muted">{{ $t->fecha_cierre ?? '—' }}</td>
+              <td class="td text-right font-semibold">${{ $fmt($t->base_inicial) }}</td>
+              <td class="td text-right font-semibold">${{ $fmt($t->total_ventas) }}</td>
+              <td class="td text-right font-semibold">${{ $fmt($t->ventas_efectivo) }}</td>
+              <td class="td text-right">{{ $fmt($t->ingresos_efectivo) }}</td>
+              <td class="td text-right text-rose-600">-{{ $fmt($t->retiros_efectivo) }}</td>
+              <td class="td text-right">-{{ $fmt($t->devoluciones) }}</td>
+              <td class="td">
+                <span class="chip {{ $t->estado === 'cerrado'
+                  ? 'bg-gray-200 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
+                  : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' }}">
+                  {{ ucfirst($t->estado) }}
+                </span>
+              </td>
+            </tr>
+          @empty
+            <tr>
+              <td class="td muted" colspan="10">
+                No hay turnos cerrados en el rango seleccionado.
+              </td>
+            </tr>
+          @endforelse
+        </tbody>
+      </table>
+    </div>
+  </section>
 </div>

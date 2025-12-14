@@ -137,10 +137,10 @@
               <span class="muted">Cobrado (todos los medios)</span>
               <span class="font-semibold">${{ $fmt($resumen['total_ventas'] ?? 0) }}</span>
             </div>
-            <div class="flex justify-between">
+            {{-- <div class="flex justify-between">
               <span class="muted">Ingresos</span>
               <span class="font-semibold">${{ $fmt($resumen['ingresos'] ?? 0) }}</span>
-            </div>
+            </div> --}}
             <div class="flex justify-between">
               <span class="muted">Retiros</span>
               <span class="font-semibold text-rose-600">-${{ $fmt($resumen['retiros'] ?? 0) }}</span>
@@ -151,14 +151,14 @@
           <div class="border-t border-gray-200 dark:border-gray-700 my-3"></div>
 
           <div class="grid sm:grid-cols-2 gap-3 text-sm">
-            <div class="flex justify-between">
+            {{-- <div class="flex justify-between">
               <span class="muted">Efectivo esperado</span>
               <span class="font-bold">${{ $fmt($turno->efectivoEsperado()) }}</span>
-            </div>
-            <div class="flex justify-between">
+            </div> --}}
+            {{-- <div class="flex justify-between">
               <span class="muted">Cobrado sin CxC</span>
               <span class="font-bold">${{ $fmt($turno->totalCobrado()) }}</span>
-            </div>
+            </div> --}}
           </div>
 
           <div class="mt-4">
@@ -230,7 +230,7 @@
            
 
             <th class="th text-right">Retiros</th>
-          
+          <th class="th text-right">Neto del efectivo</th>
 
          
             <th class="th">Medios de pago</th>
@@ -256,7 +256,16 @@
             
 
               <td class="td text-right text-rose-600">-{{ $fmt($t->retiros_efectivo) }}</td>
-          
+          @php
+  $ventas  = (float) $t->total_ventas;
+  $retiros = (float) $t->retiros_efectivo;
+  $neto    = $ventas - $retiros;
+@endphp
+
+<td class="td text-right font-bold {{ $neto < 0 ? 'text-rose-600' : 'text-emerald-600' }}">
+  ${{ $fmt($neto) }}
+</td>
+
 
               <td class="td">
   <div class="flex gap-2 whitespace-nowrap overflow-x-auto py-1">

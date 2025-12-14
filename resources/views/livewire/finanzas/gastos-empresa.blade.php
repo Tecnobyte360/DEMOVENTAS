@@ -125,7 +125,7 @@
                 </div>
 
                 {{-- Tipo de gasto --}}
-                <div class="space-y-1">
+                {{-- <div class="space-y-1">
                     <label class="text-xs font-semibold text-gray-600 dark:text-gray-300">Tipo de gasto *</label>
                     <select wire:model="tipo_gasto_id"
                             class="w-full px-4 py-2 rounded-xl border @error('tipo_gasto_id') border-red-500 @else border-gray-300 @enderror dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500">
@@ -135,7 +135,7 @@
                         @endforeach
                     </select>
                     @error('tipo_gasto_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
+                </div> --}}
 
                 {{-- Monto --}}
                 <div class="space-y-1">
@@ -149,7 +149,7 @@
 
             {{-- Ruta (opcional) --}}
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="space-y-1">
+                {{-- <div class="space-y-1">
                     <label class="text-xs font-semibold text-gray-600 dark:text-gray-300">Ruta (opcional)</label>
                     <select wire:model="ruta_id"
                             class="w-full px-4 py-2 rounded-xl border @error('ruta_id') border-red-500 @else border-gray-300 @enderror dark:bg-gray-900 dark:text-white focus:ring-2 focus:ring-violet-500">
@@ -159,7 +159,7 @@
                         @endforeach
                     </select>
                     @error('ruta_id') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
-                </div>
+                </div> --}}
 
                 {{-- Observación --}}
                 <div class="space-y-1 md:col-span-2">

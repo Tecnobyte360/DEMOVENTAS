@@ -11,18 +11,18 @@
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-3">
-        <div class="flex items-center gap-2 text-sm">
+        {{-- <div class="flex items-center gap-2 text-sm">
           <label class="text-gray-700 dark:text-gray-300">Solo activos</label>
           <input type="checkbox" wire:model="soloActivos" class="rounded text-violet-600 focus:ring-violet-600">
-        </div>
+        </div> --}}
         <div>
-          <select wire:model="tipoFiltro"
+          {{-- <select wire:model="tipoFiltro"
                   class="h-10 px-3 rounded-xl border bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700 focus:ring-2 focus:ring-violet-600">
             <option value="">— Todos los tipos —</option>
             <option value="entrada">Entrada</option>
             <option value="salida">Salida</option>
             <option value="ajuste">Ajuste</option>
-          </select>
+          </select> --}}
         </div>
         <div class="relative">
           <input type="text" wire:model.defer="search" placeholder="Buscar (código / nombre / descripción)"
@@ -32,7 +32,7 @@
           </button>
         </div>
         <button type="button" wire:click="crear"
-                class="h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-medium shadow">
+                class="h-10 px-4 rounded-xl bg-gray-600 hover:bg-gray-700 text-white font-medium shadow">
           <i class="fas fa-plus mr-2"></i> Nuevo concepto
         </button>
       </div>
@@ -42,8 +42,8 @@
   {{-- ===================== Listado ===================== --}}
   <section class="space-y-6 p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
     <div class="w-full overflow-x-auto">
-      <table class="min-w-[1100px] w-full bg-white dark:bg-gray-900 rounded-xl overflow-hidden text-sm">
-        <thead class="bg-violet-600 text-white">
+<table class="min-w-[1100px] w-full bg-white dark:bg-gray-900 rounded-2xl overflow-hidden text-sm border border-gray-200 dark:border-gray-700">
+  <thead class="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th class="p-3 text-left font-semibold">Código</th>
             <th class="p-3 text-left font-semibold">Nombre</th>
@@ -54,7 +54,7 @@
             <th class="p-3 text-center font-semibold">Acciones</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
           @forelse($conceptos as $c)
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition">
               <td class="p-3 font-mono">{{ $c->codigo }}</td>

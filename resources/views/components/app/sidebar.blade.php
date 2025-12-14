@@ -703,14 +703,14 @@
                             <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
                             <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Tipo Documentos</span>
                         </a>
-                        <a href="{{ route('tiposGastos') }}" 
+                        {{-- <a href="{{ route('tiposGastos') }}" 
                            class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
                                   transition-all duration-200 overflow-hidden
                                   hover:bg-white/25 hover:pl-5 hover:shadow-sm"
                            :style="`color: ${fgMuted}`">
                             <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
                             <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Tipos Gastos</span>
-                        </a>
+                        </a> --}}
                         <a href="{{ route('ConceptoDocumentos') }}" 
                            class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
                                   transition-all duration-200 overflow-hidden

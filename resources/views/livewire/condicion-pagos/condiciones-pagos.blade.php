@@ -23,31 +23,39 @@
 >
 
   {{-- ================= HEADER / HERO ================= --}}
-  <section class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 text-white shadow-2xl">
-    <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-      <div class="space-y-1">
-        <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3">
-          <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/15 backdrop-blur">
-            <i class="fa-solid fa-file-invoice-dollar text-2xl"></i>
-          </span>
-          Condiciones de pago
-        </h1>
-       
-      </div>
+<section class="relative overflow-hidden rounded-3xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-xl">
+  <div class="px-6 md:px-8 py-8 md:py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
 
-      <div class="flex flex-wrap items-center gap-2">
-        <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 font-semibold text-xs md:text-sm">
-          <i class="fa-solid fa-list"></i> Total: {{ $condiciones->count() }}
+    <div class="space-y-1">
+      <h1 class="text-2xl md:text-3xl font-extrabold tracking-tight flex items-center gap-3 text-gray-900 dark:text-white">
+        <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800">
+          <i class="fa-solid fa-file-invoice-dollar text-xl text-indigo-600"></i>
         </span>
-        <button
-          wire:click="crear"
-          class="h-11 px-4 rounded-2xl bg-white/90 hover:bg-white text-violet-700 font-semibold shadow"
-        >
-          <i class="fa-solid fa-plus mr-2"></i> Nueva condición
-        </button>
-      </div>
+        Condiciones de pago
+      </h1>
+      <p class="text-sm text-gray-600 dark:text-gray-400">
+        Define plazos, reglas y comportamiento de pago para documentos comerciales.
+      </p>
     </div>
-  </section>
+
+    <div class="flex flex-wrap items-center gap-3">
+      <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold text-xs md:text-sm">
+        <i class="fa-solid fa-list"></i>
+        Total: {{ $condiciones->count() }}
+      </span>
+
+      <button
+        wire:click="crear"
+        class="h-11 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow"
+      >
+        <i class="fa-solid fa-plus mr-2"></i>
+        Nueva condición
+      </button>
+    </div>
+
+  </div>
+</section>
+
 
   {{-- ================= CARD PRINCIPAL ================= --}}
   <section class="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 shadow-2xl overflow-hidden">

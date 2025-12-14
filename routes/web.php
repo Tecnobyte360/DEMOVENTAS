@@ -60,6 +60,7 @@ use App\Livewire\Serie\Serie;
 use App\Livewire\SocioNegocio\SocioNegocios;
 use App\Livewire\SubCategorias\SubCategorias;
 use App\Livewire\TipoDocumentos\Tiposdocumento;
+use App\Livewire\TurnosCaja\TurnoCaja;
 use App\Livewire\Vehiculos\Vehiculo;
 use App\Models\cotizaciones\cotizacione;
 use App\Models\Devoluciones\Devolucion;
@@ -309,6 +310,9 @@ Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocu
         ->name('Mediospagos');
     Route::get('/Pagos-recibidos', Listapagosrecibidos::class)
         ->name('PagosRecibidos');
+   Route::get('/abrircaja', TurnoCaja::class)
+        ->name('abrircaja');
+   
 
      Route::get('/grabar-video', LivewireGrabarVideo::class);
         

@@ -124,6 +124,7 @@
 
         {{-- Body --}}
         <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[70vh] overflow-y-auto">
+
           {{-- ====== Form ====== --}}
           <section class="space-y-4">
             <div>
@@ -145,13 +146,16 @@
             <div class="grid grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Tipo *</label>
-                <select wire:model.defer="tipo"
+
+                {{-- ✅ IMPORTANTE: aquí es mejor SIN defer para que updatedTipo() corra en Livewire --}}
+                <select wire:model="tipo"
                         class="mt-1 w-full px-3 py-2 rounded-xl border bg-white dark:bg-gray-800 dark:text-white dark:border-gray-700 focus:ring-2 focus:ring-violet-600">
                   <option value="entrada">Entrada</option>
                   <option value="salida">Salida</option>
                   <option value="ajuste">Ajuste</option>
                 </select>
               </div>
+
               <label class="flex items-center gap-2 mt-6">
                 <input type="checkbox" wire:model.defer="activo" class="rounded text-violet-600 focus:ring-violet-600">
                 <span class="text-sm text-gray-700 dark:text-gray-300">Concepto activo</span>
@@ -184,7 +188,7 @@
             </div>
 
             <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div class="max-h-[38vh] overflow-y-auto">
+              <div class="max-h-[30vh] overflow-y-auto">
                 <table class="min-w-full text-sm">
                   <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 sticky top-0">
                     <tr>
@@ -219,6 +223,107 @@
                 </table>
               </div>
             </div>
+
+            {{-- ===================== Cuentas seleccionadas (meta) ===================== --}}
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-4 space-y-3">
+              <div class="flex items-center justify-between">
+                <h6 class="font-semibold text-gray-800 dark:text-gray-100">
+                  Cuentas seleccionadas (Naturaleza / Rol / % / Prioridad)
+                </h6>
+
+                @error('cuentasSeleccionadas')
+                  <span class="text-xs px-2 py-1 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                    {{ $message }}
+                  </span>
+                @enderror
+              </div>
+
+              @if(count($cuentasSeleccionadas) === 0)
+                <div class="text-sm text-gray-500 dark:text-gray-400 italic">
+                  Aún no has seleccionado cuentas.
+                </div>
+              @else
+                <div class="space-y-3">
+                  @foreach($cuentasSeleccionadas as $pcId => $meta)
+                    @php
+                      // intenta buscarla en el catálogo cargado; si no está, la busca por BD
+                      $pc = $cuentasCatalogo->firstWhere('id', (int)$pcId) ?? \App\Models\CuentasContables\PlanCuentas::find($pcId);
+                    @endphp
+
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50 dark:bg-gray-800">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="font-mono text-xs text-gray-600 dark:text-gray-300">
+                            {{ $pc->codigo ?? ('ID '.$pcId) }}
+                          </div>
+                          <div class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
+                            {{ $pc->nombre ?? 'Cuenta' }}
+                          </div>
+                        </div>
+
+                        <button type="button"
+                                wire:click="toggleCuenta({{ (int)$pcId }})"
+                                class="text-rose-600 hover:text-rose-800 text-sm"
+                                title="Quitar">
+                          <i class="fas fa-times"></i>
+                        </button>
+                      </div>
+
+                      <div class="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
+                        {{-- Naturaleza --}}
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Naturaleza</label>
+                          <select
+                            class="mt-1 w-full h-10 px-3 rounded-xl border bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 focus:ring-2 focus:ring-violet-600"
+                            wire:change="setMetaCuenta({{ (int)$pcId }}, 'naturaleza', $event.target.value)"
+                          >
+                            <option value="">— Seleccionar —</option>
+                            <option value="debito"  @selected(($meta['naturaleza'] ?? '') === 'debito')>Débito</option>
+                            <option value="credito" @selected(($meta['naturaleza'] ?? '') === 'credito')>Crédito</option>
+                          </select>
+                        </div>
+
+                        {{-- Rol --}}
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Rol</label>
+                          <select
+                            class="mt-1 w-full h-10 px-3 rounded-xl border bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 focus:ring-2 focus:ring-violet-600"
+                            wire:change="setMetaCuenta({{ (int)$pcId }}, 'rol', $event.target.value)"
+                          >
+                            <option value="">— (opcional) —</option>
+                            @foreach($rolesSugeridos as $r)
+                              <option value="{{ $r }}" @selected(($meta['rol'] ?? '') === $r)>{{ $r }}</option>
+                            @endforeach
+                          </select>
+                        </div>
+
+                        {{-- Porcentaje --}}
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">%</label>
+                          <input type="number" step="0.01" min="0"
+                                 value="{{ $meta['porcentaje'] ?? '' }}"
+                                 class="mt-1 w-full h-10 px-3 rounded-xl border bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 focus:ring-2 focus:ring-violet-600"
+                                 wire:change="setMetaCuenta({{ (int)$pcId }}, 'porcentaje', $event.target.value)">
+                          <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Opcional (si repartes el valor).</p>
+                        </div>
+
+                        {{-- Prioridad --}}
+                        <div>
+                          <label class="block text-xs font-medium text-gray-700 dark:text-gray-300">Prioridad</label>
+                          <input type="number" min="0"
+                                 value="{{ $meta['prioridad'] ?? 0 }}"
+                                 class="mt-1 w-full h-10 px-3 rounded-xl border bg-white dark:bg-gray-900 dark:text-white dark:border-gray-700 focus:ring-2 focus:ring-violet-600"
+                                 wire:change="setMetaCuenta({{ (int)$pcId }}, 'prioridad', $event.target.value)">
+                          <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Más alto = se usa primero.</p>
+                        </div>
+                      </div>
+                    </div>
+                  @endforeach
+                </div>
+              @endif
+            </div>
+            {{-- =================== /Cuentas seleccionadas (meta) =================== --}}
+
           </section>
         </div>
 

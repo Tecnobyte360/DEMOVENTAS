@@ -47,4 +47,8 @@ class CajaMovimiento extends Model
     {
         return $this->tipo === 'DEVOLUCION';
     }
+    public function gastoRuta()
+{
+    return $this->hasOne(\App\Models\InventarioRuta\GastoRuta::class, 'caja_movimiento_id');
+}
 }

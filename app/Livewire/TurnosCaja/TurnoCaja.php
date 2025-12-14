@@ -5,6 +5,7 @@ namespace App\Livewire\TurnosCaja;
 use App\Models\TurnosCaja\turnos_caja;
 use App\Models\TurnosCaja\CajaMovimiento;
 use App\Models\Factura\FacturaPago;
+use App\Models\MediosPago\MedioPagos;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -21,7 +22,8 @@ class TurnoCaja extends Component
     public string $tipo_mov = 'INGRESO';
     public ?float $monto = null;
     public ?string $motivo = null;
-
+    public array $mediosActivos = [];
+    public array $mapMediosPorTurno = [];
     // Estado
     public ?turnos_caja $turno = null;
 
@@ -59,7 +61,7 @@ class TurnoCaja extends Component
             $this->refrescarResumenes();
             $this->actualizarInforme();   // carga informe inicial
         } catch (\Throwable $e) {
-            Log::error('Error en mount TurnoCaja: '.$e->getMessage());
+            Log::error('Error en mount TurnoCaja: ' . $e->getMessage());
 
             PendingToast::create()
                 ->error()
@@ -69,26 +71,53 @@ class TurnoCaja extends Component
         }
     }
 
-   public function render()
-{
-    // 🔄 Si hay turno, recargarlo desde BD y recalcular resumen
-    if ($this->turno) {
-        // Vuelve a leer el turno con los últimos retiros_efectivo, ingresos, etc.
-        $this->turno = $this->turno->fresh();
+    public function render()
+    {
+        // Obtener el turno actual y los detalles de pagos
+        if ($this->turno) {
+            // Vuelve a leer el turno con los últimos movimientos
+            $this->turno = $this->turno->fresh();
 
-        // Recalcula el arreglo $resumen, $porTipo y $porMedio
-        $this->refrescarResumenes();
+            // Recargar el resumen del turno
+            $this->refrescarResumenes();
+
+            // Obtener los medios de pago activos con su saldo
+            $mediosDePago = MedioPagos::where('activo', true)->get();
+
+            // Calcular el saldo de cada medio de pago
+            foreach ($mediosDePago as $medio) {
+                $medio->saldo = $this->calcularSaldoMedioPago($medio);
+            }
+
+            // Puedes pasar los medios de pago a la vista
+            return view('livewire.turnos-caja.turno-caja', [
+                'turno'          => $this->turno,
+                'mediosDePago'   => $mediosDePago,  // Agregar a la vista
+                'resumen'        => $this->resumen,
+                'porTipo'        => $this->porTipo,
+                'porMedio'       => $this->porMedio,
+                'turnosInforme'  => $this->turnosInforme,
+                'totalesInforme' => $this->totalesInforme,
+            ]);
+        }
+
+        // Si no hay turno
+        return view('livewire.turnos-caja.turno-caja');
     }
 
-    return view('livewire.turnos-caja.turno-caja', [
-        'turno'          => $this->turno,
-        'resumen'        => $this->resumen,
-        'porTipo'        => $this->porTipo,
-        'porMedio'       => $this->porMedio,
-        'turnosInforme'  => $this->turnosInforme,
-        'totalesInforme' => $this->totalesInforme,
-    ]);
-}
+    private function calcularSaldoMedioPago($medio)
+    {
+        // Asumiendo que tienes una relación con los pagos y que cada pago tiene un medio de pago
+        $totalPagado = FacturaPago::where('medio_pago_id', $medio->id)
+            ->where('turno_id', $this->turno->id)
+            ->sum('monto');
+
+        // Calcular el saldo (puedes modificar la fórmula según tu lógica)
+        $saldo = $medio->saldo_inicial - $totalPagado;
+
+        return $saldo;
+    }
+
 
 
     /* =========================================================
@@ -127,7 +156,7 @@ class TurnoCaja extends Component
             $this->refrescarResumenes();
             $this->actualizarInforme();
         } catch (\Throwable $e) {
-            Log::error('Error al abrir turno de caja: '.$e->getMessage());
+            Log::error('Error al abrir turno de caja: ' . $e->getMessage());
 
             PendingToast::create()
                 ->error()
@@ -198,7 +227,7 @@ class TurnoCaja extends Component
             $this->refrescarResumenes();
             $this->actualizarInforme();
         } catch (\Throwable $e) {
-            Log::error('Error al registrar movimiento de caja: '.$e->getMessage());
+            Log::error('Error al registrar movimiento de caja: ' . $e->getMessage());
 
             PendingToast::create()
                 ->error()
@@ -279,7 +308,7 @@ class TurnoCaja extends Component
 
             $this->actualizarInforme();
         } catch (\Throwable $e) {
-            Log::error('Error al cerrar turno de caja: '.$e->getMessage());
+            Log::error('Error al cerrar turno de caja: ' . $e->getMessage());
 
             PendingToast::create()
                 ->error()
@@ -335,7 +364,7 @@ class TurnoCaja extends Component
 
             $this->resumen = [
                 'base_inicial'       => (float) $this->turno->base_inicial,
-                'total_ventas'       => (float) $pagos->sum('monto'),
+                'total_ventas'       => (float) $pagos->where('medio_tipo', 'Efectivo')->sum('monto'),
                 'devoluciones'       => (float) $this->turno->devoluciones,
                 'ingresos'           => (float) $this->turno->ingresos_efectivo,
                 'retiros'            => (float) $this->turno->retiros_efectivo,
@@ -359,60 +388,85 @@ class TurnoCaja extends Component
                 ->values()
                 ->all();
         } catch (\Throwable $e) {
-            Log::error('Error al refrescar resúmenes de turno: '.$e->getMessage());
+            Log::error('Error al refrescar resúmenes de turno: ' . $e->getMessage());
 
             PendingToast::create()
                 ->error()
                 ->message('No se pudo refrescar el resumen del turno.')
-                ->duration(8000)
-                ->push();
+                ->duration(8000);
         }
     }
 
     /* =========================================================
      * INFORME HISTÓRICO POR RANGO
      * =======================================================*/
-    public function actualizarInforme(): void
-    {
-        $this->validate([
-            'filtro_desde' => 'nullable|date',
-            'filtro_hasta' => 'nullable|date|after_or_equal:filtro_desde',
-        ]);
+   public function actualizarInforme(): void
+{
+    $this->validate([
+        'filtro_desde' => 'nullable|date',
+        'filtro_hasta' => 'nullable|date|after_or_equal:filtro_desde',
+    ]);
 
-        try {
-            $query = turnos_caja::query()
-                ->where('user_id', Auth::id());
+    try {
+        // 1️⃣ Turnos
+        $query = turnos_caja::query()
+            ->where('user_id', Auth::id());
 
-            if ($this->filtro_desde) {
-                $query->whereDate('fecha_inicio', '>=', $this->filtro_desde);
-            }
-
-            if ($this->filtro_hasta) {
-                $query->whereDate('fecha_inicio', '<=', $this->filtro_hasta);
-            }
-
-            $query->orderByDesc('fecha_inicio');
-
-            $turnos = $query->get();
-            $this->turnosInforme = $turnos;
-
-            $this->totalesInforme = [
-                'conteo'         => $turnos->count(),
-                'total_base'     => (float) $turnos->sum('base_inicial'),
-                'total_ventas'   => (float) $turnos->sum('total_ventas'),
-                'total_efectivo' => (float) $turnos->sum('ventas_efectivo'),
-                'total_ingresos' => (float) $turnos->sum('ingresos_efectivo'),
-                'total_retiros'  => (float) $turnos->sum('retiros_efectivo'),
-                'total_devol'    => (float) $turnos->sum('devoluciones'),
-            ];
-        } catch (\Throwable $e) {
-            Log::error('Error al actualizar informe de turnos: '.$e->getMessage());
-
-            PendingToast::create()
-                ->error()
-                ->message('No se pudo generar el informe de turnos.')
-                ->duration(8000)
-                ->push();
+        if ($this->filtro_desde) {
+            $query->whereDate('fecha_inicio', '>=', $this->filtro_desde);
         }
+
+        if ($this->filtro_hasta) {
+            $query->whereDate('fecha_inicio', '<=', $this->filtro_hasta);
+        }
+
+        $turnos = $query->orderByDesc('fecha_inicio')->get();
+        $this->turnosInforme = $turnos;
+
+        // 2️⃣ Medios de pago activos
+        $this->mediosActivos = MedioPagos::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre'])
+            ->toArray();
+
+        // 3️⃣ Totales por turno + medio
+        $turnoIds = $turnos->pluck('id')->all();
+
+        $rows = FacturaPago::query()
+            ->selectRaw('turno_id, medio_pago_id, SUM(monto) as total')
+            ->whereIn('turno_id', $turnoIds)
+            ->whereNotNull('medio_pago_id')
+            ->groupBy('turno_id', 'medio_pago_id')
+            ->get();
+
+        // 4️⃣ Mapa [turno][medio] = total
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r->turno_id][$r->medio_pago_id] = (float) $r->total;
+        }
+
+        $this->mapMediosPorTurno = $map;
+
+        // 5️⃣ Totales generales
+        $this->totalesInforme = [
+            'conteo'         => $turnos->count(),
+            'total_base'     => (float) $turnos->sum('base_inicial'),
+            'total_ventas'   => (float) $turnos->sum('total_ventas'),
+            'total_efectivo' => (float) $turnos->sum('ventas_efectivo'),
+            'total_ingresos' => (float) $turnos->sum('ingresos_efectivo'),
+            'total_retiros'  => (float) $turnos->sum('retiros_efectivo'),
+            'total_devol'    => (float) $turnos->sum('devoluciones'),
+        ];
+    } catch (\Throwable $e) {
+        Log::error('Error al actualizar informe: '.$e->getMessage());
+
+        PendingToast::create()
+            ->error()
+            ->message('No se pudo generar el informe.')
+            ->duration(8000)
+            ->push();
     }
+}
+
 }

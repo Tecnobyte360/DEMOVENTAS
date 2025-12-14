@@ -22,8 +22,7 @@ class ConceptosDocumentos extends Component
     public bool   $soloActivos = true;
     public int    $perPage = 12;
 
-    /* Filtro para el catálogo de cuentas del modal */
-    public bool   $soloImputables = true; // ← NUEVO
+    public bool   $soloImputables = true;
 
     /* ========= Modal / Form ========= */
     public bool $showModal = false;
@@ -39,12 +38,12 @@ class ConceptosDocumentos extends Component
     public string $buscarCuenta = '';
     public $cuentasCatalogo = [];
 
+    /** plan_cuenta_id => meta */
     public array $cuentasSeleccionadas = [];
 
     public array $rolesSugeridos = [
         'gasto','ingreso','costo','inventario','gasto_devolucion','ingreso_devolucion'
     ];
-
 
     protected function rules(): array
     {
@@ -67,13 +66,11 @@ class ConceptosDocumentos extends Component
         'tipo.in'         => 'Tipo inválido.',
     ];
 
-    /* ========= Acciones de lista ========= */
     public function updatingSearch()         { $this->resetPage(); }
     public function updatingTipoFiltro()     { $this->resetPage(); }
     public function updatingSoloActivos()    { $this->resetPage(); }
-    public function updatingSoloImputables() { $this->resetPage(); } // ← NUEVO
+    public function updatingSoloImputables() { $this->resetPage(); }
 
-    /* ========= Crear / Editar ========= */
     public function crear(): void
     {
         $this->resetForm();
@@ -94,11 +91,11 @@ class ConceptosDocumentos extends Component
 
         $rows = ConceptoDocumentoCuenta::where('concepto_documento_id', $c->id)->get();
         foreach ($rows as $r) {
-            $this->cuentasSeleccionadas[$r->plan_cuenta_id] = [
+            $this->cuentasSeleccionadas[(int)$r->plan_cuenta_id] = [
                 'rol'        => $r->rol,
-                'naturaleza' => $r->naturaleza,
+                'naturaleza' => $r->naturaleza, // debito|credito
                 'porcentaje' => $r->porcentaje,
-                'prioridad'  => $r->prioridad,
+                'prioridad'  => (int)($r->prioridad ?? 0),
             ];
         }
 
@@ -116,10 +113,46 @@ class ConceptosDocumentos extends Component
         $this->resetPage();
     }
 
-    /* ========= Guardar ========= */
+    /** ✅ Cuando cambias tipo en el modal, seteamos naturaleza por defecto a las seleccionadas */
+    public function updatedTipo($value): void
+    {
+        $default = $this->defaultNaturalezaPorTipo();
+
+        foreach ($this->cuentasSeleccionadas as $pcId => $meta) {
+            if (empty($meta['naturaleza'])) {
+                $this->cuentasSeleccionadas[$pcId]['naturaleza'] = $default;
+            }
+        }
+    }
+
+    private function defaultNaturalezaPorTipo(): ?string
+    {
+        // Regla simple:
+        // - salida: por defecto débito (gasto)
+        // - entrada: por defecto crédito
+        // - ajuste: null (que el usuario decida)
+        if ($this->tipo === 'salida')  return 'debito';
+        if ($this->tipo === 'entrada') return 'credito';
+        return null;
+    }
+
     public function guardar(): void
     {
         $this->validate();
+
+        // ✅ VALIDACIÓN CONTABLE: mínimo 1 débito
+        $deb = collect($this->cuentasSeleccionadas)->filter(
+            fn($m) => ($m['naturaleza'] ?? null) === 'debito'
+        );
+
+        if ($deb->isEmpty()) {
+            $this->addError('cuentasSeleccionadas', 'Debes marcar al menos una cuenta en DÉBITO.');
+            return;
+        }
+
+        // (opcional) exigir crédito también:
+        // $cre = collect($this->cuentasSeleccionadas)->filter(fn($m) => ($m['naturaleza'] ?? null) === 'credito');
+        // if ($cre->isEmpty()) { $this->addError('cuentasSeleccionadas', 'Debes marcar al menos una cuenta en CRÉDITO.'); return; }
 
         DB::transaction(function () {
             $concepto = ConceptoDocumento::updateOrCreate(
@@ -135,6 +168,7 @@ class ConceptosDocumentos extends Component
             $this->concepto_id = $concepto->id;
 
             $idsVigentes = array_keys($this->cuentasSeleccionadas);
+
             ConceptoDocumentoCuenta::where('concepto_documento_id', $concepto->id)
                 ->whereNotIn('plan_cuenta_id', $idsVigentes ?: [0])
                 ->delete();
@@ -147,7 +181,7 @@ class ConceptosDocumentos extends Component
                     ],
                     [
                         'rol'        => $meta['rol']        ?? null,
-                        'naturaleza' => $meta['naturaleza'] ?? null,
+                        'naturaleza' => $meta['naturaleza'] ?? null, // ✅ ya viene debito|credito
                         'porcentaje' => ($meta['porcentaje'] === '' || $meta['porcentaje'] === null)
                                         ? null : (float) $meta['porcentaje'],
                         'prioridad'  => isset($meta['prioridad']) ? (int) $meta['prioridad'] : 0,
@@ -161,17 +195,16 @@ class ConceptosDocumentos extends Component
         $this->resetPage();
     }
 
-    /* ========= Helpers del modal ========= */
-
     public function toggleCuenta(int $planCuentaId): void
     {
         if (isset($this->cuentasSeleccionadas[$planCuentaId])) {
             unset($this->cuentasSeleccionadas[$planCuentaId]);
             return;
         }
+
         $this->cuentasSeleccionadas[$planCuentaId] = [
             'rol'        => null,
-            'naturaleza' => null,
+            'naturaleza' => $this->defaultNaturalezaPorTipo(), // ✅ default automático
             'porcentaje' => null,
             'prioridad'  => 0,
         ];
@@ -200,12 +233,12 @@ class ConceptosDocumentos extends Component
             'concepto_id','codigo','nombre','tipo','descripcion','activo',
             'buscarCuenta','cuentasSeleccionadas'
         ]);
+
         $this->tipo   = 'entrada';
         $this->activo = true;
         $this->cuentasSeleccionadas = [];
     }
 
-    /* ========= Render ========= */
     public function render()
     {
         $conceptos = ConceptoDocumento::query()
@@ -222,16 +255,15 @@ class ConceptosDocumentos extends Component
             ->orderBy('nombre')
             ->paginate($this->perPage);
 
- 
         $this->cuentasCatalogo = PlanCuentas::query()
             ->when($this->buscarCuenta, function ($q) {
                 $t = trim($this->buscarCuenta);
                 $q->where(function($w) use ($t){
                     $w->where('codigo','like',"%{$t}%")
                       ->orWhere('nombre','like',"%{$t}%");
-                }); 
+                });
             })
-            ->when($this->soloImputables, fn($q) => $q->where('titulo', 0)) 
+            ->when($this->soloImputables, fn($q) => $q->where('titulo', 0))
             ->where('cuenta_activa', true)
             ->orderBy('codigo')
             ->limit(100)

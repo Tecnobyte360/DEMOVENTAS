@@ -13,13 +13,18 @@ class GastoRuta extends Model
     protected $table = 'gastos_ruta';
 
     protected $fillable = [
+        'serie_id',
+        'numero',
+        'prefijo',
+
         'ruta_id',
         'user_id',
         'tipo_gasto_id',
         'concepto_documento_id',   
-          'caja_movimiento_id',  
+        'caja_movimiento_id',  
         'monto',
         'observacion',
+        'GastoRuta'
     ];
 
     public function ruta()
@@ -41,8 +46,14 @@ class GastoRuta extends Model
     {
         return $this->belongsTo(ConceptoDocumento::class, 'concepto_documento_id');
     }
-       public function cajaMovimiento()
+
+    public function cajaMovimiento()
     {
         return $this->belongsTo(\App\Models\TurnosCaja\CajaMovimiento::class);
+    }
+
+    public function asiento()
+    {
+        return $this->belongsTo(\App\Models\Asiento\Asiento::class);
     }
 }

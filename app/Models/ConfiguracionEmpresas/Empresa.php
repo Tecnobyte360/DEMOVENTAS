@@ -58,6 +58,17 @@ class Empresa extends Model
         return $this->toPublicUrl($this->favicon_path);
     }
 
+    /** === Accessors de color normalizado para UI === */
+    public function getColorPrimarioHexAttribute(): string
+    {
+        return $this->normalizeHex($this->color_primario) ?? '#1F2937';
+    }
+
+    public function getColorSecundarioHexAttribute(): string
+    {
+        return $this->normalizeHex($this->color_secundario) ?? '#1F2937';
+    }
+
     private function toPublicUrl(?string $path): ?string
     {
         if (!$path) {
@@ -69,5 +80,26 @@ class Empresa extends Model
         }
 
         return asset('storage/' . $path);
+    }
+
+    private function normalizeHex(?string $hex): ?string
+    {
+        if ($hex === null) return null;
+
+        $hex = trim($hex);
+        if ($hex === '') return null;
+
+        $hex = ltrim($hex, '#');
+
+        // soporta RGB corto
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
+            return null;
+        }
+
+        return '#'.strtoupper($hex);
     }
 }

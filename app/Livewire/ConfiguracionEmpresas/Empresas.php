@@ -15,7 +15,6 @@ class Empresas extends Component
 
     protected $paginationTheme = 'tailwind';
 
-    /** Guardamos sólo el ID para evitar problemas de (de)hidratación */
     public ?int $empresa_id = null;
 
     // Datos base
@@ -79,32 +78,25 @@ class Empresas extends Component
     protected function rules(): array
     {
         return [
-            'nombre'         => ['required', 'string', 'max:255'],
-            'nit'            => ['nullable', 'string', 'max:50'],
-            'email'          => ['nullable', 'email', 'max:255'],
-            'telefono'       => ['nullable', 'string', 'max:50'],
-            'sitio_web'      => ['nullable', 'url', 'max:255'],
-            'direccion'      => ['nullable', 'string', 'max:255'],
-            'is_activa'      => ['boolean'],
-            'color_primario' => ['nullable', 'string', 'max:32'],
+            'nombre'           => ['required', 'string', 'max:255'],
+            'nit'              => ['nullable', 'string', 'max:50'],
+            'email'            => ['nullable', 'email', 'max:255'],
+            'telefono'         => ['nullable', 'string', 'max:50'],
+            'sitio_web'        => ['nullable', 'url', 'max:255'],
+            'direccion'        => ['nullable', 'string', 'max:255'],
+            'is_activa'        => ['boolean'],
+            'color_primario'   => ['nullable', 'string', 'max:32'],
             'color_secundario' => ['nullable', 'string', 'max:32'],
-            'theme.*'        => ['nullable', 'string', 'max:64'],
+            'theme.*'          => ['nullable', 'string', 'max:64'],
 
-            'logo_b64'       => ['nullable', 'string'],
-            'logo_dark_b64'  => ['nullable', 'string'],
-            'favicon_b64'    => ['nullable', 'string'],
+            'logo_b64'         => ['nullable', 'string'],
+            'logo_dark_b64'    => ['nullable', 'string'],
+            'favicon_b64'      => ['nullable', 'string'],
         ];
     }
 
-    public function updatingQ()
-    {
-        $this->resetPage();
-    }
-
-    public function updatingPerPage()
-    {
-        $this->resetPage();
-    }
+    public function updatingQ() { $this->resetPage(); }
+    public function updatingPerPage() { $this->resetPage(); }
 
     public function createNew(): void
     {
@@ -133,12 +125,14 @@ class Empresas extends Component
     public function save(): void
     {
         try {
-            // Merge defaults por si theme viene parcial
             $this->theme = array_replace($this->defaultTheme(), $this->theme ?? []);
+
+            // ✅ normalizar colores antes de validar/guardar
+            $this->color_primario   = $this->normalizeHex($this->color_primario);
+            $this->color_secundario = $this->normalizeHex($this->color_secundario);
 
             $this->validate();
 
-            // Re-hidratar desde BD por ID
             $empresa = $this->empresa_id
                 ? Empresa::findOrFail($this->empresa_id)
                 : new Empresa();
@@ -156,7 +150,6 @@ class Empresas extends Component
                 'pdf_theme'        => $this->theme,
             ]);
 
-            // Guardar imágenes sólo si se subieron nuevas
             if ($this->logo_b64) {
                 $empresa->logo_path = $this->storeBase64Image($this->logo_b64, 'logos', 'logo');
             }
@@ -170,7 +163,6 @@ class Empresas extends Component
             $empresa->save();
             $this->empresa_id = $empresa->id;
 
-            // Refrescar “actuales” para la vista
             $this->logo_actual      = $this->toPublicUrl($empresa->logo_path);
             $this->logo_dark_actual = $this->toPublicUrl($empresa->logo_dark_path);
             $this->favicon_actual   = $this->toPublicUrl($empresa->favicon_path);
@@ -199,6 +191,24 @@ class Empresas extends Component
         }
     }
 
+    private function normalizeHex(?string $hex): ?string
+    {
+        $hex = trim((string) $hex);
+        if ($hex === '') return null;
+
+        $hex = ltrim($hex, '#');
+
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+
+        if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
+            return null;
+        }
+
+        return '#'.strtoupper($hex);
+    }
+
     private function storeBase64Image(string $dataUrl, string $folder, string $prefix): string
     {
         if (!str_contains($dataUrl, ';base64,')) {
@@ -209,12 +219,12 @@ class Empresas extends Component
         $mime = str_replace('data:', '', $meta);
 
         $ext = match ($mime) {
-            'image/jpeg'                          => 'jpg',
-            'image/png'                           => 'png',
-            'image/webp'                          => 'webp',
-            'image/svg+xml'                       => 'svg',
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/svg+xml' => 'svg',
             'image/x-icon', 'image/vnd.microsoft.icon' => 'ico',
-            default                               => 'png',
+            default => 'png',
         };
 
         $binary = base64_decode($encoded);
@@ -245,7 +255,6 @@ class Empresas extends Component
 
         $this->theme = array_replace($this->defaultTheme(), (array) $m->pdf_theme);
 
-        // Logos actuales en la UI
         $this->logo_actual      = $this->toPublicUrl($m->logo_path);
         $this->logo_dark_actual = $this->toPublicUrl($m->logo_dark_path);
         $this->favicon_actual   = $this->toPublicUrl($m->favicon_path);
@@ -256,18 +265,9 @@ class Empresas extends Component
     private function resetForm(): void
     {
         $this->reset([
-            'nombre',
-            'nit',
-            'email',
-            'telefono',
-            'sitio_web',
-            'direccion',
-            'is_activa',
-            'color_primario',
-            'color_secundario',
-            'logo_actual',
-            'logo_dark_actual',
-            'favicon_actual',
+            'nombre','nit','email','telefono','sitio_web','direccion',
+            'is_activa','color_primario','color_secundario',
+            'logo_actual','logo_dark_actual','favicon_actual',
         ]);
 
         $this->is_activa      = true;
@@ -285,14 +285,8 @@ class Empresas extends Component
 
     private function toPublicUrl(?string $path): ?string
     {
-        if (!$path) {
-            return null;
-        }
-
-        if (str_starts_with($path, 'data:image/')) {
-            return $path;
-        }
-
+        if (!$path) return null;
+        if (str_starts_with($path, 'data:image/')) return $path;
         return asset('storage/' . $path);
     }
 

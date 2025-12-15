@@ -394,7 +394,7 @@
                 </a>
 
                 <!-- Logística -->
-                @if(auth()->user()->hasRole('administrador') || auth()->user()->hasRole('rutas'))
+                {{-- @if(auth()->user()->hasRole('administrador') || auth()->user()->hasRole('rutas'))
                 <div x-data="{ open: false }">
                     <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -454,7 +454,7 @@
                         </a>
                     </div>
                 </div>
-                @endif
+                @endif --}}
 
                 <!-- Finanzas -->
                 @if(auth()->user()->hasRole('administrador'))
@@ -488,7 +488,7 @@
                     <div x-show="open" 
                          x-collapse
                          class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                        <a href="{{ route('Finanzas') }}" 
+                        {{-- <a href="{{ route('Finanzas') }}" 
                            class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
                                   transition-all duration-200 overflow-hidden
                                   hover:bg-white/25 hover:pl-5 hover:shadow-sm
@@ -496,7 +496,7 @@
                            :style="`color: ${fgMuted}`">
                             <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
                             <span class="transition-all duration-200 group-hover:text-[#1a1a1a] group-hover:font-bold">Finanzas</span>
-                        </a>
+                        </a> --}}
                         <a href="{{ route('PagosRecibidos') }}" 
                            class="group relative block px-3 py-2 rounded-lg text-sm font-medium 
                                   transition-all duration-200 overflow-hidden

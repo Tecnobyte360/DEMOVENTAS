@@ -2,7 +2,7 @@
   @push('styles')
     {{-- FontAwesome --}}
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    {{-- TomSelect para buscar facturas --}}
+    {{-- TomSelect --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
   @endpush
 @endonce
@@ -25,10 +25,8 @@
           const el = document.getElementById('factura-select');
           if (!el) return;
 
-          // destruir instancia previa (por re-render de Livewire)
-          if (el.tomselect) {
-            el.tomselect.destroy();
-          }
+          // destruir instancia previa
+          if (el.tomselect) el.tomselect.destroy();
 
           const ts = new TomSelect(el, {
             placeholder: '— Selecciona una factura —',
@@ -37,22 +35,17 @@
             closeAfterSelect: true,
             plugins: ['dropdown_input'],
             onChange(value) {
-              // sincronizar con Livewire
               @this.set('facturaId', value || null);
             },
           });
 
-          // si Livewire ya tiene factura seleccionada, reflejarla
+          // reflejar valor actual
           const current = @this.get('facturaId');
-          if (current) {
-            ts.setValue(String(current), false);
-          }
+          if (current) ts.setValue(String(current), false);
         };
 
-        // primera inicialización
         initFacturaSelect();
 
-        // re-inicializar cada vez que se procesa un mensaje de este componente
         Livewire.hook('message.processed', (message, component) => {
           if (component.fingerprint && component.fingerprint.name === 'facturas.pagos-factura') {
             initFacturaSelect();
@@ -72,14 +65,15 @@
     <div class="w-full max-w-3xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
 
       {{-- Header --}}
-      <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between 
-                  bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300 
+      <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between
+                  bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300
                   dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-gray-800 dark:text-white rounded-t-2xl">
         <h3 class="text-lg font-semibold flex items-center gap-2">
           <i class="fa-solid fa-cash-register"></i>
           Registrar pago de factura
         </h3>
-        <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition" 
+
+        <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
                 @click="open=false" wire:click="cerrar" title="Cerrar">
           <i class="fa-solid fa-xmark"></i>
         </button>
@@ -88,36 +82,70 @@
       {{-- Cuerpo --}}
       <div class="p-5 space-y-5">
 
-        {{-- 🧾 Selector de factura (con búsqueda) --}}
+        {{-- ✅ Selector de tipo + búsqueda + factura (solo si no viene facturaId) --}}
         @if(!$facturaId)
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+            {{-- Tipo (Venta/Compra) --}}
+            <div>
+              <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                Tipo
+              </label>
+
+              <select wire:model.live="tipoDocumento"
+                      class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                             dark:bg-gray-800 dark:text-white px-3 text-sm">
+                <option value="venta">Factura de Venta</option>
+                <option value="compra">Factura de Compra</option>
+              </select>
+            </div>
+
+            {{-- Buscar --}}
+            <div class="md:col-span-2">
+              <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                Buscar
+              </label>
+
+              <input type="text"
+                     wire:model.debounce.400ms="buscarFactura"
+                     placeholder="Cliente/Proveedor · documento · número · prefijo"
+                     class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                            dark:bg-gray-800 dark:text-white px-3 text-sm">
+            </div>
+          </div>
+
+          {{-- Select TomSelect --}}
           <div wire:ignore>
             <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-              Seleccionar factura
-            </label>
-            <select id="factura-select"
-                    class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
-                           dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
-              <option value="">— Selecciona una factura —</option>
-              @foreach(
-                \App\Models\Factura\Factura::with(['socioNegocio','serie'])
-                  ->where('saldo', '>', 0)
-                  ->orderByDesc('id')
-                  ->limit(200)
-                  ->get(['id','numero','prefijo','serie_id','socio_negocio_id','fecha','total','saldo']) as $f
-              )
-                @php
-                  $numero = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
-                  $codigo = trim(($f->prefijo ? $f->prefijo.'-' : '').$numero);
-                  $cliente = $f->socioNegocio?->razon_social ?? 'Sin cliente';
-                  $fecha   = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
-                @endphp
-                <option value="{{ $f->id }}">
-                  {{ $codigo }} — {{ $cliente }} — {{ $fecha }}
-                  — Total: ${{ number_format($f->total, 0, ',', '.') }}
-                  — Saldo: ${{ number_format($f->saldo, 0, ',', '.') }}
-                </option>
-              @endforeach
-            </select>
+  Seleccionar factura pendiente ({{ $tipoDocumento === 'compra' ? 'COMPRA' : 'VENTA' }})
+</label>
+
+<select
+  id="factura-select"
+  wire:key="factura-select-{{ $tipoDocumento }}-{{ md5($buscarFactura) }}"
+  class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
+         dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm"
+>
+  <option value="">— Selecciona una factura —</option>
+
+  @foreach($facturasPendientes as $f)
+    @php
+      $numero  = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
+      $codigo  = trim(($f->prefijo ? $f->prefijo.'-' : '').$numero);
+      $tercero = $f->socioNegocio?->razon_social ?? 'Sin tercero';
+      $fecha   = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
+    @endphp
+    <option value="{{ $f->id }}">
+      {{ $codigo }} — {{ $tercero }} — {{ $fecha }}
+      — Total: ${{ number_format((float)$f->total, 0, ',', '.') }}
+      — Saldo: ${{ number_format((float)$f->saldo, 0, ',', '.') }}
+    </option>
+  @endforeach
+</select>
+
+@error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
+
+
             @error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
           </div>
         @endif
@@ -154,7 +182,7 @@
           <div>
             <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Fecha</label>
             <input type="date"
-                   class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700 
+                   class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
                           dark:bg-gray-800 dark:text-white px-3"
                    wire:model.live="fecha">
             @error('fecha') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
@@ -163,7 +191,7 @@
           <div class="md:col-span-2">
             <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Notas</label>
             <input type="text"
-                   class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700 
+                   class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
                           dark:bg-gray-800 dark:text-white px-3"
                    wire:model.defer="notas"
                    placeholder="Observaciones del pago (opcional)">
@@ -191,10 +219,9 @@
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                 @foreach($items as $idx => $row)
                   <tr wire:key="pago-row-{{ $idx }}">
-                    {{-- Medio --}}
                     <td class="p-3">
                       <select wire:model.live="items.{{ $idx }}.medio_pago_id"
-                              class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700 
+                              class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
                                      dark:bg-gray-800 dark:text-white px-2">
                         <option value="">— Selecciona —</option>
                         @foreach($medios as $m)
@@ -203,21 +230,18 @@
                       </select>
                     </td>
 
-                    {{-- % --}}
                     <td class="p-3">
                       <input type="number" step="0.01" min="0" max="100"
                              wire:model.live="items.{{ $idx }}.porcentaje"
                              class="w-full h-10 text-center rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
                     </td>
 
-                    {{-- Monto --}}
                     <td class="p-3">
                       <input type="number" step="0.01" min="0.01"
                              wire:model.live="items.{{ $idx }}.monto"
                              class="w-full h-10 text-right rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
                     </td>
 
-                    {{-- Ref --}}
                     <td class="p-3">
                       <input type="text" maxlength="120"
                              wire:model.defer="items.{{ $idx }}.referencia"
@@ -225,7 +249,6 @@
                              placeholder="Comprobante o #autorización">
                     </td>
 
-                    {{-- Quitar --}}
                     <td class="p-3 text-center">
                       <button type="button" wire:click="removeItem({{ $idx }})"
                               class="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200">
@@ -256,10 +279,11 @@
             </table>
           </div>
         </div>
+
       </div>
 
       {{-- Footer --}}
-      <div class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2 
+      <div class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2
                   bg-gray-50/60 dark:bg-gray-800/40">
         <div class="text-sm">
           <span class="font-medium">Diferencia:</span>
@@ -282,6 +306,45 @@
           </button>
         </div>
       </div>
+
     </div>
   </div>
 </div>
+<script>
+  document.addEventListener('livewire:init', () => {
+
+    const initFacturaSelect = () => {
+      const el = document.getElementById('factura-select');
+      if (!el) return;
+
+      if (el.tomselect) el.tomselect.destroy();
+
+      const ts = new TomSelect(el, {
+        placeholder: '— Selecciona una factura —',
+        allowEmptyOption: true,
+        maxOptions: 500,
+        closeAfterSelect: true,
+        plugins: ['dropdown_input'],
+        onChange(value) {
+          @this.set('facturaId', value || null);
+        },
+      });
+
+      const current = @this.get('facturaId');
+      if (current) ts.setValue(String(current), false);
+    };
+
+    // Inicial
+    initFacturaSelect();
+
+    // Cada re-render del componente
+    Livewire.hook('message.processed', (message, component) => {
+      if (component.fingerprint?.name === 'facturas.pagos-factura') {
+        initFacturaSelect();
+      }
+    });
+
+    // Evento manual cuando cambias tipo/buscar
+    Livewire.on('refresh-factura-select', () => initFacturaSelect());
+  });
+</script>

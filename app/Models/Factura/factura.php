@@ -201,4 +201,8 @@ class Factura extends Model
         // si tu FK es empresa_id en la tabla facturas
         return $this->belongsTo(Empresa::class, 'empresa_id');
     }
+    public function proveedor()
+{
+    return $this->belongsTo(SocioNegocio::class, 'proveedor_id');
+}
 }

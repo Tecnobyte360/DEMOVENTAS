@@ -36,6 +36,7 @@ use App\Livewire\Facturas\Listapagosrecibidos;
 use App\Livewire\Facturas\NotaCreditoForm;
 use App\Livewire\Finanzas\Finanzas;
 use App\Livewire\Finanzas\GastosEmpresa;
+use App\Livewire\Finanzas\InformeVentas;
 use App\Livewire\Finanzas\TiposGasto;
 use App\Livewire\GrabarVideo as LivewireGrabarVideo;
 use App\Livewire\Impuesto\Impuesto;
@@ -312,7 +313,7 @@ Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocu
         ->name('PagosRecibidos');
    Route::get('/abrircaja', TurnoCaja::class)
         ->name('abrircaja');
-   
+      Route::get('/reportes/ventas', InformeVentas::class)->name('reportes.ventas');
 
      Route::get('/grabar-video', LivewireGrabarVideo::class);
         

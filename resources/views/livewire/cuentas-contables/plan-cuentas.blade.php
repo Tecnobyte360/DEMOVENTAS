@@ -17,7 +17,6 @@
   @once
     @push('scripts')
       <script>
-        // Evita carreras con Alpine al iniciar junto con Livewire
         window.deferLoadingAlpine = (alpineInit) => { document.addEventListener('livewire:init', alpineInit) }
       </script>
       <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
@@ -31,7 +30,6 @@
     .sap-connector { width: 18px; height: 18px; border-bottom: 1px dashed rgba(99,102,241,.28); margin-right: .25rem; }
     [x-cloak] { display: none !important; }
 
-    /* Bandas por nivel (sutileza, no mancha) */
     .lvl-1  { background: linear-gradient(90deg, rgba(99,102,241,.04),  transparent 180px); }
     .lvl-2  { background: linear-gradient(90deg, rgba(99,102,241,.035), transparent 180px); }
     .lvl-3  { background: linear-gradient(90deg, rgba(99,102,241,.03),  transparent 180px); }
@@ -43,10 +41,8 @@
     .lvl-9  { background: linear-gradient(90deg, rgba(99,102,241,.014), transparent 180px); }
     .lvl-10 { background: linear-gradient(90deg, rgba(99,102,241,.012), transparent 180px); }
 
-    /* Resaltado de búsqueda */
     mark.pc-hit { background: #fde68a; color: #7c2d12; padding: 0 .15rem; border-radius: .25rem; }
 
-    /* Organización avanzada */
     .pc-grid-cols {
       display: grid;
       grid-template-columns: 16rem 1fr 9rem 5rem auto; /* Código | Cuenta | Naturaleza | Activa | Saldos */
@@ -54,18 +50,14 @@
       align-items: center;
     }
 
-    /* Columnas pegajosas (congeladas) */
     .pc-sticky-code   { position: sticky; left: 0;     z-index: 10; }
     .pc-sticky-name   { position: sticky; left: 16rem; z-index: 10; }
 
-    /* Fondo para columnas pegajosas */
     .pc-bg { background: #ffffff; }
     .dark .pc-bg { background: #0b0f19; }
 
-    /* Cabecera pegajosa dentro del contenedor scrolleable */
     .pc-head-sticky { position: sticky; top: 0; z-index: 20; }
 
-    /* Separadores por Naturaleza */
     .pc-section {
       position: sticky;
       top: 0;
@@ -79,7 +71,6 @@
     .pc-section.light { background: #f1f5f9aa; }
     .dark .pc-section.light { background: #0f172aaa; }
 
-    /* Zebra suave */
     .pc-row-odd { background: rgba(2,6,23,0.00); }
     .pc-row-even { background: rgba(2,6,23,0.03); }
     .dark .pc-row-even { background: rgba(148,163,184,0.06); }
@@ -501,7 +492,7 @@
             </div>
           @endforelse
 
-          {{-- Loading general (cuando Livewire recalcula) --}}
+          {{-- Loading general --}}
           <div wire:loading.flex class="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm items-center justify-center">
             <div class="animate-spin h-6 w-6 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
           </div>
@@ -661,7 +652,6 @@
           const eb = el.getBoundingClientRect();
           const sb = sc.getBoundingClientRect();
 
-          // margen para que no quede pegado al header sticky
           if (eb.top < sb.top + 60 || eb.bottom > sb.bottom - 60) {
             sc.scrollTo({
               top: sc.scrollTop + (eb.top - sb.top) - 80,

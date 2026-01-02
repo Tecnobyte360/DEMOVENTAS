@@ -93,7 +93,7 @@ class PlanCuentas extends Component
     /* =========================================================
      |  CARGA MASIVA (ACTIVOS PUC)
      ========================================================= */
-    public $archivo_activos = null; // xlsx/xls/csv
+    public $archivo_activos = null; // xlsx/xls/csv (temporal livewire-tmp)
     public array $importResumen = ['insertados'=>0,'actualizados'=>0,'errores'=>0];
     public bool $importando = false;
 
@@ -614,10 +614,10 @@ class PlanCuentas extends Component
     }
 
     /* =========================================================
-     | ✅ IMPORTAR ACTIVOS XLSX/CSV (TODO AQUÍ, SIN CLASE IMPORT)
-     |    - Requiere encabezados: codigo, nombre
-     |    - Solo trae cuentas cuyo código (sin puntos) empieza por 1
-     |    - Niveles soportados por longitud: 1/2/4/6
+     | ✅ IMPORTAR ACTIVOS XLSX/CSV (LEE Y BORRA TEMP)
+     |  - Encabezados: codigo, nombre
+     |  - Solo códigos que empiecen por 1 (ACTIVOS)
+     |  - Niveles: len 1/2/4/6
      ========================================================= */
     public function importarActivosDesdeExcel(): void
     {
@@ -646,14 +646,9 @@ class PlanCuentas extends Component
 
                             $codPlano = str_replace('.', '', $codigo);
 
-                            // solo ACTIVOS
-                            if (!str_starts_with($codPlano, '1')) {
-                                continue;
-                            }
+                            if (!str_starts_with($codPlano, '1')) continue; // solo activos
 
                             $len = strlen($codPlano);
-
-                            // longitudes permitidas
                             if (!in_array($len, [1,2,4,6], true)) {
                                 $this->errores++;
                                 continue;
@@ -674,18 +669,18 @@ class PlanCuentas extends Component
                             };
 
                             $padreId = null;
-
                             if ($padreCodPlano) {
-                                // Busca padre por código SIN puntos
-                                $padreId = Cuenta::whereRaw("REPLACE(codigo,'.','') = ?", [$padreCodPlano])->value('id');
+                                $padreId = \App\Models\CuentasContables\PlanCuentas::whereRaw(
+                                    "REPLACE(codigo,'.','') = ?",
+                                    [$padreCodPlano]
+                                )->value('id');
                             }
 
                             $titulo = $len !== 6;
 
-                            // OJO: updateOrCreate necesita el modelo Cuenta disponible (usa FQCN)
-                            $exists = Cuenta::where('codigo', $codigo)->exists();
+                            $exists = \App\Models\CuentasContables\PlanCuentas::where('codigo', $codigo)->exists();
 
-                            Cuenta::updateOrCreate(
+                            \App\Models\CuentasContables\PlanCuentas::updateOrCreate(
                                 ['codigo' => $codigo],
                                 [
                                     'nombre' => $nombre,
@@ -709,7 +704,11 @@ class PlanCuentas extends Component
             };
 
             DB::transaction(function () use ($importer) {
+                // ✅ NO guardamos el archivo: Livewire lo tiene temporal y Excel lo lee
                 Excel::import($importer, $this->archivo_activos);
+
+                // Alternativa (también sirve):
+                // Excel::import($importer, $this->archivo_activos->getRealPath());
             });
 
             $this->importResumen = [
@@ -717,6 +716,9 @@ class PlanCuentas extends Component
                 'actualizados' => $importer->actualizados,
                 'errores'      => $importer->errores,
             ];
+
+            // ✅ BORRAR EL TEMPORAL DE LIVEWIRE (livewire-tmp)
+            try { $this->archivo_activos?->delete(); } catch (\Throwable $e) {}
 
             $this->archivo_activos = null;
             $this->resetValidation('archivo_activos');

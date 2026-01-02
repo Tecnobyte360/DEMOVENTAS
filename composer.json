@@ -18,6 +18,8 @@
         "maatwebsite/excel": "^3.1",
         "masmerise/livewire-toaster": "^2.8",
         "mike42/escpos-php": "^2.2",
+        "phpoffice/phpspreadsheet": "^1.30",
+        "smalot/pdfparser": "^2.12",
         "spatie/laravel-permission": "^6.18"
     },
     "require-dev": {

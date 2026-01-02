@@ -200,12 +200,87 @@
             </button>
           </div>
         </div>
+{{-- ✅ IMPORTAR PUC (ACTIVOS) XLSX/CSV --}}
+<div class="block">
+  <span class="block text-[11px] text-gray-500 mb-1">Importar PUC (Activos)</span>
+
+  <div class="flex flex-wrap items-center gap-2">
+
+    {{-- Selector de archivo --}}
+    <label class="inline-flex items-center gap-2 px-3 h-9 rounded-lg
+                  border border-gray-300 dark:border-gray-700
+                  bg-white dark:bg-gray-800 text-[11px]
+                  text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+      <i class="fa-solid fa-file-excel text-emerald-600"></i>
+      <span>Elegir archivo</span>
+
+      <input type="file"
+             class="hidden"
+             wire:model="archivo_activos"
+             accept=".xlsx,.csv">
+    </label>
+
+    {{-- Nombre del archivo seleccionado --}}
+    <div class="text-[11px] text-gray-500 dark:text-gray-400 min-w-[180px]">
+      @if($archivo_activos)
+        <span class="font-medium text-gray-700 dark:text-gray-200">
+          {{ $archivo_activos->getClientOriginalName() }}
+        </span>
+      @else
+        <span>No hay archivo</span>
+      @endif
+    </div>
+
+    {{-- Botón importar --}}
+    <button type="button"
+            wire:click="importarActivosDesdeExcel"
+            wire:loading.attr="disabled"
+            wire:target="archivo_activos,importarActivosDesdeExcel"
+            class="px-3 h-9 rounded-lg text-[11px] text-white
+                   bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed">
+      <span wire:loading.remove wire:target="importarActivosDesdeExcel">
+        <i class="fa-solid fa-upload mr-1"></i> Importar
+      </span>
+      <span wire:loading wire:target="importarActivosDesdeExcel" class="inline-flex items-center gap-2">
+        <span class="animate-spin h-3.5 w-3.5 border-2 border-white/80 border-t-transparent rounded-full"></span>
+        Importando…
+      </span>
+    </button>
+
+    {{-- Limpiar archivo --}}
+    @if($archivo_activos)
+      <button type="button"
+              wire:click="$set('archivo_activos', null)"
+              class="px-3 h-9 rounded-lg text-[11px]
+                     bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700
+                     text-gray-700 dark:text-gray-200">
+        Limpiar
+      </button>
+    @endif
+
+  </div>
+
+  {{-- Errores de validación --}}
+  @error('archivo_activos')
+    <p class="text-[11px] text-red-600 mt-1">{{ $message }}</p>
+  @enderror
+
+  {{-- Resumen último import --}}
+  @if(($importResumen['insertados'] ?? 0) || ($importResumen['actualizados'] ?? 0) || ($importResumen['errores'] ?? 0))
+    <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+      Resultado: <b>{{ $importResumen['insertados'] ?? 0 }}</b> insertados,
+      <b>{{ $importResumen['actualizados'] ?? 0 }}</b> actualizados,
+      <b class="{{ ($importResumen['errores'] ?? 0) ? 'text-rose-600' : '' }}">{{ $importResumen['errores'] ?? 0 }}</b> errores.
+    </p>
+  @endif
+</div>
 
         <div class="ml-auto text-[11px] text-gray-500 dark:text-gray-400">
           Nivel actual: <span class="font-semibold">{{ $nivelMax ?? 'Todos' }}</span>
         </div>
       </div>
     </div>
+    
 
     {{-- PANEL PRINCIPAL: Tabla/Árbol organizado --}}
     <section class="flex-1 min-h-0 p-4" x-bind:class="compact ? 'text-[13px]' : 'text-sm'">

@@ -6,6 +6,7 @@ use Livewire\Component;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\DB;
 use App\Models\CuentasContables\PlanCuentas as Cuenta;
+use Illuminate\Support\Facades\Log;
 
 class PlanCuentas extends Component
 {
@@ -71,6 +72,7 @@ class PlanCuentas extends Component
     {
         // abre raíces por defecto
         $this->expandidos = Cuenta::whereNull('padre_id')->pluck('id')->all();
+          $this->logCuentasConfiguradas();
     }
 
     /* ===== Helper de orden compatible con cualquier motor ===== */
@@ -568,4 +570,50 @@ class PlanCuentas extends Component
 
         return view('livewire.cuentas-contables.plan-cuentas', compact('items','nivelMax','posiblesPadres','rutaSeleccionada'));
     }
+
+    public function logCuentasConfiguradas(): void
+{
+    $cuentas = Cuenta::query()
+        ->orderByRaw($this->ordenCodigoExpr().' ASC')
+        ->get([
+            'id','codigo','nombre','padre_id','nivel','naturaleza',
+            'cuenta_activa','titulo','moneda','requiere_tercero','confidencial',
+            'nivel_confidencial','clase_cuenta','cuenta_monetaria','cuenta_asociada',
+            'revalua_indice','bloquear_contab_manual','relevante_flujo_caja','relevante_costos',
+            'dimension1','dimension2','dimension3','dimension4','saldo'
+        ]);
+
+    Log::info('PLAN_CUENTAS - Cuentas configuradas', [
+        'total' => $cuentas->count(),
+        'cuentas' => $cuentas->map(function ($c) {
+            return [
+                'id' => $c->id,
+                'codigo' => $c->codigo,
+                'nombre' => $c->nombre,
+                'padre_id' => $c->padre_id,
+                'nivel' => $c->nivel,
+                'naturaleza' => $c->naturaleza,
+                'activa' => (bool) $c->cuenta_activa,
+                'titulo' => (bool) $c->titulo,
+                'moneda' => $c->moneda,
+                'requiere_tercero' => (bool) $c->requiere_tercero,
+                'confidencial' => (bool) $c->confidencial,
+                'nivel_confidencial' => $c->nivel_confidencial,
+                'clase_cuenta' => $c->clase_cuenta,
+                'cuenta_monetaria' => (bool) $c->cuenta_monetaria,
+                'cuenta_asociada' => (bool) $c->cuenta_asociada,
+                'revalua_indice' => (bool) $c->revalua_indice,
+                'bloquear_contab_manual' => (bool) $c->bloquear_contab_manual,
+                'relevante_flujo_caja' => (bool) $c->relevante_flujo_caja,
+                'relevante_costos' => (bool) $c->relevante_costos,
+                'dimension1' => $c->dimension1,
+                'dimension2' => $c->dimension2,
+                'dimension3' => $c->dimension3,
+                'dimension4' => $c->dimension4,
+                'saldo' => (float) $c->saldo,
+            ];
+        })->all(),
+    ]);
+}
+
 }

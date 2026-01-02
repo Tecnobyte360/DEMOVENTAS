@@ -20,19 +20,25 @@ class PlanCuentas extends Component
 {
     use WithFileUploads;
 
-    /* ====== Filtros / árbol ====== */
+    /* =========================================================
+     |  FILTROS / ÁRBOL
+     ========================================================= */
     public string $q = '';
     public ?int $nivelMax = 10;
     public string $naturaleza = 'TODAS';
     public array $expandidos = [];
     public ?int $selectedId = null;
 
-    /* ====== Mejoras UI ====== */
+    /* =========================================================
+     |  MEJORAS UI
+     ========================================================= */
     public bool $soloTitulos = false;
     public bool $verSaldos   = false;
     public array $visibleIds = [];
 
-    /* ====== Filtro por factura ====== */
+    /* =========================================================
+     |  FILTRO POR FACTURA
+     ========================================================= */
     public bool $soloCuentasMovidas = false;
     public ?int $factura_id = null;
     public ?string $factura_prefijo = null;
@@ -41,7 +47,9 @@ class PlanCuentas extends Component
     protected array $idsCuentasMovidas = [];
     protected array $sumasFacturaPorCuenta = [];
 
-    /* ====== Panel ficha ====== */
+    /* =========================================================
+     |  PANEL FICHA
+     ========================================================= */
     public ?string $f_codigo = null;
     public ?string $f_nombre = null;
     public ?string $f_moneda = null;
@@ -50,11 +58,15 @@ class PlanCuentas extends Component
     public bool $f_cuenta_activa = true;
     public bool $f_titulo = false;
 
-    /* ====== Modal crear/editar ====== */
+    /* =========================================================
+     |  MODAL CREAR/EDITAR
+     ========================================================= */
     public bool $showModal = false;
     public ?int $editingId = null;
 
-    /* ====== Campos formulario ====== */
+    /* =========================================================
+     |  CAMPOS FORMULARIO
+     ========================================================= */
     public ?int $padre_id = null;
     public string $codigo = '';
     public string $nombre = '';
@@ -78,9 +90,12 @@ class PlanCuentas extends Component
     public ?string $dimension4 = null;
     public float $saldo = 0;
 
-    /* ====== Carga masiva ====== */
-    public $archivo_activos = null; // xlsx/csv
+    /* =========================================================
+     |  CARGA MASIVA (ACTIVOS PUC)
+     ========================================================= */
+    public $archivo_activos = null; // xlsx/xls/csv
     public array $importResumen = ['insertados'=>0,'actualizados'=>0,'errores'=>0];
+    public bool $importando = false;
 
     public function mount(): void
     {
@@ -88,10 +103,13 @@ class PlanCuentas extends Component
         $this->logCuentasConfiguradas();
     }
 
-    /* ===== Helper de orden compatible ===== */
+    /* =========================================================
+     |  Helper de orden compatible (por código)
+     ========================================================= */
     protected function ordenCodigoExpr(int $padLen = 12): string
     {
         $col = "REPLACE(codigo, '.', '')";
+
         switch (DB::getDriverName()) {
             case 'sqlsrv':
                 return "RIGHT(REPLICATE('0', {$padLen}) + CAST($col AS VARCHAR(64)), {$padLen})";
@@ -106,6 +124,9 @@ class PlanCuentas extends Component
         }
     }
 
+    /* =========================================================
+     |  Validaciones
+     ========================================================= */
     protected function rules(): array
     {
         return [
@@ -151,9 +172,19 @@ class PlanCuentas extends Component
         $this->cargarFicha($this->selectedId);
     }
 
+    public function updatedArchivoActivos(): void
+    {
+        $this->importResumen = ['insertados'=>0,'actualizados'=>0,'errores'=>0];
+        $this->resetValidation('archivo_activos');
+    }
+
+    /* =========================================================
+     |  Ficha
+     ========================================================= */
     protected function cargarFicha(?int $id): void
     {
         if (!$id) { $this->resetFicha(); return; }
+
         $c = Cuenta::find($id);
         if (!$c) { $this->resetFicha(); return; }
 
@@ -175,9 +206,13 @@ class PlanCuentas extends Component
         $this->f_titulo = false;
     }
 
+    /* =========================================================
+     |  Naturaleza / árbol
+     ========================================================= */
     public function setNaturaleza(string $nat): void
     {
         $this->naturaleza = strtoupper($nat);
+
         $this->expandidos = Cuenta::whereNull('padre_id')
             ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza', $this->naturaleza))
             ->pluck('id')->all();
@@ -185,7 +220,7 @@ class PlanCuentas extends Component
 
     public function toggle(int $id): void
     {
-        if (in_array($id, $this->expandidos)) {
+        if (in_array($id, $this->expandidos, true)) {
             $this->expandidos = array_values(array_diff($this->expandidos, [$id]));
         } else {
             $this->expandidos[] = $id;
@@ -194,7 +229,8 @@ class PlanCuentas extends Component
 
     public function expandAll(): void
     {
-        $this->expandidos = Cuenta::when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza', $this->naturaleza))
+        $this->expandidos = Cuenta::query()
+            ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza', $this->naturaleza))
             ->pluck('id')->all();
     }
 
@@ -205,29 +241,35 @@ class PlanCuentas extends Component
             ->pluck('id')->all();
     }
 
-    protected function buildFlatTree()
+    protected function buildFlatTree(): Collection
     {
         $base = Cuenta::query()
             ->withCount('hijos')
             ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza', $this->naturaleza))
             ->when($this->soloTitulos, fn($q) => $q->where('titulo', true))
-            ->when($this->q !== '', function ($q) {
+            ->when(trim($this->q) !== '', function ($q) {
                 $t = trim($this->q);
                 $q->where(fn($qq) => $qq->where('codigo','like',"%{$t}%")->orWhere('nombre','like',"%{$t}%"));
             })
-            ->orderByRaw($this->ordenCodigoExpr().' ASC')
+            ->orderByRaw($this->ordenCodigoExpr() . ' ASC')
             ->get()
             ->groupBy('padre_id');
 
         $flat = [];
-        $walk = function ($padreId, $nivel) use (&$walk, &$flat, $base) {
+
+        $walk = function ($padreId, int $nivel) use (&$walk, &$flat, $base) {
             foreach (($base[$padreId] ?? collect()) as $nodo) {
                 if ($this->nivelMax !== null && $nivel > $this->nivelMax) continue;
+
                 $nodo->nivel_visual = $nivel;
                 $flat[] = $nodo;
-                if (in_array($nodo->id, $this->expandidos)) $walk($nodo->id, $nivel + 1);
+
+                if (in_array($nodo->id, $this->expandidos, true)) {
+                    $walk($nodo->id, $nivel + 1);
+                }
             }
         };
+
         $walk(null, 1);
 
         return collect($flat);
@@ -243,13 +285,18 @@ class PlanCuentas extends Component
     {
         $ids = [];
         $hijos = Cuenta::where('padre_id', $id)->pluck('id')->all();
+
         foreach ($hijos as $h) {
             $ids[] = $h;
             $ids = array_merge($ids, $this->descendantIdsOf($h));
         }
+
         return $ids;
     }
 
+    /* =========================================================
+     |  Modal crear / editar
+     ========================================================= */
     public function openCreate(?int $padreId = null): void
     {
         $this->resetForm();
@@ -270,6 +317,7 @@ class PlanCuentas extends Component
     public function openEdit(int $id): void
     {
         $this->resetForm();
+
         $c = Cuenta::findOrFail($id);
 
         $this->editingId = $c->id;
@@ -319,18 +367,21 @@ class PlanCuentas extends Component
         if (!$padre) return $this->codigo;
 
         $hijos = Cuenta::where('padre_id', $padreId)
-            ->orderByRaw($this->ordenCodigoExpr().' ASC')
+            ->orderByRaw($this->ordenCodigoExpr() . ' ASC')
             ->pluck('codigo')->all();
 
         if (empty($hijos)) return rtrim($padre->codigo) . '01';
 
         $ultimo = end($hijos);
-        if (preg_match('/^(.*?)(\d+)$/', $ultimo, $m)) {
-            $pref = $m[1]; $num = $m[2];
+
+        if (preg_match('/^(.*?)(\d+)$/', (string)$ultimo, $m)) {
+            $pref = $m[1];
+            $num  = $m[2];
             $next = str_pad((string)((int)$num + 1), strlen($num), '0', STR_PAD_LEFT);
             return $pref . $next;
         }
-        return $ultimo . '01';
+
+        return (string)$ultimo . '01';
     }
 
     public function save(): void
@@ -338,18 +389,21 @@ class PlanCuentas extends Component
         $this->validate();
 
         $old = null;
+
         if ($this->editingId) {
             if ($this->padre_id === $this->editingId) {
                 $this->addError('padre_id', 'La cuenta no puede ser su propio padre.');
                 return;
             }
+
             if ($this->padre_id) {
                 $desc = $this->descendantIdsOf($this->editingId);
-                if (in_array($this->padre_id, $desc)) {
+                if (in_array($this->padre_id, $desc, true)) {
                     $this->addError('padre_id', 'No puedes asignar como padre a un descendiente.');
                     return;
                 }
             }
+
             $old = Cuenta::findOrFail($this->editingId);
         }
 
@@ -389,8 +443,13 @@ class PlanCuentas extends Component
             if ($this->editingId) {
                 $cuenta = Cuenta::findOrFail($this->editingId);
                 $padreCambio = $old?->padre_id !== $this->padre_id;
+
                 $cuenta->update($data);
-                if ($padreCambio) $this->relevelSubtree($cuenta->id, $data['nivel']);
+
+                if ($padreCambio) {
+                    $this->relevelSubtree($cuenta->id, $data['nivel']);
+                }
+
                 $this->expandPathAndSelect($cuenta->id);
             } else {
                 $cuenta = Cuenta::create($data);
@@ -400,7 +459,10 @@ class PlanCuentas extends Component
 
         $this->showModal = false;
         $this->resetForm();
-        if ($this->selectedId) $this->cargarFicha($this->selectedId);
+
+        if ($this->selectedId) {
+            $this->cargarFicha($this->selectedId);
+        }
 
         $this->dispatch('toast', title: 'Guardado', message: 'La cuenta se guardó correctamente.');
     }
@@ -408,6 +470,7 @@ class PlanCuentas extends Component
     protected function relevelSubtree(int $id, int $nivelBase): void
     {
         $hijos = Cuenta::where('padre_id', $id)->get(['id']);
+
         foreach ($hijos as $h) {
             $nuevoNivel = $nivelBase + 1;
             Cuenta::whereKey($h->id)->update(['nivel' => $nuevoNivel]);
@@ -419,7 +482,12 @@ class PlanCuentas extends Component
     {
         $ruta = [];
         $n = Cuenta::with('padre')->find($id);
-        while ($n) { $ruta[] = $n->id; $n = $n->padre; }
+
+        while ($n) {
+            $ruta[] = $n->id;
+            $n = $n->padre;
+        }
+
         $this->expandidos = array_values(array_unique(array_merge($this->expandidos, $ruta)));
         $this->selectedId = $id;
     }
@@ -432,6 +500,7 @@ class PlanCuentas extends Component
             'revalua_indice','bloquear_contab_manual','relevante_flujo_caja','relevante_costos',
             'dimension1','dimension2','dimension3','dimension4','saldo'
         ]);
+
         $this->naturaleza_form = 'ACTIVOS';
         $this->cuenta_activa = true;
         $this->titulo = false;
@@ -439,11 +508,14 @@ class PlanCuentas extends Component
         $this->saldo = 0;
     }
 
-    /* ========== FACTURA ========== */
+    /* =========================================================
+     |  FACTURA
+     ========================================================= */
     protected function cargarCuentasDeFactura(): void
     {
         $this->idsCuentasMovidas = [];
         $this->sumasFacturaPorCuenta = [];
+
         if (!$this->soloCuentasMovidas) return;
 
         $q = DB::table('asientos as a')
@@ -479,17 +551,21 @@ class PlanCuentas extends Component
     public function expandToLevel(int $level): void
     {
         $level = max(1, min(10, $level));
+
         $ids = Cuenta::query()
             ->where('nivel', '<', $level)
-            ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza',$this->naturaleza))
+            ->when($this->naturaleza !== 'TODAS', fn($q) => $q->where('naturaleza', $this->naturaleza))
             ->pluck('id')->all();
+
         $this->expandidos = array_values(array_unique($ids));
     }
 
     public function toggleSelectedByKey(bool $expand): void
     {
         if (!$this->selectedId) return;
-        $isOpen = in_array($this->selectedId, $this->expandidos);
+
+        $isOpen = in_array($this->selectedId, $this->expandidos, true);
+
         if ($expand && !$isOpen) $this->expandidos[] = $this->selectedId;
         if (!$expand && $isOpen) $this->expandidos = array_values(array_diff($this->expandidos, [$this->selectedId]));
     }
@@ -497,8 +573,13 @@ class PlanCuentas extends Component
     public function selectNext(): void
     {
         if (empty($this->visibleIds)) return;
+
         $idx = array_search($this->selectedId, $this->visibleIds, true);
-        $next = $this->visibleIds[min(($idx===false? -1 : $idx)+1, count($this->visibleIds)-1)];
+        $nextIdx = min(($idx === false ? -1 : $idx) + 1, count($this->visibleIds) - 1);
+
+        $next = $this->visibleIds[$nextIdx] ?? null;
+        if (!$next) return;
+
         $this->select($next);
         $this->dispatch('pc-scroll-to-selected', id: $next);
     }
@@ -506,8 +587,13 @@ class PlanCuentas extends Component
     public function selectPrev(): void
     {
         if (empty($this->visibleIds)) return;
+
         $idx = array_search($this->selectedId, $this->visibleIds, true);
-        $prev = $this->visibleIds[max(($idx===false? 1 : $idx)-1, 0)];
+        $prevIdx = max(($idx === false ? 1 : $idx) - 1, 0);
+
+        $prev = $this->visibleIds[$prevIdx] ?? null;
+        if (!$prev) return;
+
         $this->select($prev);
         $this->dispatch('pc-scroll-to-selected', id: $prev);
     }
@@ -515,129 +601,144 @@ class PlanCuentas extends Component
     protected function rutaSeleccionadaArray(?int $id): array
     {
         if (!$id) return [];
+
         $ruta = [];
         $n = Cuenta::with('padre')->find($id);
-        while ($n) { $ruta[] = ['id'=>$n->id, 'codigo'=>$n->codigo, 'nombre'=>$n->nombre]; $n = $n->padre; }
+
+        while ($n) {
+            $ruta[] = ['id' => $n->id, 'codigo' => $n->codigo, 'nombre' => $n->nombre];
+            $n = $n->padre;
+        }
+
         return array_reverse($ruta);
     }
 
-    /* =======================
-       ✅ IMPORTAR ACTIVOS XLSX/CSV (TODO AQUÍ, SIN CLASE IMPORT)
-       ======================= */
-   public function importarActivosDesdeExcel(): void
-{
-    $this->validate($this->rulesImportActivos());
+    /* =========================================================
+     | ✅ IMPORTAR ACTIVOS XLSX/CSV (TODO AQUÍ, SIN CLASE IMPORT)
+     |    - Requiere encabezados: codigo, nombre
+     |    - Solo trae cuentas cuyo código (sin puntos) empieza por 1
+     |    - Niveles soportados por longitud: 1/2/4/6
+     ========================================================= */
+    public function importarActivosDesdeExcel(): void
+    {
+        $this->validate($this->rulesImportActivos());
 
-    $this->importResumen = ['insertados'=>0,'actualizados'=>0,'errores'=>0];
+        $this->importando = true;
+        $this->importResumen = ['insertados'=>0,'actualizados'=>0,'errores'=>0];
 
-    try {
-        $importer = new class implements ToCollection, WithHeadingRow {
+        try {
+            $importer = new class implements ToCollection, WithHeadingRow {
+                public int $insertados = 0;
+                public int $actualizados = 0;
+                public int $errores = 0;
 
-            public int $insertados = 0;
-            public int $actualizados = 0;
-            public int $errores = 0;
+                public function collection(Collection $rows)
+                {
+                    foreach ($rows as $r) {
+                        try {
+                            $codigo = trim((string)($r['codigo'] ?? ''));
+                            $nombre = trim((string)($r['nombre'] ?? ''));
 
-            public function collection(Collection $rows)
-            {
-                foreach ($rows as $r) {
-                    try {
-                        $codigo = trim((string)($r['codigo'] ?? ''));
-                        $nombre = trim((string)($r['nombre'] ?? ''));
+                            if ($codigo === '' || $nombre === '') {
+                                $this->errores++;
+                                continue;
+                            }
 
-                        if ($codigo === '' || $nombre === '') {
+                            $codPlano = str_replace('.', '', $codigo);
+
+                            // solo ACTIVOS
+                            if (!str_starts_with($codPlano, '1')) {
+                                continue;
+                            }
+
+                            $len = strlen($codPlano);
+
+                            // longitudes permitidas
+                            if (!in_array($len, [1,2,4,6], true)) {
+                                $this->errores++;
+                                continue;
+                            }
+
+                            $nivel = match ($len) {
+                                1 => 1,
+                                2 => 2,
+                                4 => 3,
+                                6 => 4,
+                            };
+
+                            $padreCodPlano = match ($len) {
+                                1 => null,
+                                2 => substr($codPlano, 0, 1),
+                                4 => substr($codPlano, 0, 2),
+                                6 => substr($codPlano, 0, 4),
+                            };
+
+                            $padreId = null;
+
+                            if ($padreCodPlano) {
+                                // Busca padre por código SIN puntos
+                                $padreId = Cuenta::whereRaw("REPLACE(codigo,'.','') = ?", [$padreCodPlano])->value('id');
+                            }
+
+                            $titulo = $len !== 6;
+
+                            // OJO: updateOrCreate necesita el modelo Cuenta disponible (usa FQCN)
+                            $exists = Cuenta::where('codigo', $codigo)->exists();
+
+                            Cuenta::updateOrCreate(
+                                ['codigo' => $codigo],
+                                [
+                                    'nombre' => $nombre,
+                                    'nivel' => $nivel,
+                                    'padre_id' => $padreId,
+                                    'naturaleza' => 'ACTIVOS',
+                                    'cuenta_activa' => 1,
+                                    'titulo' => $titulo ? 1 : 0,
+                                    'moneda' => 'Pesos Colombianos',
+                                    'requiere_tercero' => 0,
+                                    'confidencial' => 0,
+                                ]
+                            );
+
+                            $exists ? $this->actualizados++ : $this->insertados++;
+                        } catch (\Throwable $e) {
                             $this->errores++;
-                            continue;
                         }
-
-                        $codPlano = str_replace('.', '', $codigo);
-                        if (!str_starts_with($codPlano, '1')) {
-                            continue; // solo activos
-                        }
-
-                        $len = strlen($codPlano);
-
-                        // solo longitudes 1/2/4/6
-                        if (!in_array($len, [1,2,4,6], true)) {
-                            $this->errores++;
-                            continue;
-                        }
-
-                        $nivel = match ($len) {
-                            1 => 1,
-                            2 => 2,
-                            4 => 3,
-                            6 => 4,
-                        };
-
-                        $padreCod = match ($len) {
-                            1 => null,
-                            2 => substr($codPlano, 0, 1),
-                            4 => substr($codPlano, 0, 2),
-                            6 => substr($codPlano, 0, 4),
-                        };
-
-                        $padreId = null;
-                        if ($padreCod) {
-                            $padreId = Cuenta::whereRaw("REPLACE(codigo,'.','') = ?", [$padreCod])->value('id');
-                        }
-
-                        $titulo = $len !== 6;
-
-                        $exists = Cuenta::where('codigo', $codigo)->exists();
-
-                        Cuenta::updateOrCreate(
-                            ['codigo' => $codigo],
-                            [
-                                'nombre' => $nombre,
-                                'nivel' => $nivel,
-                                'padre_id' => $padreId,
-                                'naturaleza' => 'ACTIVOS',
-                                'cuenta_activa' => 1,
-                                'titulo' => $titulo ? 1 : 0,
-                                'moneda' => 'Pesos Colombianos',
-                                'requiere_tercero' => 0,
-                                'confidencial' => 0,
-                            ]
-                        );
-
-                        $exists ? $this->actualizados++ : $this->insertados++;
-
-                    } catch (\Throwable $e) {
-                        $this->errores++;
                     }
                 }
-            }
-        };
+            };
 
-        DB::transaction(function () use ($importer) {
-            Excel::import($importer, $this->archivo_activos);
-        });
+            DB::transaction(function () use ($importer) {
+                Excel::import($importer, $this->archivo_activos);
+            });
 
-        $this->importResumen = [
-            'insertados'   => $importer->insertados,
-            'actualizados' => $importer->actualizados,
-            'errores'      => $importer->errores,
-        ];
+            $this->importResumen = [
+                'insertados'   => $importer->insertados,
+                'actualizados' => $importer->actualizados,
+                'errores'      => $importer->errores,
+            ];
 
-        $this->archivo_activos = null;
-        $this->resetValidation('archivo_activos');
+            $this->archivo_activos = null;
+            $this->resetValidation('archivo_activos');
 
-        $this->expandidos = Cuenta::whereNull('padre_id')->pluck('id')->all();
+            $this->expandidos = Cuenta::whereNull('padre_id')->pluck('id')->all();
 
-        $this->dispatch('toast', title: 'Importación OK', message:
-            "Insertados: {$this->importResumen['insertados']} | ".
-            "Actualizados: {$this->importResumen['actualizados']} | ".
-            "Errores: {$this->importResumen['errores']}"
-        );
-
-    } catch (\Throwable $e) {
-        report($e);
-        $this->dispatch('toast', title: 'Error', message: 'Falló la importación. Revisa logs.');
+            $this->dispatch(
+                'toast',
+                title: 'Importación OK',
+                message: "Insertados: {$this->importResumen['insertados']} | Actualizados: {$this->importResumen['actualizados']} | Errores: {$this->importResumen['errores']}"
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            $this->dispatch('toast', title: 'Error', message: 'Falló la importación. Revisa logs.');
+        } finally {
+            $this->importando = false;
+        }
     }
-}
 
-
-    /* ✅ Limpiar solo ACTIVOS (código empieza por 1) */
+    /* =========================================================
+     | ✅ Limpiar solo ACTIVOS (código empieza por 1)
+     ========================================================= */
     public function limpiarActivosPUC(): void
     {
         DB::transaction(function () {
@@ -651,13 +752,17 @@ class PlanCuentas extends Component
 
         $this->selectedId = null;
         $this->expandidos = Cuenta::whereNull('padre_id')->pluck('id')->all();
+
         $this->dispatch('toast', title: 'Ok', message: 'ACTIVOS eliminados.');
     }
 
+    /* =========================================================
+     |  Logs
+     ========================================================= */
     public function logCuentasConfiguradas(): void
     {
         $cuentas = Cuenta::query()
-            ->orderByRaw($this->ordenCodigoExpr().' ASC')
+            ->orderByRaw($this->ordenCodigoExpr() . ' ASC')
             ->get(['id','codigo','nombre','padre_id','nivel','naturaleza','cuenta_activa','titulo','moneda','requiere_tercero','confidencial','saldo']);
 
         Log::info('PLAN_CUENTAS - Cuentas configuradas', [
@@ -665,6 +770,9 @@ class PlanCuentas extends Component
         ]);
     }
 
+    /* =========================================================
+     |  Render
+     ========================================================= */
     public function render()
     {
         $this->cargarCuentasDeFactura();
@@ -676,16 +784,20 @@ class PlanCuentas extends Component
         }
 
         $naturDeudoras = ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'];
+
         $items = $items->map(function ($row) use ($naturDeudoras) {
             $sum = $this->sumasFacturaPorCuenta[$row->id] ?? ['debe'=>0.0,'haber'=>0.0];
             $bruto = $sum['debe'] - $sum['haber'];
+
             $nat = strtoupper((string) $row->naturaleza);
-            $esDeudora = in_array($nat, $naturDeudoras);
+            $esDeudora = in_array($nat, $naturDeudoras, true);
+
             $delta = $esDeudora ? $bruto : -$bruto;
 
             $row->saldo_despues = round((float)$row->saldo, 2);
             $row->saldo_antes   = round($row->saldo_despues - $delta, 2);
             $row->saldo_delta   = round($delta, 2);
+
             return $row;
         });
 
@@ -697,7 +809,7 @@ class PlanCuentas extends Component
                 $desc = $this->descendantIdsOf($this->editingId);
                 if (!empty($desc)) $q->whereNotIn('id', $desc);
             })
-            ->orderByRaw($this->ordenCodigoExpr().' ASC')
+            ->orderByRaw($this->ordenCodigoExpr() . ' ASC')
             ->get(['id','codigo','nombre']);
 
         $nivelMax = $this->nivelMax;

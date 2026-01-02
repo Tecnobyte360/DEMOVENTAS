@@ -1,4 +1,4 @@
-{{-- resources/views/livewire/cuentas-contables/plan-cuentas.blade.php (versión completa: organizada + fullscreen) --}}
+{{-- resources/views/livewire/cuentas-contables/plan-cuentas.blade.php (COMPLETO) --}}
 
 <div class="h-[100dvh] w-full overflow-hidden bg-transparent"
      x-data="planCuentasUI()"
@@ -47,20 +47,19 @@
     mark.pc-hit { background: #fde68a; color: #7c2d12; padding: 0 .15rem; border-radius: .25rem; }
 
     /* Organización avanzada */
-    .pc-grid-cols { 
+    .pc-grid-cols {
       display: grid;
       grid-template-columns: 16rem 1fr 9rem 5rem auto; /* Código | Cuenta | Naturaleza | Activa | Saldos */
       gap: .5rem;
       align-items: center;
     }
+
     /* Columnas pegajosas (congeladas) */
     .pc-sticky-code   { position: sticky; left: 0;     z-index: 10; }
     .pc-sticky-name   { position: sticky; left: 16rem; z-index: 10; }
 
     /* Fondo para columnas pegajosas */
-    .pc-bg {
-      background: #ffffff;
-    }
+    .pc-bg { background: #ffffff; }
     .dark .pc-bg { background: #0b0f19; }
 
     /* Cabecera pegajosa dentro del contenedor scrolleable */
@@ -69,7 +68,7 @@
     /* Separadores por Naturaleza */
     .pc-section {
       position: sticky;
-      top: 0; /* queda debajo del encabezado de columnas */
+      top: 0;
       z-index: 15;
       padding: .35rem .75rem;
       font-size: .75rem;
@@ -80,20 +79,20 @@
     .pc-section.light { background: #f1f5f9aa; }
     .dark .pc-section.light { background: #0f172aaa; }
 
-    /* Zebra suave (además de bandas por nivel) */
+    /* Zebra suave */
     .pc-row-odd { background: rgba(2,6,23,0.00); }
     .pc-row-even { background: rgba(2,6,23,0.03); }
     .dark .pc-row-even { background: rgba(148,163,184,0.06); }
 
-    /* Evita jitter del blur sticky */
     .backdrop-blur { will-change: transform; }
   </style>
 
   <div class="h-full w-full flex flex-col rounded-none md:rounded-2xl shadow-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
 
-    {{-- HEADER PRINCIPAL (fijo) --}}
-    <header class="sticky top-0 z-20 px-4 md:px-6 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur
+    {{-- HEADER PRINCIPAL --}}
+    <header class="sticky top-0 z-30 px-4 md:px-6 py-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur
                    border-b border-gray-200 dark:border-gray-700 text-gray-800 dark:text-white">
+
       <div class="flex flex-wrap items-center gap-3">
         <div class="flex items-center gap-3">
           <span class="inline-grid place-items-center w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/40">
@@ -114,8 +113,11 @@
             <input type="text" wire:model.debounce.300ms="q" placeholder="Buscar código o nombre…"
                    class="pl-8 pr-7 h-9 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm
                           placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <button type="button" class="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
-                    @click="$wire.set('q','')"><i class="fa-solid fa-xmark text-xs"></i></button>
+            <button type="button"
+                    class="absolute right-2 top-2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+                    @click="$wire.set('q','')">
+              <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
           </div>
 
           <select wire:model.live="nivelMax"
@@ -149,6 +151,7 @@
                   @click="$wire.expandAll()">
             <i class="fa-solid fa-arrows-to-circle mr-1"></i> Expandir
           </button>
+
           <button type="button" class="h-9 px-3 rounded-lg border border-gray-300 dark:border-gray-700 text-xs hover:bg-gray-100 dark:hover:bg-gray-800"
                   @click="$wire.collapseAll()">
             <i class="fa-solid fa-compress mr-1"></i> Colapsar
@@ -200,93 +203,159 @@
             </button>
           </div>
         </div>
-{{-- ✅ IMPORTAR PUC (ACTIVOS) XLSX/CSV --}}
-<div class="block">
-  <span class="block text-[11px] text-gray-500 mb-1">Importar PUC (Activos)</span>
-
-  <div class="flex flex-wrap items-center gap-2">
-
-    {{-- Selector de archivo --}}
-    <label class="inline-flex items-center gap-2 px-3 h-9 rounded-lg
-                  border border-gray-300 dark:border-gray-700
-                  bg-white dark:bg-gray-800 text-[11px]
-                  text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
-      <i class="fa-solid fa-file-excel text-emerald-600"></i>
-      <span>Elegir archivo</span>
-
-      <input type="file"
-             class="hidden"
-             wire:model="archivo_activos"
-             accept=".xlsx,.csv">
-    </label>
-
-    {{-- Nombre del archivo seleccionado --}}
-    <div class="text-[11px] text-gray-500 dark:text-gray-400 min-w-[180px]">
-      @if($archivo_activos)
-        <span class="font-medium text-gray-700 dark:text-gray-200">
-          {{ $archivo_activos->getClientOriginalName() }}
-        </span>
-      @else
-        <span>No hay archivo</span>
-      @endif
-    </div>
-
-    {{-- Botón importar --}}
-    <button type="button"
-            wire:click="importarActivosDesdeExcel"
-            wire:loading.attr="disabled"
-            wire:target="archivo_activos,importarActivosDesdeExcel"
-            class="px-3 h-9 rounded-lg text-[11px] text-white
-                   bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed">
-      <span wire:loading.remove wire:target="importarActivosDesdeExcel">
-        <i class="fa-solid fa-upload mr-1"></i> Importar
-      </span>
-      <span wire:loading wire:target="importarActivosDesdeExcel" class="inline-flex items-center gap-2">
-        <span class="animate-spin h-3.5 w-3.5 border-2 border-white/80 border-t-transparent rounded-full"></span>
-        Importando…
-      </span>
-    </button>
-
-    {{-- Limpiar archivo --}}
-    @if($archivo_activos)
-      <button type="button"
-              wire:click="$set('archivo_activos', null)"
-              class="px-3 h-9 rounded-lg text-[11px]
-                     bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700
-                     text-gray-700 dark:text-gray-200">
-        Limpiar
-      </button>
-    @endif
-
-  </div>
-
-  {{-- Errores de validación --}}
-  @error('archivo_activos')
-    <p class="text-[11px] text-red-600 mt-1">{{ $message }}</p>
-  @enderror
-
-  {{-- Resumen último import --}}
-  @if(($importResumen['insertados'] ?? 0) || ($importResumen['actualizados'] ?? 0) || ($importResumen['errores'] ?? 0))
-    <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-      Resultado: <b>{{ $importResumen['insertados'] ?? 0 }}</b> insertados,
-      <b>{{ $importResumen['actualizados'] ?? 0 }}</b> actualizados,
-      <b class="{{ ($importResumen['errores'] ?? 0) ? 'text-rose-600' : '' }}">{{ $importResumen['errores'] ?? 0 }}</b> errores.
-    </p>
-  @endif
-</div>
 
         <div class="ml-auto text-[11px] text-gray-500 dark:text-gray-400">
           Nivel actual: <span class="font-semibold">{{ $nivelMax ?? 'Todos' }}</span>
         </div>
       </div>
     </div>
-    
 
-    {{-- PANEL PRINCIPAL: Tabla/Árbol organizado --}}
+    {{-- =========================================================
+         📥 IMPORTAR PUC (ACTIVOS) DESDE EXCEL/CSV
+         ========================================================= --}}
+    <div class="shrink-0 px-4 md:px-6 py-4 border-b border-gray-200 dark:border-gray-800">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+
+        {{-- Header --}}
+        <div class="px-6 py-5 border-b border-gray-200 dark:border-slate-700 bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 class="text-white font-extrabold text-lg">📥 Importar PUC (ACTIVOS)</h3>
+              <p class="text-white/90 text-sm">
+                Sube un <b>Excel/CSV</b> con encabezados <b>codigo</b> y <b>nombre</b>.
+                Se importan solo cuentas cuyo código (sin puntos) inicia por <b>1</b>.
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button
+                type="button"
+                wire:click="limpiarActivosPUC"
+                wire:loading.attr="disabled"
+                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold border border-white/25">
+                🧹 Limpiar ACTIVOS
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {{-- Body --}}
+        <div class="p-6 space-y-5">
+
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+
+            {{-- Archivo --}}
+            <div class="lg:col-span-2">
+              <label class="block text-sm font-semibold text-gray-700 dark:text-slate-200 mb-2">
+                Archivo (xlsx/xls/csv)
+              </label>
+
+              <div class="relative">
+                <input
+                  type="file"
+                  wire:model="archivo_activos"
+                  accept=".xlsx,.xls,.csv"
+                  class="block w-full text-sm text-gray-700 dark:text-slate-200
+                         file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0
+                         file:text-sm file:font-semibold file:bg-indigo-600 file:text-white
+                         hover:file:bg-indigo-700
+                         bg-white dark:bg-slate-950
+                         border border-gray-300 dark:border-slate-700
+                         rounded-xl px-3 py-2.5"
+                />
+
+                {{-- Loading overlay al seleccionar archivo --}}
+                <div
+                  wire:loading.flex
+                  wire:target="archivo_activos"
+                  class="absolute inset-0 rounded-xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-sm items-center justify-center">
+                  <div class="flex items-center gap-3 text-gray-800 dark:text-slate-200 font-semibold">
+                    <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                    </svg>
+                    Cargando archivo...
+                  </div>
+                </div>
+              </div>
+
+              @error('archivo_activos')
+                <p class="mt-2 text-sm text-red-600 font-semibold">⚠️ {{ $message }}</p>
+              @enderror
+
+              @if($archivo_activos)
+                <p class="mt-2 text-xs text-gray-600 dark:text-slate-400">
+                  📄 Archivo seleccionado: <b>{{ $archivo_activos->getClientOriginalName() }}</b>
+                </p>
+              @endif
+            </div>
+
+            {{-- Acciones --}}
+            <div class="lg:col-span-1 flex flex-col gap-3">
+              <button
+                type="button"
+                wire:click="importarActivosDesdeExcel"
+                wire:loading.attr="disabled"
+                wire:target="importarActivosDesdeExcel,archivo_activos"
+                class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl
+                       bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold shadow-lg">
+                <span wire:loading.remove wire:target="importarActivosDesdeExcel">🚀 Importar</span>
+                <span wire:loading wire:target="importarActivosDesdeExcel" class="inline-flex items-center gap-2">
+                  <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                  Importando...
+                </span>
+              </button>
+
+              <div class="rounded-2xl border border-gray-200 dark:border-slate-700 p-4 bg-gray-50 dark:bg-slate-950">
+                <p class="text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2">📌 Formato esperado</p>
+                <ul class="text-xs text-gray-600 dark:text-slate-400 space-y-1">
+                  <li>• Encabezados: <b>codigo</b>, <b>nombre</b></li>
+                  <li>• Ej: <b>1</b>, <b>11</b>, <b>1105</b>, <b>110505</b></li>
+                  <li>• Se ignoran cuentas que no empiecen por <b>1</b></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {{-- Resumen --}}
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="rounded-2xl p-4 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+              <p class="text-xs text-gray-500 dark:text-slate-400">Insertados</p>
+              <p class="text-2xl font-black text-emerald-600">{{ $importResumen['insertados'] ?? 0 }}</p>
+            </div>
+
+            <div class="rounded-2xl p-4 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+              <p class="text-xs text-gray-500 dark:text-slate-400">Actualizados</p>
+              <p class="text-2xl font-black text-indigo-600">{{ $importResumen['actualizados'] ?? 0 }}</p>
+            </div>
+
+            <div class="rounded-2xl p-4 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+              <p class="text-xs text-gray-500 dark:text-slate-400">Errores</p>
+              <p class="text-2xl font-black text-red-600">{{ $importResumen['errores'] ?? 0 }}</p>
+            </div>
+          </div>
+
+          {{-- Hint --}}
+          <div class="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-4">
+            <p class="text-sm text-amber-900 dark:text-amber-200 font-semibold">
+              ⚠️ Nota: si el CSV trae encabezados tipo <b>"Código"</b> o <b>"Nombre Cuenta"</b>, hay que mapearlos en el import.
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {{-- =========================================================
+         PANEL PRINCIPAL: Tabla/Árbol (ocupa el resto del alto)
+         ========================================================= --}}
     <section class="flex-1 min-h-0 p-4" x-bind:class="compact ? 'text-[13px]' : 'text-sm'">
       <div class="h-full border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden relative flex flex-col">
 
-        {{-- Encabezado columnas (pegajoso dentro del panel) --}}
+        {{-- Encabezado columnas (pegajoso) --}}
         <div class="pc-head-sticky pc-grid-cols px-3 py-2 text-[12px] font-medium
                     bg-slate-100/85 dark:bg-gray-800/85 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-800">
           <div class="pc-sticky-code pc-bg">Código</div>
@@ -298,26 +367,38 @@
           @endif
         </div>
 
-        {{-- Lista con scroll que usa TODO el alto disponible --}}
-        <div class="flex-1 min-h-0 overflow-auto" x-ref="scroll">
+        {{-- Lista con scroll --}}
+        <div class="flex-1 min-h-0 overflow-auto relative" x-ref="scroll">
           @php $lastNat = null; $rowIndex = 0; @endphp
 
           @forelse($items as $row)
             @php
-              $expanded = in_array($row->id, $this->expandidos ?? []);
-              $hasKids  = $row->hijos_count ?? ($row->tiene_hijos ?? $row->hijos()->count());
-              $indent   = max(0, ((int)($row->nivel_visual ?? $row->nivel) - 1) * 18);
+              $expanded = in_array($row->id, $expandidos ?? []);
+              $hasKids  = (int)($row->hijos_count ?? 0);
+              $indent   = max(0, (((int)($row->nivel_visual ?? $row->nivel)) - 1) * 18);
               $lvlClass = 'lvl-'.min(10, (int)($row->nivel_visual ?? $row->nivel));
               $rowIndex++;
               $isEven = $rowIndex % 2 === 0;
               $nat = $row->naturaleza ?: 'OTROS';
             @endphp
 
-            {{-- Separador cuando cambia la Naturaleza --}}
+            {{-- Separador por Naturaleza --}}
             @if($lastNat !== $nat)
               <div class="pc-section light">{{ strtoupper($nat) }}</div>
               @php $lastNat = $nat; @endphp
             @endif
+
+            @php
+              $needle = trim($q ?? '');
+              $hitNombre = e($row->nombre);
+              $hitCodigo = e($row->codigo);
+
+              if ($needle !== '') {
+                $rx = '/(' . preg_quote($needle, '/') . ')/i';
+                $hitNombre = preg_replace($rx, '<mark class="pc-hit">$1</mark>', $hitNombre);
+                $hitCodigo = preg_replace($rx, '<mark class="pc-hit">$1</mark>', $hitCodigo);
+              }
+            @endphp
 
             <div id="row-{{ $row->id }}"
                  class="group sap-tree-row pc-grid-cols px-3 py-2 border-t border-gray-100 dark:border-gray-800
@@ -331,11 +412,10 @@
               </div>
 
               {{-- Cuenta/árbol (pegajoso) --}}
-              <div class="pc-sticky-name pc-bg flex items-center min-w-0"
-                   @click.stop="{{ $hasKids ? "\$wire.toggle($row->id)" : '' }}">
+              <div class="pc-sticky-name pc-bg flex items-center min-w-0">
                 <span class="sap-indent" style="width: {{ $indent }}px"></span>
 
-                @if($hasKids)
+                @if($hasKids > 0)
                   <button type="button" wire:click.stop="toggle({{ $row->id }})"
                           class="mr-1 inline-flex h-6 w-6 items-center justify-center rounded border border-gray-300 dark:border-gray-700
                                  bg-white/60 dark:bg-gray-900/60 hover:bg-white dark:hover:bg-gray-800"
@@ -348,26 +428,19 @@
 
                 <i class="fa-regular {{ $row->titulo ? 'fa-folder' : 'fa-file-lines' }} mr-2 text-sky-700 dark:text-sky-400"></i>
 
-                @php
-                  $needle = trim($q ?? '');
-                  $hitNombre = $row->nombre; $hitCodigo = $row->codigo;
-                  if ($needle !== '') {
-                    $rx = '/(' . preg_quote($needle, '/') . ')/i';
-                    $hitNombre = preg_replace($rx, '<mark class=\"pc-hit\">$1</mark>', e($row->nombre));
-                    $hitCodigo = preg_replace($rx, '<mark class=\"pc-hit\">$1</mark>', e($row->codigo));
-                  } else { $hitNombre = e($hitNombre); $hitCodigo = e($hitCodigo); }
-                @endphp
-
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2 min-w-0">
-                    <span class="inline-flex items-center rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-0.5 font-mono text-[11px] text-gray-800 dark:text-gray-100"
-                          x-html="'{!! $hitCodigo !!}'"></span>
-                    <span class="truncate {{ $row->titulo ? 'italic text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100' }}"
-                          x-html="'{!! $hitNombre !!}'"></span>
+                    <span class="inline-flex items-center rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-0.5 font-mono text-[11px] text-gray-800 dark:text-gray-100">
+                      {!! $hitCodigo !!}
+                    </span>
 
-                    @if($hasKids)
+                    <span class="truncate {{ $row->titulo ? 'italic text-gray-700 dark:text-gray-300' : 'text-gray-900 dark:text-gray-100' }}">
+                      {!! $hitNombre !!}
+                    </span>
+
+                    @if($hasKids > 0)
                       <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-                        {{ (int)$hasKids }}
+                        {{ $hasKids }}
                       </span>
                     @endif
                   </div>
@@ -407,7 +480,7 @@
                 @endif
               </div>
 
-              {{-- Saldos (opcionales) --}}
+              {{-- Saldos --}}
               @if($verSaldos)
                 <div class="text-right pr-2 font-mono">
                   <div class="text-[11px] text-gray-500">ant: ${{ number_format($row->saldo_antes ?? $row->saldo, 2) }}</div>
@@ -418,6 +491,7 @@
                 </div>
               @endif
             </div>
+
           @empty
             <div class="px-6 py-10 text-center">
               <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-400 mb-3">
@@ -427,7 +501,7 @@
             </div>
           @endforelse
 
-          {{-- Loading --}}
+          {{-- Loading general (cuando Livewire recalcula) --}}
           <div wire:loading.flex class="absolute inset-0 bg-white/60 dark:bg-gray-900/60 backdrop-blur-sm items-center justify-center">
             <div class="animate-spin h-6 w-6 border-2 border-indigo-600 border-t-transparent rounded-full"></div>
           </div>
@@ -436,19 +510,34 @@
     </section>
   </div>
 
-  {{-- Modal crear/editar --}}
-  <div x-data="{ open: @entangle('showModal').live }" x-show="open" x-cloak class="fixed inset-0 z-[100]" wire:ignore.self @keydown.escape.window="open=false">
+  {{-- =========================================================
+       MODAL crear/editar
+       ========================================================= --}}
+  <div x-data="{ open: @entangle('showModal').live }"
+       x-show="open"
+       x-cloak
+       class="fixed inset-0 z-[100]"
+       wire:ignore.self
+       @keydown.escape.window="open=false">
+
     <div class="absolute inset-0 bg-black/50" @click="open=false"></div>
+
     <div class="relative z-10 w-full max-w-2xl mx-auto mt-12 rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-2xl">
       <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-        <h3 class="text-lg font-semibold text-gray-800 dark:text-white">{{ $editingId ? 'Editar cuenta' : 'Nueva cuenta' }}</h3>
-        <button class="text-gray-500 hover:text-gray-700" @click="open=false" type="button"><i class="fa-solid fa-xmark"></i></button>
+        <h3 class="text-lg font-semibold text-gray-800 dark:text-white">
+          {{ $editingId ? 'Editar cuenta' : 'Nueva cuenta' }}
+        </h3>
+        <button class="text-gray-500 hover:text-gray-700" @click="open=false" type="button">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
       </div>
 
       <form wire:submit.prevent="save" class="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="md:col-span-2">
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Cuenta padre</label>
-          <select wire:model.live="padre_id" class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
+          <select wire:model.live="padre_id"
+                  class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3
+                         focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
             <option value="">— Sin padre (raíz) —</option>
             @foreach($posiblesPadres as $p)
               <option value="{{ $p->id }}">{{ $p->codigo }} — {{ $p->nombre }}</option>
@@ -462,86 +551,125 @@
 
         <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Código</label>
-          <input type="text" wire:model.defer="codigo" placeholder="11050501" class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 @error('codigo') border-red-500 @enderror">
+          <input type="text" wire:model.defer="codigo" placeholder="11050501"
+                 class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3
+                        focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 @error('codigo') border-red-500 @enderror">
           @error('codigo') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Nombre</label>
-          <input type="text" wire:model.defer="nombre" placeholder="CAJA GENERAL" class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 @error('nombre') border-red-500 @enderror">
+          <input type="text" wire:model.defer="nombre" placeholder="CAJA GENERAL"
+                 class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3
+                        focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500 @error('nombre') border-red-500 @enderror">
           @error('nombre') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Naturaleza</label>
-          <select wire:model.live="naturaleza_form" class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
-            <option value="ACTIVOS">ACTIVOS</option><option value="PASIVOS">PASIVOS</option><option value="PATRIMONIO">PATRIMONIO</option>
-            <option value="INGRESOS">INGRESOS</option><option value="COSTOS">COSTOS</option><option value="GASTOS">GASTOS</option>
-            <option value="OTROS_INGRESOS">OTROS_INGRESOS</option><option value="OTROS_GASTOS">OTROS_GASTOS</option>
+          <select wire:model.live="naturaleza_form"
+                  class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3
+                         focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
+            <option value="ACTIVOS">ACTIVOS</option>
+            <option value="PASIVOS">PASIVOS</option>
+            <option value="PATRIMONIO">PATRIMONIO</option>
+            <option value="INGRESOS">INGRESOS</option>
+            <option value="COSTOS">COSTOS</option>
+            <option value="GASTOS">GASTOS</option>
+            <option value="OTROS_INGRESOS">OTROS_INGRESOS</option>
+            <option value="OTROS_GASTOS">OTROS_GASTOS</option>
           </select>
         </div>
 
         <div class="grid grid-cols-2 gap-3 md:col-span-2">
-          <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model.live="cuenta_activa" class="rounded"><span class="text-sm">Activa</span></label>
-          <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model.live="titulo" class="rounded"><span class="text-sm">Título (no imputable)</span></label>
-          <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model.live="requiere_tercero" class="rounded"><span class="text-sm">Requiere tercero</span></label>
-          <label class="inline-flex items-center gap-2"><input type="checkbox" wire:model.live="confidencial" class="rounded"><span class="text-sm">Confidencial</span></label>
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" wire:model.live="cuenta_activa" class="rounded">
+            <span class="text-sm">Activa</span>
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" wire:model.live="titulo" class="rounded">
+            <span class="text-sm">Título (no imputable)</span>
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" wire:model.live="requiere_tercero" class="rounded">
+            <span class="text-sm">Requiere tercero</span>
+          </label>
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" wire:model.live="confidencial" class="rounded">
+            <span class="text-sm">Confidencial</span>
+          </label>
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Moneda</label>
-          <input type="text" wire:model.defer="moneda" class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
+          <input type="text" wire:model.defer="moneda"
+                 class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3
+                        focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
         </div>
+
         <div>
           <label class="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1">Saldo inicial</label>
-          <input type="number" step="0.01" min="0" wire:model.defer="saldo" class="w-full h-10 text-right rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
+          <input type="number" step="0.01" min="0" wire:model.defer="saldo"
+                 class="w-full h-10 text-right rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white shadow-sm px-3
+                        focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500">
         </div>
 
         <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-3">
           @for($d=1;$d<=4;$d++)
             <div>
               <label class="block text-[11px] font-medium text-gray-600 dark:text-gray-300 mb-1">Dimensión {{ $d }}</label>
-              <input type="text" wire:model.defer="{{ 'dimension'.$d }}" class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white px-3">
+              <input type="text" wire:model.defer="{{ 'dimension'.$d }}"
+                     class="w-full h-10 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white px-3">
             </div>
           @endfor
         </div>
 
         <div class="md:col-span-2 flex items-center justify-end gap-2 mt-2">
-          <button type="button" @click="open=false" class="px-4 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600">Cancelar</button>
-          <button type="submit" class="px-4 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white">{{ $editingId ? 'Actualizar' : 'Guardar' }}</button>
+          <button type="button" @click="open=false"
+                  class="px-4 h-10 rounded-xl bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-gray-300 dark:hover:bg-gray-600">
+            Cancelar
+          </button>
+          <button type="submit" class="px-4 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white">
+            {{ $editingId ? 'Actualizar' : 'Guardar' }}
+          </button>
         </div>
       </form>
     </div>
   </div>
-</div>
 
-<script>
-  function planCuentasUI() {
-    const lw = () => window.Livewire.find('{{ $_instance->id() }}');
-    return {
-      compact: false,
-      expandLevel: 2,
-      live: {
-        expandToLevel: (level) => lw()?.call('expandToLevel', level),
-        selectNext:     () => lw()?.call('selectNext'),
-        selectPrev:     () => lw()?.call('selectPrev'),
-        toggleSelected: (expand) => lw()?.call('toggleSelectedByKey', expand),
-      },
-      init() {
-        window.addEventListener('pc-scroll-to-selected', (e) => {
-          this.scrollIntoViewIfNeeded('row-' + e.detail.id);
-        });
-      },
-      copy(text) { navigator.clipboard.writeText(text); },
-      scrollIntoViewIfNeeded(id) {
-        const el = document.getElementById(id);
-        const sc = this.$refs.scroll;
-        if (!el || !sc) return;
-        const eb = el.getBoundingClientRect(), sb = sc.getBoundingClientRect();
-        if (eb.top < sb.top + 60 || eb.bottom > sb.bottom - 60) {
-          sc.scrollTo({ top: sc.scrollTop + (eb.top - sb.top) - 80, behavior: 'smooth' });
+  <script>
+    function planCuentasUI() {
+      const lw = () => window.Livewire?.find(@js($_instance->id()));
+      return {
+        compact: false,
+        live: {
+          expandToLevel:  (level) => lw()?.call('expandToLevel', level),
+          selectNext:     () => lw()?.call('selectNext'),
+          selectPrev:     () => lw()?.call('selectPrev'),
+          toggleSelected: (expand) => lw()?.call('toggleSelectedByKey', expand),
+        },
+        init() {
+          window.addEventListener('pc-scroll-to-selected', (e) => {
+            this.scrollIntoViewIfNeeded('row-' + e.detail.id);
+          });
+        },
+        scrollIntoViewIfNeeded(id) {
+          const el = document.getElementById(id);
+          const sc = this.$refs.scroll;
+          if (!el || !sc) return;
+
+          const eb = el.getBoundingClientRect();
+          const sb = sc.getBoundingClientRect();
+
+          // margen para que no quede pegado al header sticky
+          if (eb.top < sb.top + 60 || eb.bottom > sb.bottom - 60) {
+            sc.scrollTo({
+              top: sc.scrollTop + (eb.top - sb.top) - 80,
+              behavior: 'smooth'
+            });
+          }
         }
       }
     }
-  }
-</script>
+  </script>
+</div>

@@ -19,7 +19,8 @@ class DatabaseSeeder extends Seeder
             UnidadMedidaSeeder::class,
             EntradasMercanciaTipoYSerieSeeder::class,
             PlanCuentasActivosSeeder::class,
-            PlanCuentasPasivosSeeder::class
+            PlanCuentasPasivosSeeder::class,
+            PlanCuentasPatrimonioSeeder::class
         ]);
     }
 }

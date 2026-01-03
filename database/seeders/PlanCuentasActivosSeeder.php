@@ -86,8 +86,8 @@ class PlanCuentasActivosSeeder extends Seeder
                 // NIVEL 3 (hijos de 14)
                 // =========================
                 ['1405','MATERIAS PRIMAS',3,'14','ACTIVOS',false],
-                ['1410','PRODUCTO S EN PROCESO',3,'14','ACTIVOS',false],
-                ['1415','OBRAS DECONSTRUCCION EN',3,'14','ACTIVOS',false],
+                ['1410','PRODUCTO(S) EN PROCESO',3,'14','ACTIVOS',false],
+                ['1415','OBRAS DE CONSTRUCCION EN',3,'14','ACTIVOS',false],
                 ['1417','OBRAS DE URBANISMO',3,'14','ACTIVOS',false],
                 ['1420','CONTRATOS EN EJECUCION',3,'14','ACTIVOS',false],
                 ['1425','CULTIVOS EN DESARROLLO',3,'14','ACTIVOS',false],
@@ -107,7 +107,7 @@ class PlanCuentasActivosSeeder extends Seeder
                 ['1504','TERRENOS',3,'15','ACTIVOS',false],
                 ['1506','MATERIALES PROYECTOS',3,'15','ACTIVOS',false],
                 ['1508','CONSTRUCCIONES EN CURSO',3,'15','ACTIVOS',false],
-                ['1512','MAQUINARIA Y EQUIPO S EN',3,'15','ACTIVOS',false],
+                ['1512','MAQUINARIA Y EQUIPO(S) EN',3,'15','ACTIVOS',false],
                 ['1516','CONSTRUCCIONES Y',3,'15','ACTIVOS',false],
                 ['1520','MAQUINARIA Y EQUIPO',3,'15','ACTIVOS',false],
                 ['1524','EQUIPO DE OFICINA',3,'15','ACTIVOS',false],
@@ -119,7 +119,7 @@ class PlanCuentasActivosSeeder extends Seeder
                 ['1548','FLOTA Y EQUIPO AEREO',3,'15','ACTIVOS',false],
                 ['1552','FLOTA Y EQUIPO FERREO',3,'15','ACTIVOS',false],
                 ['1556','ACUEDUCTOS PLANTAS Y',3,'15','ACTIVOS',false],
-                ['1560','AR MAMAMENTO DE VIGILANCIA',3,'15','ACTIVOS',false],
+                ['1560','ARMAMENTO DE VIGILANCIA',3,'15','ACTIVOS',false],
                 ['1562','ENVASES Y EMPAQUES',3,'15','ACTIVOS',false],
                 ['1564','PLANTACIONES AGRICOLAS Y',3,'15','ACTIVOS',false],
                 ['1568','VIAS DE COMUNICACION Y',3,'15','ACTIVOS',false],
@@ -127,10 +127,10 @@ class PlanCuentasActivosSeeder extends Seeder
                 ['1576','POZOS ARTESIANOS',3,'15','ACTIVOS',false],
                 ['1580','YACIMIENTOS',3,'15','ACTIVOS',false],
                 ['1584','SEMOVIENTES',3,'15','ACTIVOS',false],
-                ['1588','PROPIEDADES PLANTAY',3,'15','ACTIVOS',false],
+                ['1588','PROPIEDADES PLANTA Y',3,'15','ACTIVOS',false],
                 ['1592','DEPRECIACION ACUMULADA',3,'15','ACTIVOS',false],
                 ['1596','DEPRECIACION DIFERIDA',3,'15','ACTIVOS',false],
-                ['1597','ARMORTIZACION ACUMULADA',3,'15','ACTIVOS',false],
+                ['1597','AMORTIZACION ACUMULADA',3,'15','ACTIVOS',false],
                 ['1598','AGOTAMIENTO ACUMULADO',3,'15','ACTIVOS',false],
                 ['1599','PROVISIONES',3,'15','ACTIVOS',false],
 
@@ -187,7 +187,7 @@ class PlanCuentasActivosSeeder extends Seeder
     ): void {
         $padreId = null;
 
-        if ($padreCodigo) {
+        if (!blank($padreCodigo)) {
             $padreId = PlanCuentas::where('codigo', $padreCodigo)->value('id');
         }
 
@@ -200,7 +200,11 @@ class PlanCuentasActivosSeeder extends Seeder
                 'naturaleza' => strtoupper($naturaleza),
                 'cuenta_activa' => 1,
                 'titulo' => $titulo ? 1 : 0,
-                'moneda' => 'Pesos Colombianos',
+
+                // ✅ Evita el error "Data too long for column moneda"
+                // Si después amplías la columna, puedes cambiarlo a "Pesos Colombianos"
+                'moneda' => 'COP',
+
                 'requiere_tercero' => 0,
                 'saldo' => 0,
             ]

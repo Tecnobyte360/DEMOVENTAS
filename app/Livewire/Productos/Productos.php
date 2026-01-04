@@ -13,6 +13,7 @@ use App\Models\Impuestos\Impuesto as ImpuestoModel;
 use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\UnidadesMedida;
+use Illuminate\Support\Facades\DB;
 use Masmerise\Toaster\PendingToast;
 
 class Productos extends Component
@@ -81,11 +82,20 @@ class Productos extends Component
         ->orderBy('id')
         ->get(['id', 'codigo', 'nombre', 'obligatorio', 'orden']);
 
+    // ===============================
+    // ORDEN COMPATIBLE SQL SERVER / MYSQL
+    // ===============================
+    $driver = DB::getDriverName();
+
+    $orderByCodigo = match ($driver) {
+        'sqlsrv' => 'LEN(codigo), codigo',
+        default  => 'LENGTH(codigo), codigo', // mysql, pgsql, sqlite
+    };
 
     $this->cuentasPUC = PlanCuentas::query()
         ->where('cuenta_activa', 1)
-        ->where('titulo', 0) // 👈 imputable
-        ->orderByRaw('LENGTH(codigo), codigo')
+        ->where('titulo', 0) // solo imputables
+        ->orderByRaw($orderByCodigo)
         ->get(['id', 'codigo', 'nombre', 'nivel']);
 
     $this->unidades = UnidadesMedida::where('activo', true)
@@ -100,6 +110,7 @@ class Productos extends Component
 
     $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
 }
+
 
 
     public function render()

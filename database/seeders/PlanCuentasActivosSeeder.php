@@ -12,7 +12,14 @@ class PlanCuentasActivosSeeder extends Seeder
     {
         DB::transaction(function () {
 
-            // (codigo, nombre, nivel, padre_codigo, naturaleza, titulo)
+            /**
+             * Formato:
+             * [codigo, nombre, nivel, padre_codigo, naturaleza, titulo]
+             *
+             * NOTA:
+             * - Aquí conservamos tu estructura tal cual.
+             * - Luego generamos automáticamente 6 y 8 dígitos para cada cuenta de 4 dígitos.
+             */
             $cuentas = [
                 // =========================
                 // NIVEL 1
@@ -169,8 +176,33 @@ class PlanCuentasActivosSeeder extends Seeder
                 ['1905','DE INVERSIONES',3,'19','ACTIVOS',false],
                 ['1910','DE PROPIEDADES PLANTA Y',3,'19','ACTIVOS',false],
                 ['1995','OTROS ACTIVOS',3,'19','ACTIVOS',false],
-
             ];
+
+            /**
+             * ✅ Generación automática:
+             * Para cada cuenta de 4 dígitos (nivel 3), crea:
+             * - Subcuenta 6 dígitos: XXXX01 (nivel 4) hijo de XXXX
+             * - Auxiliar 8 dígitos:  XXXX0101 (nivel 5) hijo de XXXX01
+             *
+             * Nombres: genéricos para que no inventemos contabilidad.
+             */
+            $auto = [];
+            foreach ($cuentas as $c) {
+                [$codigo, $nombre, $nivel, $padreCodigo, $naturaleza, $titulo] = $c;
+
+                if (strlen($codigo) === 4) {
+                    $codigo6 = $codigo . '01';     // Ej: 1105 -> 110501
+                    $codigo8 = $codigo6 . '01';    // Ej: 110501 -> 11050101
+
+                    $auto[] = [$codigo6, $nombre . ' (DETALLE)', 4, $codigo, $naturaleza, false];
+                    $auto[] = [$codigo8, $nombre . ' (AUX 01)', 5, $codigo6, $naturaleza, false];
+                }
+            }
+
+            $cuentas = array_merge($cuentas, $auto);
+
+            // ✅ Ordena para insertar siempre padres primero (1,2,4,6,8)
+            usort($cuentas, fn($a, $b) => strlen($a[0]) <=> strlen($b[0]) ?: strcmp($a[0], $b[0]));
 
             foreach ($cuentas as $c) {
                 $this->upsertCuenta(...$c);
@@ -201,11 +233,7 @@ class PlanCuentasActivosSeeder extends Seeder
                 'naturaleza' => strtoupper($naturaleza),
                 'cuenta_activa' => 1,
                 'titulo' => $titulo ? 1 : 0,
-
-                // ✅ Evita el error "Data too long for column moneda"
-                // Si después amplías la columna, puedes cambiarlo a "Pesos Colombianos"
                 'moneda' => 'COP',
-
                 'requiere_tercero' => 0,
                 'saldo' => 0,
             ]

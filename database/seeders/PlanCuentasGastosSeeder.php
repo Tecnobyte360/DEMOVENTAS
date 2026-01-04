@@ -73,6 +73,31 @@ class PlanCuentasGastosSeeder extends Seeder
                 ['5395','DIVERSOS',3,'53','GASTOS',false],
             ];
 
+            /**
+             * ✅ Generación automática:
+             * 4 dígitos -> 6 dígitos (XXXX01)
+             * 6 dígitos -> 8 dígitos (XXXX0101)
+             */
+            $auto = [];
+            foreach ($cuentas as $c) {
+                [$codigo, $nombre, $nivel, $padreCodigo, $naturaleza, $titulo] = $c;
+
+                if (strlen($codigo) === 4) {
+                    $codigo6 = $codigo . '01';   // ej: 5105 -> 510501
+                    $codigo8 = $codigo6 . '01';  // ej: 510501 -> 51050101
+
+                    $auto[] = [$codigo6, $nombre . ' (DETALLE)', 4, $codigo, $naturaleza, false];
+                    $auto[] = [$codigo8, $nombre . ' (AUX 01)', 5, $codigo6, $naturaleza, false];
+                }
+            }
+
+            $cuentas = array_merge($cuentas, $auto);
+
+            // ✅ Inserta padres primero
+            usort($cuentas, fn($a, $b) =>
+                strlen($a[0]) <=> strlen($b[0]) ?: strcmp($a[0], $b[0])
+            );
+
             foreach ($cuentas as $c) {
                 $this->upsertCuenta(...$c);
             }

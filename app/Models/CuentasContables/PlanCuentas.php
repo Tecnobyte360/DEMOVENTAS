@@ -80,19 +80,25 @@ class PlanCuentas extends Model
      * ✅ Ordena por código con padding, compatible con MySQL/MariaDB, PostgreSQL, SQLite y SQL Server.
      */
     public function scopeOrdenCodigo($q, int $padLen = 20)
-    {
-        $driver = $q->getQuery()->getConnection()->getDriverName(); // 'mysql','pgsql','sqlite','sqlsrv'
+{
+    $driver = $q->getQuery()->getConnection()->getDriverName();
 
-        if ($driver === 'sqlsrv') {
-            // Ej.: RIGHT(REPLICATE('0',20) + REPLACE(CAST(codigo AS varchar(255)),'.',''), 20)
-            $expr = "RIGHT(REPLICATE('0', {$padLen}) + REPLACE(CAST(codigo AS varchar(255)), '.', ''), {$padLen})";
-        } else {
-            // MySQL, MariaDB, PostgreSQL, SQLite tienen LPAD
-            $expr = "LPAD(REPLACE(codigo, '.', ''), {$padLen}, '0')";
-        }
-
+    if ($driver === 'sqlsrv') {
+        $expr = "RIGHT(REPLICATE('0', {$padLen}) + REPLACE(CAST(codigo AS varchar(255)), '.', ''), {$padLen})";
         return $q->orderByRaw("$expr ASC");
     }
+
+    if ($driver === 'sqlite') {
+        // SQLite: no LPAD nativo → orden por largo + codigo sin puntos
+        return $q->orderByRaw("LENGTH(REPLACE(codigo,'.','')) ASC")
+                 ->orderByRaw("REPLACE(codigo,'.','') ASC");
+    }
+
+    // mysql / pgsql
+    $expr = "LPAD(REPLACE(codigo, '.', ''), {$padLen}, '0')";
+    return $q->orderByRaw("$expr ASC");
+}
+
 
     public function scopeImputables($q)
     {

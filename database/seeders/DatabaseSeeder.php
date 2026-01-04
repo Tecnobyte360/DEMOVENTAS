@@ -21,7 +21,8 @@ class DatabaseSeeder extends Seeder
             PlanCuentasActivosSeeder::class,
             PlanCuentasPasivosSeeder::class,
             PlanCuentasPatrimonioSeeder::class,
-            PlanCuentasIngresosSeeder::class
+            PlanCuentasIngresosSeeder::class,
+            PlanCuentasGastosSeeder::class
         ]);
     }
 }

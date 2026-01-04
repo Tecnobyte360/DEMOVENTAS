@@ -56,36 +56,51 @@ class Productos extends Component
     /** Modal de cuentas */
     public bool $showCuentasModal = false;
 
-    public function mount()
-    {
-        $this->productos     = collect();
-        $this->subcategorias = Subcategoria::where('activo', true)->orderBy('nombre')->get();
-        $this->bodegas       = Bodega::where('activo', true)->orderBy('nombre')->get();
-        $this->es_inventariable = true;
-        $this->impuestos = ImpuestoModel::with('tipo')
-            ->where('activo', true)
-            ->orderBy('prioridad')->orderBy('nombre')
-            ->get();
+   public function mount()
+{
+    $this->productos     = collect();
 
-        $this->tiposCuenta = ProductoCuentaTipo::activos()
-            ->orderBy('orden')->orderBy('id')
-            ->get(['id', 'codigo', 'nombre', 'obligatorio', 'orden']);
+    $this->subcategorias = Subcategoria::where('activo', true)
+        ->orderBy('nombre')
+        ->get();
 
-        $this->cuentasPUC = PlanCuentas::imputables()
-            ->where('nivel')
-            ->ordenCodigo()
-            ->get(['id', 'codigo', 'nombre']);
+    $this->bodegas = Bodega::where('activo', true)
+        ->orderBy('nombre')
+        ->get();
 
-        $this->unidades = UnidadesMedida::where('activo', true)
-            ->orderBy('nombre')
-            ->get(['id', 'nombre', 'simbolo', 'codigo']);
+    $this->es_inventariable = true;
 
-        foreach ($this->tiposCuenta as $t) {
-            $this->cuentasPorTipo[$t->id] = null;
-        }
+    $this->impuestos = ImpuestoModel::with('tipo')
+        ->where('activo', true)
+        ->orderBy('prioridad')
+        ->orderBy('nombre')
+        ->get();
 
-        $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
+    $this->tiposCuenta = ProductoCuentaTipo::activos()
+        ->orderBy('orden')
+        ->orderBy('id')
+        ->get(['id', 'codigo', 'nombre', 'obligatorio', 'orden']);
+
+
+    $this->cuentasPUC = PlanCuentas::query()
+        ->where('cuenta_activa', 1)
+        ->where('titulo', 0) // 👈 imputable
+        ->orderByRaw('LENGTH(codigo), codigo')
+        ->get(['id', 'codigo', 'nombre', 'nivel']);
+
+    $this->unidades = UnidadesMedida::where('activo', true)
+        ->orderBy('nombre')
+        ->get(['id', 'nombre', 'simbolo', 'codigo']);
+
+    // Inicializar selección por tipo
+    $this->cuentasPorTipo = [];
+    foreach ($this->tiposCuenta as $t) {
+        $this->cuentasPorTipo[$t->id] = null;
     }
+
+    $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
+}
+
 
     public function render()
     {

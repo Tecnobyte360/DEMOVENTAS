@@ -20,7 +20,8 @@ class DatabaseSeeder extends Seeder
             EntradasMercanciaTipoYSerieSeeder::class,
             PlanCuentasActivosSeeder::class,
             PlanCuentasPasivosSeeder::class,
-            PlanCuentasPatrimonioSeeder::class
+            PlanCuentasPatrimonioSeeder::class,
+            PlanCuentasIngresosSeeder::class
         ]);
     }
 }

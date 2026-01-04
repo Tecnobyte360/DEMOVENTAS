@@ -388,7 +388,8 @@ class Productos extends Component
 
 
     /* ========================= Update ========================= */
- public function update()
+ 
+public function update()
 {
     try {
         $this->validate(array_merge([
@@ -407,19 +408,23 @@ class Productos extends Component
 
         $this->aplicarStockGlobalSiExiste();
 
-        $producto = Producto::findOrFail($this->producto_id);
+        /** @var \App\Models\Productos\Producto $producto */
+        $producto = Producto::query()->with('bodegas')->findOrFail($this->producto_id);
 
+        // =========================
+        // UPDATE PRODUCTO
+        // =========================
         $data = [
             'nombre'             => $this->nombre,
             'descripcion'        => $this->descripcion,
-            'precio'             => $this->precio,
-            'costo'              => $this->costo ?? 0,
-            'activo'             => $this->activo,
-            'subcategoria_id'    => $this->subcategoria_id,
-            'impuesto_id'        => $this->impuesto_id,
-            'unidad_medida_id'   => $this->unidad_medida_id,
+            'precio'             => (float) $this->precio,
+            'costo'              => (float) ($this->costo ?? 0),
+            'activo'             => (bool) $this->activo,
+            'subcategoria_id'    => (int) $this->subcategoria_id,
+            'impuesto_id'        => $this->impuesto_id ? (int)$this->impuesto_id : null,
+            'unidad_medida_id'   => $this->unidad_medida_id ? (int)$this->unidad_medida_id : null,
             'mov_contable_segun' => $this->mov_contable_segun,
-            'es_inventariable'   => $this->es_inventariable,
+            'es_inventariable'   => (bool) $this->es_inventariable,
         ];
 
         if (!empty($this->imagen_base64)) {
@@ -434,6 +439,7 @@ class Productos extends Component
         if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
             foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
                 if (!$pucId) continue;
+
                 $producto->cuentas()->updateOrCreate(
                     ['tipo_id' => (int)$tipoId],
                     ['plan_cuentas_id' => (int)$pucId]
@@ -445,55 +451,48 @@ class Productos extends Component
 
         // =========================
         // BODEGAS (PIVOT)
-        // ✅ PERMITE PRODUCTO INVENTARIABLE SIN BODEGAS
-        // ✅ SI AGREGA BODEGA NUEVA, INSERTA CON COSTOS 0 (NO NULL)
         // =========================
-        if ($this->es_inventariable) {
+        if (!$this->es_inventariable) {
+            // servicio: sin bodegas
+            $producto->bodegas()->detach();
+        } else {
+            // ✅ PERMITIR GUARDAR AUNQUE NO HAYA BODEGAS
+            $stocksUI = $this->stocksPorBodega ?? [];
 
-            $producto->loadMissing('bodegas');
+            if (!empty($stocksUI)) {
+                $bodegasSync = [];
 
-            $bodegasSync = [];
+                foreach ($stocksUI as $bodegaId => $stockData) {
+                    $bodegaId = (int) $bodegaId;
 
-            foreach (($this->stocksPorBodega ?? []) as $bodegaId => $stockData) {
-                $bodegaId = (int) $bodegaId;
+                    $actual = $producto->bodegas->firstWhere('id', $bodegaId);
 
-                $actual = $producto->bodegas->firstWhere('id', $bodegaId);
+                    // ✅ COALESCE: si en BD viene NULL => 0
+                    $costoProm   = $actual ? (float)($actual->pivot->costo_promedio ?? 0) : 0.0;
+                    $ultimoCosto = $actual ? (float)($actual->pivot->ultimo_costo ?? 0) : 0.0;
+                    $metodo      = $actual ? ($actual->pivot->metodo_costeo ?: 'PROMEDIO') : 'PROMEDIO';
 
-                // Si existe, conserva; si es nueva, default seguros
-                $costoProm   = $actual ? $actual->pivot->costo_promedio : 0;
-                $ultimoCosto = $actual ? $actual->pivot->ultimo_costo   : 0;
-                $metodo      = $actual ? ($actual->pivot->metodo_costeo ?: 'PROMEDIO') : 'PROMEDIO';
+                    // UI
+                    $min = isset($stockData['stock_minimo']) ? (float)$stockData['stock_minimo'] : 0.0;
+                    $max = (array_key_exists('stock_maximo', $stockData) && $stockData['stock_maximo'] !== null && $stockData['stock_maximo'] !== '')
+                        ? (float)$stockData['stock_maximo']
+                        : null;
 
-                // blindaje contra null / '' / basura
-                $costoProm   = is_numeric($costoProm)   ? (float)$costoProm   : 0.0;
-                $ultimoCosto = is_numeric($ultimoCosto) ? (float)$ultimoCosto : 0.0;
+                    $bodegasSync[$bodegaId] = [
+                        'stock'          => $actual ? (float)($actual->pivot->stock ?? 0) : 0.0,
+                        'stock_minimo'   => $min,
+                        'stock_maximo'   => $max,
 
-                $stockMin = isset($stockData['stock_minimo']) ? (float)$stockData['stock_minimo'] : 0.0;
+                        // ✅ NUNCA NULL
+                        'costo_promedio' => $costoProm,
+                        'ultimo_costo'   => $ultimoCosto,
+                        'metodo_costeo'  => $metodo,
+                    ];
+                }
 
-                $stockMax = (array_key_exists('stock_maximo', $stockData) && $stockData['stock_maximo'] !== '' && $stockData['stock_maximo'] !== null)
-                    ? (float)$stockData['stock_maximo']
-                    : null;
-
-                $bodegasSync[$bodegaId] = [
-                    'stock'          => $actual ? (float)($actual->pivot->stock ?? 0) : 0.0,
-                    'stock_minimo'   => $stockMin,
-                    'stock_maximo'   => $stockMax,
-
-                    // 🔥 CLAVE: jamás null
-                    'costo_promedio' => $costoProm,
-                    'ultimo_costo'   => $ultimoCosto,
-                    'metodo_costeo'  => $metodo,
-                ];
-            }
-
-            // ✅ si no hay bodegas, NO sync (no inserta nada)
-            if (!empty($bodegasSync)) {
                 $producto->bodegas()->sync($bodegasSync);
             }
-
-        } else {
-            // Servicio: sin bodegas
-            $producto->bodegas()->detach();
+            // ✅ Si está vacío, NO hacemos nada: queda como está (permitido)
         }
 
         $this->resetInput();
@@ -511,7 +510,6 @@ class Productos extends Component
             ->duration(12000);
     }
 }
-
 
 
 

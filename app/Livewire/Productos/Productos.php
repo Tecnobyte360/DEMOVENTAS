@@ -57,9 +57,9 @@ class Productos extends Component
     /** Modal de cuentas */
     public bool $showCuentasModal = false;
 
-   public function mount()
+  public function mount()
 {
-    $this->productos     = collect();
+    $this->productos = collect();
 
     $this->subcategorias = Subcategoria::where('activo', true)
         ->orderBy('nombre')
@@ -82,27 +82,15 @@ class Productos extends Component
         ->orderBy('id')
         ->get(['id', 'codigo', 'nombre', 'obligatorio', 'orden']);
 
-    // ===============================
-    // ORDEN COMPATIBLE SQL SERVER / MYSQL
-    // ===============================
-    $driver = DB::getDriverName();
-
-    $orderByCodigo = match ($driver) {
-        'sqlsrv' => 'LEN(codigo), codigo',
-        default  => 'LENGTH(codigo), codigo', // mysql, pgsql, sqlite
-    };
-
-    $this->cuentasPUC = PlanCuentas::query()
-        ->where('cuenta_activa', 1)
-        ->where('titulo', 0) // solo imputables
-        ->orderByRaw($orderByCodigo)
+    // ✅ AQUÍ: NO uses LEN/LENGTH. Usa los scopes del modelo (compatibles)
+    $this->cuentasPUC = PlanCuentas::imputables()
+        ->ordenCodigo()
         ->get(['id', 'codigo', 'nombre', 'nivel']);
 
     $this->unidades = UnidadesMedida::where('activo', true)
         ->orderBy('nombre')
         ->get(['id', 'nombre', 'simbolo', 'codigo']);
 
-    // Inicializar selección por tipo
     $this->cuentasPorTipo = [];
     foreach ($this->tiposCuenta as $t) {
         $this->cuentasPorTipo[$t->id] = null;

@@ -72,7 +72,7 @@ class Productos extends Component
             ->get(['id', 'codigo', 'nombre', 'obligatorio', 'orden']);
 
         $this->cuentasPUC = PlanCuentas::imputables()
-            ->where('nivel', 5)
+            ->where('nivel')
             ->ordenCodigo()
             ->get(['id', 'codigo', 'nombre']);
 

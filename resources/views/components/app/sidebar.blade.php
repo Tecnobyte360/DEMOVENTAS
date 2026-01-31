@@ -533,7 +533,7 @@
                 </div>
 
                 <!-- Configuración -->
-                @if(auth()->user()->hasRole('administrador'))
+                {{-- @if(auth()->user()->hasRole('administrador')) --}}
                 <div x-data="{ open: {{ in_array(Request::segment(1), ['settings']) ? 'true' : 'false' }} }">
                     <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -614,7 +614,7 @@
                         </a>
                     </div>
                 </div>
-                @endif
+                {{-- @endif --}}
 
             </div>
         </nav>

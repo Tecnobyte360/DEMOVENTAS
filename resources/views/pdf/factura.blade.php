@@ -1,11 +1,8 @@
 @php
   // ============ Normalización ============
-  // Si $empresa llega como array (desde algún flujo), castear a objeto
   if (isset($empresa) && is_array($empresa)) {
       $empresa = (object) $empresa;
   }
-
-  // Si por alguna razón no viene nada, crea un objeto vacío
   if (!isset($empresa) || $empresa === null) {
       $empresa = (object) [];
   }
@@ -31,9 +28,6 @@
   $wmColor   = $theme['wmColor']   ?? 'rgba(34, 51, 97, .06)';
 
   // ✅ Logo: para PDF lo ideal es PATH absoluto.
-  // - 1) logo_path (public_path...) si existe
-  // - 2) logo_url (asset/https) si no existe path
-  // - 3) si llega "storage/..." lo convierte a public_path()
   $logoSrc = null;
 
   if (!empty($empresa->logo_path)) {
@@ -45,11 +39,9 @@
           ? public_path($empresa->logo)
           : $empresa->logo;
   } elseif (!empty($empresa->logo_src)) {
-      // fallback si viene ya armado
       $logoSrc = $empresa->logo_src;
   }
 
-  // Datos de empresa (ahora $empresa es OBJETO)
   $E = [
     'nombre'    => $empresa->nombre        ?? 'Empresa',
     'nit'       => !empty($empresa->nit) ? ('NIT '.$empresa->nit) : null,
@@ -60,7 +52,6 @@
     'logo_src'  => $logoSrc,
   ];
 
-  // Formateadores y folio
   $money  = fn($v) => '$'.number_format((float)$v, 2, '.', ',');
   $fmtPct = fn($v) => rtrim(rtrim(number_format((float)$v, 3, '.', ''), '0'), '.').'%';
 
@@ -76,26 +67,68 @@
   <meta charset="utf-8">
   <title>Factura {{ $folio }}</title>
   <style>
-    @page { margin: 130px 36px 120px 36px; }
-    body { font-family: DejaVu Sans, sans-serif; color: {{ $ink }}; font-size: 12px; background: {{ $base }}; }
-    header { position: fixed; top: -110px; left: 0; right: 0; height: 120px; }
-    footer { position: fixed; bottom: -90px; left: 0; right: 0; height: 100px; }
+    /* ✅ Header compacto */
+    @page { margin: 85px 36px 95px 36px; }
 
-    .brand-band { height: 6px; background: {{ $primary }}; border-radius: 0 0 6px 6px; }
-    .brand { display: table; width:100%; margin-top: 10px; }
-    .brand .col { display: table-cell; vertical-align: top; }
-    .brand .right { text-align: right; }
+    body {
+      font-family: DejaVu Sans, sans-serif;
+      color: {{ $ink }};
+      font-size: 12px;
+      background: {{ $base }};
+    }
 
-    .doc-title { font-size: 22px; letter-spacing: .5px; margin: 2px 0 0; color: {{ $primary }}; font-weight: 800; }
-    .badge { display:inline-block; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; vertical-align: middle; }
+    header { position: fixed; top: -70px; left: 0; right: 0; height: 75px; }
+    footer { position: fixed; bottom: -70px; left: 0; right: 0; height: 70px; }
 
-    .watermark { position: fixed; top: 40%; left: 12%; font-size: 90px; color: {{ $wmColor }}; transform: rotate(-20deg); font-weight: 800; z-index:0; }
+    .brand-band { height: 5px; background: {{ $primary }}; border-radius: 0 0 6px 6px; }
+    .brand { display: table; width:100%; margin-top: 6px; }
+    .brand .col { display: table-cell; vertical-align: middle; }
+    .brand .right { text-align: right; vertical-align: top; padding-top: 2px; }
+
+    .doc-title {
+      font-size: 24px;
+      letter-spacing: .5px;
+      margin: 0;
+      color: {{ $primary }};
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .badge {
+      display:inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+
+    /* ✅ Marca de agua más suave */
+    .watermark {
+      position: fixed;
+      top: 43%;
+      left: 12%;
+      font-size: 82px;
+      color: {{ $wmColor }};
+      transform: rotate(-20deg);
+      font-weight: 800;
+      z-index:0;
+    }
 
     .pane { border:1px solid {{ $border }}; border-radius: 8px; padding:10px 12px; }
     .pane h4 { margin:0 0 6px; font-size: 12px; color: {{ $muted }}; text-transform: uppercase; letter-spacing: .4px; }
 
-    table.items { width:100%; border-collapse: collapse; margin-top: 14px; }
-    table.items thead th { background: {{ $theadBg }}; color: {{ $theadText }}; font-weight:700; font-size:11px; border-bottom:1px solid {{ $border }}; padding:8px; text-transform: uppercase; letter-spacing:.3px; }
+    table.items { width:100%; border-collapse: collapse; margin-top: 12px; }
+    table.items thead th {
+      background: {{ $theadBg }};
+      color: {{ $theadText }};
+      font-weight:700;
+      font-size:11px;
+      border-bottom:1px solid {{ $border }};
+      padding:8px;
+      text-transform: uppercase;
+      letter-spacing:.3px;
+    }
     table.items tbody td { padding:7px 8px; border-bottom:1px solid #f1f5f9; }
     table.items tbody tr:nth-child(even) { background: {{ $stripe }}; }
 
@@ -103,33 +136,34 @@
     .text-center { text-align: center; }
     .w-50 { width:50%; }
 
-    .totals { margin-top: 12px; width: 100%; }
+    .totals { margin-top: 10px; width: 100%; }
     .totals td { padding:5px 8px; }
     .totals .label { color: {{ $muted }}; }
     .totals .grand { background: {{ $grandBg }}; color: {{ $grandTx }}; font-weight:700; border-radius: 8px; }
 
-    .terms { margin-top: 14px; }
+    .terms { margin-top: 12px; }
     .muted { color: {{ $muted }}; }
     .small { font-size: 10px; }
     .page-number:after { content: counter(page) " / " counter(pages); }
 
-    .brand-name { font-size: 16px; font-weight: 800; color: {{ $ink }}; }
+    .brand-name { font-size: 15px; font-weight: 800; color: {{ $ink }}; }
   </style>
 </head>
 <body>
 
 <header>
   <div class="brand-band"></div>
-  <div class="brand" style="margin-top:-20px;">
-    <div class="col" style="width:320px; vertical-align:middle;">
-      <table class="brand-head" style="width:100%">
+
+  <div class="brand">
+    <div class="col" style="width:260px;">
+      <table style="width:100%">
         <tr>
-          <td class="logo-cell" style="text-align:center; vertical-align:middle; padding:0;">
+          <td style="text-align:left; vertical-align:middle; padding:0;">
             @if(!empty($E['logo_src']))
               <img
                 src="{{ $E['logo_src'] }}"
                 alt="Logo {{ $E['nombre'] }}"
-                style="display:block; margin:0 auto; max-height:130px; width:auto; object-fit:contain;">
+                style="display:block; max-height:55px; max-width:280px; width:auto; object-fit:contain;">
             @else
               <div class="brand-name">{{ $E['nombre'] }}</div>
               @if(!empty($E['nit']))
@@ -141,19 +175,22 @@
       </table>
     </div>
 
-    <div class="col right" style="vertical-align:top; padding-top:5px;">
-      <div class="doc-title" style="font-size:28px;">FACTURA</div>
-      <div style="margin-top:4px;">
+    <div class="col right">
+      <div class="doc-title">FACTURA</div>
+
+      <div style="margin-top:3px;">
         <span class="small muted">Número:</span>
         <strong style="font-size:14px;">{{ $folio }}</strong>
       </div>
+
       <div class="small muted" style="margin-top:2px;">
         Fecha: {{ \Illuminate\Support\Carbon::parse($factura->fecha ?? $factura->created_at)->format('d/m/Y') }}
         @if(!empty($factura->vencimiento))
           · Vence: {{ \Illuminate\Support\Carbon::parse($factura->vencimiento)->format('d/m/Y') }}
         @endif
       </div>
-      <div style="margin-top:8px;">
+
+      <div style="margin-top:6px;">
         @php
           $estado = $factura->estado ?? 'borrador';
           $colors = [
@@ -164,7 +201,8 @@
             'anulada'  => ['#ffe4e6', '#9f1239'],
           ][$estado] ?? ['#e5e7eb','#374151'];
         @endphp
-        <span class="badge" style="background: {{ $colors[0] }}; color: {{ $colors[1] }}; font-size:11px; padding:4px 10px;">
+
+        <span class="badge" style="background: {{ $colors[0] }}; color: {{ $colors[1] }};">
           {{ ucwords(str_replace('_', ' ', $estado)) }}
         </span>
       </div>

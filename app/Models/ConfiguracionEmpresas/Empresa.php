@@ -44,20 +44,21 @@ class Empresa extends Model
     }
 
     /** === Accessors de URLs === */
-    public function getLogoUrlAttribute(): ?string
-    {
-        return $this->toPublicUrl($this->logo_path);
-    }
+ public function getLogoUrlAttribute(): ?string
+{
+    return $this->logo_path ? asset($this->logo_path) : null;
+}
 
-    public function getLogoDarkUrlAttribute(): ?string
-    {
-        return $this->toPublicUrl($this->logo_dark_path);
-    }
+public function getLogoDarkUrlAttribute(): ?string
+{
+    return $this->logo_dark_path ? asset($this->logo_dark_path) : null;
+}
 
-    public function getFaviconUrlAttribute(): ?string
-    {
-        return $this->toPublicUrl($this->favicon_path);
-    }
+public function getFaviconUrlAttribute(): ?string
+{
+    return $this->favicon_path ? asset($this->favicon_path) : null;
+}
+
 
     /** === Accessors de color normalizado para UI === */
     public function getColorPrimarioHexAttribute(): string
@@ -72,15 +73,10 @@ class Empresa extends Model
 
     private function toPublicUrl(?string $path): ?string
     {
-        if (!$path) {
-            return null;
-        }
+        if (!$path) return null;
+        if (str_starts_with($path, 'data:image/')) return $path;
 
-        if (str_starts_with($path, 'data:image/')) {
-            return $path;
-        }
-
-        return asset('storage/' . $path);
+        return asset($path);
     }
 
     private function normalizeHex(?string $hex): ?string
@@ -94,13 +90,13 @@ class Empresa extends Model
 
         // soporta RGB corto
         if (strlen($hex) === 3) {
-            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
         }
 
         if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
             return null;
         }
 
-        return '#'.strtoupper($hex);
+        return '#' . strtoupper($hex);
     }
 }

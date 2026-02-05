@@ -93,8 +93,8 @@
   <title>Factura {{ $folio }}</title>
 
   <style>
-    /* ✅ Header compacto y con más aire */
-    @page { margin: 90px 36px 95px 36px; }
+    /* ✅ Header con más espacio para logos grandes */
+    @page { margin: 105px 36px 95px 36px; }
 
     body {
       font-family: DejaVu Sans, sans-serif;
@@ -103,11 +103,11 @@
       background: {{ $base }};
     }
 
-    header { position: fixed; top: -74px; left: 0; right: 0; height: 78px; }
+    header { position: fixed; top: -89px; left: 0; right: 0; height: 93px; }
     footer { position: fixed; bottom: -70px; left: 0; right: 0; height: 70px; }
 
     .brand-band { height: 5px; background: {{ $primary }}; border-radius: 0 0 6px 6px; }
-    .brand { display: table; width:100%; margin-top: 6px; }
+    .brand { display: table; width:100%; margin-top: 8px; }
     .brand .col { display: table-cell; vertical-align: middle; }
     .brand .right { text-align: right; vertical-align: top; padding-top: 2px; }
 
@@ -187,12 +187,11 @@
         <tr>
           <td style="text-align:left; vertical-align:middle; padding:0;">
 
-            {{-- ✅ LOGO RECORTADO PARA BANNERS GRANDES --}}
+            {{-- ✅ LOGO OPTIMIZADO - Sin recortes innecesarios --}}
             @if(!empty($E['logo_src']))
               <div style="
                 max-width:280px;
-                max-height:48px;
-                overflow:hidden;
+                max-height:60px;
                 display:flex;
                 align-items:center;
               ">
@@ -201,8 +200,10 @@
                   alt="Logo {{ $E['nombre'] }}"
                   style="
                     max-width:280px;
+                    max-height:60px;
                     width:auto;
-                    transform: translateY(-14px);
+                    height:auto;
+                    object-fit:contain;
                   ">
               </div>
             @else

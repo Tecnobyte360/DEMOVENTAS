@@ -11,8 +11,8 @@
   }
 
   /** -----------------------------------------------------------
-  *  Solo trabajar con el pdf_theme de la empresa
-  * ---------------------------------------------------------- */
+   *  Solo trabajar con el pdf_theme de la empresa
+   * ---------------------------------------------------------- */
   $theme = is_object($empresa) && method_exists($empresa, 'pdfTheme')
       ? $empresa->pdfTheme()
       : (is_array($theme ?? null) ? $theme : []);
@@ -30,6 +30,25 @@
   $grandTx   = $theme['grandTx']   ?? '#ffffff';
   $wmColor   = $theme['wmColor']   ?? 'rgba(34, 51, 97, .06)';
 
+  // ✅ Logo: para PDF lo ideal es PATH absoluto.
+  // - 1) logo_path (public_path...) si existe
+  // - 2) logo_url (asset/https) si no existe path
+  // - 3) si llega "storage/..." lo convierte a public_path()
+  $logoSrc = null;
+
+  if (!empty($empresa->logo_path)) {
+      $logoSrc = $empresa->logo_path;
+  } elseif (!empty($empresa->logo_url)) {
+      $logoSrc = $empresa->logo_url;
+  } elseif (!empty($empresa->logo) && is_string($empresa->logo)) {
+      $logoSrc = str_starts_with($empresa->logo, 'storage/')
+          ? public_path($empresa->logo)
+          : $empresa->logo;
+  } elseif (!empty($empresa->logo_src)) {
+      // fallback si viene ya armado
+      $logoSrc = $empresa->logo_src;
+  }
+
   // Datos de empresa (ahora $empresa es OBJETO)
   $E = [
     'nombre'    => $empresa->nombre        ?? 'Empresa',
@@ -38,12 +57,13 @@
     'telefono'  => $empresa->telefono      ?? null,
     'email'     => $empresa->email         ?? null,
     'website'   => $empresa->sitio_web     ?? null,
-    'logo_src'  => $empresa->logo_path     ?? null,
+    'logo_src'  => $logoSrc,
   ];
 
   // Formateadores y folio
   $money  = fn($v) => '$'.number_format((float)$v, 2, '.', ',');
   $fmtPct = fn($v) => rtrim(rtrim(number_format((float)$v, 3, '.', ''), '0'), '.').'%';
+
   $len  = $factura->serie->longitud ?? 6;
   $num  = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '—';
   $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
@@ -79,14 +99,18 @@
     table.items tbody td { padding:7px 8px; border-bottom:1px solid #f1f5f9; }
     table.items tbody tr:nth-child(even) { background: {{ $stripe }}; }
 
-    .text-right { text-align: right; } .text-center { text-align: center; } .w-50 { width:50%; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .w-50 { width:50%; }
 
     .totals { margin-top: 12px; width: 100%; }
     .totals td { padding:5px 8px; }
     .totals .label { color: {{ $muted }}; }
     .totals .grand { background: {{ $grandBg }}; color: {{ $grandTx }}; font-weight:700; border-radius: 8px; }
 
-    .terms { margin-top: 14px; } .muted { color: {{ $muted }}; } .small { font-size: 10px; }
+    .terms { margin-top: 14px; }
+    .muted { color: {{ $muted }}; }
+    .small { font-size: 10px; }
     .page-number:after { content: counter(page) " / " counter(pages); }
 
     .brand-name { font-size: 16px; font-weight: 800; color: {{ $ink }}; }
@@ -106,6 +130,11 @@
                 src="{{ $E['logo_src'] }}"
                 alt="Logo {{ $E['nombre'] }}"
                 style="display:block; margin:0 auto; max-height:130px; width:auto; object-fit:contain;">
+            @else
+              <div class="brand-name">{{ $E['nombre'] }}</div>
+              @if(!empty($E['nit']))
+                <div class="small muted" style="margin-top:2px;">{{ $E['nit'] }}</div>
+              @endif
             @endif
           </td>
         </tr>
@@ -196,7 +225,6 @@
     <thead>
       <tr>
         <th style="width:34%">Producto</th>
-        <th style="width:12%" class="text-center">Bodega</th>
         <th style="width:8%"  class="text-right">Cant.</th>
         <th style="width:12%" class="text-right">Precio</th>
         <th style="width:8%"  class="text-right">Desc</th>
@@ -208,18 +236,16 @@
       @foreach(($factura->detalles ?? []) as $d)
         @php
           $nombre  = $d->producto->nombre ?? ($d->descripcion ?: ('#'.$d->producto_id));
-          $bodega  = $d->bodega->nombre  ?? '—';
           $cant    = (float) $d->cantidad;
           $precio  = (float) $d->precio_unitario;
           $descPct = (float) ($d->descuento_pct ?? 0);
           $ivaPct  = (float) ($d->impuesto_pct  ?? 0);
-          $base    = $cant * $precio * (1 - $descPct/100);
-          $iva     = $base * $ivaPct/100;
-          $totalLn = $base + $iva;
+          $baseLn  = $cant * $precio * (1 - $descPct/100);
+          $ivaLn   = $baseLn * $ivaPct/100;
+          $totalLn = $baseLn + $ivaLn;
         @endphp
         <tr>
           <td>{{ $nombre }}</td>
-          <td class="text-center">{{ $bodega }}</td>
           <td class="text-right">{{ rtrim(rtrim(number_format($cant,3,'.',''), '0'), '.') }}</td>
           <td class="text-right">{{ $money($precio) }}</td>
           <td class="text-right">{{ $fmtPct($descPct) }}</td>

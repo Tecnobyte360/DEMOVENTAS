@@ -147,6 +147,7 @@
                                         class="w-[16rem] xl:w-[20rem]
                        object-contain
                        rounded-2xl
+                       
                        bg-white/90
                        p-6
                        shadow-xl

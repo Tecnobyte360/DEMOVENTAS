@@ -1,16 +1,8 @@
 <x-authentication-layout>
 
-    {{-- Header --}}
-    <div class="mb-8 text-center">
-        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#132742]">
-            Bienvenido de nuevo
-        </h1>
-        <p class="mt-2 text-sm text-slate-600">
-            Ingresa a tu cuenta para continuar
-        </p>
-    </div>
+   
 
-    {{-- Card --}}
+  
     <div class="relative overflow-hidden rounded-[2rem] border border-slate-200/70 bg-white
                 shadow-[0_40px_90px_-30px_rgba(15,23,42,.18)]">
 

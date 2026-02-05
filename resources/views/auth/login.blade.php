@@ -1,65 +1,176 @@
 <x-authentication-layout>
-    <!-- Título -->
- <h1 class="text-4xl font-extrabold text-gray-800 dark:text-gray-100 mb-6">
-    {{ $empresaActual?->nombre ?? '' }} <span class="text-violet-500">!</span>
-</h1>
-<link rel="icon" type="image/png" href="{{ $empresaActual?->logo_url ?? asset('favicon.png') }}">
 
-
-    <!-- Mensaje de estado -->
-    @if (session('status'))
-        <div class="mb-4 text-sm font-medium text-green-600">
-            {{ session('status') }}
-        </div>
-    @endif   
-
-    <!-- Formulario de Inicio de Sesión -->
-    <form method="POST" action="{{ route('login') }}">
-        @csrf
-        <div class="space-y-5">
-            <div>
-                <x-label for="email" value="{{ __('Usuario') }}" class="text-sm font-semibold" />
-                <x-input id="email" type="email" name="email" :value="old('email')" required autofocus class="w-full mt-1 rounded-lg border-gray-300 focus:border-violet-500 focus:ring-violet-500" />                
-            </div>
-            <div>
-                <x-label for="password" value="{{ __('Clave') }}" class="text-sm font-semibold" />
-                <x-input id="password" type="password" name="password" required autocomplete="current-password" class="w-full mt-1 rounded-lg border-gray-300 focus:border-violet-500 focus:ring-violet-500" />                
-            </div>
-        </div>
-
-        <div class="flex items-center justify-between mt-6">
-            @if (Route::has('password.request'))
-                <a class="text-sm text-violet-500 hover:text-violet-600 underline" href="{{ route('password.request') }}">
-                    {{ __('Olvide mi contraseña') }}
-                </a>
-            @endif            
-            <x-button class="ml-3 px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white font-semibold rounded-lg">
-                {{ __('Iniciar sesión') }}
-            </x-button>            
-        </div>
-    </form>
-
-    <!-- Validaciones -->
-    <x-validation-errors class="mt-4" />   
-
-    <!-- Footer -->
-    <div class="pt-5 mt-6 border-t border-gray-200 dark:border-gray-700/60 text-center">
-       
+    <!-- ================= Header ================= -->
+   <!-- ================= Header ================= -->
+<div class="mb-8">
 
    
-     <div class="mt-5">
-  <div class="bg-violet-500/20 text-white-800 px-4 py-3 rounded-lg flex items-center space-x-2">
+       
+    
 
-        <svg class="w-4 h-4 fill-current" viewBox="0 0 12 12">
-            <path d="M10.28 1.28L3.989 7.575 1.695 5.28A1 1 0 00.28 6.695l3 3a1 1 0 001.414 0l7-7A1 1 0 0010.28 1.28z" />
-        </svg>
-       <span class="text-sm">
-    <b>by</b> <a href="https://tecnobyte360.com/" class="text-900 hover:underline"><b>Tecnobyte 360</b></a> &copy; Copyright
-</span>
+    <!-- Título principal -->
+    <h1 class="mt-1 text-3xl sm:text-4xl font-extrabold leading-tight text-[#0B1E36]">
+        Bienvenido a {{ $empresaActual?->nombre ?? 'Tecnobyte360' }}
+        
+    </h1>
 
-    </div>
+    <!-- Subtítulo -->
+    <p class="mt-3 text-sm text-slate-600 max-w-md">
+        Inicia sesión para continuar y gestionar tu experiencia.
+    </p>
+
 </div>
 
 
+    <!-- ================= Card ================= -->
+    <div
+        class="rounded-3xl
+               border border-slate-200
+               bg-white
+               shadow-[0_18px_50px_-20px_rgba(2,6,23,.25)]
+               p-6 sm:p-8"
+    >
+        <!-- Mensaje de estado -->
+        @if (session('status'))
+            <div class="mb-4 text-sm font-medium text-emerald-600">
+                {{ session('status') }}
+            </div>
+        @endif
+
+        <!-- ================= Form ================= -->
+        <form method="POST" action="{{ route('login') }}" class="space-y-5">
+            @csrf
+
+            <!-- Email -->
+            <div>
+                <x-label
+                    for="email"
+                    value="Correo electrónico"
+                    class="text-sm font-semibold text-slate-700"
+                />
+
+                <div class="mt-2 relative">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5"
+                             viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16v16H4z" opacity=".15"></path>
+                            <path d="M4 6l8 7 8-7"></path>
+                        </svg>
+                    </span>
+
+                    <x-input
+                        id="email"
+                        type="email"
+                        name="email"
+                        :value="old('email')"
+                        required
+                        autofocus
+                        placeholder="tucorreo@empresa.com"
+                        class="w-full pl-11 rounded-xl
+                               border-slate-300
+                               bg-white
+                               text-slate-900
+                               placeholder:text-slate-400
+                               focus:border-[#0B1E36]
+                               focus:ring-[#0B1E36]/25"
+                    />
+                </div>
+            </div>
+
+            <!-- Password -->
+            <div>
+                <x-label
+                    for="password"
+                    value="Contraseña"
+                    class="text-sm font-semibold text-slate-700"
+                />
+
+                <div class="mt-2 relative">
+                    <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5"
+                             viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2">
+                            <path d="M7 11V8a5 5 0 0 1 10 0v3" />
+                            <path d="M6 11h12v10H6z" opacity=".15"></path>
+                            <path d="M6 11h12v10H6z" />
+                        </svg>
+                    </span>
+
+                    <x-input
+                        id="password"
+                        type="password"
+                        name="password"
+                        required
+                        placeholder="••••••••"
+                        class="w-full pl-11 rounded-xl
+                               border-slate-300
+                               bg-white
+                               text-slate-900
+                               placeholder:text-slate-400
+                               focus:border-[#0B1E36]
+                               focus:ring-[#0B1E36]/25"
+                    />
+                </div>
+            </div>
+
+            <!-- Row -->
+            <div class="flex items-center justify-between pt-1">
+                <label for="remember_me" class="inline-flex items-center gap-2">
+                    <input
+                        id="remember_me"
+                        type="checkbox"
+                        name="remember"
+                        class="rounded-md border-slate-300 text-[#0B1E36] focus:ring-[#0B1E36]/30"
+                    />
+                    <span class="text-sm text-slate-600">
+                        Recordarme
+                    </span>
+                </label>
+
+                @if (Route::has('password.request'))
+                    <a
+                        href="{{ route('password.request') }}"
+                        class="text-sm font-medium text-[#0B1E36] hover:underline"
+                    >
+                        ¿Olvidaste tu contraseña?
+                    </a>
+                @endif
+            </div>
+
+            <!-- Button -->
+            <button
+                type="submit"
+                class="w-full rounded-xl
+                       bg-[#0B1E36]
+                       px-4 py-3
+                       text-white font-semibold
+                       shadow-lg
+                       transition
+                       hover:bg-[#12345B]
+                       focus:outline-none
+                       focus:ring-4
+                       focus:ring-[#0B1E36]/30"
+            >
+                Iniciar sesión →
+            </button>
+
+            <!-- Errors -->
+            <x-validation-errors class="pt-2" />
+        </form>
     </div>
+
+    <!-- ================= Footer ================= -->
+    <div class="pt-6 mt-6 text-center text-sm text-slate-500">
+        <span>
+            by
+            <a href="https://tecnobyte360.com"
+               target="_blank"
+               class="font-semibold text-[#0B1E36] hover:underline">
+                Tecnobyte 360
+            </a>
+            &copy; {{ date('Y') }}
+        </span>
+    </div>
+
 </x-authentication-layout>

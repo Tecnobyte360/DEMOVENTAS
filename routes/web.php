@@ -61,6 +61,7 @@ use App\Livewire\Serie\Serie;
 use App\Livewire\SocioNegocio\SocioNegocios;
 use App\Livewire\SubCategorias\SubCategorias;
 use App\Livewire\TipoDocumentos\Tiposdocumento;
+use App\Livewire\TransferenciasStock;
 use App\Livewire\TurnosCaja\TurnoCaja;
 use App\Livewire\Vehiculos\Vehiculo;
 use App\Models\cotizaciones\cotizacione;
@@ -229,8 +230,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::fallback(function () {
         return view('pages/utility/404');
     });
-Route::get('/facturas/{factura}/preview', [FacturaPosPrintController::class, 'preview'])
-     ->name('facturas.preview');
+    Route::get('/facturas/{factura}/preview', [FacturaPosPrintController::class, 'preview'])
+        ->name('facturas.preview');
 
 
 
@@ -272,7 +273,7 @@ Route::get('/facturas/{factura}/preview', [FacturaPosPrintController::class, 'pr
     Route::get('/Facturacion', Index::class)->name('Facturacion');
     Route::get('/Notas-credito-clientes', NotaCreditoForm::class)->name('notascreditoclientes');
     Route::get('/Notas-credito-compra', NotasCreditoNotaCreditoCompraForm::class)->name('Notascreditocompra');
-   Route::get('/Kardex', KardexProducto::class)->name('cardexinventario');
+    Route::get('/Kardex', KardexProducto::class)->name('cardexinventario');
 
 
 
@@ -287,9 +288,9 @@ Route::get('/facturas/{factura}/preview', [FacturaPosPrintController::class, 'pr
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
     Route::get('Factura-compras', IndexFacturas::class)->name('Factura-compras');
-Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
+    Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
 
-    
+
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
     // Route::get('/catalogos/ciiu', CiiuActividades::class)
     //     ->name('catalogos.ciiu');
@@ -311,10 +312,10 @@ Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocu
         ->name('Mediospagos');
     Route::get('/Pagos-recibidos', Listapagosrecibidos::class)
         ->name('PagosRecibidos');
-   Route::get('/abrircaja', TurnoCaja::class)
+    Route::get('/abrircaja', TurnoCaja::class)
         ->name('abrircaja');
-      Route::get('/reportes/ventas', InformeVentas::class)->name('reportes.ventas');
+    Route::get('/reportes/ventas', InformeVentas::class)->name('reportes.ventas');
 
-     Route::get('/grabar-video', LivewireGrabarVideo::class);
-        
+    Route::get('/grabar-video', LivewireGrabarVideo::class);
+    Route::get('/transferencias-stock', TransferenciasStock::class)->name('transferencias.stock');
 });

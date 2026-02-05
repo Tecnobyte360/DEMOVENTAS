@@ -182,16 +182,16 @@
   <div class="brand-band"></div>
 
   <div class="brand">
-    <div class="col" style="width:260px;">
+    <div class="col" style="width:320px;">
       <table style="width:100%">
         <tr>
           <td style="text-align:left; vertical-align:middle; padding:0;">
 
-            {{-- ✅ LOGO OPTIMIZADO - Sin recortes innecesarios --}}
+            {{-- ✅ LOGO OPTIMIZADO - Sin recortes, tamaño balanceado --}}
             @if(!empty($E['logo_src']))
               <div style="
-                max-width:280px;
-                max-height:60px;
+                max-width:320px;
+                max-height:65px;
                 display:flex;
                 align-items:center;
               ">
@@ -199,11 +199,12 @@
                   src="{{ $E['logo_src'] }}"
                   alt="Logo {{ $E['nombre'] }}"
                   style="
-                    max-width:280px;
-                    max-height:60px;
+                    max-width:320px;
+                    max-height:65px;
                     width:auto;
                     height:auto;
                     object-fit:contain;
+                    object-position:left center;
                   ">
               </div>
             @else

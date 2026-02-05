@@ -31,15 +31,25 @@
   $logoSrc = null;
 
   if (!empty($empresa->logo_path)) {
-      $logoSrc = $empresa->logo_path;
+      $logoSrc = $empresa->logo_path; // ej: empresas/logos/logo.jpg
   } elseif (!empty($empresa->logo_url)) {
-      $logoSrc = $empresa->logo_url;
+      $logoSrc = $empresa->logo_url;  // ej: https://...
   } elseif (!empty($empresa->logo) && is_string($empresa->logo)) {
-      $logoSrc = str_starts_with($empresa->logo, 'storage/')
-          ? public_path($empresa->logo)
-          : $empresa->logo;
+      $logoSrc = $empresa->logo;
   } elseif (!empty($empresa->logo_src)) {
       $logoSrc = $empresa->logo_src;
+  }
+
+  // ✅ Convertir a path absoluto si es un path relativo dentro de public/
+  // (por tu caso: ahora los archivos están en public/empresas/...)
+  $logoPdfSrc = null;
+  if ($logoSrc) {
+      if (str_starts_with($logoSrc, 'http://') || str_starts_with($logoSrc, 'https://') || str_starts_with($logoSrc, 'data:image/')) {
+          $logoPdfSrc = $logoSrc;
+      } else {
+          // asume que es relativo a public/
+          $logoPdfSrc = public_path($logoSrc);
+      }
   }
 
   $E = [
@@ -49,7 +59,7 @@
     'telefono'  => $empresa->telefono      ?? null,
     'email'     => $empresa->email         ?? null,
     'website'   => $empresa->sitio_web     ?? null,
-    'logo_src'  => $logoSrc,
+    'logo_src'  => $logoPdfSrc,
   ];
 
   $money  = fn($v) => '$'.number_format((float)$v, 2, '.', ',');
@@ -66,6 +76,7 @@
 <head>
   <meta charset="utf-8">
   <title>Factura {{ $folio }}</title>
+
   <style>
     /* ✅ Header compacto */
     @page { margin: 85px 36px 95px 36px; }
@@ -149,6 +160,7 @@
     .brand-name { font-size: 15px; font-weight: 800; color: {{ $ink }}; }
   </style>
 </head>
+
 <body>
 
 <header>
@@ -159,17 +171,32 @@
       <table style="width:100%">
         <tr>
           <td style="text-align:left; vertical-align:middle; padding:0;">
+
+            {{-- ✅ LOGO RECORTADO PARA BANNERS GRANDES --}}
             @if(!empty($E['logo_src']))
-              <img
-                src="{{ $E['logo_src'] }}"
-                alt="Logo {{ $E['nombre'] }}"
-                style="display:block; max-height:55px; max-width:280px; width:auto; object-fit:contain;">
+              <div style="
+                max-width:280px;
+                max-height:48px;
+                overflow:hidden;
+                display:flex;
+                align-items:center;
+              ">
+                <img
+                  src="{{ $E['logo_src'] }}"
+                  alt="Logo {{ $E['nombre'] }}"
+                  style="
+                    max-width:280px;
+                    width:auto;
+                    transform: translateY(-18px);
+                  ">
+              </div>
             @else
               <div class="brand-name">{{ $E['nombre'] }}</div>
               @if(!empty($E['nit']))
                 <div class="small muted" style="margin-top:2px;">{{ $E['nit'] }}</div>
               @endif
             @endif
+
           </td>
         </tr>
       </table>

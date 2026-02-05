@@ -133,6 +133,7 @@
                 <div class="mt-3 text-center text-xs text-slate-400 dark:text-slate-500">
                     © {{ date('Y') }} Tecnobyte360. Todos los derechos reservados.
                 </div>
+                
             </div>
         </div>
     </main>

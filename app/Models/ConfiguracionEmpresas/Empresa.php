@@ -2,6 +2,7 @@
 
 namespace App\Models\ConfiguracionEmpresas;
 
+use App\Models\Factura\Factura;
 use Illuminate\Database\Eloquent\Model;
 
 class Empresa extends Model
@@ -39,7 +40,7 @@ class Empresa extends Model
 
     public function facturas()
     {
-        return $this->hasMany(\App\Models\Factura\Factura::class, 'empresa_id');
+        return $this->hasMany(Factura::class, 'empresa_id');
     }
 
     /** === Accessors de URLs === */

@@ -43,22 +43,41 @@ class Empresa extends Model
         return $this->hasMany(Factura::class, 'empresa_id');
     }
 
-    /** === Accessors de URLs === */
- public function getLogoUrlAttribute(): ?string
-{
-    return $this->logo_path ? asset($this->logo_path) : null;
-}
+    /* ============================================================
+     |  ACCESSORS (WEB): URL pública correcta usando /storage
+     ============================================================ */
+    public function getLogoUrlAttribute(): ?string
+    {
+        return $this->toStorageUrl($this->logo_path);
+    }
 
-public function getLogoDarkUrlAttribute(): ?string
-{
-    return $this->logo_dark_path ? asset($this->logo_dark_path) : null;
-}
+    public function getLogoDarkUrlAttribute(): ?string
+    {
+        return $this->toStorageUrl($this->logo_dark_path);
+    }
 
-public function getFaviconUrlAttribute(): ?string
-{
-    return $this->favicon_path ? asset($this->favicon_path) : null;
-}
+    public function getFaviconUrlAttribute(): ?string
+    {
+        return $this->toStorageUrl($this->favicon_path);
+    }
 
+    /* ============================================================
+     |  ACCESSORS (PDF): PATH absoluto para DomPDF / Snappy
+     ============================================================ */
+    public function getLogoPdfPathAttribute(): ?string
+    {
+        return $this->toStoragePublicPath($this->logo_path);
+    }
+
+    public function getLogoDarkPdfPathAttribute(): ?string
+    {
+        return $this->toStoragePublicPath($this->logo_dark_path);
+    }
+
+    public function getFaviconPdfPathAttribute(): ?string
+    {
+        return $this->toStoragePublicPath($this->favicon_path);
+    }
 
     /** === Accessors de color normalizado para UI === */
     public function getColorPrimarioHexAttribute(): string
@@ -71,12 +90,49 @@ public function getFaviconUrlAttribute(): ?string
         return $this->normalizeHex($this->color_secundario) ?? '#1F2937';
     }
 
-    private function toPublicUrl(?string $path): ?string
+    /* ============================================================
+     |  HELPERS
+     ============================================================ */
+
+    /**
+     * Convierte "empresas/logos/x.jpg" => asset("storage/empresas/logos/x.jpg")
+     * Si ya viene con "storage/..." lo respeta.
+     */
+    private function toStorageUrl(?string $path): ?string
     {
         if (!$path) return null;
+
+        $path = ltrim($path, '/');
+
         if (str_starts_with($path, 'data:image/')) return $path;
 
-        return asset($path);
+        // si ya viene storage/...
+        if (str_starts_with($path, 'storage/')) {
+            return asset($path);
+        }
+
+        // si viene empresas/logos/... => /storage/empresas/logos/...
+        return asset('storage/' . $path);
+    }
+
+    /**
+     * Convierte "empresas/logos/x.jpg" => public_path("storage/empresas/logos/x.jpg")
+     * Esto es lo que el PDF necesita.
+     */
+    private function toStoragePublicPath(?string $path): ?string
+    {
+        if (!$path) return null;
+
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            $path = substr($path, strlen('storage/'));
+            $path = ltrim($path, '/');
+        }
+
+        $abs = public_path('storage/' . $path);
+
+        return file_exists($abs) ? $abs : null;
     }
 
     private function normalizeHex(?string $hex): ?string
@@ -90,7 +146,7 @@ public function getFaviconUrlAttribute(): ?string
 
         // soporta RGB corto
         if (strlen($hex) === 3) {
-            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
         }
 
         if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {

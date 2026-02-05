@@ -30,25 +30,40 @@
   // ✅ Logo: para PDF lo ideal es PATH absoluto.
   $logoSrc = null;
 
+  // 1) Si viene en DB como "empresas/logos/xxx.jpg" (recomendado)
   if (!empty($empresa->logo_path)) {
-      $logoSrc = $empresa->logo_path; // ej: empresas/logos/logo.jpg
-  } elseif (!empty($empresa->logo_url)) {
-      $logoSrc = $empresa->logo_url;  // ej: https://...
-  } elseif (!empty($empresa->logo) && is_string($empresa->logo)) {
+      $logoSrc = $empresa->logo_path;
+  }
+  // 2) Si viene como accessor url (http/https)
+  elseif (!empty($empresa->logo_url)) {
+      $logoSrc = $empresa->logo_url;
+  }
+  // 3) Si llega como "storage/..." o ruta ya armada
+  elseif (!empty($empresa->logo) && is_string($empresa->logo)) {
       $logoSrc = $empresa->logo;
-  } elseif (!empty($empresa->logo_src)) {
+  }
+  // 4) fallback
+  elseif (!empty($empresa->logo_src)) {
       $logoSrc = $empresa->logo_src;
   }
 
-  // ✅ Convertir a path absoluto si es un path relativo dentro de public/
-  // (por tu caso: ahora los archivos están en public/empresas/...)
+  // ✅ Convertir a PATH absoluto si no es URL/data
   $logoPdfSrc = null;
   if ($logoSrc) {
-      if (str_starts_with($logoSrc, 'http://') || str_starts_with($logoSrc, 'https://') || str_starts_with($logoSrc, 'data:image/')) {
+      if (
+          str_starts_with($logoSrc, 'http://') ||
+          str_starts_with($logoSrc, 'https://') ||
+          str_starts_with($logoSrc, 'data:image/')
+      ) {
           $logoPdfSrc = $logoSrc;
       } else {
-          // asume que es relativo a public/
-          $logoPdfSrc = public_path($logoSrc);
+          // Si viene como "storage/..." lo pasamos a public_path
+          if (str_starts_with($logoSrc, 'storage/')) {
+              $logoPdfSrc = public_path($logoSrc);
+          } else {
+              // Si viene como "empresas/..." también es relativo a public/
+              $logoPdfSrc = public_path($logoSrc);
+          }
       }
   }
 
@@ -78,8 +93,8 @@
   <title>Factura {{ $folio }}</title>
 
   <style>
-    /* ✅ Header compacto */
-    @page { margin: 85px 36px 95px 36px; }
+    /* ✅ Header compacto y con más aire */
+    @page { margin: 90px 36px 95px 36px; }
 
     body {
       font-family: DejaVu Sans, sans-serif;
@@ -88,7 +103,7 @@
       background: {{ $base }};
     }
 
-    header { position: fixed; top: -70px; left: 0; right: 0; height: 75px; }
+    header { position: fixed; top: -74px; left: 0; right: 0; height: 78px; }
     footer { position: fixed; bottom: -70px; left: 0; right: 0; height: 70px; }
 
     .brand-band { height: 5px; background: {{ $primary }}; border-radius: 0 0 6px 6px; }
@@ -114,7 +129,7 @@
       vertical-align: middle;
     }
 
-    /* ✅ Marca de agua más suave */
+    /* ✅ Marca de agua suave */
     .watermark {
       position: fixed;
       top: 43%;
@@ -187,7 +202,7 @@
                   style="
                     max-width:280px;
                     width:auto;
-                    transform: translateY(-18px);
+                    transform: translateY(-14px);
                   ">
               </div>
             @else

@@ -110,7 +110,8 @@
                     </div>
 
 
-                    <div class="relative hidden lg:flex items-center justify-center p-10">
+               <div class="relative flex items-center justify-center p-10">
+
                         <!-- degradado azul premium -->
                         <div class="absolute inset-0 bg-gradient-to-br from-[#0b1626] via-[#132742] to-[#09111d]"></div>
 
@@ -143,17 +144,11 @@
                     p-5
                     shadow-[0_25px_80px_-25px_rgba(255,255,255,.35)]">
 
-                                    <img src="{{ $empresaActual?->logo_url }}" alt="{{ $empresaActual?->nombre }}"
-                                        class="w-[16rem] xl:w-[20rem]
-                       object-contain
-                       rounded-2xl
-                       
-                       bg-white/90
-                       p-6
-                       shadow-xl
-                       transition-transform duration-500
-                       group-hover:scale-[1.03]"
-                                        loading="lazy" />
+                                   <img
+  src="{{ $empresaActual?->logo_url ?? '' }}"
+  alt="{{ $empresaActual?->nombre ?? 'Empresa' }}"
+  class="w-[16rem] xl:w-[20rem] object-contain rounded-2xl bg-white/90 p-6 shadow-xl"
+/>
                                 </div>
                             </div>
 

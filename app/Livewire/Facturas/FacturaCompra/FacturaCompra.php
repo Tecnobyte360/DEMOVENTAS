@@ -94,11 +94,11 @@ class FacturaCompra extends Component
         'lineas.*.impuesto_pct'          => 'porcentaje de impuesto',
     ];
 
-    #[On('abrir-factura')]
-    public function abrir(int $id): void
-    {
-        $this->cargarFactura($id);
-    }
+   #[On('abrir-factura')]
+public function abrir(int $id): void
+{
+    $this->cargarFactura($id);
+}
 
     /* ======================
      *  Inicialización

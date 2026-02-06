@@ -113,10 +113,11 @@
               </td>
               <td class="px-4 py-3 text-right">
                 <div class="inline-flex gap-2">
-                  <button wire:click="$dispatch('abrir-factura', { id: {{ $f->id }} })"
-                          class="h-9 px-3 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs">
-                    Abrir
-                  </button>
+                 <button wire:click="abrir({{ $f->id }})"
+        class="h-9 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs">
+  Editar
+</button>
+
                 </div>
               </td>
             </tr>

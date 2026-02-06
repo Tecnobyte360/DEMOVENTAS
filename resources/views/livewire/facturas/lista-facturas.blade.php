@@ -101,12 +101,15 @@
           <td class="p-2 sm:p-3 whitespace-nowrap">
             <div class="flex items-center gap-1.5 sm:gap-2">
               {{-- Editar --}}
-              <button type="button" title="Editar"
-                      wire:click="abrir({{ $f->id }})"
-                      class="group relative px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:bg-black/80 transition">
-                <i class="fa-solid fa-pen-to-square"></i>
-                <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Editar</span>
-              </button>
+             <button
+    type="button"
+    title="Editar"
+    wire:click="abrir({{ $f->id }})"
+    class="group relative px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:bg-black/80 transition"
+>
+    <i class="fa-solid fa-pen-to-square"></i>
+</button>
+
 
               {{-- Enviar --}}
               <button type="button" title="Enviar por correo"

@@ -14,7 +14,7 @@ use Throwable;
 
 class TransferenciasStock extends Component
 {
-   use WithPagination;
+    use WithPagination;
 
     protected $paginationTheme = 'tailwind';
 
@@ -34,12 +34,12 @@ class TransferenciasStock extends Component
     public bool $disabledTransferir = true;
 
     /** =========================
-     *  FILTROS TABLA (nuevo)
+     *  FILTROS TABLA
      *  ========================= */
-    public string $f_buscar = '';      // busca por nombre producto
-    public string $f_bodega = '';      // filtra por bodega (origen o destino)
-    public string $f_desde  = '';      // YYYY-MM-DD
-    public string $f_hasta  = '';      // YYYY-MM-DD
+    public string $f_buscar = '';
+    public string $f_bodega = '';
+    public string $f_desde  = '';
+    public string $f_hasta  = '';
 
     public function mount(): void
     {
@@ -53,33 +53,33 @@ class TransferenciasStock extends Component
     protected function rules(): array
     {
         return [
-            'producto_id'        => ['required', 'integer', 'exists:productos,id'],
-            'bodega_origen_id'   => ['required', 'integer', 'exists:bodegas,id'],
-            'bodega_destino_id'  => ['required', 'integer', 'different:bodega_origen_id', 'exists:bodegas,id'],
-            'cantidad'           => ['required', 'numeric', 'min:0.000001'],
-            'observacion'        => ['nullable', 'string', 'max:500'],
+            'producto_id'       => ['required', 'integer', 'exists:productos,id'],
+            'bodega_origen_id'  => ['required', 'integer', 'exists:bodegas,id'],
+            'bodega_destino_id' => ['required', 'integer', 'different:bodega_origen_id', 'exists:bodegas,id'],
+            'cantidad'          => ['required', 'numeric', 'min:0.000001'],
+            'observacion'       => ['nullable', 'string', 'max:500'],
         ];
     }
 
     protected array $messages = [
-        'producto_id.required'       => 'Debes seleccionar un producto.',
-        'bodega_origen_id.required'  => 'Debes seleccionar la bodega origen.',
-        'bodega_destino_id.required' => 'Debes seleccionar la bodega destino.',
-        'bodega_destino_id.different' => 'La bodega destino debe ser diferente a la bodega origen.',
-        'cantidad.required'          => 'Debes ingresar una cantidad.',
-        'cantidad.min'               => 'La cantidad debe ser mayor que 0.',
+        'producto_id.required'         => 'Debes seleccionar un producto.',
+        'bodega_origen_id.required'    => 'Debes seleccionar la bodega origen.',
+        'bodega_destino_id.required'   => 'Debes seleccionar la bodega destino.',
+        'bodega_destino_id.different'  => 'La bodega destino debe ser diferente a la bodega origen.',
+        'cantidad.required'            => 'Debes ingresar una cantidad.',
+        'cantidad.min'                 => 'La cantidad debe ser mayor que 0.',
     ];
 
     public function updated($property): void
     {
-        // ===== tu lógica existente =====
+        // Form
         if (in_array($property, ['producto_id', 'bodega_origen_id', 'cantidad', 'bodega_destino_id'], true)) {
             $this->resetErrorBag('cantidad');
             $this->recalcularStockOrigen();
             $this->recalcularDisabled();
         }
 
-        // ===== nuevo: si cambian filtros, vuelve a la página 1 =====
+        // Filtros tabla
         if (in_array($property, ['f_buscar', 'f_bodega', 'f_desde', 'f_hasta'], true)) {
             $this->resetPage();
         }
@@ -106,12 +106,12 @@ class TransferenciasStock extends Component
         if (!$this->producto_id) return;
         if (!$this->bodega_origen_id) return;
         if (!$this->bodega_destino_id) return;
-        if ((int)$this->bodega_origen_id === (int)$this->bodega_destino_id) return;
+        if ((int) $this->bodega_origen_id === (int) $this->bodega_destino_id) return;
 
         $cant = (float) $this->cantidad;
         if ($cant <= 0) return;
 
-        if (!is_null($this->stock_origen) && $cant > (float)$this->stock_origen) return;
+        if (!is_null($this->stock_origen) && $cant > (float) $this->stock_origen) return;
 
         $this->disabledTransferir = false;
     }
@@ -121,7 +121,8 @@ class TransferenciasStock extends Component
         $this->validate();
 
         $cant = (float) $this->cantidad;
-        if (!is_null($this->stock_origen) && $cant > (float)$this->stock_origen) {
+
+        if (!is_null($this->stock_origen) && $cant > (float) $this->stock_origen) {
             $this->addError('cantidad', 'La cantidad supera el stock disponible en la bodega origen.');
             $this->dispatch('toast', type: 'error', message: 'Stock insuficiente en bodega origen.');
             $this->recalcularDisabled();
@@ -130,23 +131,25 @@ class TransferenciasStock extends Component
 
         try {
             $res = $svc->transferir(
-                $this->producto_id,
-                $this->bodega_origen_id,
-                $this->bodega_destino_id,
+                (int) $this->producto_id,
+                (int) $this->bodega_origen_id,
+                (int) $this->bodega_destino_id,
                 $cant,
                 Auth::id(),
                 $this->observacion
             );
 
-            $this->dispatch('toast', type: 'success',
-                message: "Transferencia OK. CPU: {$res['cpu']} | Total: {$res['costo_total']}"
-            );
+            $this->dispatch('toast', type: 'success', message: "Transferencia OK. CPU: {$res['cpu']} | Total: {$res['costo_total']}");
 
+            // reset form
             $this->reset(['producto_id', 'bodega_origen_id', 'bodega_destino_id', 'cantidad', 'observacion']);
-            $this->stock_origen = null;
-            $this->disabledTransferir = true;
+            $this->resetErrorBag();
 
-            // opcional: para que se vea arriba inmediatamente en histórico
+            // recalcula helpers (deja UI coherente)
+            $this->recalcularStockOrigen();
+            $this->recalcularDisabled();
+
+            // refresca histórico
             $this->resetPage();
 
         } catch (Throwable $e) {
@@ -157,7 +160,7 @@ class TransferenciasStock extends Component
 
     public function limpiarFiltrosTabla(): void
     {
-        $this->reset(['f_buscar','f_bodega','f_desde','f_hasta']);
+        $this->reset(['f_buscar', 'f_bodega', 'f_desde', 'f_hasta']);
         $this->resetPage();
     }
 
@@ -197,10 +200,8 @@ class TransferenciasStock extends Component
         if ($this->f_desde !== '') $q->whereDate('ts.created_at', '>=', $this->f_desde);
         if ($this->f_hasta !== '') $q->whereDate('ts.created_at', '<=', $this->f_hasta);
 
-        $transferencias = $q->paginate(10);
-
         return view('livewire.transferencias-stock', [
-            'transferencias' => $transferencias,
+            'transferencias' => $q->paginate(10),
         ]);
     }
 }

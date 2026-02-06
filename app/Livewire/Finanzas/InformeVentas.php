@@ -88,74 +88,90 @@ class InformeVentas extends Component
         return in_array($codigo, $comprasCodigos, true);
     }
 
-    protected function baseQuery(): Builder
-    {
-        // ✅ Si tienes proveedor(), inclúyelo para no romper la vista en compras
-        $q = Factura::query()->with(['cliente', 'proveedor', 'empresa', 'serie.tipo']);
+  protected function baseQuery(): Builder
+{
+    $esCompra = $this->esCompra();
 
-        // ✅ SERIE define el tipo (ventas/compras)
-        if ($this->serieId) {
-            $q->where('serie_id', $this->serieId);
+    // ✅ Carga relaciones según contexto (ventas vs compras)
+    $with = ['empresa', 'serie.tipo'];
 
-            if (!$this->serieSeleccionada || $this->serieSeleccionada->id !== $this->serieId) {
-                $this->serieSeleccionada = Serie::with('tipo')->find($this->serieId);
-            }
+    if ($esCompra) {
+        // compras: usa socioNegocio como proveedor (o proveedor si existe)
+        // ✅ SI quieres SI o SI "proveedor()", deja proveedor, si no, usa socioNegocio.
+        $with[] = 'socioNegocio'; // proveedor real (misma FK)
+        // $with[] = 'proveedor'; // <- solo si estás 100% seguro que existe en ESTE modelo cargado
+    } else {
+        $with[] = 'cliente';
+    }
+
+    $q = Factura::query()->with($with);
+
+    // ✅ SERIE define el tipo (ventas/compras)
+    if ($this->serieId) {
+        $q->where('serie_id', $this->serieId);
+
+        if (!$this->serieSeleccionada || $this->serieSeleccionada->id !== $this->serieId) {
+            $this->serieSeleccionada = Serie::with('tipo')->find($this->serieId);
+        }
+    } else {
+        // ✅ Por defecto SOLO VENTAS
+        $codigos = array_map('strtoupper', $this->codigosVentas);
+
+        $q->whereHas('serie.tipo', function ($t) use ($codigos) {
+            $t->whereIn(DB::raw('UPPER(codigo)'), $codigos);
+        });
+    }
+
+    // Estado
+    if ($this->estadoFiltro !== 'todos') {
+        if ($this->estadoFiltro === 'vencida') {
+            $q->where('saldo', '>', 0)
+              ->whereNotNull('vencimiento')
+              ->whereDate('vencimiento', '<', now()->toDateString());
         } else {
-            // ✅ Por defecto SOLO VENTAS
-            $codigos = array_map('strtoupper', $this->codigosVentas);
+            $q->where('estado', $this->estadoFiltro);
+        }
+    }
 
-            $q->whereHas('serie.tipo', function ($t) use ($codigos) {
-                $t->whereIn(DB::raw('UPPER(codigo)'), $codigos);
+    // Tipo pago
+    if ($this->tipoPagoFiltro !== 'todos') {
+        $q->where('tipo_pago', $this->tipoPagoFiltro);
+    }
+
+    // Empresa
+    if ($this->empresaFiltro !== 'todas' && $this->empresaFiltro !== '') {
+        $q->where('empresa_id', $this->empresaFiltro);
+    }
+
+    // ✅ Cliente/Proveedor según si es compra
+    if (trim($this->filtroCliente) !== '') {
+        $f = trim($this->filtroCliente);
+
+        if ($esCompra) {
+            // ✅ compras: filtra por socioNegocio (proveedor)
+            $q->whereHas('socioNegocio', function ($qq) use ($f) {
+                $qq->where('razon_social', 'like', "%{$f}%");
+            });
+        } else {
+            // ✅ ventas: filtra por cliente
+            $q->whereHas('cliente', function ($qq) use ($f) {
+                $qq->where('razon_social', 'like', "%{$f}%");
             });
         }
-
-        // Estado
-        if ($this->estadoFiltro !== 'todos') {
-            if ($this->estadoFiltro === 'vencida') {
-                $q->where('saldo', '>', 0)
-                    ->whereNotNull('vencimiento')
-                    ->whereDate('vencimiento', '<', now()->toDateString());
-            } else {
-                $q->where('estado', $this->estadoFiltro);
-            }
-        }
-
-        // Tipo pago
-        if ($this->tipoPagoFiltro !== 'todos') {
-            $q->where('tipo_pago', $this->tipoPagoFiltro);
-        }
-
-        // Empresa
-        if ($this->empresaFiltro !== 'todas' && $this->empresaFiltro !== '') {
-            $q->where('empresa_id', $this->empresaFiltro);
-        }
-
-        // ✅ Cliente/Proveedor según si es compra
-        if (trim($this->filtroCliente) !== '') {
-            $f = trim($this->filtroCliente);
-
-            if ($this->esCompra()) {
-                $q->whereHas('proveedor', function ($qq) use ($f) {
-                    $qq->where('razon_social', 'like', "%{$f}%");
-                });
-            } else {
-                $q->whereHas('cliente', function ($qq) use ($f) {
-                    $qq->where('razon_social', 'like', "%{$f}%");
-                });
-            }
-        }
-
-        // Rango de fechas
-        if ($this->fechaInicio && $this->fechaFin) {
-            $q->whereBetween('fecha', [$this->fechaInicio, $this->fechaFin]);
-        } elseif ($this->fechaInicio) {
-            $q->whereDate('fecha', '>=', $this->fechaInicio);
-        } elseif ($this->fechaFin) {
-            $q->whereDate('fecha', '<=', $this->fechaFin);
-        }
-
-        return $q;
     }
+
+    // Rango de fechas
+    if ($this->fechaInicio && $this->fechaFin) {
+        $q->whereBetween('fecha', [$this->fechaInicio, $this->fechaFin]);
+    } elseif ($this->fechaInicio) {
+        $q->whereDate('fecha', '>=', $this->fechaInicio);
+    } elseif ($this->fechaFin) {
+        $q->whereDate('fecha', '<=', $this->fechaFin);
+    }
+
+    return $q;
+}
+
 
     protected function calcularKpis(Builder $query): void
     {
@@ -197,18 +213,20 @@ class InformeVentas extends Component
     // ✅ Determina si es compras (según la serie seleccionada)
     $esCompra = $this->esCompra();
 
-    // ✅ Lista sugerida de terceros (datalist) basada en los resultados actuales
-   $terceros = $facturas->getCollection()
+
+  $terceros = $facturas->getCollection()
     ->map(function ($f) use ($esCompra) {
-        return $esCompra
-            ? optional($f->proveedor)->razon_social
-            : optional($f->cliente)->razon_social;
+        if ($esCompra) {
+            return optional($f->socioNegocio)->razon_social; 
+        }
+        return optional($f->cliente)->razon_social; // cliente
     })
     ->filter()
     ->unique()
     ->values()
     ->take(50)
     ->toArray();
+
 
 
     return view('livewire.finanzas.informe-ventas', [

@@ -4,7 +4,6 @@ namespace App\Livewire\ConfiguracionEmpresas;
 
 use App\Models\ConfiguracionEmpresas\Empresa;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -127,7 +126,7 @@ class Empresas extends Component
         try {
             $this->theme = array_replace($this->defaultTheme(), $this->theme ?? []);
 
-            // ✅ normalizar colores antes de validar/guardar
+            // normalizar colores
             $this->color_primario   = $this->normalizeHex($this->color_primario);
             $this->color_secundario = $this->normalizeHex($this->color_secundario);
 
@@ -150,19 +149,25 @@ class Empresas extends Component
                 'pdf_theme'        => $this->theme,
             ]);
 
-            if ($this->logo_b64) {
-                $empresa->logo_path = $this->storeBase64Image($this->logo_b64, 'logos', 'logo');
-            }
-            if ($this->logo_dark_b64) {
-                $empresa->logo_dark_path = $this->storeBase64Image($this->logo_dark_b64, 'logos', 'logo-dark');
-            }
-            if ($this->favicon_b64) {
-                $empresa->favicon_path = $this->storeBase64Image($this->favicon_b64, 'favicons', 'favicon');
-            }
-
+            // ✅ Guardar primero para tener ID (si es nueva)
             $empresa->save();
             $this->empresa_id = $empresa->id;
 
+            // ✅ guardar imágenes DIRECTO EN PUBLIC/empresas/{id}/...
+            if ($this->logo_b64) {
+                $empresa->logo_path = $this->storeBase64ImagePublic($this->logo_b64, $empresa->id, 'logos', 'logo');
+            }
+            if ($this->logo_dark_b64) {
+                $empresa->logo_dark_path = $this->storeBase64ImagePublic($this->logo_dark_b64, $empresa->id, 'logos', 'logo-dark');
+            }
+            if ($this->favicon_b64) {
+                $empresa->favicon_path = $this->storeBase64ImagePublic($this->favicon_b64, $empresa->id, 'favicons', 'favicon');
+            }
+
+            // guardar rutas si cambiaron
+            $empresa->save();
+
+            // refrescar previews
             $this->logo_actual      = $this->toPublicUrl($empresa->logo_path);
             $this->logo_dark_actual = $this->toPublicUrl($empresa->logo_dark_path);
             $this->favicon_actual   = $this->toPublicUrl($empresa->favicon_path);
@@ -209,7 +214,11 @@ class Empresas extends Component
         return '#'.strtoupper($hex);
     }
 
-    private function storeBase64Image(string $dataUrl, string $folder, string $prefix): string
+    /**
+     * Guarda una imagen base64 directamente en public/empresas/{empresaId}/{folder}/
+     * Retorna ruta relativa para DB: empresas/{empresaId}/{folder}/archivo.png
+     */
+    private function storeBase64ImagePublic(string $dataUrl, int $empresaId, string $folder, string $prefix): string
     {
         if (!str_contains($dataUrl, ';base64,')) {
             throw new \RuntimeException('Imagen inválida.');
@@ -228,15 +237,27 @@ class Empresas extends Component
         };
 
         $binary = base64_decode($encoded);
-
         if ($binary === false) {
             throw new \RuntimeException('No se pudo decodificar la imagen.');
         }
 
-        $path = "empresas/{$folder}/{$prefix}-" . uniqid() . ".{$ext}";
-        Storage::disk('public')->put($path, $binary);
+        $relativeDir  = "empresas/{$empresaId}/{$folder}";
+        $absoluteDir  = public_path($relativeDir);
 
-        return $path;
+        if (!is_dir($absoluteDir)) {
+            @mkdir($absoluteDir, 0755, true);
+        }
+
+        $filename     = "{$prefix}-" . uniqid('', true) . ".{$ext}";
+        $relativePath = "{$relativeDir}/{$filename}";
+        $absolutePath = public_path($relativePath);
+
+        $ok = @file_put_contents($absolutePath, $binary);
+        if ($ok === false) {
+            throw new \RuntimeException('No se pudo guardar la imagen en public/. Verifica permisos.');
+        }
+
+        return $relativePath;
     }
 
     private function fillFromModel(Empresa $m): void
@@ -286,8 +307,12 @@ class Empresas extends Component
     private function toPublicUrl(?string $path): ?string
     {
         if (!$path) return null;
+
+        $path = ltrim($path, '/');
+
         if (str_starts_with($path, 'data:image/')) return $path;
-        return asset('storage/' . $path);
+
+        return asset($path);
     }
 
     public function render()

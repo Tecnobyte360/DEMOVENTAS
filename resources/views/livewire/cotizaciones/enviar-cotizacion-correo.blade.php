@@ -1,68 +1,82 @@
-<div x-cloak x-data x-show="@entangle('show').live" style="display:none" class="fixed inset-0 z-[100]">
+<div
+  x-data="{ open: @entangle('show') }"
+  x-cloak
+>
+  <div
+    x-show="open"
+    x-transition.opacity
+    class="fixed inset-0 z-[300] flex items-center justify-center"
+    @keydown.escape.window="open = false"
+  >
+    <div class="absolute inset-0 bg-black/60" @click="open=false"></div>
 
-    <div class="absolute inset-0 bg-black/40" @click="$wire.cerrar()"></div>
-
-    <div class="absolute left-1/2 top-10 -translate-x-1/2 w-[95%] md:w-[880px] rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-            <h3 class="text-lg font-semibold">Enviar</h3>
-            <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" @click="$wire.cerrar()">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
+    <div class="relative z-10 w-[95vw] max-w-2xl rounded-2xl bg-white dark:bg-slate-900 shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-bold text-slate-900 dark:text-white">Enviar cotización por correo</h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Se adjunta PDF automáticamente</p>
         </div>
 
-        <div class="p-5 space-y-4">
-            <div>
-                <label class="text-xs font-medium text-gray-600 dark:text-gray-300">Para</label>
-                <input type="email" wire:model.defer="email_to"
-                       class="mt-1 w-full rounded-xl border px-3 py-2 dark:bg-gray-800 dark:text-white"
-                       placeholder="cliente@correo.com">
-                @error('email_to') <p class="text-xs text-rose-600 mt-1">{{ $message }}</p> @enderror
-            </div>
+        <button type="button" class="h-9 w-9 rounded-xl bg-slate-100 dark:bg-slate-800"
+                wire:click="cerrar">
+          ✕
+        </button>
+      </div>
 
-            <div>
-                <label class="text-xs font-medium text-gray-600 dark:text-gray-300">CC (opcional)</label>
-                <input type="text" wire:model.defer="email_cc"
-                       class="mt-1 w-full rounded-xl border px-3 py-2 dark:bg-gray-800 dark:text-white"
-                       placeholder="separar con coma: a@b.com, c@d.com">
-            </div>
-
-            <div>
-                <label class="text-xs font-medium text-gray-600 dark:text-gray-300">Asunto</label>
-                <input type="text" wire:model.defer="email_subject"
-                       class="mt-1 w-full rounded-xl border px-3 py-2 dark:bg-gray-800 dark:text-white">
-                @error('email_subject') <p class="text-xs text-rose-600 mt-1">{{ $message }}</p> @enderror
-            </div>
-
-            <div>
-                <label class="text-xs font-medium text-gray-600 dark:text-gray-300">Mensaje</label>
-                <textarea rows="8" wire:model.defer="email_body"
-                          class="mt-1 w-full rounded-xl border px-3 py-2 dark:bg-gray-800 dark:text-white"></textarea>
-                @error('email_body') <p class="text-xs text-rose-600 mt-1">{{ $message }}</p> @enderror
-            </div>
-
-            <div class="pt-2">
-                <div class="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Adjuntos</div>
-                @if($email_attachment_path && $email_attachment_name)
-                    <div class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-gray-800">
-                        <i class="fa-solid fa-paperclip"></i>
-                        <span class="text-sm">{{ $email_attachment_name }}</span>
-                        <button class="text-rose-600 hover:underline" wire:click="quitarAdjunto" type="button">&times;</button>
-                    </div>
-                @else
-                    <button type="button" wire:click="regenerarAdjunto"
-                            class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 text-white hover:bg-indigo-700">
-                        <i class="fa-solid fa-file-pdf"></i> Generar PDF
-                    </button>
-                @endif
-            </div>
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Para</label>
+          <input type="email" wire:model.defer="email_to"
+                 class="mt-1 w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white">
+          @error('email_to') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
         </div>
 
-        <div class="px-5 py-4 border-t border-gray-200 dark:border-gray-800 flex items-center justify-end gap-3">
-            <button class="px-4 py-2 rounded-xl border" @click="$wire.cerrar()" type="button">Cancelar</button>
-            <button class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
-                    wire:click="enviarCorreo" type="button">
-                Enviar
-            </button>
+        <div>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">CC (separado por comas)</label>
+          <input type="text" wire:model.defer="email_cc"
+                 class="mt-1 w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white">
         </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Asunto</label>
+          <input type="text" wire:model.defer="email_subject"
+                 class="mt-1 w-full h-11 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white">
+          @error('email_subject') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
+
+        <div>
+          <label class="text-xs font-semibold text-slate-600 dark:text-slate-300">Mensaje</label>
+          <textarea rows="6" wire:model.defer="email_body"
+                    class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white"></textarea>
+          @error('email_body') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+        </div>
+
+        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+          <div>
+            Adjunto: <span class="font-semibold">{{ $email_attachment_name ?? 'Sin adjunto' }}</span>
+          </div>
+          <div class="flex gap-2">
+            <button type="button" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800"
+                    wire:click="regenerarAdjunto">Regenerar</button>
+
+            <button type="button" class="px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800"
+                    wire:click="quitarAdjunto">Quitar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-2">
+        <button type="button" class="h-11 px-4 rounded-xl bg-slate-200 dark:bg-slate-800"
+                wire:click="cerrar">Cerrar</button>
+
+        <button type="button" class="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+                wire:click="enviarCorreo"
+                wire:loading.attr="disabled"
+                wire:target="enviarCorreo">
+          <span wire:loading.remove wire:target="enviarCorreo">Enviar</span>
+          <span wire:loading wire:target="enviarCorreo">Enviando…</span>
+        </button>
+      </div>
     </div>
+  </div>
 </div>

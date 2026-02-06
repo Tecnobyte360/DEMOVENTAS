@@ -261,25 +261,27 @@ class Cotizacion extends Component
     }
 
     /** Enviar: abre modal del hijo */
-    public function enviar()
-    {
-        try {
-            $this->validate();
-            if (empty($this->lineas)) {
-                PendingToast::create()->error()->message('Ingresa al menos una línea antes de enviar.')->duration(5000);
-                return;
-            }
+  public function enviar()
+{
+    try {
+        $this->validate();
 
-            $this->persistir();
-
-            // Abrir modal en el hijo con la cotización actual
-            $this->dispatch('abrir-modal-enviar', cotizacionId: $this->cotizacion->id)
-                 ->to(\App\Livewire\Cotizaciones\EnviarCotizacionCorreo::class);
-
-        } catch (Throwable $e) {
-            $this->toastError($e, 'Error al preparar envío');
+        if (empty($this->lineas)) {
+            PendingToast::create()->error()->message('Ingresa al menos una línea antes de enviar.')->duration(5000);
+            return;
         }
+
+        // ✅ crea o actualiza la cotización (si es nueva, aquí se crea)
+        $this->persistir();
+
+        // ✅ abre modal del hijo con el id recién creado
+        $this->dispatch('abrir-modal-enviar', cotizacionId: $this->cotizacion->id)
+            ->to(\App\Livewire\Cotizaciones\EnviarCotizacionCorreo::class);
+
+    } catch (Throwable $e) {
+        $this->toastError($e, 'Error al preparar envío');
     }
+}
 
     public function aprobarYGenerarPedido()
     {

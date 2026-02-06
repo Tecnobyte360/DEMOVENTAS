@@ -166,7 +166,10 @@ class Factura extends Model
 
         return $this;
     }
-
+    public function proveedor(): BelongsTo
+    {
+        return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
+    }
     public function registrarPago(array $data): FacturaPago
     {
         $pago = $this->pagos()->create($data);

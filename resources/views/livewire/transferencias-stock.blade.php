@@ -296,5 +296,159 @@
 
         </div>
     </div>
+{{-- =========================
+    HISTÓRICO / TABLA
+========================= --}}
+<div class="mt-8 relative overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-700 rounded-3xl shadow-xl">
+    <div class="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-400 via-sky-400 to-indigo-500"></div>
+
+    {{-- Header --}}
+    <div class="px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+        <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-200 flex items-center justify-center">
+                    <i class="fa-solid fa-clock-rotate-left text-sm"></i>
+                </div>
+                <div>
+                    <h3 class="text-base md:text-lg font-extrabold text-gray-900 dark:text-white">
+                        Histórico de transferencias
+                    </h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                        Consulta los movimientos realizados, filtra por producto, bodega y fechas.
+                    </p>
+                </div>
+            </div>
+
+            {{-- Filtros --}}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 w-full lg:w-auto">
+                {{-- Buscar --}}
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text"
+                           wire:model.live.debounce.400ms="f_buscar"
+                           placeholder="Buscar producto…"
+                           class="w-full h-10 pl-9 pr-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white text-sm
+                                  focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+
+                {{-- Bodega --}}
+                <select wire:model.live="f_bodega"
+                        class="w-full h-10 px-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white text-sm
+                               focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Todas las bodegas</option>
+                    @foreach($bodegas as $b)
+                        <option value="{{ $b->id }}">{{ $b->nombre }}</option>
+                    @endforeach
+                </select>
+
+                {{-- Desde --}}
+                <input type="date" wire:model.live="f_desde"
+                       class="w-full h-10 px-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white text-sm
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+
+                {{-- Hasta --}}
+                <input type="date" wire:model.live="f_hasta"
+                       class="w-full h-10 px-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white text-sm
+                              focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+
+                {{-- Limpiar --}}
+                <button type="button"
+                        wire:click="limpiarFiltrosTabla"
+                        class="w-full h-10 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-800 dark:text-gray-100 text-sm font-semibold
+                               hover:bg-slate-50 dark:hover:bg-slate-700 transition inline-flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-broom text-xs"></i> Limpiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {{-- Tabla --}}
+    <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-200">
+                <tr>
+                    <th class="px-5 py-3 text-left font-bold">Fecha</th>
+                    <th class="px-5 py-3 text-left font-bold">Producto</th>
+                    <th class="px-5 py-3 text-left font-bold">Origen</th>
+                    <th class="px-5 py-3 text-left font-bold">Destino</th>
+                    <th class="px-5 py-3 text-right font-bold">Cantidad</th>
+                    <th class="px-5 py-3 text-right font-bold">CPU</th>
+                    <th class="px-5 py-3 text-right font-bold">Total</th>
+                    <th class="px-5 py-3 text-left font-bold">Observación</th>
+                </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                @forelse($transferencias as $t)
+                    <tr class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition" wire:key="ts-{{ $t->id }}">
+                        <td class="px-5 py-3 text-slate-700 dark:text-slate-200">
+                            <div class="font-semibold">
+                                {{ \Illuminate\Support\Carbon::parse($t->created_at)->format('Y-m-d') }}
+                            </div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                                {{ \Illuminate\Support\Carbon::parse($t->created_at)->format('H:i') }}
+                            </div>
+                        </td>
+
+                        <td class="px-5 py-3">
+                            <p class="font-semibold text-gray-900 dark:text-white">
+                                {{ $t->producto }}
+                            </p>
+                        </td>
+
+                        <td class="px-5 py-3">
+                            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold
+                                         bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-200">
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                                {{ $t->bodega_origen }}
+                            </span>
+                        </td>
+
+                        <td class="px-5 py-3">
+                            <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold
+                                         bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                                <i class="fa-solid fa-arrow-down-left-from-square text-[10px]"></i>
+                                {{ $t->bodega_destino }}
+                            </span>
+                        </td>
+
+                        <td class="px-5 py-3 text-right font-extrabold text-gray-900 dark:text-white">
+                            {{ number_format((float)$t->cantidad, 3, ',', '.') }}
+                        </td>
+
+                        <td class="px-5 py-3 text-right text-slate-700 dark:text-slate-200">
+                            {{ number_format((float)$t->costo_unitario, 3, ',', '.') }}
+                        </td>
+
+                        <td class="px-5 py-3 text-right font-bold text-slate-900 dark:text-white">
+                            $ {{ number_format((float)$t->costo_total, 0, ',', '.') }}
+                        </td>
+
+                        <td class="px-5 py-3">
+                            @if(!empty($t->observacion))
+                                <p class="text-slate-700 dark:text-slate-200 line-clamp-2 max-w-[420px]">
+                                    {{ $t->observacion }}
+                                </p>
+                            @else
+                                <span class="text-slate-400">—</span>
+                            @endif
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="8" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400">
+                            No hay transferencias registradas con los filtros actuales.
+                        </td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+
+    {{-- Footer --}}
+    <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800">
+        {{ $transferencias->onEachSide(1)->links() }}
+    </div>
+</div>
 
 </div>

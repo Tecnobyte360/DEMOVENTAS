@@ -4,6 +4,7 @@ namespace App\Models\Factura;
 
 use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Models\MediosPago\MedioPagos;
+use App\Models\NotaCredito;
 use App\Models\Serie\Serie;
 use App\Models\SocioNegocio\SocioNegocio;
 use Carbon\Carbon;
@@ -39,7 +40,7 @@ class Factura extends Model
         'pdf_path',
         'cuenta_cobro_id',
         'condicion_pago_id',
-         'empresa_id',
+        'empresa_id',
     ];
 
     protected $casts = [
@@ -91,7 +92,10 @@ class Factura extends Model
     {
         return $this->hasMany(FacturaPago::class, 'factura_id');
     }
-
+    public function notasCredito()
+    {
+        return $this->hasMany(NotaCredito::class, 'factura_id');
+    }
     /* --------------- Helpers de pago/fechas --------------- */
 
     public function setContado(): self
@@ -187,7 +191,7 @@ class Factura extends Model
                 $this->pagos()->create([
                     'fecha'         => $fecha,
                     'medio_pago_id' => $medioId,
-                    'metodo'        => $medio?->codigo,               
+                    'metodo'        => $medio?->codigo,
                     'monto'         => (float) ($i['monto'] ?? 0),
                     'referencia'    => $i['referencia'] ?? null,
                     'notas'         => $notas,
@@ -198,8 +202,7 @@ class Factura extends Model
         });
     }
     public function empresa(): BelongsTo
-{
-    return $this->belongsTo(Empresa::class, 'empresa_id');
-}
-
+    {
+        return $this->belongsTo(Empresa::class, 'empresa_id');
+    }
 }

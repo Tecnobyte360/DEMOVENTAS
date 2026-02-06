@@ -95,8 +95,8 @@
             </td>
 
             {{-- Acciones --}}
-            <td class="p-2 sm:p-3 whitespace-nowrap">
-              <div class="flex items-center gap-1.5 sm:gap-2">
+            {{-- <td class="p-2 sm:p-3 whitespace-nowrap">
+              <div class="flex items-center gap-1.5 sm:gap-2"> --}}
                 {{-- Editar --}}
                 {{-- <button type="button" title="Editar"
                         wire:click="abrir({{ $n->id }})"
@@ -130,8 +130,8 @@
                   <i class="fa-solid fa-receipt"></i>
                   <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-emerald-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Imprimir</span>
                 </button> --}}
-              </div>
-            </td>
+              {{-- </div>
+            </td> --}}
           </tr>
         @empty
           <tr>

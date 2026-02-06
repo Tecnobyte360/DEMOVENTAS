@@ -461,46 +461,46 @@ class NotaCreditoForm extends Component
     }
 
     private function refrescarFacturasCliente(): void
-    {
-        $this->facturasCliente = [];
+{
+    $this->facturasCliente = [];
 
-        $clienteId = (int) ($this->socio_negocio_id ?? 0);
-        if ($clienteId <= 0) return;
+    $clienteId = (int) ($this->socio_negocio_id ?? 0);
+    if ($clienteId <= 0) return;
 
-        $rows = Factura::query()
-            ->where('socio_negocio_id', $clienteId)
-            ->orderByDesc('fecha')
-            ->orderByDesc('id')
-            ->limit(300)
-            ->get(['id', 'prefijo', 'numero', 'fecha', 'total', 'saldo']);
+    $rows = Factura::query()
+        ->where('socio_negocio_id', $clienteId)
 
-        Log::info('NC: facturas cargadas', [
-            'clienteId' => $clienteId,
-            'count'     => $rows->count(),
-        ]);
+        // ✅ EXCLUIR facturas que ya tengan nota crédito emitida/cerrada
+        ->whereDoesntHave('notasCredito', function ($q) {
+            $q->whereIn('estado', ['emitida', 'cerrado']);
+        })
 
-        $this->facturasCliente = $rows->map(function ($f) {
-            $num    = (string)($f->numero ?? '');
-            $pref   = trim((string)($f->prefijo ?? ''));
-            $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
+        ->orderByDesc('fecha')
+        ->orderByDesc('id')
+        ->limit(300)
+        ->get(['id', 'prefijo', 'numero', 'fecha', 'total', 'saldo']);
 
-            $fecha = $f->fecha instanceof Carbon
-                ? $f->fecha->toDateString()
-                : (string) $f->fecha;
+    $this->facturasCliente = $rows->map(function ($f) {
+        $num    = (string)($f->numero ?? '');
+        $pref   = trim((string)($f->prefijo ?? ''));
+        $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
 
-            return [
-                'id'      => (int) $f->id,
-                'numero'  => $numFmt,
-                'fecha'   => $fecha,
-                'total'   => (float) ($f->total ?? 0),
-                'saldo'   => (float) ($f->saldo ?? 0),
-                'prefijo' => $pref,
-                'crudo'   => $num,
-            ];
-        })->all();
+        $fecha = $f->fecha instanceof Carbon ? $f->fecha->toDateString() : (string) $f->fecha;
 
-        $this->dispatch('$refresh');
-    }
+        return [
+            'id'      => (int) $f->id,
+            'numero'  => $numFmt,
+            'fecha'   => $fecha,
+            'total'   => (float) ($f->total ?? 0),
+            'saldo'   => (float) ($f->saldo ?? 0),
+            'prefijo' => $pref,
+            'crudo'   => $num,
+        ];
+    })->all();
+
+    $this->dispatch('$refresh');
+}
+
 
     public function updatedFacturaId($val): void
     {

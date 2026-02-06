@@ -468,41 +468,56 @@ class NotaCreditoForm extends Component
         $this->dispatch('$refresh');
     }
 
-    private function refrescarFacturasCliente(): void
-    {
-        $this->facturasCliente = [];
+   private function refrescarFacturasCliente(): void
+{
+    $this->facturasCliente = [];
 
-        $clienteId = (int) ($this->socio_negocio_id ?? 0);
-        if ($clienteId <= 0) return;
+    $clienteId = (int) ($this->socio_negocio_id ?? 0);
+    if ($clienteId <= 0) return;
 
-        $rows = Factura::query()
-            ->where('socio_negocio_id', $clienteId)
-            ->withCount([
-                'notasCredito as nc_vigentes_count' => fn($q) => $q->whereIn('estado', ['emitida', 'cerrado'])
-            ])
-            ->orderByDesc('fecha')
-            ->orderByDesc('id')
-            ->limit(300)
-            ->get(['id', 'prefijo', 'numero', 'fecha', 'total', 'saldo']);
+    $rows = Factura::query()
+        ->where('socio_negocio_id', $clienteId)
 
-        $this->facturasCliente = $rows->map(function ($f) {
-            $pref = trim((string)$f->prefijo);
-            $num  = (string)$f->numero;
-            $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
+        // ✅ EXCLUIR facturas que ya tienen nota crédito emitida/cerrada
+        ->whereNotIn('id', function ($q) {
+            $q->select('factura_id')
+              ->from('nota_creditos') // <-- AJUSTA si tu tabla se llama distinto
+              ->whereNotNull('factura_id')
+              ->whereIn('estado', ['emitida', 'cerrado']);
+        })
 
-            return [
-                'id'        => (int) $f->id,
-                'numero'    => $numFmt,
-                'fecha'     => $f->fecha instanceof \Carbon\Carbon ? $f->fecha->toDateString() : (string)$f->fecha,
-                'total'     => (float) ($f->total ?? 0),
-                'saldo'     => (float) ($f->saldo ?? 0),
-                'tiene_nc'  => ((int)$f->nc_vigentes_count) > 0,
-            ];
-        })->all();
+        ->orderByDesc('fecha')
+        ->orderByDesc('id')
+        ->limit(300)
+        ->get(['id', 'prefijo', 'numero', 'fecha', 'total', 'saldo']);
 
+    $this->facturasCliente = $rows->map(function ($f) {
+        $pref = trim((string) $f->prefijo);
+        $num  = (string) ($f->numero ?? '');
+        $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
 
-        $this->dispatch('$refresh');
+        return [
+            'id'     => (int) $f->id,
+            'numero' => $numFmt,
+            'fecha'  => $f->fecha instanceof \Carbon\Carbon ? $f->fecha->toDateString() : (string) $f->fecha,
+            'total'  => (float) ($f->total ?? 0),
+            'saldo'  => (float) ($f->saldo ?? 0),
+        ];
+    })->all();
+
+    // ✅ Si la factura seleccionada ya no existe en la lista, resetea
+    if ($this->factura_id) {
+        $existe = collect($this->facturasCliente)->contains('id', (int) $this->factura_id);
+        if (!$existe) {
+            $this->factura_id = null;
+            $this->numeroFacturaSeleccionada = null;
+            $this->aplicacionLanzada = false;
+        }
     }
+
+    $this->dispatch('$refresh');
+}
+
 
 
     public function updatedFacturaId($val): void

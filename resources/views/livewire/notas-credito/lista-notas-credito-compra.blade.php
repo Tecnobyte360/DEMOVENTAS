@@ -51,12 +51,6 @@
           <input type="date" wire:model.live="hasta"
                  class="h-10 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white" />
 
-          <select wire:model.live="perPage"
-                  class="h-10 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
-            <option value="10">10 / pág</option>
-            <option value="25">25 / pág</option>
-            <option value="50">50 / pág</option>
-          </select>
         </div>
       </div>
     </header>

@@ -23,7 +23,11 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index(['producto_id','bodega_origen_id','bodega_destino_id']);
+            
+            $table->index(
+                ['producto_id', 'bodega_origen_id', 'bodega_destino_id'],
+                'idx_ts_prod_bod_ori_des'
+            );
         });
     }
 

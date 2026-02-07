@@ -6,7 +6,6 @@ use Livewire\Component;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
-// Ajusta estos imports a tus modelos reales si existen:
 use App\Models\Factura\Factura;
 use App\Models\NotaCredito;
 
@@ -26,7 +25,6 @@ class IngresosVsEgresos extends Component
     public float $totalEgresos  = 0;
     public float $totalNeto     = 0;
 
-    // (Opcional) refrescar desde otros componentes
     protected $listeners = [
         'refresh-ingresos-egresos' => 'loadData',
     ];
@@ -65,13 +63,17 @@ class IngresosVsEgresos extends Component
         $months = $this->months();
 
         // ==========================
-        // 1) FACTURAS (VENTAS)
+        // 1) FACTURAS (VENTAS)  ✅ serie_id = 4
         // ==========================
         $qFacturas = Factura::query()
             ->selectRaw('MONTH(fecha) as mes, SUM(total) as total')
             ->whereBetween('fecha', [$start, $end])
-            ->whereNotIn('estado', ['anulada']); // ajusta si manejas otros estados
-        if ($this->empresa_id) $qFacturas->where('empresa_id', $this->empresa_id);
+            ->whereNotIn('estado', ['anulada'])
+            ->where('serie_id', 4); // ✅ SOLO INGRESOS SERIE 4
+
+        if ($this->empresa_id) {
+            $qFacturas->where('empresa_id', $this->empresa_id);
+        }
 
         $facturasPorMes = $qFacturas
             ->groupByRaw('MONTH(fecha)')
@@ -80,24 +82,23 @@ class IngresosVsEgresos extends Component
             ->toArray();
 
         // ==========================
-        // 2) NOTAS CRÉDITO (VENTA)
+        // 2) NOTAS CRÉDITO (VENTA)  (opcional filtrar serie_id=4 si existe)
         // ==========================
-        // Ajusta columnas/tabla según tu NotaCredito real:
-        // - fecha
-        // - total
-        // - estado
-        // - empresa_id (si aplica)
         $qNCVenta = NotaCredito::query()
             ->selectRaw('MONTH(fecha) as mes, SUM(total) as total')
             ->whereBetween('fecha', [$start, $end]);
 
-        // Si tu NC tiene estados:
         if (SchemaHasColumn('notas_credito', 'estado')) {
             $qNCVenta->whereNotIn('estado', ['anulada']);
         }
-        // Si tu NC tiene empresa_id:
+
         if ($this->empresa_id && SchemaHasColumn('notas_credito', 'empresa_id')) {
             $qNCVenta->where('empresa_id', $this->empresa_id);
+        }
+
+        // ✅ Si NotaCredito tiene serie_id y quieres que afecte SOLO a serie 4
+        if (SchemaHasColumn('notas_credito', 'serie_id')) {
+            $qNCVenta->where('serie_id', 4);
         }
 
         $ncVentaPorMes = $qNCVenta
@@ -107,41 +108,41 @@ class IngresosVsEgresos extends Component
             ->toArray();
 
         // ==========================
-        // 3) GASTOS (EGRESOS)  ✅ ENCHUFAR
+        // 3) GASTOS (EGRESOS)
         // ==========================
-        // Reemplaza 'gastos'/'fecha'/'total' por tus tablas reales:
         $gastosPorMes = $this->sumByMonth(
-            table: 'gastos',           // <- AJUSTA
-            dateColumn: 'fecha',       // <- AJUSTA
-            amountColumn: 'total',     // <- AJUSTA
+            table: 'gastos',            // <- AJUSTA si tu tabla tiene otro nombre
+            dateColumn: 'fecha',        // <- AJUSTA
+            amountColumn: 'total',      // <- AJUSTA
             start: $start,
             end: $end,
             empresaColumn: 'empresa_id' // <- AJUSTA o null
         );
 
         // ==========================
-        // 4) COMPRAS (EGRESOS) ✅ ENCHUFAR
+        // 4) COMPRAS (EGRESOS) ✅ serie_id = 13
         // ==========================
-        // Reemplaza 'compras'/'fecha'/'total' por tus tablas reales:
         $comprasPorMes = $this->sumByMonth(
-            table: 'compras',          // <- AJUSTA
-            dateColumn: 'fecha',       // <- AJUSTA
-            amountColumn: 'total',     // <- AJUSTA
+            table: 'compras',           // <- AJUSTA
+            dateColumn: 'fecha',        // <- AJUSTA
+            amountColumn: 'total',      // <- AJUSTA
             start: $start,
             end: $end,
-            empresaColumn: 'empresa_id' // <- AJUSTA o null
+            empresaColumn: 'empresa_id', // <- AJUSTA o null
+            extraWhere: ['serie_id' => 13] // ✅ SOLO COMPRAS SERIE 13
         );
 
         // ==========================
-        // 5) NOTAS CRÉDITO COMPRA (RESTAN EGRESOS) ✅ ENCHUFAR
+        // 5) NOTAS CRÉDITO COMPRA (RESTAN EGRESOS) (opcional serie_id=13)
         // ==========================
         $ncCompraPorMes = $this->sumByMonth(
             table: 'notas_credito_compra', // <- AJUSTA
-            dateColumn: 'fecha',           // <- AJUSTA
-            amountColumn: 'total',         // <- AJUSTA
+            dateColumn: 'fecha',            // <- AJUSTA
+            amountColumn: 'total',          // <- AJUSTA
             start: $start,
             end: $end,
-            empresaColumn: 'empresa_id'    // <- AJUSTA o null
+            empresaColumn: 'empresa_id',    // <- AJUSTA o null
+            extraWhere: ['serie_id' => 13]  // ✅ si existe la columna
         );
 
         // ==========================
@@ -161,12 +162,14 @@ class IngresosVsEgresos extends Component
             $fact = (float) ($facturasPorMes[$m] ?? 0);
             $ncV  = (float) ($ncVentaPorMes[$m] ?? 0);
 
+            // Ingresos = facturas - NC venta
             $ing = max($fact - $ncV, 0);
 
             $gas = (float) ($gastosPorMes[$m] ?? 0);
             $com = (float) ($comprasPorMes[$m] ?? 0);
             $ncC = (float) ($ncCompraPorMes[$m] ?? 0);
 
+            // Egresos = gastos + compras - NC compra
             $egr = max(($gas + $com) - $ncC, 0);
 
             $net = $ing - $egr;
@@ -179,7 +182,7 @@ class IngresosVsEgresos extends Component
             $tEgr += $egr;
         }
 
-        $this->labels = $labels;
+        $this->labels   = $labels;
         $this->ingresos = $ingArr;
         $this->egresos  = $egrArr;
         $this->neto     = $netArr;
@@ -199,9 +202,9 @@ class IngresosVsEgresos extends Component
         string $amountColumn,
         Carbon $start,
         Carbon $end,
-        ?string $empresaColumn = null
+        ?string $empresaColumn = null,
+        array $extraWhere = [] // ✅ NUEVO
     ): array {
-        // Si la tabla no existe, devolvemos 0s sin romper el indicador.
         if (!SchemaHasTable($table)) return [];
 
         $q = DB::table($table)
@@ -212,6 +215,13 @@ class IngresosVsEgresos extends Component
             $q->where($empresaColumn, $this->empresa_id);
         }
 
+        // ✅ filtros extra (ej: serie_id)
+        foreach ($extraWhere as $col => $val) {
+            if (SchemaHasColumn($table, $col)) {
+                $q->where($col, $val);
+            }
+        }
+
         return $q->groupByRaw("MONTH($dateColumn)")
             ->pluck('total', 'mes')
             ->map(fn($v) => (float) $v)
@@ -220,22 +230,20 @@ class IngresosVsEgresos extends Component
 
     public function render()
     {
-        // Tu blade ya usa estas variables, perfecto:
         return view('livewire.indicadores.ingresos-vs-egresos', [
-            'labels'       => $this->labels,
-            'ingresos'     => $this->ingresos,
-            'egresos'      => $this->egresos,
-            'neto'         => $this->neto,
-            'totalIngresos'=> $this->totalIngresos,
-            'totalEgresos' => $this->totalEgresos,
-            'totalNeto'    => $this->totalNeto,
+            'labels'        => $this->labels,
+            'ingresos'      => $this->ingresos,
+            'egresos'       => $this->egresos,
+            'neto'          => $this->neto,
+            'totalIngresos' => $this->totalIngresos,
+            'totalEgresos'  => $this->totalEgresos,
+            'totalNeto'     => $this->totalNeto,
         ]);
     }
 }
 
 /**
- * Helpers pequeños para evitar reventar si no tienes tablas/columnas aún.
- * Los dejo acá para que copies/pegues rápido; si ya tienes helpers propios, bórralos.
+ * Helpers para evitar reventar si no tienes tablas/columnas aún.
  */
 function SchemaHasTable(string $table): bool
 {

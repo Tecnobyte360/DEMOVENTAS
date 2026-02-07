@@ -750,6 +750,11 @@
     </footer>
   </section>
 
-  {{-- *** IMPORTANTE: el componente del modal debe estar montado en el DOM *** --}}
-  <livewire:facturas.pagos-factura />
+
+ @if($showPagos)
+  <livewire:facturas.pagos-factura
+    :facturaId="$factura?->id"
+    :key="'pagos-factura-'.($factura?->id ?? 'new')"
+  />
+@endif
 </div>

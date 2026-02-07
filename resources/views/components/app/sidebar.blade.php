@@ -342,7 +342,7 @@
                                             stock</span>
                                     </a>
 
-                                    <a href="{{ route('SalidaMercancia') }}"
+                                    {{-- <a href="{{ route('SalidaMercancia') }}"
                                         class="group relative block px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 overflow-hidden
                                           hover:bg-white/25 hover:pl-5"
                                         :style="`color: ${fgMuted}`">
@@ -351,9 +351,9 @@
                                         </div>
                                         <span class="transition-all duration-200 group-hover:font-bold">Salida
                                             mercancía</span>
-                                    </a>
+                                    </a> --}}
 
-                                    <a href="{{ route('DevolucionMercancia') }}"
+                                    {{-- <a href="{{ route('DevolucionMercancia') }}"
                                         class="group relative block px-3 py-2 rounded-lg text-xs font-medium transition-all duration-200 overflow-hidden
                                           hover:bg-white/25 hover:pl-5"
                                         :style="`color: ${fgMuted}`">
@@ -362,7 +362,7 @@
                                         </div>
                                         <span class="transition-all duration-200 group-hover:font-bold">Devolución de
                                             mercancía</span>
-                                    </a>
+                                    </a> --}}
 
 
 

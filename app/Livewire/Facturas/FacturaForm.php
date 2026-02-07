@@ -140,7 +140,10 @@ class FacturaForm extends Component
                 $this->addLinea();
                 $this->aplicarFormaPago('contado');
                 $this->terminos_pago = 'Contado';
-                $this->serie_id      = $this->serieDefault?->id;
+                $this->serie_id = (int)(
+                    $this->factura?->serie_id
+                    ?: ($this->serieDefault?->id)
+                );
 
                 // 👇 En modo compra NO autoemitimos
                 $this->autoEmitirContado = $this->modo === 'venta';
@@ -1148,35 +1151,34 @@ class FacturaForm extends Component
         }
     }
 
-  public function abrirPagos(): void
-{
-    if ($this->abortIfLocked('registrar pagos')) return;
+    public function abrirPagos(): void
+    {
+        if ($this->abortIfLocked('registrar pagos')) return;
 
-    try {
-        if (!$this->verificarStockParaLineas()) {
-            PendingToast::create()
-                ->error()->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
-                ->duration(8000);
-            return;
+        try {
+            if (!$this->verificarStockParaLineas()) {
+                PendingToast::create()
+                    ->error()->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                    ->duration(8000);
+                return;
+            }
+
+            if (!$this->factura?->id) {
+                $this->guardar();
+                if (!$this->factura?->id) return;
+            }
+
+            // ✅ 1) Monta el componente
+            $this->showPagos = true;
+
+            // ✅ 2) Una vez montado, le dices que abra
+            $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id);
+        } catch (\Throwable $e) {
+            $msg = trim((string) $e->getMessage());
+            if ($msg === '') $msg = 'Ocurrió un error inesperado.';
+            PendingToast::create()->error()->message('Error al abrir pagos: ' . $msg)->duration(9000);
         }
-
-        if (!$this->factura?->id) {
-            $this->guardar();
-            if (!$this->factura?->id) return;
-        }
-
-        // ✅ 1) Monta el componente
-        $this->showPagos = true;
-
-        // ✅ 2) Una vez montado, le dices que abra
-        $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id);
-
-    } catch (\Throwable $e) {
-        $msg = trim((string) $e->getMessage());
-        if ($msg === '') $msg = 'Ocurrió un error inesperado.';
-        PendingToast::create()->error()->message('Error al abrir pagos: ' . $msg)->duration(9000);
     }
-}
 
 
     public function getProximoPreviewProperty(): ?string

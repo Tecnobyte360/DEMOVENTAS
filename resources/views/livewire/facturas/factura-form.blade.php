@@ -100,7 +100,7 @@
             Cliente <span class="text-red-500">*</span>
           </label>
           <select
-            wire:model.live="socio_negocio_id"
+           wire:model.live.number="socio_negocio_id"
             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('socio_negocio_id') border-red-500 focus:ring-red-300 @enderror"
           >
             <option value="">— Seleccione —</option>
@@ -750,7 +750,7 @@
     </footer>
   </section>
 
-
+  {{-- *** IMPORTANTE: el componente del modal debe estar montado en el DOM *** --}}
  @if($showPagos)
   <livewire:facturas.pagos-factura
     :facturaId="$factura?->id"

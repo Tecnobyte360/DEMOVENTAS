@@ -100,7 +100,7 @@
             Cliente <span class="text-red-500">*</span>
           </label>
           <select
-           wire:model.live.number="socio_negocio_id"
+            wire:model.live="socio_negocio_id"
             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('socio_negocio_id') border-red-500 focus:ring-red-300 @enderror"
           >
             <option value="">— Seleccione —</option>
@@ -334,19 +334,21 @@
                 </td>
 
                 {{-- Producto --}}
-                <td class="px-4 py-3 min-w-[260px]">
-                  <select
-                    data-first-product
-                    wire:model.live="lineas.{{ $i }}.producto_id"
-                    wire:change="setProducto({{ $i }}, $event.target.value)"
-                    class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
-                  >
-                    <option value="">— Seleccione —</option>
-                    @foreach($productos as $p)
-                      <option value="{{ $p->id }}">{{ $p->nombre }}</option>
-                    @endforeach
-                  </select>
-                </td>
+                {{-- Producto --}}
+<td class="px-4 py-3 min-w-[260px]">
+  <select
+    id="producto-select-{{ $i }}"
+    data-producto-select
+    wire:model.live="lineas.{{ $i }}.producto_id"
+    wire:change="setProducto({{ $i }}, $event.target.value)"
+    class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+  >
+    <option value="">— Seleccione —</option>
+    @foreach($productos as $p)
+      <option value="{{ $p->id }}">{{ $p->nombre }}</option>
+    @endforeach
+  </select>
+</td>
 
             
                 <td class="px-4 py-3 min-w-[260px]">

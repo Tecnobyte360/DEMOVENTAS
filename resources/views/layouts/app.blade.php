@@ -13,11 +13,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    />
+
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.default.css" rel="stylesheet">
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
+
     @livewireStyles
 
     <script>
@@ -53,17 +62,25 @@
     <div class="flex h-[100dvh] overflow-hidden">
       <x-app.sidebar :variant="$attributes['sidebarVariant']" />
 
-      <div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden @if($attributes['background']){{ $attributes['background'] }}@endif" x-ref="contentarea">
+      <div
+        class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden
+        @if($attributes['background']){{ $attributes['background'] }}@endif"
+        x-ref="contentarea"
+      >
         <x-app.header :variant="$attributes['headerVariant']" />
 
-        {{-- MAIN súper fluido y compacto --}}
+        {{-- MAIN --}}
         <main class="grow w-full max-w-full px-1 sm:px-2 lg:px-3">
           {{ $slot }}
         </main>
       </div>
     </div>
 
+    {{-- ✅ Chart.js GLOBAL (OBLIGATORIO PARA LOS GRÁFICOS) --}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     @livewireScripts
+
     <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
   </body>
 </html>

@@ -10,6 +10,7 @@ use App\Http\Controllers\MemberController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\Cotizaciones\CotizacionPdfController;
 use App\Http\Controllers\FacturaPosPrintController;
 use App\Http\Controllers\FacturaTicketController;
 use App\Http\Controllers\Usuarios\UsuariosController;
@@ -276,7 +277,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/Notas-credito-compra', NotasCreditoNotaCreditoCompraForm::class)->name('Notascreditocompra');
     Route::get('/Kardex', KardexProducto::class)->name('cardexinventario');
 
-
+    Route::get('/cotizaciones/{id}', Cotizacion::class)->name('cotizaciones.edit');
 
     Route::get('/SeriesDocumentos', Serie::class)->name('SeriesDocumentos');
     Route::get('/facturas/{factura}/ticket', [FacturaTicketController::class, 'show'])
@@ -290,7 +291,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
     Route::get('Factura-compras', IndexFacturas::class)->name('Factura-compras');
     Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
-
+    Route::get('/cotizaciones/{id}/pdf', CotizacionPdfController::class)
+        ->name('cotizaciones.pdf');
 
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
     // Route::get('/catalogos/ciiu', CiiuActividades::class)

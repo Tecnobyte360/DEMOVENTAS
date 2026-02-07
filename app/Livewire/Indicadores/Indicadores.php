@@ -3,32 +3,46 @@
 namespace App\Livewire\Indicadores;
 
 use Livewire\Component;
-use App\Models\Pedidos\Pedido;
+use App\Models\Factura\Factura;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class Indicadores extends Component
 {
-    public $totalFacturado = 0;
-    public $totalPagado = 0;
-    public $totalPendiente = 0;
-    public $totalPedidos = 0;
+    public float $totalFacturado = 0;
+    public float $totalPagado = 0;
+    public float $totalPendiente = 0;
+    public int   $totalPedidos = 0;
 
-    public function mount()
+    // ✅ Datos para el chart (solo HOY)
+    public array $chartLabels = [];
+    public array $chartFacturado = [];
+    public array $chartPagado = [];
+    public array $chartPendiente = [];
+
+    protected array $codigosVentas = ['FACTURA', 'NOTA_CREDITO'];
+
+    public function mount(): void
     {
-        $hoy = Carbon::today();
+        $hoy = Carbon::today()->toDateString();
+        $codigos = array_map('strtoupper', $this->codigosVentas);
 
-        $pedidos = Pedido::with(['pagos', 'detalles.producto'])
+        $q = Factura::query()
             ->whereDate('fecha', $hoy)
-            ->get();
+            ->whereHas('serie.tipo', function ($t) use ($codigos) {
+                $t->whereIn(DB::raw('UPPER(codigo)'), $codigos);
+            });
 
-        $this->totalFacturado = $pedidos->sum(fn($p) =>
-            $p->detalles->sum(fn($d) => $d->cantidad * ($d->producto->precio ?? 0))
-        );
+        $this->totalPedidos   = (int) $q->count();
+        $this->totalFacturado = (float) $q->sum('total');
+        $this->totalPagado    = (float) $q->sum('pagado');
+        $this->totalPendiente = (float) $q->sum('saldo');
 
-        $this->totalPagado = $pedidos->sum(fn($p) => $p->pagos->sum('monto'));
-
-        $this->totalPendiente = $this->totalFacturado - $this->totalPagado;
-        $this->totalPedidos = $pedidos->count();
+        // ✅ Chart: una sola etiqueta (HOY)
+        $this->chartLabels    = [Carbon::today()->translatedFormat('d M')]; 
+        $this->chartFacturado = [$this->totalFacturado];
+        $this->chartPagado    = [$this->totalPagado];
+        $this->chartPendiente = [$this->totalPendiente];
     }
 
     public function render()

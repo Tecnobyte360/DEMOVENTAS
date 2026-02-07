@@ -34,7 +34,9 @@
         <div class="grid grid-cols-12 gap-6">
 
             <!-- Line chart (Acme Plus) -->
-            <x-dashboard.dashboard-card-01 :dataFeed="$dataFeed" />
+          @livewire('indicadores.indicadores')
+@livewire('indicadores.ventas-por-mes')
+
 
             <!-- Line chart (Acme Advanced) -->
             <x-dashboard.dashboard-card-02 :dataFeed="$dataFeed" />

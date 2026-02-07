@@ -1,4 +1,4 @@
-<div
+{{-- <div
     class="relative flex flex-col col-span-full sm:col-span-6 xl:col-span-4
            bg-white
            rounded-2xl
@@ -35,4 +35,4 @@
     <div class="pointer-events-none absolute inset-x-0 bottom-0 h-10
                 bg-gradient-to-t from-white to-transparent">
     </div>
-</div>
+</div> --}}

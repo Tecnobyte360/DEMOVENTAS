@@ -1,0 +1,81 @@
+<?php
+
+namespace App\Livewire\Indicadores;
+
+use Livewire\Component;
+use Illuminate\Support\Facades\DB;
+
+class VentasPorMes extends Component
+{
+    public array $labels = [];
+
+    public array $dataContado = [];
+    public array $dataCredito = [];
+    public array $dataNotasCredito = []; // abs() para mostrar
+    public array $dataNeto = [];
+
+    public float $totalAnioContado = 0;
+    public float $totalAnioCredito = 0;
+    public float $totalAnioNotasCredito = 0; // positivo para KPI
+    public float $totalAnioNeto = 0;
+
+    public function mount(): void
+    {
+        $this->cargar();
+    }
+
+    protected function cargar(): void
+    {
+        $year = now()->year;
+
+        $rows = DB::table('facturas as f')
+            ->selectRaw('MONTH(f.fecha) as mes')
+            ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'contado' THEN f.total ELSE 0 END) as contado")
+            ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'credito' THEN f.total ELSE 0 END) as credito")
+            ->selectRaw("SUM(CASE WHEN f.total < 0 THEN f.total ELSE 0 END) as notas_credito") // negativo
+            ->selectRaw("SUM(f.total) as neto") // incluye negativos
+            ->whereYear('f.fecha', $year)
+            ->groupByRaw('MONTH(f.fecha)')
+            ->orderByRaw('MONTH(f.fecha)')
+            ->get()
+            ->keyBy('mes');
+
+        $meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+        $this->labels = $meses;
+
+        $this->dataContado = [];
+        $this->dataCredito = [];
+        $this->dataNotasCredito = [];
+        $this->dataNeto = [];
+
+        $this->totalAnioContado = 0;
+        $this->totalAnioCredito = 0;
+        $this->totalAnioNotasCredito = 0;
+        $this->totalAnioNeto = 0;
+
+        for ($m = 1; $m <= 12; $m++) {
+            $r = $rows->get($m);
+
+            $contado = (float) ($r->contado ?? 0);
+            $credito = (float) ($r->credito ?? 0);
+            $ncNeg   = (float) ($r->notas_credito ?? 0); 
+            $neto    = (float) ($r->neto ?? 0);
+
+            $this->dataContado[] = $contado;
+            $this->dataCredito[] = $credito;
+            $this->dataNotasCredito[] = abs($ncNeg); 
+            $this->dataNeto[] = $neto;
+
+            $this->totalAnioContado += $contado;
+            $this->totalAnioCredito += $credito;
+            $this->totalAnioNotasCredito += abs($ncNeg);
+            $this->totalAnioNeto += $neto;
+        }
+    }
+
+    public function render()
+    {
+        return view('livewire.indicadores.ventas-por-mes');
+    }
+}

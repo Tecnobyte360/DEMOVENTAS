@@ -1,145 +1,117 @@
 // Import Chart.js
 import {
-  Chart, LineController, LineElement, Filler, PointElement, LinearScale, TimeScale, Tooltip,
+  Chart, LineController, LineElement, Filler, PointElement, LinearScale, CategoryScale, Tooltip,
 } from 'chart.js';
-import 'chartjs-adapter-moment';
-import { chartAreaGradient } from '../app';
 
-// Import utilities
+import { chartAreaGradient } from '../app';
 import { formatValue, getCssVariable, adjustColorOpacity } from '../utils';
 
-Chart.register(LineController, LineElement, Filler, PointElement, LinearScale, TimeScale, Tooltip);
+Chart.register(LineController, LineElement, Filler, PointElement, LinearScale, CategoryScale, Tooltip);
 
-// A chart built with Chart.js 3
-// https://www.chartjs.org/
-const dashboardCard02 = () => {
-  const ctx = document.getElementById('dashboard-card-02');
+const ventasCardChart = () => {
+  const ctx = document.getElementById('ventas-card-chart');
   if (!ctx) return;
 
   const darkMode = localStorage.getItem('dark-mode') === 'true';
 
-  const tooltipBodyColor = {
-    light: '#6B7280',
-    dark: '#9CA3AF'
-  };
+  const tooltipBodyColor = { light: '#6B7280', dark: '#9CA3AF' };
+  const tooltipBgColor = { light: '#ffffff', dark: '#374151' };
+  const tooltipBorderColor = { light: '#E5E7EB', dark: '#4B5563' };
 
-  const tooltipBgColor = {
-    light: '#ffffff',
-    dark: '#374151'
-  };
+  // ✅ Data inyectada desde Blade
+  const payload = window.__ventasCard || { labels: [], data: [] };
+  const labels = Array.isArray(payload.labels) ? payload.labels : [];
+  const data = Array.isArray(payload.data) ? payload.data : [];
 
-  const tooltipBorderColor = {
-    light: '#E5E7EB',
-    dark: '#4B5563'
-  };   
+  // Si ya existe un chart con ese canvas, destrúyelo (evita duplicados al navegar)
+  if (ctx.__chart) {
+    ctx.__chart.destroy();
+    ctx.__chart = null;
+  }
 
-  fetch('/json-data-feed?datatype=2')
-    .then(a => {
-      return a.json();
-    })
-    .then(result => {
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          data,
+          fill: true,
+          backgroundColor: (context) => {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return 'transparent';
 
-      const dataset1 = result.data.slice(0, 26);
-      const dataset2 = result.data.slice(26, 52);
-
-      const chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: result.labels,
-          datasets: [
-            // Indigo line
-            {
-              data: dataset1,
-              fill: true,
-              backgroundColor: function(context) {
-                const chart = context.chart;
-                const {ctx, chartArea} = chart;
-                return chartAreaGradient(ctx, chartArea, [
-                  { stop: 0, color: adjustColorOpacity(getCssVariable('--color-violet-500'), 0) },
-                  { stop: 1, color: adjustColorOpacity(getCssVariable('--color-violet-500'), 0.2) }
-                ]);
-              },
-              borderColor: getCssVariable('--color-violet-500'),
-              borderWidth: 2,
-              pointRadius: 0,
-              pointHoverRadius: 3,
-              pointBackgroundColor: getCssVariable('--color-violet-500'),
-              pointHoverBackgroundColor: getCssVariable('--color-violet-500'),
-              pointBorderWidth: 0,
-              pointHoverBorderWidth: 0,
-              clip: 20,
-              tension: 0.2
-            },
-            // Gray line
-            {
-              data: dataset2,
-              borderColor: adjustColorOpacity(getCssVariable('--color-gray-500'), 0.25),
-              borderWidth: 2,
-              pointRadius: 0,
-              pointHoverRadius: 3,
-              pointBackgroundColor: adjustColorOpacity(getCssVariable('--color-gray-500'), 0.25),
-              pointHoverBackgroundColor: adjustColorOpacity(getCssVariable('--color-gray-500'), 0.25),
-              pointBorderWidth: 0,
-              pointHoverBorderWidth: 0,
-              clip: 20,
-              tension: 0.2
-            },
-          ],
+            return chartAreaGradient(ctx, chartArea, [
+              { stop: 0, color: adjustColorOpacity(getCssVariable('--color-emerald-500'), 0) },
+              { stop: 1, color: adjustColorOpacity(getCssVariable('--color-emerald-500'), 0.22) },
+            ]);
+          },
+          borderColor: getCssVariable('--color-emerald-500'),
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 3,
+          pointBackgroundColor: getCssVariable('--color-emerald-500'),
+          pointHoverBackgroundColor: getCssVariable('--color-emerald-500'),
+          pointBorderWidth: 0,
+          pointHoverBorderWidth: 0,
+          clip: 20,
+          tension: 0.28,
         },
-        options: {
-          layout: {
-            padding: 20,
+      ],
+    },
+    options: {
+      layout: { padding: 16 },
+      scales: {
+        y: {
+          display: false,
+          beginAtZero: true,
+          ticks: {
+            callback: (v) => formatValue(v),
           },
-          scales: {
-            y: {
-              display: false,
-              beginAtZero: true,
-            },
-            x: {
-              type: 'time',
-              time: {
-                parser: 'MM-DD-YYYY',
-                unit: 'month',
-              },
-              display: false,
-            },
-          },
-          plugins: {
-            tooltip: {
-              callbacks: {
-                title: () => false, // Disable tooltip title
-                label: (context) => formatValue(context.parsed.y),
-              },
-              bodyColor: darkMode ? tooltipBodyColor.dark : tooltipBodyColor.light,
-              backgroundColor: darkMode ? tooltipBgColor.dark : tooltipBgColor.light,
-              borderColor: darkMode ? tooltipBorderColor.dark : tooltipBorderColor.light,    
-            },
-            legend: {
-              display: false,
-            },
-          },
-          interaction: {
-            intersect: false,
-            mode: 'nearest',
-          },
-          maintainAspectRatio: false,
         },
-      });
-      
-      document.addEventListener('darkMode', (e) => {
-        const { mode } = e.detail;
-        if (mode === 'on') {
-          chart.options.plugins.tooltip.bodyColor = tooltipBodyColor.dark;
-          chart.options.plugins.tooltip.backgroundColor = tooltipBgColor.dark;
-          chart.options.plugins.tooltip.borderColor = tooltipBorderColor.dark;
-        } else {
-          chart.options.plugins.tooltip.bodyColor = tooltipBodyColor.light;
-          chart.options.plugins.tooltip.backgroundColor = tooltipBgColor.light;
-          chart.options.plugins.tooltip.borderColor = tooltipBorderColor.light;
-        }
-        chart.update('none');
-      });      
-    });
+        x: {
+          display: false,
+          type: 'category',
+        },
+      },
+      plugins: {
+        tooltip: {
+          callbacks: {
+            title: (items) => (items?.[0]?.label ? `Hora: ${items[0].label}` : false),
+            label: (context) => `Ventas: ${formatValue(context.parsed.y)}`,
+          },
+          bodyColor: darkMode ? tooltipBodyColor.dark : tooltipBodyColor.light,
+          backgroundColor: darkMode ? tooltipBgColor.dark : tooltipBgColor.light,
+          borderColor: darkMode ? tooltipBorderColor.dark : tooltipBorderColor.light,
+          borderWidth: 1,
+        },
+        legend: { display: false },
+      },
+      interaction: { intersect: false, mode: 'nearest' },
+      maintainAspectRatio: false,
+    },
+  });
+
+  // Guarda referencia para destruir luego si Livewire re-renderiza
+  ctx.__chart = chart;
+
+  // Dark mode listener (igual que el tuyo)
+  document.addEventListener('darkMode', (e) => {
+    const { mode } = e.detail;
+    if (!ctx.__chart) return;
+
+    if (mode === 'on') {
+      ctx.__chart.options.plugins.tooltip.bodyColor = tooltipBodyColor.dark;
+      ctx.__chart.options.plugins.tooltip.backgroundColor = tooltipBgColor.dark;
+      ctx.__chart.options.plugins.tooltip.borderColor = tooltipBorderColor.dark;
+    } else {
+      ctx.__chart.options.plugins.tooltip.bodyColor = tooltipBodyColor.light;
+      ctx.__chart.options.plugins.tooltip.backgroundColor = tooltipBgColor.light;
+      ctx.__chart.options.plugins.tooltip.borderColor = tooltipBorderColor.light;
+    }
+    ctx.__chart.update('none');
+  });
 };
 
-export default dashboardCard02;
+export default ventasCardChart;

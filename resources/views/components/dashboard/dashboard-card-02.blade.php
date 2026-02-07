@@ -1,4 +1,4 @@
-<div
+{{-- <div
     class="relative flex flex-col col-span-full sm:col-span-6 xl:col-span-4
            bg-white
            rounded-2xl
@@ -45,4 +45,4 @@
     <div class="grow">
         <canvas id="dashboard-card-05" width="595" height="248"></canvas>
     </div>
-</div>
+</div> --}}

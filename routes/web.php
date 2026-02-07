@@ -27,6 +27,7 @@ use App\Livewire\CondicionPagos\CondicionesPagos;
 use App\Livewire\ConfiguracionEmpresas\Empresas;
 use App\Livewire\Contabilidad\Asientos;
 use App\Livewire\Cotizaciones\Cotizacion;
+use App\Livewire\Cotizaciones\IndexCotizaciones;
 use App\Livewire\CuentasContables\PlanCuentas;
 use App\Livewire\Facturas\FacturaCompra\FacturaCompra;
 use App\Livewire\Facturas\FacturaCompra\IndexFacturas;
@@ -269,7 +270,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/Empresas', Empresas::class)->name('Empresas');
 
     //cotizaciones
-    Route::get('/Cotizaciones', Cotizacion::class)->name('Cotizaciones');
+    Route::get('/Cotizaciones', IndexCotizaciones::class)->name('Cotizaciones');
     Route::get('/Facturacion', Index::class)->name('Facturacion');
     Route::get('/Notas-credito-clientes', NotaCreditoForm::class)->name('notascreditoclientes');
     Route::get('/Notas-credito-compra', NotasCreditoNotaCreditoCompraForm::class)->name('Notascreditocompra');

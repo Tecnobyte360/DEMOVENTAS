@@ -447,22 +447,23 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
     return null;
 }
 
-    private function normalizeLinea(array &$l): void
-    {
-        if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
-            $l['precio_unitario'] = (float)$l['costo_unitario'];
-        }
-
-        $cant   = (float)($l['cantidad'] ?? 0);
-        $precio = (float)($l['precio_unitario'] ?? 0);
-        $desc   = (float)($l['descuento_pct'] ?? 0);
-        $iva    = (float)($l['impuesto_pct'] ?? 0);
-
-        $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
-        $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
-        $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+   private function normalizeLinea(array &$l): void
+{
+    if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
+        $l['precio_unitario'] = (float)$l['costo_unitario'];
     }
+
+    $cant   = (float)($l['cantidad'] ?? 0);
+    $precio = (float)($l['precio_unitario'] ?? 0);
+    $desc   = (float)($l['descuento_pct'] ?? 0);
+    $iva    = (float)($l['impuesto_pct'] ?? 0);
+
+   
+    $l['cantidad']        = max(0.0, round(is_finite($cant)   ? $cant   : 0, 3));
+    $l['precio_unitario'] = max(0.0, round(is_finite($precio) ? $precio : 0, 2));
+    $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
+    $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+}
 
     public function normalizarPrecio(int $i): void
     {
@@ -909,32 +910,46 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
         $this->dispatch('$refresh');
     }
 
-    public function getSubtotalProperty(): float
-    {
-        $s = 0.0;
-        foreach ($this->lineas as $l) {
-            $cant   = max(1, (float)($l['cantidad'] ?? 1));
-            $precio = max(0, (float)($l['precio_unitario'] ?? 0));
-            $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
-            $base   = $cant * $precio * (1 - $desc / 100);
-            $s     += $base;
+  public function getSubtotalProperty(): float
+{
+    $s = 0.0;
+
+    foreach ($this->lineas as $l) {
+        $cant   = (float)($l['cantidad'] ?? 0);
+        $precio = max(0, (float)($l['precio_unitario'] ?? 0));
+        $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+
+        if ($cant <= 0) {
+            continue;
         }
-        return round($s, 2);
+
+        $base = $cant * $precio * (1 - $desc / 100);
+        $s   += $base;
     }
 
-    public function getImpuestosTotalProperty(): float
-    {
-        $i = 0.0;
-        foreach ($this->lineas as $l) {
-            $cant   = max(1, (float)($l['cantidad'] ?? 1));
-            $precio = max(0, (float)($l['precio_unitario'] ?? 0));
-            $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
-            $iva    = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
-            $base   = $cant * $precio * (1 - $desc / 100);
-            $i     += $base * $iva / 100;
+    return round($s, 2);
+}
+
+   public function getImpuestosTotalProperty(): float
+{
+    $i = 0.0;
+
+    foreach ($this->lineas as $l) {
+        $cant   = (float)($l['cantidad'] ?? 0);
+        $precio = max(0, (float)($l['precio_unitario'] ?? 0));
+        $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+        $iva    = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
+
+        if ($cant <= 0) {
+            continue;
         }
-        return round($i, 2);
+
+        $base = $cant * $precio * (1 - $desc / 100);
+        $i   += $base * $iva / 100;
     }
+
+    return round($i, 2);
+}
 
     public function getTotalProperty(): float
     {

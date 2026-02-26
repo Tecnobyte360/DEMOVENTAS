@@ -105,68 +105,70 @@ class FacturaForm extends Component
     {
         $this->cargarFactura($id);
     }
-    public function mount(?int $id = null): void
-    {
-        try {
+   public function mount(?int $id = null): void
+{
+    try {
+        $this->fecha = now()->toDateString();
 
-            $this->fecha = now()->toDateString();
+        // 👇 Detectar serie según modo
+        $this->documento = $this->modo === 'compra' ? 'facturacompra' : 'factura';
+        $this->serieDefault = Serie::defaultParaCodigo($this->documento);
 
-            // 👇 Detectar serie según modo
-            $this->documento = $this->modo === 'compra' ? 'facturacompra' : 'factura';
-            $this->serieDefault = Serie::defaultParaCodigo($this->documento);
+        // ✅ Auto-emitir SOLO en modo venta (para compra NO)
+        $this->autoEmitirContado = ($this->modo === 'venta');
 
-            if ($id) {
-                // Cargar factura existente
-                $this->cargarFactura($id);
+        if ($id) {
+            // Cargar factura existente
+            $this->cargarFactura($id);
 
-                // Asignar serie si no tiene
-                if (!$this->factura->serie_id && $this->serieDefault) {
-                    $this->serie_id = $this->serieDefault->id;
-                }
-
-                // Aplicar forma de pago actual
-                $this->aplicarFormaPago($this->tipo_pago);
-
-                // Definir términos si no existen
-                if (empty($this->terminos_pago)) {
-                    $this->terminos_pago = $this->tipo_pago === 'credito'
-                        ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
-                        : 'Contado';
-                }
-
-                $this->autoEmitirContado = ($this->tipo_pago === 'contado');
-            } else {
-                // Nueva factura
-                $this->addLinea();
-                $this->aplicarFormaPago('contado');
-                $this->terminos_pago = 'Contado';
-                $this->serie_id = (int)(
-                    $this->factura?->serie_id
-                    ?: ($this->serieDefault?->id)
-                );
-
-                // 👇 En modo compra NO autoemitimos
-                $this->autoEmitirContado = $this->modo === 'venta';
-
-                // Si ya viene socio seleccionado
-                if ($this->socio_negocio_id) {
-                    $this->setPagoDesdeCliente((int)$this->socio_negocio_id);
-
-                    $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')->find((int)$this->socio_negocio_id);
-                    $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
-                }
+            // Asignar serie si no tiene
+            if (!$this->factura->serie_id && $this->serieDefault) {
+                $this->serie_id = $this->serieDefault->id;
             }
 
-            // 👇 Según el modo usa cuenta por cobrar (CxC) o por pagar (CxP)
-            $this->setCuentaCobroPorDefecto();
-        } catch (\Throwable $e) {
-            report($e);
-            \Masmerise\Toaster\PendingToast::create()
-                ->error()
-                ->message('No se pudo inicializar el formulario de factura.')
-                ->duration(7000);
+            // Aplicar forma de pago actual
+            $this->aplicarFormaPago($this->tipo_pago);
+
+            // Definir términos si no existen
+            if (empty($this->terminos_pago)) {
+                $this->terminos_pago = $this->tipo_pago === 'credito'
+                    ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
+                    : 'Contado';
+            }
+
+        } else {
+            // Nueva factura
+            $this->addLinea();
+            $this->aplicarFormaPago('contado');
+            $this->terminos_pago = 'Contado';
+
+            $this->serie_id = (int)(
+                $this->factura?->serie_id
+                ?: ($this->serieDefault?->id)
+            );
+
+            // Si ya viene socio seleccionado
+            if ($this->socio_negocio_id) {
+                $this->setPagoDesdeCliente((int)$this->socio_negocio_id);
+
+                $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')
+                    ->find((int)$this->socio_negocio_id);
+
+                $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+            }
         }
+
+        // 👇 Según el modo usa cuenta por cobrar (CxC) o por pagar (CxP)
+        $this->setCuentaCobroPorDefecto();
+
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()
+            ->error()
+            ->message('No se pudo inicializar el formulario de factura.')
+            ->duration(7000);
     }
+}
 
 
     public function render()
@@ -620,23 +622,23 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
-    public function aplicarFormaPago(string $tipo): void
-    {
-        if ($this->bloqueada) return;
+ public function aplicarFormaPago(string $tipo): void
+{
+    if ($this->bloqueada) return;
 
-        $this->tipo_pago = $tipo;
+    $this->tipo_pago = $tipo;
 
-        // 🔽 nuevo: prende/apaga auto-emitir según contado/crédito
-        $this->autoEmitirContado = ($tipo === 'contado');
+    // ✅ Auto-emitir SOLO si: es venta y contado
+    $this->autoEmitirContado = ($this->modo === 'venta' && $tipo === 'contado');
 
-        if ($tipo === 'contado') {
-            $this->plazo_dias  = null;
-            $this->vencimiento = $this->fecha;
-        } else {
-            if (!$this->plazo_dias) $this->plazo_dias = 30;
-            $this->vencimiento = Carbon::parse($this->fecha)->addDays($this->plazo_dias)->toDateString();
-        }
+    if ($tipo === 'contado') {
+        $this->plazo_dias  = null;
+        $this->vencimiento = $this->fecha;
+    } else {
+        if (!$this->plazo_dias) $this->plazo_dias = 30;
+        $this->vencimiento = Carbon::parse($this->fecha)->addDays($this->plazo_dias)->toDateString();
     }
+}
 
 
     public function updatedFecha(): void
@@ -1307,48 +1309,48 @@ class FacturaForm extends Component
         }
     }
 
-    #[On('pago-registrado')]
-    public function onPagoRegistrado(int $facturaId): void
-    {
-        try {
-            if (!$this->factura?->id || $this->factura->id !== $facturaId) {
-                $this->cargarFactura($facturaId);
-            }
-
-            $this->factura->refresh()->recalcularTotales()->save();
-            $this->estado = $this->factura->estado;
-
-            $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
-
-            if ($this->tipo_pago === 'contado') {
-                if ($faltante <= 0.01) {
-                    if ($this->autoEmitirContado) {
-                        if ($this->estado !== 'emitida') {
-                            $this->emitir();
-                        }
-                        $this->cerrarSiAplicada();
-                    } else {
-                        PendingToast::create()
-                            ->info()->message('Pago completo registrado. Puedes emitir cuando quieras.')
-                            ->duration(6000);
-                        $this->dispatch('$refresh');
-                    }
-                } else {
-                    $this->dispatch('$refresh');
-                }
-                return;
-            }
-
-            // Crédito u otros
-            $this->cerrarSiAplicada();
-            $this->dispatch('$refresh');
-        } catch (\Throwable $e) {
-            Log::error('onPagoRegistrado error', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()
-                ->message('El pago se registró, pero no se pudo actualizar el estado automáticamente.')
-                ->duration(9000);
+   #[On('pago-registrado')]
+public function onPagoRegistrado(int $facturaId): void
+{
+    try {
+        // 1) Cargar/refrescar factura
+        if (!$this->factura?->id || $this->factura->id !== $facturaId) {
+            $this->cargarFactura($facturaId);
         }
+
+        $this->factura->refresh()->recalcularTotales()->save();
+
+        // sincroniza estado y tipo pago desde DB (clave)
+        $this->estado    = (string)($this->factura->estado ?? 'borrador');
+        $this->tipo_pago = (string)($this->factura->tipo_pago ?? $this->tipo_pago);
+
+        // 2) Calcular faltante real
+        $total   = round((float)($this->factura->total  ?? 0), 2);
+        $pagado  = round((float)($this->factura->pagado ?? 0), 2);
+        $faltante = round($total - $pagado, 2);
+
+        // 3) Auto emitir SOLO si: venta + contado + pagada + no emitida
+        $esContado  = ($this->factura->tipo_pago ?? '') === 'contado';
+        $noEmitida  = ($this->factura->estado ?? '') !== 'emitida';
+        $pagoTotal  = ($faltante <= 0.01);
+
+        if ($esContado && $pagoTotal && $noEmitida && $this->autoEmitirContado) {
+            $this->emitir();           // toma consecutivo + asiento + inventario
+            $this->cerrarSiAplicada(); // opcional: cierra si aplica
+            return;
+        }
+
+        // 4) Si no auto-emite, igual intenta cerrar si aplica (crédito, etc.)
+        $this->cerrarSiAplicada();
+        $this->dispatch('$refresh');
+
+    } catch (\Throwable $e) {
+        Log::error('onPagoRegistrado error', ['msg' => $e->getMessage()]);
+        PendingToast::create()->error()
+            ->message('El pago se registró, pero no se pudo emitir/actualizar automáticamente.')
+            ->duration(9000);
     }
+}
 
     private function verificarStockDisponibleAntesDeEmitir(): void
     {

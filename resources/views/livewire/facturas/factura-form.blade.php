@@ -21,8 +21,10 @@
 <div x-data="{
     goPicker() {
         const el = document.querySelector('[data-first-product]');
-        if (el) { el.focus();
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        if (el) {
+            el.focus();
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 }" x-on:keydown.window.ctrl.k.prevent="goPicker()"
     x-on:keydown.window.meta.k.prevent="goPicker()" class="p-6 md:p-8">
@@ -560,11 +562,15 @@
         @php
             $esContado = $tipo_pago === 'contado';
             $esCredito = $tipo_pago === 'credito';
-            $totalVista = round((float) ($this->total ?? 0), 2);
-            $pagadoVista = round((float) ($factura->pagado ?? 0), 2);
+
+            // ✅ Si ya hay factura, usa los valores persistidos en BD (fuente de verdad)
+            $totalVista = round((float) ($factura?->total ?? ($this->total ?? 0)), 2);
+            $pagadoVista = round((float) ($factura?->pagado ?? 0), 2);
+
             $saldoVista = max(round($totalVista - $pagadoVista, 2), 0);
             $tieneFactura = (bool) $factura?->id;
-            // 🔹 Bloquea emitir solo si es contado y no está completamente pagada
+
+            // 🔒 Bloquea emitir solo si es contado y NO está pagada totalmente
             $bloqueaEmitir = $esContado && (!$tieneFactura || $saldoVista > 0.01);
         @endphp
 
@@ -579,7 +585,7 @@
                         class="xl:col-span-3 flex flex-wrap items-center gap-2 text-sm md:text-base text-gray-700 dark:text-gray-300">
                         <span class="font-semibold">Total:</span>
                         <span class="text-lg md:text-xl font-extrabold text-gray-900 dark:text-white">
-                            $ {{ number_format($this->total, 2) }}
+                    $ {{ number_format($totalVista, 2) }}
                         </span>
 
                         @if ($esContado)

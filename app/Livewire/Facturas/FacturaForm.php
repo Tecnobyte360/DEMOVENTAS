@@ -314,15 +314,26 @@ class FacturaForm extends Component
 
     private function normalizeLinea(array &$l): void
     {
-        $cant   = (float)($l['cantidad'] ?? 0);
+        // cantidad: si viene null o '', la dejamos null (para que se vea vacío)
+        $rawCant = $l['cantidad'] ?? null;
+
+        if ($rawCant === '' || $rawCant === null) {
+            $l['cantidad'] = null;
+        } else {
+            $cant = (float)$rawCant;
+            $l['cantidad'] = round(is_finite($cant) ? $cant : 0, 3);
+            // si quieres seguir bloqueando negativos:
+            if ($l['cantidad'] < 0) $l['cantidad'] = 0;
+        }
+
+        // resto igual
         $precio = (float)($l['precio_unitario'] ?? 0);
         $desc   = (float)($l['descuento_pct'] ?? 0);
         $iva    = (float)($l['impuesto_pct'] ?? 0);
 
-        $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
-        $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
+        $l['precio_unitario'] = max(0.0, round(is_finite($precio) ? $precio : 0, 2));
         $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva) ? $iva : 0, 3)));
     }
 
     public function updated($name, $value): void
@@ -697,30 +708,45 @@ class FacturaForm extends Component
     public function getSubtotalProperty(): float
     {
         $s = 0.0;
+
         foreach ($this->lineas as $l) {
-            $cant   = max(1, (float)($l['cantidad'] ?? 1));
+
+            $cant   = (float)($l['cantidad'] ?? 0);
             $precio = max(0, (float)($l['precio_unitario'] ?? 0));
             $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
-            $base   = $cant * $precio * (1 - $desc / 100);
-            $s     += $base;
+
+            // 👉 Si cantidad es null, vacío o 0, no suma
+            if ($cant <= 0) {
+                continue;
+            }
+
+            $base = $cant * $precio * (1 - $desc / 100);
+            $s   += $base;
         }
+
         return round($s, 2);
     }
-
     public function getImpuestosTotalProperty(): float
     {
         $i = 0.0;
+
         foreach ($this->lineas as $l) {
-            $cant   = max(1, (float)($l['cantidad'] ?? 1));
+
+            $cant   = (float)($l['cantidad'] ?? 0);
             $precio = max(0, (float)($l['precio_unitario'] ?? 0));
             $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
             $iva    = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
-            $base   = $cant * $precio * (1 - $desc / 100);
-            $i     += $base * $iva / 100;
+
+            if ($cant <= 0) {
+                continue;
+            }
+
+            $base = $cant * $precio * (1 - $desc / 100);
+            $i   += $base * $iva / 100;
         }
+
         return round($i, 2);
     }
-
     public function getTotalProperty(): float
     {
         return round($this->subtotal + $this->impuestosTotal, 2);

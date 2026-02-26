@@ -295,7 +295,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
     Route::get('/cotizaciones/{id}/pdf', CotizacionPdfController::class)
         ->name('cotizaciones.pdf');
-       Route::get('/cotizaciones/{id}/print', [CotizacionesController::class, 'print'])
+Route::get('/cotizaciones/{id}/print', [CotizacionesController::class, 'printView'])
     ->name('cotizaciones.print');
 
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');

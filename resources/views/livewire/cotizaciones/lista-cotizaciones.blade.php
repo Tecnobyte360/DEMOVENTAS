@@ -1,5 +1,6 @@
 @assets
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
 @endassets
 
 <div class="space-y-4">
@@ -187,11 +188,10 @@
                                         title="PDF">
                                         <i class="fa-solid fa-file-pdf text-xs"></i>
                                     </button>
-
                                     <button type="button" wire:click.stop="imprimir({{ $c->id }})"
-                                        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold">
-                                        <i class="fa-solid fa-print"></i>
-                                        Imprimir
+                                        class="h-9 w-9 rounded-lg bg-amber-500 hover:bg-amber-600 text-white inline-flex items-center justify-center"
+                                        title="Imprimir">
+                                        <i class="fa-solid fa-print text-xs"></i>
                                     </button>
 
                                 </div>
@@ -250,13 +250,72 @@
         </div>
     @endif
 
-    {{-- Listener Livewire 3 --}}
- <script>
-    document.addEventListener('livewire:init', () => {
-        Livewire.on('abrir-impresion', ({ url }) => {
-            window.open(url, '_blank');
-        });
-    });
-</script>
 
 </div>
+@push('scripts')
+    <script>
+        // =============================================
+        // QZ Tray — impresión directa a impresora de red
+        // =============================================
+
+        // 1️⃣  Configura aquí el nombre EXACTO de la impresora de red
+        const NOMBRE_IMPRESORA = 'HP LaserJet 400'; // ← cámbialo
+
+        // 2️⃣  Escucha el evento de Livewire
+        document.addEventListener('abrir-impresion', async (e) => {
+            const pdfUrl = e.detail.url;
+            await imprimirConQZ(pdfUrl);
+        });
+
+        async function imprimirConQZ(pdfUrl) {
+            try {
+                // Conectar a QZ Tray
+                if (!qz.websocket.isActive()) {
+                    await qz.websocket.connect();
+                }
+
+                // Buscar impresora
+                const impresora = await qz.printers.find(NOMBRE_IMPRESORA);
+
+                // Configurar trabajo de impresión
+                const config = qz.configs.create(impresora, {
+                    copies: 1,
+                    colorType: 'blackWhite', // o 'color'
+                    orientation: 'portrait', // o 'landscape'
+                });
+
+                // Datos: URL del PDF (QZ Tray lo descarga y lo manda a imprimir)
+                const data = [{
+                    type: 'pixel',
+                    format: 'pdf',
+                    flavor: 'file',
+                    data: pdfUrl,
+                }];
+
+                await qz.print(config, data);
+
+                // Notificación de éxito
+                mostrarToast('✅ Enviado a impresora: ' + NOMBRE_IMPRESORA, 'success');
+
+            } catch (err) {
+                console.error('QZ Tray error:', err);
+
+                if (err.message && err.message.includes('Unable to establish')) {
+                    mostrarToast('❌ QZ Tray no está activo. Por favor ábrelo en tu PC.', 'error');
+                } else {
+                    mostrarToast('❌ Error al imprimir: ' + err.message, 'error');
+                }
+            }
+        }
+
+        // Toast simple de notificación
+        function mostrarToast(msg, tipo) {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-5 right-5 z-[9999] px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium transition-all
+        ${tipo === 'success' ? 'bg-emerald-600' : 'bg-rose-600'}`;
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+    </script>
+@endpush

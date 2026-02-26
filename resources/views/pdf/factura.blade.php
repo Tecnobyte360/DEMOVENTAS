@@ -90,7 +90,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Factura {{ $folio }}</title>
+  <title>Remisión {{ $folio }}</title>
 
   <style>
     /* ✅ Header con más espacio para logos grandes */
@@ -220,7 +220,7 @@
     </div>
 
     <div class="col right">
-      <div class="doc-title">FACTURA</div>
+      <div class="doc-title">REMISIÓN</div>
 
       <div style="margin-top:3px;">
         <span class="small muted">Número:</span>
@@ -268,7 +268,7 @@
 @if(($factura->estado ?? '') === 'anulada')
   <div class="watermark">ANULADA</div>
 @else
-  <div class="watermark">FACTURA</div>
+  <div class="watermark">REMISION</div>
 @endif
 
 <main style="position: relative; z-index:1">

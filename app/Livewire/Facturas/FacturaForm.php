@@ -471,7 +471,7 @@ class FacturaForm extends Component
             'cuenta_ingreso_id' => null,
             'bodega_id'         => null,
             'descripcion'       => null,
-            'cantidad'          => 1,
+            'cantidad'          => null,
             'precio_unitario'   => 0,
             'descuento_pct'     => 0,
             'impuesto_id'       => null,

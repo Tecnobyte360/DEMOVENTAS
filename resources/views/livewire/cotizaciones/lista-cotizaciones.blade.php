@@ -30,7 +30,7 @@
                     <div class="relative">
                         <select wire:model.live="estado"
                             class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800
-                     text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/40">
+                                   text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/40">
                             <option value="todas">Todos</option>
                             <option value="borrador">Borrador</option>
                             <option value="enviada">Enviada</option>
@@ -44,7 +44,7 @@
                     <div class="relative">
                         <select wire:model.live="perPage"
                             class="h-10 px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800
-                     text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/40">
+                                   text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/40">
                             <option value="10">10</option>
                             <option value="12">12</option>
                             <option value="25">25</option>
@@ -61,14 +61,14 @@
                     <input wire:model.debounce.400ms="search" type="text"
                         placeholder="Buscar #, cliente, NIT, estado…"
                         class="w-full h-10 pl-10 pr-10 rounded-lg border border-slate-200 dark:border-slate-700
-                   bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100
-                   focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/40" />
+                               bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100
+                               focus:outline-none focus:ring-2 focus:ring-indigo-200 dark:focus:ring-indigo-900/40" />
 
                     @if (!empty($search))
                         <button type="button" wire:click="$set('search','')"
                             class="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7 rounded-md
-                     bg-slate-100 hover:bg-slate-200 text-slate-600
-                     dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100"
+                                   bg-slate-100 hover:bg-slate-200 text-slate-600
+                                   dark:bg-slate-700 dark:hover:bg-slate-600 dark:text-slate-100"
                             title="Limpiar">
                             <i class="fa-solid fa-xmark text-xs"></i>
                         </button>
@@ -162,6 +162,8 @@
                                     {{ $estadoText }}
                                 </span>
                             </td>
+
+                            {{-- Acciones --}}
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-2">
 
@@ -179,81 +181,82 @@
                                         <i class="fa-solid fa-envelope text-xs"></i>
                                     </button>
 
-                                    {{-- Ver/Preview (solo si tienes el método preview en el componente) --}}
-                                    {{-- Si NO tienes preview(), elimina este botón --}}
-                                    {{-- <button type="button" wire:click.stop="preview({{ $c->id }})"
-                                        class="h-9 w-9 rounded-lg bg-slate-700 hover:bg-slate-800 text-white inline-flex items-center justify-center"
-                                        title="Ver">
-                                        <i class="fa-solid fa-eye text-xs"></i>
-                                    </button> --}}
-
-                                    {{-- PDF ✅ (usa el método pdf() del componente) --}}
+                                    {{-- PDF --}}
                                     <button type="button" wire:click.stop="pdf({{ $c->id }})"
                                         class="h-9 w-9 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white inline-flex items-center justify-center"
                                         title="PDF">
                                         <i class="fa-solid fa-file-pdf text-xs"></i>
                                     </button>
 
+                                    <button type="button" wire:click.stop="imprimir({{ $c->id }})"
+                                        class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-sm font-semibold">
+                                        <i class="fa-solid fa-print"></i>
+                                        Imprimir
+                                    </button>
+
                                 </div>
                             </td>
-
-
-
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" class="p-8 text-center text-slate-500 dark:text-slate-400">
+                                Sin resultados…
+                            </td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
-        </td>
-        </tr>
 
-    @empty
-        <tr>
-            <td colspan="8" class="p-8 text-center text-slate-500 dark:text-slate-400">
-                Sin resultados…
-            </td>
-        </tr>
-        @endforelse
-        </tbody>
-        </table>
-</div>
+        {{-- Paginación --}}
+        <div class="p-4 border-t border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900">
+            {{ $items->links() }}
+        </div>
 
-{{-- Paginación --}}
-<div class="p-4 border-t border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900">
-    {{ $items->links() }}
-</div>
+    </section>
 
-</section>
+    {{-- Modal envío (hijo) --}}
+    <livewire:cotizaciones.enviar-cotizacion-correo :key="'enviar-global'" />
 
-{{-- Modal envío (hijo) --}}
-<livewire:cotizaciones.enviar-cotizacion-correo :key="'enviar-global'" />
+    {{-- ===== Modal preview (si tienes $showPreview y $previewId en el componente) ===== --}}
+    @if (!empty($showPreview) && !empty($previewId))
+        <div x-data x-on:keydown.escape.window="$wire.closePreview()" class="fixed inset-0 z-[100]">
+            <div class="absolute inset-0 bg-black/50" wire:click="closePreview"></div>
 
-{{-- ===== Modal preview (si tienes $showPreview y $previewId en el componente) ===== --}}
-@if (!empty($showPreview) && !empty($previewId))
-    <div x-data x-on:keydown.escape.window="$wire.closePreview()" class="fixed inset-0 z-[100]">
-        <div class="absolute inset-0 bg-black/50" wire:click="closePreview"></div>
+            <div
+                class="relative mx-auto max-w-[98vw] w-[98vw] h-[98vh] mt-[1vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                <div
+                    class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                    <h3 class="text-sm md:text-base font-semibold text-slate-900 dark:text-white">
+                        Previsualización - Cotización #{{ $previewId }}
+                    </h3>
+                    <div class="flex items-center gap-2">
+                        <a href="{{ route('cotizaciones.preview', $previewId) }}" target="_blank"
+                            class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                            Abrir pestaña
+                        </a>
+                        <button type="button" wire:click="closePreview"
+                            class="px-3 py-1.5 text-xs rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
 
-        <div
-            class="relative mx-auto max-w-[98vw] w-[98vw] h-[98vh] mt-[1vh] bg-white dark:bg-slate-900 rounded-lg shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
-                <h3 class="text-sm md:text-base font-semibold text-slate-900 dark:text-white">
-                    Previsualización - Cotización #{{ $previewId }}
-                </h3>
-                <div class="flex items-center gap-2">
-                    <a href="{{ route('cotizaciones.preview', $previewId) }}" target="_blank"
-                        class="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
-                        Abrir pestaña
-                    </a>
-                    <button type="button" wire:click="closePreview"
-                        class="px-3 py-1.5 text-xs rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-700">
-                        Cerrar
-                    </button>
+                <div class="h-[calc(98vh-3.5rem)]">
+                    <iframe src="{{ route('cotizaciones.preview', $previewId) }}?t={{ now()->timestamp }}"
+                        class="w-full h-full" style="border:0" title="Previsualización cotización"></iframe>
                 </div>
             </div>
-
-            <div class="h-[calc(98vh-3.5rem)]">
-                <iframe src="{{ route('cotizaciones.preview', $previewId) }}?t={{ now()->timestamp }}"
-                    class="w-full h-full" style="border:0" title="Previsualización cotización">
-                </iframe>
-            </div>
         </div>
-    </div>
-@endif
+    @endif
+
+    {{-- Listener Livewire 3 --}}
+ <script>
+    document.addEventListener('livewire:init', () => {
+        Livewire.on('abrir-impresion', ({ url }) => {
+            window.open(url, '_blank');
+        });
+    });
+</script>
 
 </div>

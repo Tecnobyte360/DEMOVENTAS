@@ -5,7 +5,6 @@ namespace App\Livewire\Cotizaciones;
 use Livewire\Component;
 use Livewire\WithPagination;
 use App\Models\cotizaciones\cotizacione;
-use Masmerise\Toaster\PendingToast;
 
 class ListaCotizaciones extends Component
 {
@@ -17,36 +16,48 @@ class ListaCotizaciones extends Component
     public string $estado = 'todas';
     public int $perPage = 12;
 
-    protected $queryString = ['search','estado','page','perPage'];
+    protected $queryString = ['search', 'estado', 'page', 'perPage'];
 
-    public function updatingSearch(){ $this->resetPage(); }
-    public function updatingEstado(){ $this->resetPage(); }
-    public function updatingPerPage(){ $this->resetPage(); }
+    public function updatingSearch()
+    {
+        $this->resetPage();
+    }
+    public function updatingEstado()
+    {
+        $this->resetPage();
+    }
+    public function updatingPerPage()
+    {
+        $this->resetPage();
+    }
 
-    /**
-     * ✅ Abrir cotización = navegar al formulario (editar)
-     */
     public function abrir(int $id)
     {
         return redirect()->route('cotizaciones.edit', $id);
     }
 
-    /**
-     * ✅ Abrir modal de envío (componente global montado abajo)
-     */
     public function enviar(int $id): void
     {
         $this->dispatch('abrir-modal-enviar', cotizacionId: $id)
             ->to(\App\Livewire\Cotizaciones\EnviarCotizacionCorreo::class);
     }
 
-    /**
-     * ✅ PDF desde la LISTA: aquí SIEMPRE se recibe $id
-     * (porque este componente NO tiene $this->cotizacion)
-     */
-   public function pdf(int $id)
+    public function pdf(int $id)
+    {
+        return redirect()->route('cotizaciones.pdf', $id);
+    }
+
+
+  public function imprimir(int $id): void
 {
-    return redirect()->route('cotizaciones.pdf', $id);
+    $url = route('cotizaciones.print', $id);
+    $this->dispatch('abrir-impresion', url: $url);
+}
+
+
+public function print(int $id): void
+{
+    $this->imprimir($id);
 }
 
     public function render()
@@ -56,14 +67,14 @@ class ListaCotizaciones extends Component
             ->latest('id');
 
         if (trim($this->search) !== '') {
-            $s = '%'.trim($this->search).'%';
+            $s = '%' . trim($this->search) . '%';
 
             $q->where(function ($qq) use ($s) {
                 $qq->where('id', 'like', $s)
                     ->orWhere('estado', 'like', $s)
                     ->orWhereHas('cliente', function ($c) use ($s) {
                         $c->where('razon_social', 'like', $s)
-                          ->orWhere('nit', 'like', $s);
+                            ->orWhere('nit', 'like', $s);
                     });
             });
         }

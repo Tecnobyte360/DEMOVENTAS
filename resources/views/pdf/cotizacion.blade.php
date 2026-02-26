@@ -15,9 +15,6 @@
       ? $empresa->pdfTheme()
       : (is_array($theme ?? null) ? $theme : []);
 
-  // ✅ bandera para auto-imprimir (viene del controller)
-  $isPrint = (bool)($isPrint ?? false);
-
   // Colores base
   $primary   = $theme['primary']   ?? '#223361';
   $base      = $theme['base']      ?? '#ffffff';
@@ -96,15 +93,6 @@
 <head>
   <meta charset="utf-8">
   <title>Cotización {{ $folio }}</title>
-
-  {{-- ✅ Auto-print si viene ?print=1 --}}
-  @if($isPrint)
-    <script type="text/javascript">
-      window.onload = function () {
-        window.print();
-      };
-    </script>
-  @endif
 
   <style>
     /* Igual factura */
@@ -388,3 +376,13 @@
 
 </body>
 </html>
+@push('scripts')
+@if(!empty($autoPrint))
+<script>
+    window.addEventListener('load', () => {
+        window.focus();
+        window.print();
+    });
+</script>
+@endif
+@endpush

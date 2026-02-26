@@ -6,12 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\cotizaciones\cotizacione;
 use App\Models\ConfiguracionEmpresas\Empresa;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Http\Request;
 
 class CotizacionPdfController extends Controller
 {
-    public function __invoke(Request $request, int $id)
+    public function __invoke(int $id)
     {
+        // 1) Cotización con relaciones necesarias (incluye bodega)
         $cotizacion = cotizacione::with([
                 'cliente',
                 'detalles.producto',
@@ -19,16 +19,16 @@ class CotizacionPdfController extends Controller
             ])
             ->findOrFail($id);
 
+        // 2) Empresa activa (la misma lógica que usas en factura, si aplica)
         $empresa = Empresa::query()
             ->where('is_activa', true)
             ->first();
 
-        $isPrint = $request->boolean('print'); 
-
+        // 3) Render PDF
         return Pdf::loadView('pdf.cotizacion', [
                 'cotizacion' => $cotizacion,
-                'empresa'    => $empresa,
-                'isPrint'    => $isPrint,
+                'empresa'    => $empresa,   // ✅ clave para que se vea igual a factura
+                // 'ref'      => null,       // (opcional) si quieres forzar un folio custom
             ])
             ->stream('Cotizacion_'.$id.'.pdf');
     }

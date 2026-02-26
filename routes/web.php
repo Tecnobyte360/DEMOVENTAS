@@ -10,6 +10,7 @@ use App\Http\Controllers\MemberController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\Cotizaciones\CotizacionesController;
 use App\Http\Controllers\Cotizaciones\CotizacionPdfController;
 use App\Http\Controllers\FacturaPosPrintController;
 use App\Http\Controllers\FacturaTicketController;
@@ -29,6 +30,7 @@ use App\Livewire\ConfiguracionEmpresas\Empresas;
 use App\Livewire\Contabilidad\Asientos;
 use App\Livewire\Cotizaciones\Cotizacion;
 use App\Livewire\Cotizaciones\IndexCotizaciones;
+use App\Livewire\Cotizaciones\ListaCotizaciones;
 use App\Livewire\CuentasContables\PlanCuentas;
 use App\Livewire\Facturas\FacturaCompra\FacturaCompra;
 use App\Livewire\Facturas\FacturaCompra\IndexFacturas;
@@ -293,6 +295,8 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
     Route::get('/cotizaciones/{id}/pdf', CotizacionPdfController::class)
         ->name('cotizaciones.pdf');
+       Route::get('/cotizaciones/{id}/print', [CotizacionesController::class, 'print'])
+    ->name('cotizaciones.print');
 
     //     Route::get('/catalogos/municipios', Municiopios::class)->name('catalogos/municipios');
     // Route::get('/catalogos/ciiu', CiiuActividades::class)

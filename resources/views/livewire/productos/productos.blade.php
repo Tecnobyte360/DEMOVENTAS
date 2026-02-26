@@ -439,235 +439,276 @@
   </form>
 
   {{-- ===================== Tabla de productos ===================== --}}
-  <section class="space-y-6 p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
-    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
-      <h3 class="text-xl sm:text-2xl font-bold text-gray-800 dark:text-white">Inventario Actual</h3>
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-        <input wire:model.defer="search" type="text" placeholder="Buscar producto..."
-               class="w-full sm:w-64 px-4 py-2 border rounded-xl dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-gray-600 focus:border-violet-600"/>
-        <button wire:click="$refresh" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl shadow transition-all text-sm">
-          <i class="fas fa-search mr-1"></i> Buscar
-        </button>
-      </div>
+  <section
+  class="space-y-6 p-4 sm:p-6 bg-gray-50 dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
+
+  {{-- Header --}}
+  <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+    <h3 class="text-lg sm:text-2xl font-bold text-gray-800 dark:text-white">
+      Inventario Actual
+    </h3>
+
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+      <input wire:model.defer="search" type="text" placeholder="Buscar producto..."
+        class="w-full sm:w-64 h-10 px-3 border rounded-xl dark:border-gray-700 dark:bg-gray-800 dark:text-white
+               focus:ring-gray-600 focus:border-violet-600 text-sm" />
+      <button wire:click="$refresh"
+        class="h-10 px-4 bg-gray-600 hover:bg-gray-700 text-white rounded-xl shadow transition-all text-sm">
+        <i class="fas fa-search mr-1"></i> Buscar
+      </button>
     </div>
+  </div>
 
-    <div class="w-full overflow-x-auto">
-      <table class="min-w-[1500px] w-full bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden text-sm text-gray-700 dark:text-gray-300">
-        <thead class="bg-gray-600 text-white">
-          <tr>
-            <th class="p-3 text-left font-semibold">#ID</th>
-            <th class="p-3 text-left font-semibold">Imagen</th>
-            <th class="p-3 text-left font-semibold">Nombre</th>
-            <th class="p-3 text-left font-semibold">Descripción</th>
-            <th class="p-3 text-center font-semibold">Tipo</th>
-            <th class="p-3 text-center font-semibold">U. Medida</th>
-            <th class="p-3 text-center font-semibold">Precio (sin IVA)</th>
-            <th class="p-3 text-center font-semibold">Impuesto</th>
-            <th class="p-3 text-center font-semibold">Precio c/ IVA</th>
-            {{-- <th class="p-3 text-center font-semibold">Cuentas</th> --}}
-            <th class="p-3 text-center font-semibold">Subcategoría</th>
-            <th class="p-3 text-center font-semibold">Stock Total</th>
-            <th class="p-3 text-center font-semibold">Costo Prom. Global</th> {{-- NUEVO --}}
-            <th class="p-3 text-center font-semibold">Estado</th>
-            <th class="p-3 text-center font-semibold">Bodegas</th>
-            <th class="p-3 text-center font-semibold">Acciones</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-100 dark:divide-gray-700">
-          @forelse($productos as $prod)
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700 transition">
-              <td class="p-3">{{ $prod->id }}</td>
+  {{-- Tabla compacta (SIN min-w fijo / SIN scroll forzado) --}}
+  <div class="w-full overflow-x-hidden">
+    <table
+      class="w-full table-fixed bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden text-xs text-gray-700 dark:text-gray-300">
 
-              <td class="p-3">
-                @if($prod->imagen_url)
-                  <img src="{{ $prod->imagen_url }}" alt="img"
-                       class="h-10 w-10 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700">
+      <thead class="bg-gray-700 text-white">
+        <tr class="whitespace-nowrap">
+          <th class="px-2 py-2 text-left font-semibold w-[60px]">#ID</th>
+          <th class="px-2 py-2 text-left font-semibold w-[64px]">Img</th>
+
+          <th class="px-2 py-2 text-left font-semibold w-[220px]">Nombre</th>
+
+          {{-- ✅ Oculta en pantallas pequeñas para evitar scroll --}}
+          <th class="px-2 py-2 text-left font-semibold hidden lg:table-cell w-[260px]">Descripción</th>
+
+          <th class="px-2 py-2 text-center font-semibold w-[120px]">Tipo</th>
+
+          {{-- ✅ Oculta en pantallas pequeñas --}}
+          <th class="px-2 py-2 text-center font-semibold hidden md:table-cell w-[140px]">U. Medida</th>
+
+          <th class="px-2 py-2 text-center font-semibold w-[120px]">Precio</th>
+
+          {{-- ✅ Oculta en pantallas pequeñas --}}
+          <th class="px-2 py-2 text-center font-semibold hidden xl:table-cell w-[200px]">Impuesto</th>
+
+          <th class="px-2 py-2 text-center font-semibold w-[130px]">Precio c/ IVA</th>
+
+          {{-- ✅ Oculta en pantallas pequeñas --}}
+          <th class="px-2 py-2 text-center font-semibold hidden xl:table-cell w-[160px]">Subcat.</th>
+
+          <th class="px-2 py-2 text-center font-semibold w-[120px]">Stock</th>
+
+          {{-- ✅ Oculta en pantallas pequeñas --}}
+          <th class="px-2 py-2 text-center font-semibold hidden 2xl:table-cell w-[150px]">CPU Global</th>
+
+          <th class="px-2 py-2 text-center font-semibold w-[120px]">Estado</th>
+          <th class="px-2 py-2 text-center font-semibold w-[90px]">Bod.</th>
+          <th class="px-2 py-2 text-center font-semibold w-[90px]">Acc.</th>
+        </tr>
+      </thead>
+
+      <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+        @forelse($productos as $prod)
+          <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
+
+            <td class="px-2 py-2">{{ $prod->id }}</td>
+
+            <td class="px-2 py-2">
+              @if($prod->imagen_url)
+                <img src="{{ $prod->imagen_url }}" alt="img"
+                  class="h-9 w-9 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700">
+              @else
+                <div class="h-9 w-9 rounded-lg bg-gray-200 dark:bg-gray-700 grid place-items-center text-gray-400">
+                  <i class="fas fa-image"></i>
+                </div>
+              @endif
+            </td>
+
+            {{-- Nombre (truncate) --}}
+            <td class="px-2 py-2 truncate" title="{{ $prod->nombre }}">
+              {{ $prod->nombre }}
+            </td>
+
+            {{-- Descripción (solo lg+) --}}
+            <td class="px-2 py-2 hidden lg:table-cell truncate" title="{{ $prod->descripcion }}">
+              {{ $prod->descripcion }}
+            </td>
+
+            {{-- Tipo --}}
+            <td class="px-2 py-2 text-center">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full
+                {{ $prod->es_inventariable ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700' }}">
+                <i class="{{ $prod->es_inventariable ? 'fas fa-box' : 'fas fa-concierge-bell' }}"></i>
+                {{ $prod->es_inventariable ? 'Invent.' : 'Serv.' }}
+              </span>
+            </td>
+
+            {{-- UM (solo md+) --}}
+            <td class="px-2 py-2 text-center hidden md:table-cell truncate"
+                title="{{ $prod->unidadMedida?->nombre }}">
+              @if($prod->unidadMedida)
+                {{ $prod->unidadMedida->nombre }}
+                @if($prod->unidadMedida->simbolo) ({{ $prod->unidadMedida->simbolo }}) @endif
+              @else
+                —
+              @endif
+            </td>
+
+            {{-- Precio --}}
+            <td class="px-2 py-2 text-center whitespace-nowrap">
+              {{ number_format($prod->precio, 2) }}
+            </td>
+
+            {{-- Impuesto (solo xl+) --}}
+            <td class="px-2 py-2 text-center hidden xl:table-cell truncate"
+                title="{{ $prod->impuesto?->nombre }}">
+              {{ $prod->impuesto?->nombre ?? '—' }}
+              @if($prod->impuesto)
+                @if(!is_null($prod->impuesto->porcentaje))
+                  ({{ number_format($prod->impuesto->porcentaje, 2) }}%)
+                @elseif(!is_null($prod->impuesto->monto_fijo))
+                  (${{ number_format($prod->impuesto->monto_fijo, 2) }})
+                @endif
+              @endif
+            </td>
+
+            {{-- Precio con IVA --}}
+            <td class="px-2 py-2 text-center whitespace-nowrap">
+              ${{ number_format($prod->precio_con_iva, 2) }}
+            </td>
+
+            {{-- Subcategoría (solo xl+) --}}
+            <td class="px-2 py-2 text-center hidden xl:table-cell truncate"
+                title="{{ $prod->subcategoria->nombre ?? '-' }}">
+              {{ $prod->subcategoria->nombre ?? '-' }}
+            </td>
+
+            {{-- Stock total --}}
+            <td class="px-2 py-2 text-center whitespace-nowrap">
+              {{ $prod->es_inventariable ? $prod->bodegas->sum(fn($b) => $b->pivot->stock) : '—' }}
+            </td>
+
+            {{-- CPU Global (solo 2xl+) --}}
+            <td class="px-2 py-2 text-center hidden 2xl:table-cell whitespace-nowrap">
+              {{ is_null($prod->costo_promedio_global) ? '—' : number_format($prod->costo_promedio_global, 2) }}
+            </td>
+
+            {{-- Estado --}}
+            <td class="px-2 py-2 text-center">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-full
+                {{ $prod->activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
+                @if ($prod->activo)
+                  <i class="fas fa-check-circle"></i> Activo
                 @else
-                  <div class="h-10 w-10 rounded-lg bg-gray-200 dark:bg-gray-700 grid place-items-center text-gray-400">
-                    <i class="fas fa-image"></i>
-                  </div>
+                  <i class="fas fa-times-circle"></i> Inactivo
                 @endif
-              </td>
+              </span>
+            </td>
 
-              <td class="p-3">{{ $prod->nombre }}</td>
-              <td class="p-3">{{ $prod->descripcion }}</td>
-
-              {{-- Tipo Inventariable / Servicio --}}
-              <td class="p-3 text-center">
-                <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full
-                  {{ $prod->es_inventariable ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700' }}">
-                  <i class="{{ $prod->es_inventariable ? 'fas fa-box' : 'fas fa-concierge-bell' }}"></i>
-                  {{ $prod->es_inventariable ? 'Inventariable' : 'Servicio' }}
-                </span>
-              </td>
-
-              {{-- UM --}}
-              <td class="p-3 text-center">
-                @if($prod->unidadMedida)
-                  {{ $prod->unidadMedida->nombre }}
-                  @if($prod->unidadMedida->simbolo) ({{ $prod->unidadMedida->simbolo }}) @endif
-                @else
-                  —
-                @endif
-              </td>
-
-              <td class="p-3 text-center">{{ number_format($prod->precio, 2) }}</td>
-              <td class="p-3 text-center">
-                {{ $prod->impuesto?->nombre ?? '—' }}
-                @if($prod->impuesto)
-                  @if(!is_null($prod->impuesto->porcentaje))
-                    ({{ number_format($prod->impuesto->porcentaje, 2) }}%)
-                  @elseif(!is_null($prod->impuesto->monto_fijo))
-                    (${{ number_format($prod->impuesto->monto_fijo, 2) }})
-                  @endif
-                @endif
-              </td>
-              <td class="p-3 text-center">${{ number_format($prod->precio_con_iva, 2) }}</td>
-
-              {{-- Resumen cuentas --}}
-              {{-- <td class="p-3">
-                @if(($prod->mov_contable_segun ?? null) === \App\Models\Productos\Producto::MOV_SEGUN_SUBCATEGORIA)
-                  <span class="text-xs inline-flex items-center px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
-                    Según subcategoría
-                  </span>
-                @elseif($prod->relationLoaded('cuentas') && $prod->cuentas->count())
-                  <div class="flex flex-wrap gap-1">
-                    @foreach($prod->cuentas as $pc)
-                      <span class="inline-flex items-center px-2 py-0.5 text-[11px] rounded-full bg-gray-100 dark:bg-gray-700">
-                        <span class="font-semibold mr-1">{{ $pc->tipo->nombre ?? 'Tipo' }}</span>
-                        <span class="text-gray-500">|</span>
-                        <span class="ml-1">{{ $pc->cuentaPUC?->codigo }}</span>
-                      </span>
-                    @endforeach
-                  </div>
-                @else
-                  <span class="text-gray-400 italic text-xs">Sin cuentas</span>
-                @endif
-              </td> --}}
-
-              <td class="p-3 text-center">{{ $prod->subcategoria->nombre ?? '-' }}</td>
-
-              {{-- Stock total (— si servicio) --}}
-              <td class="p-3 text-center">
-                {{ $prod->es_inventariable ? $prod->bodegas->sum(fn($b) => $b->pivot->stock) : '—' }}
-              </td>
-
-              {{-- NUEVO: Costo promedio global (CPU) --}}
-             <td class="p-3 text-center">
-                {{ is_null($prod->costo_promedio_global) ? '—' : number_format($prod->costo_promedio_global, 2) }}
-              </td>
-
-
-              {{-- Estado --}}
-              <td class="p-3 text-center">
-                <span class="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-full {{ $prod->activo ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700' }}">
-                  @if ($prod->activo) <i class="fas fa-check-circle"></i> Activo @else <i class="fas fa-times-circle"></i> Inactivo @endif
-                </span>
-              </td>
-
-              {{-- Ver bodegas (solo inventariable) --}}
-              <td class="p-3 text-center">
-                @if ($prod->es_inventariable && $prod->bodegas && $prod->bodegas->count())
-                  <button wire:click="$toggle('mostrarBodegas.{{ $prod->id }}')" class="text-indigo-600 hover:text-indigo-800 text-lg" title="Ver bodegas">
-                    <i class="fas fa-eye"></i>
-                  </button>
-                @elseif(!$prod->es_inventariable)
-                  <span class="text-gray-400 italic text-xs">Servicio</span>
-                @else
-                  <span class="text-gray-400 italic text-xs">Sin Bodegas</span>
-                @endif
-              </td>
-
-              {{-- Acciones --}}
-              <td class="p-3 text-center space-x-2">
-                <button wire:click="edit({{ $prod->id }})" class="text-blue-600 hover:text-blue-800 transition-colors" title="Editar">
-                  <i class="fas fa-edit"></i>
+            {{-- Ver bodegas --}}
+            <td class="px-2 py-2 text-center">
+              @if ($prod->es_inventariable && $prod->bodegas && $prod->bodegas->count())
+                <button wire:click="$toggle('mostrarBodegas.{{ $prod->id }}')"
+                  class="text-indigo-600 hover:text-indigo-800 text-base" title="Ver bodegas">
+                  <i class="fas fa-eye"></i>
                 </button>
+              @elseif(!$prod->es_inventariable)
+                <span class="text-gray-400 italic text-[11px]">Serv.</span>
+              @else
+                <span class="text-gray-400 italic text-[11px]">—</span>
+              @endif
+            </td>
+
+            {{-- Acciones --}}
+            <td class="px-2 py-2 text-center">
+              <button wire:click="edit({{ $prod->id }})"
+                class="text-blue-600 hover:text-blue-800 transition-colors" title="Editar">
+                <i class="fas fa-edit"></i>
+              </button>
+            </td>
+          </tr>
+
+          {{-- Detalle bodegas (solo si inventariable) --}}
+          @if ($prod->es_inventariable && !empty($mostrarBodegas[$prod->id]) && $prod->bodegas)
+            <tr>
+              <td colspan="15" class="bg-gray-100 dark:bg-gray-700 p-3">
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-xs text-gray-700 dark:text-gray-300">
+                    <thead class="bg-violet-200 dark:bg-violet-700 text-gray-800 dark:text-white">
+                      <tr class="whitespace-nowrap">
+                        <th class="p-2 text-left">Código</th>
+                        <th class="p-2 text-left">Bodega</th>
+                        <th class="p-2 text-center">Stock</th>
+                        <th class="p-2 text-center">Min</th>
+                        <th class="p-2 text-center">Max</th>
+                        <th class="p-2 text-center">Condición</th>
+                        <th class="p-2 text-center">Últ. Costo</th>
+                        <th class="p-2 text-center">CPU</th>
+                        <th class="p-2 text-center">Método</th>
+                      </tr>
+                    </thead>
+
+                    <tbody class="divide-y divide-gray-300 dark:divide-gray-600">
+                      @foreach($prod->bodegas as $bodega)
+                        @php
+                          $stock  = $bodega->pivot->stock;
+                          $minimo = $bodega->pivot->stock_minimo;
+                          $maximo = $bodega->pivot->stock_maximo;
+                          $ultimo = $bodega->pivot->ultimo_costo;
+                          $cpu    = $bodega->pivot->costo_promedio;
+                          $metodo = $bodega->pivot->metodo_costeo;
+                        @endphp
+
+                        <tr class="whitespace-nowrap">
+                          <td class="p-2">{{ $bodega->id }}</td>
+                          <td class="p-2">{{ $bodega->nombre }}</td>
+                          <td class="p-2 text-center">{{ $stock }}</td>
+                          <td class="p-2 text-center">{{ $minimo }}</td>
+                          <td class="p-2 text-center">{{ $maximo ?? '-' }}</td>
+
+                          <td class="p-2 text-center">
+                            @if ($stock == 0)
+                              <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold bg-red-100 text-red-700 rounded-full">
+                                <i class="fas fa-times-circle mr-1"></i> Sin
+                              </span>
+                            @elseif ($stock < $minimo)
+                              <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold bg-yellow-100 text-yellow-800 rounded-full">
+                                <i class="fas fa-exclamation-triangle mr-1"></i> Bajo
+                              </span>
+                            @elseif (!is_null($maximo) && $stock > $maximo)
+                              <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold bg-blue-100 text-blue-800 rounded-full">
+                                <i class="fas fa-boxes mr-1"></i> Alto
+                              </span>
+                            @else
+                              <span class="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold bg-green-100 text-green-700 rounded-full">
+                                <i class="fas fa-check-circle mr-1"></i> OK
+                              </span>
+                            @endif
+                          </td>
+
+                          <td class="p-2 text-center">
+                            {{ is_null($ultimo) ? '—' : number_format((float)$ultimo, 6) }}
+                          </td>
+                          <td class="p-2 text-center">
+                            {{ is_null($cpu) ? '—' : number_format((float)$cpu, 6) }}
+                          </td>
+                          <td class="p-2 text-center">
+                            {{ $metodo ?: '—' }}
+                          </td>
+                        </tr>
+                      @endforeach
+                    </tbody>
+                  </table>
+                </div>
               </td>
             </tr>
+          @endif
 
-            {{-- Detalle bodegas (solo si inventariable) --}}
-            @if ($prod->es_inventariable && !empty($mostrarBodegas[$prod->id]) && $prod->bodegas)
-              <tr>
-                <td colspan="16" class="bg-gray-100 dark:bg-gray-700 p-4"> {{-- ajustado: antes 15 --}}
-                  <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm text-gray-700 dark:text-gray-300">
-                      <thead class="bg-violet-200 dark:bg-violet-700 text-gray-800 dark:text-white">
-                        <tr>
-                          <th class="p-2 text-left">Código</th>
-                          <th class="p-2 text-left">Bodega</th>
-                          <th class="p-2 text-center">Stock</th>
-                          <th class="p-2 text-center">Stock Mínimo</th>
-                          <th class="p-2 text-center">Stock Máximo</th>
-                          <th class="p-2 text-center">Condición</th>
-                          <th class="p-2 text-center">Último Costo</th>      {{-- NUEVO --}}
-                          <th class="p-2 text-center">Costo Promedio</th>    {{-- NUEVO --}}
-                          <th class="p-2 text-center">Método</th>            {{-- NUEVO --}}
-                        </tr>
-                      </thead>
-                      <tbody class="divide-y divide-gray-300 dark:divide-gray-600">
-                        @foreach($prod->bodegas as $bodega)
-                          @php
-                            $stock  = $bodega->pivot->stock;
-                            $minimo = $bodega->pivot->stock_minimo;
-                            $maximo = $bodega->pivot->stock_maximo;
-                            $ultimo = $bodega->pivot->ultimo_costo;
-                            $cpu    = $bodega->pivot->costo_promedio;
-                            $metodo = $bodega->pivot->metodo_costeo;
-                          @endphp
-                          <tr>
-                            <td class="p-2">{{ $bodega->id }}</td>
-                            <td class="p-2">{{ $bodega->nombre }}</td>
-                            <td class="p-2 text-center">{{ $stock }}</td>
-                            <td class="p-2 text-center">{{ $minimo }}</td>
-                            <td class="p-2 text-center">{{ $maximo ?? '-' }}</td>
-                            <td class="p-2 text-center">
-                              @if ($stock == 0)
-                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-red-100 text-red-700 rounded-full">
-                                  <i class="fas fa-times-circle mr-1"></i> Sin stock
-                                </span>
-                              @elseif ($stock < $minimo)
-                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded-full">
-                                  <i class="fas fa-exclamation-triangle mr-1"></i> Stock bajo
-                                </span>
-                              @elseif (!is_null($maximo) && $stock > $maximo)
-                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
-                                  <i class="fas fa-boxes mr-1"></i> Sobre stock
-                                </span>
-                              @else
-                                <span class="inline-flex items-center px-2 py-1 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
-                                  <i class="fas fa-check-circle mr-1"></i> Abastecido
-                                </span>
-                              @endif
-                            </td>
+        @empty
+          <tr>
+            <td colspan="15" class="p-4 text-center text-gray-500 dark:text-gray-400 italic">
+              No hay productos registrados.
+            </td>
+          </tr>
+        @endforelse
+      </tbody>
 
-                            {{-- NUEVAS CELDAS DE COSTOS --}}
-                            <td class="p-2 text-center">
-                              {{ is_null($ultimo) ? '—' : number_format((float)$ultimo, 6) }}
-                            </td>
-                            <td class="p-2 text-center">
-                              {{ is_null($cpu) ? '—' : number_format((float)$cpu, 6) }}
-                            </td>
-                            <td class="p-2 text-center">
-                              {{ $metodo ?: '—' }}
-                            </td>
-                          </tr>
-                        @endforeach
-                      </tbody>
-                    </table>
-                  </div>
-                </td>
-              </tr>
-            @endif
-          @empty
-            <tr>
-              <td colspan="16" class="p-4 text-center text-gray-500 dark:text-gray-400 italic">No hay productos registrados.</td>
-            </tr>
-          @endforelse
-        </tbody>
-      </table>
-    </div>
-  </section>
+    </table>
+  </div>
+</section>
 
   {{-- ===================== MODAL: Configurar Cuentas ===================== --}}
   @if($showCuentasModal)

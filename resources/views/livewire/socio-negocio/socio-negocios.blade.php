@@ -26,8 +26,10 @@
     showPedidosModal: false,
     showDireccionesModal: @entangle('showDireccionesModal').live,
     tab: 'list'
-}" x-init="window.addEventListener('abrir-modal-pedidos', () => { showPedidosModal = true;
-    tab = 'list' });" wire:init="loadListas" class="p-6 md:p-8 space-y-6">
+}" x-init="window.addEventListener('abrir-modal-pedidos', () => {
+    showPedidosModal = true;
+    tab = 'list'
+});" wire:init="loadListas" class="p-6 md:p-8 space-y-6">
 
     {{-- ================= HERO ================= --}}
     @php $sociosTotal = collect($clientes)->concat($proveedores)->count(); @endphp
@@ -125,15 +127,12 @@
                 </div>
             </div>
         </div>
-    </section>
+        @php
+            $socios = collect($clientes)->concat($proveedores);
+        @endphp
 
-    {{-- ================= LISTA (Cards móvil / Tabla desktop) ================= --}}
-    @php
-        $socios = collect($clientes)->concat($proveedores);
-    @endphp
 
-    <section
-        class="rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 shadow-2xl overflow-hidden">
+       
         <header
             class="px-6 md:px-8 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <div class="flex items-center gap-3">
@@ -398,7 +397,10 @@
                 </table>
             </div>
         </div>
+
+
     </section>
+
 
     {{-- ================= MODAL: Cuentas contables ================= --}}
     <div class="fixed inset-0 z-50 grid place-items-center bg-black/50 backdrop-blur-sm"

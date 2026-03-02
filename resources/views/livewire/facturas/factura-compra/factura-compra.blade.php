@@ -3,26 +3,32 @@
 @once
     @push('styles')
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
     @endpush
 @endonce
 
 @once
     @push('scripts')
         <script>
-            // Evita conflictos: Alpine espera a que Livewire inicie
+            // Evita conflictos: Alpine espera a Livewire
             window.deferLoadingAlpine = (alpineInit) => {
                 document.addEventListener('livewire:init', alpineInit)
             }
         </script>
         <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+        {{-- TomSelect --}}
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
     @endpush
 @endonce
 
 <div x-data="{
     goPicker() {
         const el = document.querySelector('[data-first-product]');
-        if (el) { el.focus();
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        if (el) {
+            el.focus();
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
     }
 }" x-on:keydown.window.ctrl.k.prevent="goPicker()"
     x-on:keydown.window.meta.k.prevent="goPicker()" class="p-6 md:p-8">
@@ -328,10 +334,33 @@
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
                         @forelse($lineas as $i => $l)
                             @php
-                                $cant = max(1, (float) $l['cantidad']);
+                                // =========================
+                                // Cantidad (cálculo vs UI)
+                                // =========================
+                                $cantRaw = $l['cantidad'] ?? null;
+
+                                // ✅ Para cálculos: vacío/null/no numérico => 0
+                                $cant =
+                                    $cantRaw === '' || $cantRaw === null || !is_numeric($cantRaw)
+                                        ? 0.0
+                                        : (float) $cantRaw;
+
+                                // ✅ Para UI: si es null/''/0 => mostrar vacío (evita que aparezca "1")
+                                $cantidadUI = $l['cantidad'] ?? null;
+                                $cantidadValue =
+                                    $cantidadUI === null ||
+                                    $cantidadUI === '' ||
+                                    (is_numeric($cantidadUI) && (float) $cantidadUI == 0.0)
+                                        ? ''
+                                        : $cantidadUI;
+
+                                // =========================
+                                // Cálculos de línea
+                                // =========================
                                 $costo = max(0, (float) ($l['precio_unitario'] ?? ($l['costo_unitario'] ?? 0)));
                                 $desc = min(100, max(0, (float) ($l['descuento_pct'] ?? 0)));
                                 $ivaP = min(100, max(0, (float) ($l['impuesto_pct'] ?? 0)));
+
                                 $base = $cant * $costo * (1 - $desc / 100);
                                 $ivaMonto = round(($base * $ivaP) / 100, 2);
                                 $totalLin = round($base + $ivaMonto, 2);
@@ -339,11 +368,15 @@
                                 $prodSel = !empty($l['producto_id'])
                                     ? $productos->firstWhere('id', $l['producto_id'])
                                     : null;
+
                                 $imgUrl = $prodSel?->imagen_url ?? null;
+
+                                $cuentaSelId = (int) ($l['cuenta_inventario_id'] ?? 0);
                             @endphp
 
                             <tr wire:key="linea-{{ $i }}"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+
                                 {{-- Imagen --}}
                                 <td class="px-4 py-3 w-[72px]">
                                     <div
@@ -375,7 +408,9 @@
 
                                 {{-- Producto --}}
                                 <td class="px-4 py-3 min-w-[260px]">
-                                    <select data-first-product
+                                    <select
+                                        wire:key="producto-{{ $i }}-{{ (int) ($lineas[$i]['producto_id'] ?? 0) }}"
+                                        @if ($i === 0) data-first-product @endif
                                         wire:model.live="lineas.{{ $i }}.producto_id"
                                         wire:change="setProducto({{ $i }}, $event.target.value)"
                                         class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
@@ -384,14 +419,14 @@
                                             <option value="{{ $p->id }}">{{ $p->nombre }}</option>
                                         @endforeach
                                     </select>
+
+                                    @error('lineas.' . $i . '.producto_id')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
                                 </td>
 
                                 {{-- Cuenta contable (solo lectura) --}}
-                                {{-- Cuenta contable (Inventario / Gasto sugerida) --}}
                                 <td class="px-4 py-3 min-w-[200px]">
-                                    @php
-                                        $cuentaSelId = (int) ($l['cuenta_inventario_id'] ?? 0);
-                                    @endphp
                                     <div class="space-y-1">
                                         <select
                                             wire:model.live.number="lineas.{{ $i }}.cuenta_inventario_id"
@@ -399,7 +434,6 @@
                                             disabled>
                                             <option value="">— Seleccione —</option>
 
-                                            {{-- Opción sugerida por producto/proveedor --}}
                                             @if ($cuentaSelId && isset($pucIndex[$cuentaSelId]))
                                                 @php $c = $pucIndex[$cuentaSelId]; @endphp
                                                 <option value="{{ $cuentaSelId }}">
@@ -407,7 +441,6 @@
                                                 </option>
                                             @endif
 
-                                            {{-- Catálogo opcional para mostrar (si quieres listar) --}}
                                             @if (!empty($cuentasInventario) && $cuentasInventario->count())
                                                 <optgroup label="PUC · Inventario / Gastos de compra">
                                                     @foreach ($cuentasInventario as $cu)
@@ -422,13 +455,9 @@
                                             <p class="text-xs text-red-600">{{ $message }}</p>
                                         @enderror
 
-                                        {{-- Hint visual --}}
-                                        @if (!$cuentaSelId)
-                                            <p class="text-[11px] text-slate-500">
-                                        @endif
+
                                     </div>
                                 </td>
-
 
                                 {{-- Descripción --}}
                                 <td class="px-4 py-3 min-w-[200px]">
@@ -448,10 +477,12 @@
                                     </select>
                                 </td>
 
-                                {{-- Cantidad --}}
+                                {{-- Cantidad (✅ vacío visual cuando es 0/null/'' ) --}}
                                 <td class="px-4 py-3 text-right">
-                                    <input type="number" step="1" min="1"
-                                        wire:model.live.debounce.200ms="lineas.{{ $i }}.cantidad"
+                                    <input type="number" step="1" min="0" placeholder="—"
+                                        value="{{ $cantidadValue }}"
+                                        wire:model.lazy="lineas.{{ $i }}.cantidad"
+                                        wire:blur="normalizarCantidad({{ $i }})"
                                         class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                                 </td>
 
@@ -509,7 +540,8 @@
 
                                 {{-- Total línea --}}
                                 <td class="px-4 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">
-                                    ${{ number_format($totalLin, 2) }}</td>
+                                    ${{ number_format($totalLin, 2) }}
+                                </td>
 
                                 {{-- Acciones --}}
                                 <td class="px-4 py-3 text-right">
@@ -532,13 +564,13 @@
                         @empty
                             <tr>
                                 <td colspan="13" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                    No hay líneas. Usa <button type="button" class="text-violet-600 hover:underline"
+                                    No hay líneas. Usa
+                                    <button type="button" class="text-violet-600 hover:underline"
                                         wire:click="addLinea">+ Línea</button>.
                                 </td>
                             </tr>
                         @endforelse
                     </tbody>
-
                     <tfoot class="bg-gray-50 dark:bg-gray-800/40">
                         <tr>
                             <td colspan="10"></td>
@@ -655,7 +687,7 @@
                                         <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium"
                                             x-text="estado === 'anulada' ? 'Anulada' : (estado === 'cerrado' ? 'Cerrada' : 'Fin')">
                                         </div>
-                                        <div class="hidden md:block text-xs text-slate-500">—</div>
+
                                     </li>
                                 </ol>
                             </div>
@@ -690,4 +722,43 @@
             </div>
         </footer>
     </section>
+
 </div>
+<script>
+    document.addEventListener('livewire:init', () => {
+
+        const initProductoSelects = () => {
+            document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                const index = parseInt(el.dataset.linea || '0', 10);
+
+                // 🔥 evitar instancias duplicadas
+                if (el.tomselect) {
+                    el.tomselect.destroy();
+                }
+
+                new TomSelect(el, {
+                    placeholder: '— Seleccione —',
+                    allowEmptyOption: true,
+                    closeAfterSelect: true,
+                    maxOptions: 1000,
+                    plugins: ['dropdown_input'],
+                    onChange: (value) => {
+                        const pid = value ? parseInt(value, 10) : null;
+                        Livewire.dispatch('set-producto-linea', {
+                            index,
+                            productoId: pid
+                        });
+                    }
+                });
+            });
+        };
+
+        initProductoSelects();
+
+        // cada vez que Livewire re-renderiza, reenganchar tomselect
+        Livewire.hook('message.processed', () => {
+            initProductoSelects();
+        });
+
+    });
+</script>

@@ -94,11 +94,11 @@ class FacturaCompra extends Component
         'lineas.*.impuesto_pct'          => 'porcentaje de impuesto',
     ];
 
-   #[On('abrir-factura')]
-public function abrir(int $id): void
-{
-    $this->cargarFactura($id);
-}
+    #[On('abrir-factura')]
+    public function abrir(int $id): void
+    {
+        $this->cargarFactura($id);
+    }
 
     /* ======================
      *  Inicialización
@@ -113,11 +113,11 @@ public function abrir(int $id): void
             ->where(fn($q) => $q->whereNull('titulo')->orWhere('titulo', 0))
             ->where(function ($q) {
                 $q->where('codigo', 'like', '1%')   // Activo (Inventarios)
-                  ->orWhere('codigo', 'like', '5%') // Gastos
-                  ->orWhere('codigo', 'like', '6%'); // Costos
+                    ->orWhere('codigo', 'like', '5%') // Gastos
+                    ->orWhere('codigo', 'like', '6%'); // Costos
             })
             ->orderBy('codigo')
-            ->get(['id','codigo','nombre']);
+            ->get(['id', 'codigo', 'nombre']);
 
         $this->pucIndex = $this->cuentasInventario
             ->keyBy('id')
@@ -318,7 +318,10 @@ public function abrir(int $id): void
      * ========================= */
     private function tipoIngresoId(): ?int
     {
-        return cache()->remember('producto_cuenta_tipo_ingreso_id', 600, fn () =>
+        return cache()->remember(
+            'producto_cuenta_tipo_ingreso_id',
+            600,
+            fn() =>
             ProductoCuentaTipo::query()->where('codigo', 'INGRESO')->value('id')
         );
     }
@@ -358,117 +361,149 @@ public function abrir(int $id): void
     }
 
     /** Resolver cuenta INVENTARIO por artículo/subcategoría */
-  private function resolveCuentaInventarioParaProducto(Producto $p): ?int
-{
-    // Si tiene cuenta directa en el producto
-    if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
+    private function resolveCuentaInventarioParaProducto(Producto $p): ?int
+    {
+        // Si tiene cuenta directa en el producto
+        if (!empty($p->cuenta_inventario_id)) return (int)$p->cuenta_inventario_id;
 
-    // Orden de prioridad según TU base de datos
-    $tiposInventario = ['INVENTARIO', 'COSTO'];
+        // Orden de prioridad según TU base de datos
+        $tiposInventario = ['INVENTARIO', 'COSTO'];
 
-    foreach ($tiposInventario as $codigoTipo) {
-        $tipoId = cache()->remember("producto_cuenta_tipo_{$codigoTipo}_id", 600, fn () =>
-            ProductoCuentaTipo::query()->where('codigo', $codigoTipo)->value('id')
-        );
-        
-        if (!$tipoId) continue;
+        foreach ($tiposInventario as $codigoTipo) {
+            $tipoId = cache()->remember(
+                "producto_cuenta_tipo_{$codigoTipo}_id",
+                600,
+                fn() =>
+                ProductoCuentaTipo::query()->where('codigo', $codigoTipo)->value('id')
+            );
 
-        $cuenta = $this->resolverCuentaPorTipo($p, (int)$tipoId);
-        if ($cuenta) return $cuenta;
-    }
+            if (!$tipoId) continue;
 
-    return null;
-}
-
-private function resolveCuentaGastoParaProducto(Producto $p): ?int
-{
-    // Orden de prioridad según TU base de datos
-    $tiposGasto = ['GASTO', 'COSTO'];
-
-    foreach ($tiposGasto as $codigoTipo) {
-        $tipoId = cache()->remember("producto_cuenta_tipo_{$codigoTipo}_id", 600, fn () =>
-            ProductoCuentaTipo::query()->where('codigo', $codigoTipo)->value('id')
-        );
-        
-        if (!$tipoId) continue;
-
-        $cuenta = $this->resolverCuentaPorTipo($p, (int)$tipoId);
-        if ($cuenta) return $cuenta;
-    }
-
-    return null;
-}
-
-/**
- * 🔑 Helper: Resuelve cuenta por tipo según MOV_SEGUN (ARTICULO o SUBCATEGORIA)
- */
-private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
-{
-    // Estrategia 1: Por ARTÍCULO (busca en producto_cuentas)
-    if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-        // Intentar con relaciones cargadas
-        if ($p->relationLoaded('cuentas')) {
-            $cuenta = $p->cuentas->firstWhere('tipo_id', $tipoId);
-            if ($cuenta && $cuenta->plan_cuentas_id) {
-                return (int)$cuenta->plan_cuentas_id;
-            }
+            $cuenta = $this->resolverCuentaPorTipo($p, (int)$tipoId);
+            if ($cuenta) return $cuenta;
         }
 
-        // Consulta directa si no está cargado
-        $cuenta = \App\Models\Productos\ProductoCuenta::query()
-            ->where('producto_id', $p->id)
-            ->where('tipo_id', $tipoId)
-            ->first();
-
-        return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
+        return null;
     }
 
-    // Estrategia 2: Por SUBCATEGORÍA (busca en subcategoria_cuentas)
-    if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
-        if (!$p->subcategoria_id) return null;
+    private function resolveCuentaGastoParaProducto(Producto $p): ?int
+    {
+        // Orden de prioridad según TU base de datos
+        $tiposGasto = ['GASTO', 'COSTO'];
 
-        // Intentar con relaciones cargadas
-        if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
-            $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', $tipoId);
-            if ($sc && $sc->plan_cuentas_id) {
-                return (int)$sc->plan_cuentas_id;
-            }
+        foreach ($tiposGasto as $codigoTipo) {
+            $tipoId = cache()->remember(
+                "producto_cuenta_tipo_{$codigoTipo}_id",
+                600,
+                fn() =>
+                ProductoCuentaTipo::query()->where('codigo', $codigoTipo)->value('id')
+            );
+
+            if (!$tipoId) continue;
+
+            $cuenta = $this->resolverCuentaPorTipo($p, (int)$tipoId);
+            if ($cuenta) return $cuenta;
         }
 
-        // Consulta directa si no está cargado
-        $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
-            ->where('subcategoria_id', (int)$p->subcategoria_id)
-            ->where('tipo_id', $tipoId)
-            ->first();
-
-        return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+        return null;
     }
 
-    return null;
-}
+    /**
+     * 🔑 Helper: Resuelve cuenta por tipo según MOV_SEGUN (ARTICULO o SUBCATEGORIA)
+     */
+    private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
+    {
+        // Estrategia 1: Por ARTÍCULO (busca en producto_cuentas)
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+            // Intentar con relaciones cargadas
+            if ($p->relationLoaded('cuentas')) {
+                $cuenta = $p->cuentas->firstWhere('tipo_id', $tipoId);
+                if ($cuenta && $cuenta->plan_cuentas_id) {
+                    return (int)$cuenta->plan_cuentas_id;
+                }
+            }
 
-   private function normalizeLinea(array &$l): void
-{
-    if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
-        $l['precio_unitario'] = (float)$l['costo_unitario'];
+            // Consulta directa si no está cargado
+            $cuenta = \App\Models\Productos\ProductoCuenta::query()
+                ->where('producto_id', $p->id)
+                ->where('tipo_id', $tipoId)
+                ->first();
+
+            return $cuenta?->plan_cuentas_id ? (int)$cuenta->plan_cuentas_id : null;
+        }
+
+        // Estrategia 2: Por SUBCATEGORÍA (busca en subcategoria_cuentas)
+        if ($p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) {
+            if (!$p->subcategoria_id) return null;
+
+            // Intentar con relaciones cargadas
+            if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
+                $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', $tipoId);
+                if ($sc && $sc->plan_cuentas_id) {
+                    return (int)$sc->plan_cuentas_id;
+                }
+            }
+
+            // Consulta directa si no está cargado
+            $sc = \App\Models\Categorias\SubcategoriaCuenta::query()
+                ->where('subcategoria_id', (int)$p->subcategoria_id)
+                ->where('tipo_id', $tipoId)
+                ->first();
+
+            return $sc?->plan_cuentas_id ? (int)$sc->plan_cuentas_id : null;
+        }
+
+        return null;
     }
 
-    $cant   = (float)($l['cantidad'] ?? 0);
-    $precio = (float)($l['precio_unitario'] ?? 0);
-    $desc   = (float)($l['descuento_pct'] ?? 0);
-    $iva    = (float)($l['impuesto_pct'] ?? 0);
+    private function normalizeLinea(array &$l): void
+    {
+        if (isset($l['costo_unitario']) && (!isset($l['precio_unitario']) || (float)$l['precio_unitario'] <= 0)) {
+            $l['precio_unitario'] = (float)$l['costo_unitario'];
+        }
 
-   
-    $l['cantidad']        = max(0.0, round(is_finite($cant)   ? $cant   : 0, 3));
-    $l['precio_unitario'] = max(0.0, round(is_finite($precio) ? $precio : 0, 2));
-    $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-    $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
-}
+        $cant   = (float)($l['cantidad'] ?? 0);
+        $precio = (float)($l['precio_unitario'] ?? 0);
+        $desc   = (float)($l['descuento_pct'] ?? 0);
+        $iva    = (float)($l['impuesto_pct'] ?? 0);
+
+
+        $l['cantidad']        = max(0.0, round(is_finite($cant)   ? $cant   : 0, 3));
+        $l['precio_unitario'] = max(0.0, round(is_finite($precio) ? $precio : 0, 2));
+        $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
+        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+    }
 
     public function normalizarPrecio(int $i): void
     {
         if (!isset($this->lineas[$i]) || $this->bloqueada) return;
         $this->lineas[$i]['precio_unitario'] = max(0.0, (float)($this->lineas[$i]['precio_unitario'] ?? 0));
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->dispatch('$refresh');
+    }
+
+
+    public function normalizarCantidad(int $i): void
+    {
+        if ($this->bloqueada) return;
+        if (!isset($this->lineas[$i])) return;
+
+        $raw = $this->lineas[$i]['cantidad'] ?? null;
+
+        // ✅ si está vacío, se queda vacío
+        if ($raw === '' || $raw === null) {
+            $this->lineas[$i]['cantidad'] = null;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->dispatch('$refresh');
+            return;
+        }
+
+        $cant = (float) $raw;
+
+        // ✅ si es inválido o negativo → 0 (no 1)
+        if (!is_finite($cant) || $cant < 0) $cant = 0;
+
+        $this->lineas[$i]['cantidad'] = round($cant, 3);
         $this->normalizeLinea($this->lineas[$i]);
         $this->dispatch('$refresh');
     }
@@ -495,7 +530,7 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
             return;
         }
 
-        if (preg_match('/^lineas\.(\d+)\.(cantidad|descuento_pct|impuesto_pct)$/', $name, $m)) {
+        if (preg_match('/^lineas\.(\d+)\.(descuento_pct|impuesto_pct)$/', $name, $m)) {
             $i = (int) $m[1];
             $this->stockCheck = $i;
             if (isset($this->lineas[$i])) {
@@ -611,7 +646,7 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
             'cuenta_inventario_id'  => null,
             'bodega_id'             => null,
             'descripcion'           => null,
-            'cantidad'              => 1,
+            'cantidad'              => null,
             'precio_unitario'       => 0,
             'descuento_pct'         => 0,
             'impuesto_id'           => null,
@@ -906,56 +941,65 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
         $this->plazo_dias = $dias;
         $base = $this->fecha ?: now()->toDateString();
         $this->vencimiento = $this->calcularVencimiento($base, $dias);
-        $this->resetErrorBag(['vencimiento','condicion_pago_id','plazo_dias']);
+        $this->resetErrorBag(['vencimiento', 'condicion_pago_id', 'plazo_dias']);
         $this->dispatch('$refresh');
     }
 
-  public function getSubtotalProperty(): float
-{
-    $s = 0.0;
+    public function getSubtotalProperty(): float
+    {
+        $s = 0.0;
 
-    foreach ($this->lineas as $l) {
-        $cant   = (float)($l['cantidad'] ?? 0);
-        $precio = max(0, (float)($l['precio_unitario'] ?? 0));
-        $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+        foreach ($this->lineas as $l) {
+            $cant   = (float)($l['cantidad'] ?? 0);
+            $precio = max(0, (float)($l['precio_unitario'] ?? 0));
+            $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
 
-        if ($cant <= 0) {
-            continue;
+            if ($cant <= 0) {
+                continue;
+            }
+
+            $base = $cant * $precio * (1 - $desc / 100);
+            $s   += $base;
         }
 
-        $base = $cant * $precio * (1 - $desc / 100);
-        $s   += $base;
+        return round($s, 2);
     }
 
-    return round($s, 2);
-}
+    public function getImpuestosTotalProperty(): float
+    {
+        $i = 0.0;
 
-   public function getImpuestosTotalProperty(): float
-{
-    $i = 0.0;
+        foreach ($this->lineas as $l) {
+            $cant   = (float)($l['cantidad'] ?? 0);
+            $precio = max(0, (float)($l['precio_unitario'] ?? 0));
+            $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+            $iva    = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
 
-    foreach ($this->lineas as $l) {
-        $cant   = (float)($l['cantidad'] ?? 0);
-        $precio = max(0, (float)($l['precio_unitario'] ?? 0));
-        $desc   = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
-        $iva    = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
+            if ($cant <= 0) {
+                continue;
+            }
 
-        if ($cant <= 0) {
-            continue;
+            $base = $cant * $precio * (1 - $desc / 100);
+            $i   += $base * $iva / 100;
         }
 
-        $base = $cant * $precio * (1 - $desc / 100);
-        $i   += $base * $iva / 100;
+        return round($i, 2);
     }
-
-    return round($i, 2);
-}
 
     public function getTotalProperty(): float
     {
         return round($this->subtotal + $this->impuestosTotal, 2);
     }
+    #[On('set-producto-linea')]
+    public function setProductoLinea($index, $productoId)
+    {
+        $productoId = $productoId ? (int)$productoId : null;
 
+        $this->lineas[$index]['producto_id'] = $productoId;
+
+        // Si ya tienes tu método setProducto(), reutilízalo:
+        $this->setProducto($index, $productoId);
+    }
     protected function persistirBorrador(): void
     {
         if ($this->bloqueada) {
@@ -963,7 +1007,10 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
         }
 
         DB::transaction(function () {
-            if (!$this->factura) $this->factura = new Factura();
+
+            if (!$this->factura) {
+                $this->factura = new Factura();
+            }
 
             $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
 
@@ -984,20 +1031,34 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
                 $this->factura->forceFill($dataCab)->save();
             });
 
+            // 🔥 Si estás en modo "borrador", puedes borrar y recrear líneas
             $this->factura->detalles()->delete();
 
             $detallesPayload = [];
+
             foreach ($this->lineas as $l) {
+
+                // ✅ EVITA QUE SE GUARDE 1 CUANDO VIENE VACÍO/NULL
+                $cantidad = ($l['cantidad'] ?? null);
+
+                // Si viene '', null o no numérico => 0 (no forzar 1)
+                $cantidad = ($cantidad === '' || $cantidad === null || !is_numeric($cantidad))
+                    ? 0
+                    : (float) $cantidad;
+
                 $detallesPayload[] = [
-                    'producto_id'           => $l['producto_id'] ?? null,
-                    'cuenta_inventario_id'  => isset($l['cuenta_inventario_id']) ? (int)$l['cuenta_inventario_id'] : null,
-                    'bodega_id'             => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
-                    'descripcion'           => $l['descripcion'] ?? null,
-                    'cantidad'              => (float)($l['cantidad'] ?? 1),
-                    'precio_unitario'       => (float)($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
-                    'descuento_pct'         => (float)($l['descuento_pct'] ?? 0),
-                    'impuesto_id'           => $l['impuesto_id'] ?? null,
-                    'impuesto_pct'          => (float)($l['impuesto_pct'] ?? 0),
+                    'producto_id'          => $l['producto_id'] ?? null,
+                    'cuenta_inventario_id' => isset($l['cuenta_inventario_id']) ? (int) $l['cuenta_inventario_id'] : null,
+                    'bodega_id'            => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
+                    'descripcion'          => $l['descripcion'] ?? null,
+
+                    // ✅ aquí el fix
+                    'cantidad'             => $cantidad,
+
+                    'precio_unitario'      => (float) ($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
+                    'descuento_pct'        => (float) ($l['descuento_pct'] ?? 0),
+                    'impuesto_id'          => $l['impuesto_id'] ?? null,
+                    'impuesto_pct'         => (float) ($l['impuesto_pct'] ?? 0),
                 ];
             }
 
@@ -1027,7 +1088,7 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
                     'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                     'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
                 ])->find($l['producto_id']);
-                
+
                 if ($p) {
                     // Usar lógica según tipo
                     $l['cuenta_inventario_id'] = ($p->es_inventariable ?? true)
@@ -1045,10 +1106,10 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
             // 🔑 NUEVO: Validación personalizada para cuenta_inventario_id
             foreach ($this->lineas as $i => $l) {
                 if (empty($l['producto_id'])) continue;
-                
+
                 $p = Producto::find($l['producto_id']);
                 if (!$p) continue;
-                
+
                 // Si es inventariable, debe tener cuenta
                 if (($p->es_inventariable ?? true) && empty($l['cuenta_inventario_id'])) {
                     throw ValidationException::withMessages([
@@ -1056,7 +1117,7 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
                     ]);
                 }
             }
-            
+
             $this->validate($this->rules, [], $this->validationAttributes);
             return true;
         } catch (ValidationException $e) {
@@ -1111,7 +1172,7 @@ private function resolverCuentaPorTipo(Producto $p, int $tipoId): ?int
                     'prefijo'  => $this->serieDefault->prefijo,
                     'estado'   => 'emitida',
                 ]);
-                
+
                 \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
                 InventarioService::aumentarPorFacturaCompra($this->factura);
 

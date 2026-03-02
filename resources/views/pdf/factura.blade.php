@@ -1,11 +1,7 @@
 @php
   // ============ Normalización ============
-  if (isset($empresa) && is_array($empresa)) {
-      $empresa = (object) $empresa;
-  }
-  if (!isset($empresa) || $empresa === null) {
-      $empresa = (object) [];
-  }
+  if (isset($empresa) && is_array($empresa)) $empresa = (object) $empresa;
+  if (!isset($empresa) || $empresa === null) $empresa = (object) [];
 
   /** -----------------------------------------------------------
    *  Solo trabajar con el pdf_theme de la empresa
@@ -30,22 +26,10 @@
   // ✅ Logo: para PDF lo ideal es PATH absoluto.
   $logoSrc = null;
 
-  // 1) Si viene en DB como "empresas/logos/xxx.jpg" (recomendado)
-  if (!empty($empresa->logo_path)) {
-      $logoSrc = $empresa->logo_path;
-  }
-  // 2) Si viene como accessor url (http/https)
-  elseif (!empty($empresa->logo_url)) {
-      $logoSrc = $empresa->logo_url;
-  }
-  // 3) Si llega como "storage/..." o ruta ya armada
-  elseif (!empty($empresa->logo) && is_string($empresa->logo)) {
-      $logoSrc = $empresa->logo;
-  }
-  // 4) fallback
-  elseif (!empty($empresa->logo_src)) {
-      $logoSrc = $empresa->logo_src;
-  }
+  if (!empty($empresa->logo_path)) $logoSrc = $empresa->logo_path;
+  elseif (!empty($empresa->logo_url)) $logoSrc = $empresa->logo_url;
+  elseif (!empty($empresa->logo) && is_string($empresa->logo)) $logoSrc = $empresa->logo;
+  elseif (!empty($empresa->logo_src)) $logoSrc = $empresa->logo_src;
 
   // ✅ Convertir a PATH absoluto si no es URL/data
   $logoPdfSrc = null;
@@ -57,13 +41,7 @@
       ) {
           $logoPdfSrc = $logoSrc;
       } else {
-          // Si viene como "storage/..." lo pasamos a public_path
-          if (str_starts_with($logoSrc, 'storage/')) {
-              $logoPdfSrc = public_path($logoSrc);
-          } else {
-              // Si viene como "empresas/..." también es relativo a public/
-              $logoPdfSrc = public_path($logoSrc);
-          }
+          $logoPdfSrc = public_path($logoSrc); // sirve para storage/... o empresas/...
       }
   }
 
@@ -84,13 +62,42 @@
   $num  = $factura->numero !== null ? str_pad((string)$factura->numero, $len, '0', STR_PAD_LEFT) : '—';
   $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
   $folio = "{$pref}{$num}";
+
+  // =========================================================
+  // ✅ Detectar si es FACTURA DE COMPRA (si no, es REMISIÓN)
+  // =========================================================
+  $docCodigo = strtoupper((string)($documento ?? ($factura->serie->tipo->codigo ?? '')));
+
+  $esCompra = false;
+  if (isset($modo) && strtolower((string)$modo) === 'compra') {
+      $esCompra = true;
+  } elseif (!empty($factura->modo) && strtolower((string)$factura->modo) === 'compra') {
+      $esCompra = true;
+  } elseif (!empty($factura->es_compra)) {
+      $esCompra = true;
+  } elseif (str_contains($docCodigo, 'COMPRA')) {
+      $esCompra = true;
+  }
+
+  $docTitulo = $esCompra ? 'FACTURA DE COMPRA' : 'REMISIÓN';
+  $wmTexto   = $esCompra ? 'COMPRA' : 'REMISION';
+
+  // =========================================================
+  // ✅ Tercero: Proveedor en compra / Cliente en venta
+  // Ajusta si tu relación real se llama distinto.
+  // =========================================================
+  $tercero = $esCompra
+    ? ($factura->proveedor ?? $factura->socioNegocio ?? $factura->cliente ?? null)
+    : ($factura->cliente ?? $factura->socioNegocio ?? null);
+
+  $labelTercero = $esCompra ? 'Proveedor' : 'Cliente';
 @endphp
 
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Remisión {{ $folio }}</title>
+  <title>{{ $docTitulo }} {{ $folio }}</title>
 
   <style>
     /* ✅ Header con más espacio para logos grandes */
@@ -189,23 +196,11 @@
 
             {{-- ✅ LOGO OPTIMIZADO - Sin recortes, tamaño balanceado --}}
             @if(!empty($E['logo_src']))
-              <div style="
-                max-width:320px;
-                max-height:65px;
-                display:flex;
-                align-items:center;
-              ">
+              <div style="max-width:320px; max-height:65px; display:flex; align-items:center;">
                 <img
                   src="{{ $E['logo_src'] }}"
                   alt="Logo {{ $E['nombre'] }}"
-                  style="
-                    max-width:320px;
-                    max-height:65px;
-                    width:auto;
-                    height:auto;
-                    object-fit:contain;
-                    object-position:left center;
-                  ">
+                  style="max-width:320px; max-height:65px; width:auto; height:auto; object-fit:contain; object-position:left center;">
               </div>
             @else
               <div class="brand-name">{{ $E['nombre'] }}</div>
@@ -220,7 +215,7 @@
     </div>
 
     <div class="col right">
-      <div class="doc-title">REMISIÓN</div>
+      <div class="doc-title">{{ $docTitulo }}</div>
 
       <div style="margin-top:3px;">
         <span class="small muted">Número:</span>
@@ -268,7 +263,7 @@
 @if(($factura->estado ?? '') === 'anulada')
   <div class="watermark">ANULADA</div>
 @else
-  <div class="watermark">REMISION</div>
+  <div class="watermark">{{ $wmTexto }}</div>
 @endif
 
 <main style="position: relative; z-index:1">
@@ -276,12 +271,12 @@
     <tr>
       <td class="w-50">
         <div class="pane">
-          <h4>Cliente</h4>
-          <div style="font-size:13px; font-weight:700">{{ $factura->cliente->razon_social ?? 'Cliente' }}</div>
+          <h4>{{ $labelTercero }}</h4>
+          <div style="font-size:13px; font-weight:700">{{ $tercero->razon_social ?? $labelTercero }}</div>
           <div class="small muted">
-            NIT: {{ $factura->cliente->nit ?? '—' }}<br>
-            Email: {{ $factura->cliente->correo ?? '—' }}<br>
-            Tel: {{ $factura->cliente->telefono ?? '—' }}
+            NIT: {{ $tercero->nit ?? '—' }}<br>
+            Email: {{ $tercero->correo ?? $tercero->email ?? '—' }}<br>
+            Tel: {{ $tercero->telefono ?? '—' }}
           </div>
         </div>
       </td>
@@ -289,13 +284,25 @@
         <div class="pane">
           <h4>Condiciones</h4>
           <table style="width:100%">
-            <tr><td class="small muted">Moneda</td><td class="small" style="text-align:right">{{ $factura->moneda ?? 'COP' }}</td></tr>
-            <tr><td class="small muted">Pago</td><td class="small" style="text-align:right">{{ ucfirst($factura->tipo_pago ?? 'contado') }}</td></tr>
+            <tr>
+              <td class="small muted">Moneda</td>
+              <td class="small" style="text-align:right">{{ $factura->moneda ?? 'COP' }}</td>
+            </tr>
+            <tr>
+              <td class="small muted">{{ $esCompra ? 'Tipo' : 'Pago' }}</td>
+              <td class="small" style="text-align:right">{{ ucfirst($factura->tipo_pago ?? 'contado') }}</td>
+            </tr>
             @if(($factura->tipo_pago ?? '') === 'credito')
-              <tr><td class="small muted">Plazo</td><td class="small" style="text-align:right">{{ $factura->plazo_dias }} días</td></tr>
+              <tr>
+                <td class="small muted">Plazo</td>
+                <td class="small" style="text-align:right">{{ $factura->plazo_dias }} días</td>
+              </tr>
             @endif
             @if(!empty($factura->terminos_pago))
-              <tr><td class="small muted">Términos</td><td class="small" style="text-align:right">{{ $factura->terminos_pago }}</td></tr>
+              <tr>
+                <td class="small muted">Términos</td>
+                <td class="small" style="text-align:right">{{ $factura->terminos_pago }}</td>
+              </tr>
             @endif
           </table>
         </div>

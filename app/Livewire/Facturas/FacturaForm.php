@@ -104,71 +104,75 @@ class FacturaForm extends Component
     public function abrir(int $id): void
     {
         $this->cargarFactura($id);
+
+        // ✅ fuerza sincronización de TomSelect con lineas actuales
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
-   public function mount(?int $id = null): void
-{
-    try {
-        $this->fecha = now()->toDateString();
 
-        // 👇 Detectar serie según modo
-        $this->documento = $this->modo === 'compra' ? 'facturacompra' : 'factura';
-        $this->serieDefault = Serie::defaultParaCodigo($this->documento);
 
-        // ✅ Auto-emitir SOLO en modo venta (para compra NO)
-        $this->autoEmitirContado = ($this->modo === 'venta');
 
-        if ($id) {
-            // Cargar factura existente
-            $this->cargarFactura($id);
+    public function mount(?int $id = null): void
+    {
+        try {
+            $this->fecha = now()->toDateString();
 
-            // Asignar serie si no tiene
-            if (!$this->factura->serie_id && $this->serieDefault) {
-                $this->serie_id = $this->serieDefault->id;
+            // 👇 Detectar serie según modo
+            $this->documento = $this->modo === 'compra' ? 'facturacompra' : 'factura';
+            $this->serieDefault = Serie::defaultParaCodigo($this->documento);
+
+            // ✅ Auto-emitir SOLO en modo venta (para compra NO)
+            $this->autoEmitirContado = ($this->modo === 'venta');
+
+            if ($id) {
+                // Cargar factura existente
+                $this->cargarFactura($id);
+
+                // Asignar serie si no tiene
+                if (!$this->factura->serie_id && $this->serieDefault) {
+                    $this->serie_id = $this->serieDefault->id;
+                }
+
+                // Aplicar forma de pago actual
+                $this->aplicarFormaPago($this->tipo_pago);
+
+                // Definir términos si no existen
+                if (empty($this->terminos_pago)) {
+                    $this->terminos_pago = $this->tipo_pago === 'credito'
+                        ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
+                        : 'Contado';
+                }
+            } else {
+                // Nueva factura
+                $this->addLinea();
+                $this->aplicarFormaPago('contado');
+                $this->terminos_pago = 'Contado';
+
+                $this->serie_id = (int)(
+                    $this->factura?->serie_id
+                    ?: ($this->serieDefault?->id)
+                );
+
+                // Si ya viene socio seleccionado
+                if ($this->socio_negocio_id) {
+                    $this->setPagoDesdeCliente((int)$this->socio_negocio_id);
+
+                    $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')
+                        ->find((int)$this->socio_negocio_id);
+
+                    $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+                }
             }
 
-            // Aplicar forma de pago actual
-            $this->aplicarFormaPago($this->tipo_pago);
-
-            // Definir términos si no existen
-            if (empty($this->terminos_pago)) {
-                $this->terminos_pago = $this->tipo_pago === 'credito'
-                    ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
-                    : 'Contado';
-            }
-
-        } else {
-            // Nueva factura
-            $this->addLinea();
-            $this->aplicarFormaPago('contado');
-            $this->terminos_pago = 'Contado';
-
-            $this->serie_id = (int)(
-                $this->factura?->serie_id
-                ?: ($this->serieDefault?->id)
-            );
-
-            // Si ya viene socio seleccionado
-            if ($this->socio_negocio_id) {
-                $this->setPagoDesdeCliente((int)$this->socio_negocio_id);
-
-                $socio = \App\Models\SocioNegocio\SocioNegocio::with('condicionPago')
-                    ->find((int)$this->socio_negocio_id);
-
-                $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
-            }
+            // 👇 Según el modo usa cuenta por cobrar (CxC) o por pagar (CxP)
+            $this->setCuentaCobroPorDefecto();
+        } catch (\Throwable $e) {
+            report($e);
+            PendingToast::create()
+                ->error()
+                ->message('No se pudo inicializar el formulario de factura.')
+                ->duration(7000);
         }
-
-        // 👇 Según el modo usa cuenta por cobrar (CxC) o por pagar (CxP)
-        $this->setCuentaCobroPorDefecto();
-
-    } catch (\Throwable $e) {
-        report($e);
-        PendingToast::create()
-            ->error()
-            ->message('No se pudo inicializar el formulario de factura.')
-            ->duration(7000);
     }
-}
 
 
     public function render()
@@ -421,59 +425,124 @@ class FacturaForm extends Component
             ? 'Contado'
             : 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días';
     }
-
-    private function cargarFactura(int $id): void
+    #[On('set-producto-linea')]
+    public function onSetProductoLinea($index, $productoId = null): void
     {
-        try {
-            $f = Factura::with(['detalles'])->findOrFail($id);
-            $this->factura = $f;
+        if ($this->bloqueada) return;
 
-            $this->fill($f->only([
-                'serie_id',
-                'socio_negocio_id',
-                'fecha',
-                'vencimiento',
-                'tipo_pago',
-                'plazo_dias',
-                'terminos_pago',
-                'notas',
-                'moneda',
-                'estado',
-                'cuenta_cobro_id',
-                'condicion_pago_id',
-            ]));
+        $i = (int) $index;
+        $pid = $productoId ? (int) $productoId : null;
 
-            $this->lineas = $f->detalles->map(function ($d) {
-                $cuentaId = $d->cuenta_ingreso_id ? (int)$d->cuenta_ingreso_id : null;
+        // ✅ usa tu lógica existente (asigna cuenta_ingreso_id, precio, impuesto, etc.)
+        $this->setProducto($i, $pid);
 
-                if (!$cuentaId && $d->producto_id) {
-                    $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])->find($d->producto_id);
-                    if ($p) $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
-                }
+        // ✅ recalcula stock al cambiar producto
+        $this->refreshStockLinea($i);
 
-                $l = [
-                    'id'                => $d->id,
-                    'producto_id'       => $d->producto_id,
-                    'cuenta_ingreso_id' => $cuentaId,
-                    'bodega_id'         => $d->bodega_id,
-                    'descripcion'       => $d->descripcion,
-                    'cantidad'          => (float)$d->cantidad,
-                    'precio_unitario'   => (float)$d->precio_unitario,
-                    'descuento_pct'     => (float)$d->descuento_pct,
-                    'impuesto_id'       => $d->impuesto_id ?? null,
-                    'impuesto_pct'      => (float)$d->impuesto_pct,
-                ];
-                $this->normalizeLinea($l);
-                return $l;
-            })->toArray();
+        // limpieza visual
+        $this->resetErrorBag();
+        $this->resetValidation();
 
-            $this->resetErrorBag();
-            $this->resetValidation();
-        } catch (Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo cargar la factura.')->duration(7000);
-        }
+        // refresca vista
+        $this->dispatch('$refresh');
     }
+
+   private function cargarFactura(int $id): void
+{
+    try {
+        $f = Factura::with(['detalles'])->findOrFail($id);
+        $this->factura = $f;
+
+        // =========================
+        // Cabecera
+        // =========================
+        $this->fill($f->only([
+            'serie_id',
+            'socio_negocio_id',
+            'fecha',
+            'vencimiento',
+            'tipo_pago',
+            'plazo_dias',
+            'terminos_pago',
+            'notas',
+            'moneda',
+            'estado',
+            'cuenta_cobro_id',
+            'condicion_pago_id',
+        ]));
+
+        // =========================
+        // Líneas (desde DB)
+        // =========================
+        $this->lineas = $f->detalles->map(function ($d) {
+            $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
+
+            if (!$cuentaId && $d->producto_id) {
+                $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
+                    ->find($d->producto_id);
+
+                if ($p) {
+                    $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                }
+            }
+
+            $l = [
+                'id'                => $d->id,
+                'producto_id'       => $d->producto_id ? (int)$d->producto_id : null,
+                'cuenta_ingreso_id' => $cuentaId,
+                'bodega_id'         => $d->bodega_id ? (int)$d->bodega_id : null,
+                'descripcion'       => $d->descripcion,
+                'cantidad'          => is_null($d->cantidad) ? null : (float)$d->cantidad,
+                'precio_unitario'   => (float)$d->precio_unitario,
+                'descuento_pct'     => (float)$d->descuento_pct,
+                'impuesto_id'       => $d->impuesto_id ? (int)$d->impuesto_id : null,
+                'impuesto_pct'      => (float)$d->impuesto_pct,
+            ];
+
+            $this->normalizeLinea($l);
+            return $l;
+        })->toArray();
+
+        // =========================================================
+        // ✅ (RECOMENDADO) Rehidratar líneas con lógica actual
+        // - Esto vuelve a ejecutar tu setProducto() por cada línea
+        // - Actualiza cuenta_ingreso_id, impuesto, precio, etc.
+        //
+        // ⚠️ Si NO quieres recalcular nada al editar (mantener DB tal cual),
+        //    comenta este bloque.
+        // =========================================================
+        foreach ($this->lineas as $i => $l) {
+            $pid = (int)($l['producto_id'] ?? 0);
+            if ($pid > 0) {
+                // setProducto respeta descripción si ya existe (tu código lo hace)
+                $this->setProducto($i, $pid);
+            }
+
+            // Stock (si hay bodega + producto)
+            $this->refreshStockLinea($i);
+        }
+
+        // Limpieza
+        $this->resetErrorBag();
+        $this->resetValidation();
+
+        // ✅ IMPORTANTÍSIMO para TomSelect (wire:ignore)
+        // Esto hace que el select visual se “setee” al editar
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+
+        // (opcional) refrescar UI
+        $this->dispatch('$refresh');
+
+    } catch (Throwable $e) {
+        report($e);
+        PendingToast::create()
+            ->error()
+            ->message('No se pudo cargar la factura.')
+            ->duration(7000);
+    }
+}
+
+
 
     public function addLinea(): void
     {
@@ -622,23 +691,23 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
- public function aplicarFormaPago(string $tipo): void
-{
-    if ($this->bloqueada) return;
+    public function aplicarFormaPago(string $tipo): void
+    {
+        if ($this->bloqueada) return;
 
-    $this->tipo_pago = $tipo;
+        $this->tipo_pago = $tipo;
 
-    // ✅ Auto-emitir SOLO si: es venta y contado
-    $this->autoEmitirContado = ($this->modo === 'venta' && $tipo === 'contado');
+        // ✅ Auto-emitir SOLO si: es venta y contado
+        $this->autoEmitirContado = ($this->modo === 'venta' && $tipo === 'contado');
 
-    if ($tipo === 'contado') {
-        $this->plazo_dias  = null;
-        $this->vencimiento = $this->fecha;
-    } else {
-        if (!$this->plazo_dias) $this->plazo_dias = 30;
-        $this->vencimiento = Carbon::parse($this->fecha)->addDays($this->plazo_dias)->toDateString();
+        if ($tipo === 'contado') {
+            $this->plazo_dias  = null;
+            $this->vencimiento = $this->fecha;
+        } else {
+            if (!$this->plazo_dias) $this->plazo_dias = 30;
+            $this->vencimiento = Carbon::parse($this->fecha)->addDays($this->plazo_dias)->toDateString();
+        }
     }
-}
 
 
     public function updatedFecha(): void
@@ -1309,48 +1378,47 @@ class FacturaForm extends Component
         }
     }
 
-   #[On('pago-registrado')]
-public function onPagoRegistrado(int $facturaId): void
-{
-    try {
-        // 1) Cargar/refrescar factura
-        if (!$this->factura?->id || $this->factura->id !== $facturaId) {
-            $this->cargarFactura($facturaId);
+    #[On('pago-registrado')]
+    public function onPagoRegistrado(int $facturaId): void
+    {
+        try {
+            // 1) Cargar/refrescar factura
+            if (!$this->factura?->id || $this->factura->id !== $facturaId) {
+                $this->cargarFactura($facturaId);
+            }
+
+            $this->factura->refresh()->recalcularTotales()->save();
+
+            // sincroniza estado y tipo pago desde DB (clave)
+            $this->estado    = (string)($this->factura->estado ?? 'borrador');
+            $this->tipo_pago = (string)($this->factura->tipo_pago ?? $this->tipo_pago);
+
+            // 2) Calcular faltante real
+            $total   = round((float)($this->factura->total  ?? 0), 2);
+            $pagado  = round((float)($this->factura->pagado ?? 0), 2);
+            $faltante = round($total - $pagado, 2);
+
+            // 3) Auto emitir SOLO si: venta + contado + pagada + no emitida
+            $esContado  = ($this->factura->tipo_pago ?? '') === 'contado';
+            $noEmitida  = ($this->factura->estado ?? '') !== 'emitida';
+            $pagoTotal  = ($faltante <= 0.01);
+
+            if ($esContado && $pagoTotal && $noEmitida && $this->autoEmitirContado) {
+                $this->emitir();           // toma consecutivo + asiento + inventario
+                $this->cerrarSiAplicada(); // opcional: cierra si aplica
+                return;
+            }
+
+            // 4) Si no auto-emite, igual intenta cerrar si aplica (crédito, etc.)
+            $this->cerrarSiAplicada();
+            $this->dispatch('$refresh');
+        } catch (\Throwable $e) {
+            Log::error('onPagoRegistrado error', ['msg' => $e->getMessage()]);
+            PendingToast::create()->error()
+                ->message('El pago se registró, pero no se pudo emitir/actualizar automáticamente.')
+                ->duration(9000);
         }
-
-        $this->factura->refresh()->recalcularTotales()->save();
-
-        // sincroniza estado y tipo pago desde DB (clave)
-        $this->estado    = (string)($this->factura->estado ?? 'borrador');
-        $this->tipo_pago = (string)($this->factura->tipo_pago ?? $this->tipo_pago);
-
-        // 2) Calcular faltante real
-        $total   = round((float)($this->factura->total  ?? 0), 2);
-        $pagado  = round((float)($this->factura->pagado ?? 0), 2);
-        $faltante = round($total - $pagado, 2);
-
-        // 3) Auto emitir SOLO si: venta + contado + pagada + no emitida
-        $esContado  = ($this->factura->tipo_pago ?? '') === 'contado';
-        $noEmitida  = ($this->factura->estado ?? '') !== 'emitida';
-        $pagoTotal  = ($faltante <= 0.01);
-
-        if ($esContado && $pagoTotal && $noEmitida && $this->autoEmitirContado) {
-            $this->emitir();           // toma consecutivo + asiento + inventario
-            $this->cerrarSiAplicada(); // opcional: cierra si aplica
-            return;
-        }
-
-        // 4) Si no auto-emite, igual intenta cerrar si aplica (crédito, etc.)
-        $this->cerrarSiAplicada();
-        $this->dispatch('$refresh');
-
-    } catch (\Throwable $e) {
-        Log::error('onPagoRegistrado error', ['msg' => $e->getMessage()]);
-        PendingToast::create()->error()
-            ->message('El pago se registró, pero no se pudo emitir/actualizar automáticamente.')
-            ->duration(9000);
     }
-}
 
     private function verificarStockDisponibleAntesDeEmitir(): void
     {

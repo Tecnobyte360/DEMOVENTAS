@@ -1,350 +1,366 @@
 @once
-  @push('styles')
-    {{-- FontAwesome --}}
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-    {{-- TomSelect --}}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
-  @endpush
+    @push('styles')
+        {{-- FontAwesome --}}
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+        {{-- TomSelect --}}
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
+    @endpush
 @endonce
 
 @once
-  @push('scripts')
-    <script>
-      window.deferLoadingAlpine = (alpineInit) => {
-        document.addEventListener('livewire:init', alpineInit)
-      }
-    </script>
-    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    @push('scripts')
+        <script>
+            window.deferLoadingAlpine = (alpineInit) => {
+                document.addEventListener('livewire:init', alpineInit)
+            }
+        </script>
+        <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
-    {{-- TomSelect --}}
-    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
+        {{-- TomSelect --}}
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
 
-    <script>
-      document.addEventListener('livewire:load', () => {
-        const initFacturaSelect = () => {
-          const el = document.getElementById('factura-select');
-          if (!el) return;
+        <script>
+            document.addEventListener('livewire:load', () => {
+                const initFacturaSelect = () => {
+                    const el = document.getElementById('factura-select');
+                    if (!el) return;
 
-          // destruir instancia previa
-          if (el.tomselect) el.tomselect.destroy();
+                    // destruir instancia previa
+                    if (el.tomselect) el.tomselect.destroy();
 
-          const ts = new TomSelect(el, {
-            placeholder: '— Selecciona una factura —',
-            allowEmptyOption: true,
-            maxOptions: 500,
-            closeAfterSelect: true,
-            plugins: ['dropdown_input'],
-            onChange(value) {
-              @this.set('facturaId', value || null);
-            },
-          });
+                    const ts = new TomSelect(el, {
+                        placeholder: '— Selecciona una factura —',
+                        allowEmptyOption: true,
+                        maxOptions: 500,
+                        closeAfterSelect: true,
+                        plugins: ['dropdown_input'],
+                        onChange(value) {
+                            @this.set('facturaId', value || null);
+                        },
+                    });
 
-          // reflejar valor actual
-          const current = @this.get('facturaId');
-          if (current) ts.setValue(String(current), false);
-        };
+                    // reflejar valor actual
+                    const current = @this.get('facturaId');
+                    if (current) ts.setValue(String(current), false);
+                };
 
-        initFacturaSelect();
+                initFacturaSelect();
 
-        Livewire.hook('message.processed', (message, component) => {
-          if (component.fingerprint && component.fingerprint.name === 'facturas.pagos-factura') {
-            initFacturaSelect();
-          }
-        });
-      });
-    </script>
-  @endpush
+                Livewire.hook('message.processed', (message, component) => {
+                    if (component.fingerprint && component.fingerprint.name === 'facturas.pagos-factura') {
+                        initFacturaSelect();
+                    }
+                });
+            });
+        </script>
+    @endpush
 @endonce
 
 <div x-data="{ open: @entangle('show') }" x-cloak>
-  {{-- Overlay --}}
-  <div x-show="open" class="fixed inset-0 z-40 bg-black/40"></div>
+    {{-- Overlay --}}
+    <div x-show="open" class="fixed inset-0 z-40 bg-black/40"></div>
 
-  {{-- Modal --}}
-  <div x-show="open" class="fixed inset-0 z-50 grid place-items-center p-4">
-    <div class="w-full max-w-3xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
+    {{-- Modal --}}
+    <div x-show="open" class="fixed inset-0 z-50 grid place-items-center p-4">
+        <div
+            class="w-full max-w-3xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
 
-      {{-- Header --}}
-      <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between
+            {{-- Header --}}
+            <div
+                class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between
                   bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300
                   dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-gray-800 dark:text-white rounded-t-2xl">
-        <h3 class="text-lg font-semibold flex items-center gap-2">
-          <i class="fa-solid fa-cash-register"></i>
-          Registrar pago de factura
-        </h3>
+                <h3 class="text-lg font-semibold flex items-center gap-2">
+                    <i class="fa-solid fa-cash-register"></i>
+                    Registrar pago de factura
+                </h3>
 
-        <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
-                @click="open=false" wire:click="cerrar" title="Cerrar">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
+                <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
+                    @click="open=false" wire:click="cerrar" title="Cerrar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
 
-      {{-- Cuerpo --}}
-      <div class="p-5 space-y-5">
+            {{-- Cuerpo --}}
+            <div class="p-5 space-y-5">
 
-        {{-- ✅ Selector de tipo + búsqueda + factura (solo si no viene facturaId) --}}
-        @if(!$facturaId)
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {{-- ✅ Selector de tipo + búsqueda + factura (solo si no viene facturaId) --}}
+                @if (!$facturaId)
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
 
-            {{-- Tipo (Venta/Compra) --}}
-            <div>
-              <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-                Tipo
-              </label>
+                        {{-- Tipo (Venta/Compra) --}}
+                        <div>
+                            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                                Tipo
+                            </label>
 
-              <select wire:model.live="tipoDocumento"
-                      class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                            <select wire:model.live="tipoDocumento"
+                                class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
                              dark:bg-gray-800 dark:text-white px-3 text-sm">
-                <option value="venta">Factura de Venta</option>
-                <option value="compra">Factura de Compra</option>
-              </select>
-            </div>
+                                <option value="venta">Factura de Venta</option>
+                                <option value="compra">Factura de Compra</option>
+                            </select>
+                        </div>
 
-            {{-- Buscar --}}
-            <div class="md:col-span-2">
-              <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-                Buscar
-              </label>
+                        {{-- Buscar --}}
+                        <div class="md:col-span-2">
+                            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                                Buscar
+                            </label>
 
-              <input type="text"
-                     wire:model.debounce.400ms="buscarFactura"
-                     placeholder="Cliente/Proveedor · documento · número · prefijo"
-                     class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                            <input type="text" wire:model.debounce.400ms="buscarFactura"
+                                placeholder="Cliente/Proveedor · documento · número · prefijo"
+                                class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
                             dark:bg-gray-800 dark:text-white px-3 text-sm">
-            </div>
-          </div>
+                        </div>
+                    </div>
 
-          {{-- Select TomSelect --}}
-          <div wire:ignore>
-            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-  Seleccionar factura pendiente ({{ $tipoDocumento === 'compra' ? 'COMPRA' : 'VENTA' }})
-</label>
+                    {{-- Select TomSelect --}}
+                    <div wire:ignore>
+                        <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                            Seleccionar factura pendiente ({{ $tipoDocumento === 'compra' ? 'COMPRA' : 'VENTA' }})
+                        </label>
 
-<select
-  id="factura-select"
-  wire:key="factura-select-{{ $tipoDocumento }}-{{ md5($buscarFactura) }}"
-  class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
-         dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm"
->
-  <option value="">— Selecciona una factura —</option>
+                        <select id="factura-select"
+                            wire:key="factura-select-{{ $tipoDocumento }}-{{ md5($buscarFactura) }}"
+                            class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
+         dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
+                            <option value="">— Selecciona una factura —</option>
 
-  @foreach($facturasPendientes as $f)
-    @php
-      $numero  = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
-      $codigo  = trim(($f->prefijo ? $f->prefijo.'-' : '').$numero);
-      $tercero = $f->socioNegocio?->razon_social ?? 'Sin tercero';
-      $fecha   = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
-    @endphp
-    <option value="{{ $f->id }}">
-      {{ $codigo }} — {{ $tercero }} — {{ $fecha }}
-      — Total: ${{ number_format((float)$f->total, 0, ',', '.') }}
-      — Saldo: ${{ number_format((float)$f->saldo, 0, ',', '.') }}
-    </option>
-  @endforeach
-</select>
+                            @foreach ($facturasPendientes as $f)
+                                @php
+                                    $numero = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
+                                    $codigo = trim(($f->prefijo ? $f->prefijo . '-' : '') . $numero);
+                                    $tercero = $f->socioNegocio?->razon_social ?? 'Sin tercero';
+                                    $fecha = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
+                                @endphp
+                                <option value="{{ $f->id }}">
+                                    {{ $codigo }} — {{ $tercero }} — {{ $fecha }}
+                                    — Total: ${{ number_format((float) $f->total, 0, ',', '.') }}
+                                    — Saldo: ${{ number_format((float) $f->saldo, 0, ',', '.') }}
+                                </option>
+                            @endforeach
+                        </select>
 
-@error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
+                        @error('facturaId')
+                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                        @enderror
 
 
-            @error('facturaId') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
-          </div>
-        @endif
+                        @error('facturaId')
+                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                        @enderror
+                    </div>
+                @endif
 
-        {{-- 🧮 Resumen de montos --}}
-        <div class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-800/40">
-          <div class="flex flex-wrap gap-3 text-sm">
-            @if($facturaId)
-              <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                Factura #{{ $facturaId }}
-              </span>
-            @else
-              <span class="text-sm text-gray-500 dark:text-gray-400">
-                Selecciona una factura para ver su saldo
-              </span>
-            @endif
-          </div>
+                {{-- 🧮 Resumen de montos --}}
+                <div
+                    class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-800/40">
+                    <div class="flex flex-wrap gap-3 text-sm">
+                        @if ($facturaId)
+                            <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                                Factura #{{ $facturaId }}
+                            </span>
+                        @else
+                            <span class="text-sm text-gray-500 dark:text-gray-400">
+                                Selecciona una factura para ver su saldo
+                            </span>
+                        @endif
+                    </div>
 
-          <div class="mt-2 grid grid-cols-3 gap-3 text-sm">
-            <div class="flex justify-between">
-              <span>Total</span><strong>${{ number_format($fac_total, 2, ',', '.') }}</strong>
-            </div>
-            <div class="flex justify-between">
-              <span>Pagado</span><strong>${{ number_format($fac_pagado, 2, ',', '.') }}</strong>
-            </div>
-            <div class="flex justify-between">
-              <span>Saldo</span><strong class="text-emerald-600">${{ number_format($fac_saldo, 2, ',', '.') }}</strong>
-            </div>
-          </div>
-        </div>
+                    <div class="mt-2 grid grid-cols-3 gap-3 text-sm">
+                        <div class="flex justify-between">
+                            <span>Total</span><strong>${{ number_format($fac_total, 2, ',', '.') }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Pagado</span><strong>${{ number_format($fac_pagado, 2, ',', '.') }}</strong>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Saldo</span><strong
+                                class="text-emerald-600">${{ number_format($fac_saldo, 2, ',', '.') }}</strong>
+                        </div>
+                    </div>
+                </div>
 
-        {{-- 📅 Fecha / Notas --}}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Fecha</label>
-            <input type="date"
-                   class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                {{-- 📅 Fecha / Notas --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label
+                            class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Fecha</label>
+                        <input type="date"
+                            class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
                           dark:bg-gray-800 dark:text-white px-3"
-                   wire:model.live="fecha">
-            @error('fecha') <div class="text-rose-600 text-xs mt-1">{{ $message }}</div> @enderror
-          </div>
+                            wire:model.live="fecha">
+                        @error('fecha')
+                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                        @enderror
+                    </div>
 
-          <div class="md:col-span-2">
-            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Notas</label>
-            <input type="text"
-                   class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                    <div class="md:col-span-2">
+                        <label
+                            class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Notas</label>
+                        <input type="text"
+                            class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
                           dark:bg-gray-800 dark:text-white px-3"
-                   wire:model.defer="notas"
-                   placeholder="Observaciones del pago (opcional)">
-          </div>
-        </div>
+                            wire:model.defer="notas" placeholder="Observaciones del pago (opcional)">
+                    </div>
+                </div>
 
-        {{-- 💳 Distribución por medio de pago --}}
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div class="bg-gray-100 dark:bg-gray-800 px-3 py-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider">
-            Distribución por medio de pago
-          </div>
+                {{-- 💳 Distribución por medio de pago --}}
+                <div class="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div
+                        class="bg-gray-100 dark:bg-gray-800 px-3 py-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider">
+                        Distribución por medio de pago
+                    </div>
 
-          <div class="overflow-x-auto">
-            <table class="min-w-full text-sm">
-              <thead>
-                <tr class="text-left bg-gray-50 dark:bg-gray-800/50">
-                  <th class="p-3">Medio</th>
-                  <th class="p-3 w-32 text-center">% </th>
-                  <th class="p-3 w-40 text-right">Monto</th>
-                  <th class="p-3 w-48">Referencia</th>
-                  <th class="p-3 w-12 text-center">—</th>
-                </tr>
-              </thead>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full text-sm">
+                            <thead>
+                                <tr class="text-left bg-gray-50 dark:bg-gray-800/50">
+                                    <th class="p-3">Medio</th>
+                                    <th class="p-3 w-32 text-center">% </th>
+                                    <th class="p-3 w-40 text-right">Monto</th>
+                                    <th class="p-3 w-48">Referencia</th>
+                                    <th class="p-3 w-12 text-center">—</th>
+                                </tr>
+                            </thead>
 
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                @foreach($items as $idx => $row)
-                  <tr wire:key="pago-row-{{ $idx }}">
-                    <td class="p-3">
-                      <select wire:model.live="items.{{ $idx }}.medio_pago_id"
-                              class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                @foreach ($items as $idx => $row)
+                                    <tr wire:key="pago-row-{{ $idx }}">
+                                        <td class="p-3">
+                                            <select wire:model.live="items.{{ $idx }}.medio_pago_id"
+                                                class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
                                      dark:bg-gray-800 dark:text-white px-2">
-                        <option value="">— Selecciona —</option>
-                        @foreach($medios as $m)
-                          <option value="{{ $m->id }}">{{ $m->codigo ? $m->codigo.' — ' : '' }}{{ $m->nombre }}</option>
-                        @endforeach
-                      </select>
-                    </td>
+                                                <option value="">— Selecciona —</option>
+                                                @foreach ($medios as $m)
+                                                    <option value="{{ $m->id }}">
+                                                        {{ $m->codigo ? $m->codigo . ' — ' : '' }}{{ $m->nombre }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </td>
 
-                    <td class="p-3">
-                      <input type="number" step="0.01" min="0" max="100"
-                             wire:model.live="items.{{ $idx }}.porcentaje"
-                             class="w-full h-10 text-center rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
-                    </td>
+                                        <td class="p-3">
+                                            <input type="number" step="0.01" min="0" max="100"
+                                                wire:model.live="items.{{ $idx }}.porcentaje"
+                                                class="w-full h-10 text-center rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
+                                        </td>
 
-                    <td class="p-3">
-                      <input type="number" step="0.01" min="0.01"
-                             wire:model.live="items.{{ $idx }}.monto"
-                             class="w-full h-10 text-right rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
-                    </td>
+                                        <td class="p-3">
+                                            <input type="number" step="0.01" min="0.01"
+                                                wire:model.live="items.{{ $idx }}.monto"
+                                                class="w-full h-10 text-right rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
+                                        </td>
 
-                    <td class="p-3">
-                      <input type="text" maxlength="120"
-                             wire:model.defer="items.{{ $idx }}.referencia"
-                             class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2"
-                             placeholder="Comprobante o #autorización">
-                    </td>
+                                        <td class="p-3">
+                                            <input type="text" maxlength="120"
+                                                wire:model.defer="items.{{ $idx }}.referencia"
+                                                class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2"
+                                                placeholder="Comprobante o #autorización">
+                                        </td>
 
-                    <td class="p-3 text-center">
-                      <button type="button" wire:click="removeItem({{ $idx }})"
-                              class="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200">
-                        <i class="fa-solid fa-xmark"></i>
-                      </button>
-                    </td>
-                  </tr>
-                @endforeach
-              </tbody>
+                                        <td class="p-3 text-center">
+                                            <button type="button" wire:click="removeItem({{ $idx }})"
+                                                class="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200">
+                                                <i class="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
 
-              <tfoot class="bg-gray-50 dark:bg-gray-800/30">
-                <tr>
-                  <td class="p-3">
-                    <button type="button" wire:click="addItem"
-                            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs">
-                      <i class="fa-solid fa-plus mr-1"></i> Añadir medio
-                    </button>
-                  </td>
-                  <td class="p-3 text-center font-semibold">{{ number_format($sumPct, 2, ',', '.') }}%</td>
-                  <td class="p-3 text-right font-semibold">${{ number_format($sumMonto, 2, ',', '.') }}</td>
-                  <td class="p-3 text-right font-semibold" colspan="2">
-                    <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
-                      Diff: ${{ number_format($diff, 2, ',', '.') }}
-                    </span>
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        </div>
+                            <tfoot class="bg-gray-50 dark:bg-gray-800/30">
+                                <tr>
+                                    <td class="p-3">
+                                        <button type="button" wire:click="addItem"
+                                            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs">
+                                            <i class="fa-solid fa-plus mr-1"></i> Añadir medio
+                                        </button>
+                                    </td>
+                                    <td class="p-3 text-center font-semibold">
+                                        {{ number_format($sumPct, 2, ',', '.') }}%</td>
+                                    <td class="p-3 text-right font-semibold">
+                                        ${{ number_format($sumMonto, 2, ',', '.') }}</td>
+                                    <td class="p-3 text-right font-semibold" colspan="2">
+                                        <span
+                                            class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
+                                            Diff: ${{ number_format($diff, 2, ',', '.') }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
 
-      </div>
+            </div>
 
-      {{-- Footer --}}
-      <div class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2
+            {{-- Footer --}}
+            <div
+                class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2
                   bg-gray-50/60 dark:bg-gray-800/40">
-        <div class="text-sm">
-          <span class="font-medium">Diferencia:</span>
-          <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
-            ${{ number_format($diff, 2, ',', '.') }}
-          </span>
+                <div class="text-sm">
+                    <span class="font-medium">Diferencia:</span>
+                    <span
+                        class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
+                        ${{ number_format($diff, 2, ',', '.') }}
+                    </span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button class="px-4 py-2 rounded-xl bg-white border dark:bg-gray-900 dark:border-gray-700"
+                        @click="open=false" wire:click="cerrar">
+                        Cancelar
+                    </button>
+
+                    <button
+                        class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        wire:click="guardarPago" wire:loading.attr="disabled"
+                        title="Guardar el pago y actualizar factura">
+                        <i class="fa-solid fa-check mr-2"></i> Guardar pago
+                    </button>
+                </div>
+            </div>
+
         </div>
-
-        <div class="flex gap-2">
-          <button class="px-4 py-2 rounded-xl bg-white border dark:bg-gray-900 dark:border-gray-700"
-                  @click="open=false" wire:click="cerrar">
-            Cancelar
-          </button>
-
-          <button class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  wire:click="guardarPago"
-                  wire:loading.attr="disabled"
-                  title="Guardar el pago y actualizar factura">
-            <i class="fa-solid fa-check mr-2"></i> Guardar pago
-          </button>
-        </div>
-      </div>
-
     </div>
-  </div>
 </div>
 <script>
-  document.addEventListener('livewire:init', () => {
+    document.addEventListener('livewire:init', () => {
 
-    const initFacturaSelect = () => {
-      const el = document.getElementById('factura-select');
-      if (!el) return;
+        const initFacturaSelect = () => {
+            const el = document.getElementById('factura-select');
+            if (!el) return;
 
-      if (el.tomselect) el.tomselect.destroy();
+            if (el.tomselect) el.tomselect.destroy();
 
-      const ts = new TomSelect(el, {
-        placeholder: '— Selecciona una factura —',
-        allowEmptyOption: true,
-        maxOptions: 500,
-        closeAfterSelect: true,
-        plugins: ['dropdown_input'],
-        onChange(value) {
-          @this.set('facturaId', value || null);
-        },
-      });
+            const ts = new TomSelect(el, {
+                placeholder: '— Selecciona una factura —',
+                allowEmptyOption: true,
+                maxOptions: 500,
+                closeAfterSelect: true,
+                plugins: ['dropdown_input'],
+                onChange(value) {
+                    @this.set('facturaId', value || null);
+                },
+            });
 
-      const current = @this.get('facturaId');
-      if (current) ts.setValue(String(current), false);
-    };
+            const current = @this.get('facturaId');
+            if (current) ts.setValue(String(current), false);
+        };
 
-    // Inicial
-    initFacturaSelect();
-
-    // Cada re-render del componente
-    Livewire.hook('message.processed', (message, component) => {
-      if (component.fingerprint?.name === 'facturas.pagos-factura') {
+        // Inicial
         initFacturaSelect();
-      }
-    });
 
-    // Evento manual cuando cambias tipo/buscar
-    Livewire.on('refresh-factura-select', () => initFacturaSelect());
-  });
+        // Cada re-render del componente
+        Livewire.hook('message.processed', (message, component) => {
+            if (component.fingerprint?.name === 'facturas.pagos-factura') {
+                initFacturaSelect();
+            }
+        });
+
+        // Evento manual cuando cambias tipo/buscar
+        Livewire.on('refresh-factura-select', () => initFacturaSelect());
+    });
 </script>

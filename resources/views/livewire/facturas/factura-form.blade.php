@@ -1,20 +1,21 @@
 {{-- resources/views/livewire/facturas/form-factura.blade.php --}}
-
 @once
     @push('styles')
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
     @endpush
 @endonce
 
 @once
     @push('scripts')
         <script>
-            // Evita conflictos: Alpine espera a que Livewire inicie
             window.deferLoadingAlpine = (alpineInit) => {
                 document.addEventListener('livewire:init', alpineInit)
             }
         </script>
         <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
     @endpush
 @endonce
 
@@ -362,15 +363,22 @@
                                     {{-- Producto --}}
                                     {{-- Producto --}}
                                     <td class="px-4 py-3 min-w-[260px]">
-                                        <select id="producto-select-{{ $i }}" data-producto-select
-                                            wire:model.live="lineas.{{ $i }}.producto_id"
-                                            wire:change="setProducto({{ $i }}, $event.target.value)"
-                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                                            <option value="">— Seleccione —</option>
-                                            @foreach ($productos as $p)
-                                                <option value="{{ $p->id }}">{{ $p->nombre }}</option>
-                                            @endforeach
-                                        </select>
+                                        <div wire:ignore>
+                                            <select id="producto-select-{{ $i }}" data-producto-select
+                                                data-linea="{{ $i }}"
+                                                class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
+                                                <option value="">— Seleccione —</option>
+                                                @foreach ($productos as $p)
+                                                    <option value="{{ $p->id }}" @selected((int) ($lineas[$i]['producto_id'] ?? 0) === (int) $p->id)>
+                                                        {{ $p->nombre }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        @error('lineas.' . $i . '.producto_id')
+                                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                        @enderror
                                     </td>
 
 
@@ -585,7 +593,7 @@
                         class="xl:col-span-3 flex flex-wrap items-center gap-2 text-sm md:text-base text-gray-700 dark:text-gray-300">
                         <span class="font-semibold">Total:</span>
                         <span class="text-lg md:text-xl font-extrabold text-gray-900 dark:text-white">
-                    $ {{ number_format($totalVista, 2) }}
+                            $ {{ number_format($totalVista, 2) }}
                         </span>
 
                         @if ($esContado)
@@ -805,4 +813,73 @@
     @if ($showPagos)
         <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-' . ($factura?->id ?? 'new')" />
     @endif
+<script>
+document.addEventListener('livewire:init', () => {
+
+  const ensureTomSelect = (el) => {
+    if (!el) return null;
+
+    // ya existe
+    if (el.tomselect) return el.tomselect;
+
+    const linea = parseInt(el.dataset.linea || '0', 10);
+
+    const ts = new TomSelect(el, {
+      placeholder: '— Seleccione —',
+      allowEmptyOption: true,
+      create: false,
+      maxOptions: 500,
+      hideSelected: false,
+      closeAfterSelect: true,
+
+      // ✅ CLAVE: esto asegura búsqueda por el texto visible
+      searchField: ['text'],
+
+      // ❌ NO uses dropdown_input si quieres “filtro normal”
+      // plugins: ['dropdown_input'],
+
+      onChange(value) {
+        const pid = value ? parseInt(value, 10) : null;
+        @this.call('setProducto', linea, pid);
+      }
+    });
+
+    return ts;
+  };
+
+  const initAll = () => {
+    document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+      ensureTomSelect(el);
+    });
+  };
+
+  // Inicial
+  initAll();
+
+  // Cada vez que Livewire procese un mensaje, intenta inicializar los nuevos
+  Livewire.hook('message.processed', () => {
+    initAll();
+  });
+
+  // ✅ Evento para “sincronizar” cuando cargas/abres factura en modo editar
+  // (desde PHP: $this->dispatch('sync-productos-tomselect', lineas: $this->lineas); )
+  Livewire.on('sync-productos-tomselect', (payload) => {
+    const lineas = payload?.lineas || [];
+
+    lineas.forEach((l, i) => {
+      const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
+      if (!el) return;
+
+      const ts = ensureTomSelect(el);
+      if (!ts) return;
+
+      const pid = l?.producto_id ? String(l.producto_id) : '';
+
+      // ✅ setValue SIN disparar onChange (true = silent)
+      ts.setValue(pid, true);
+    });
+  });
+
+});
+</script>
 </div>

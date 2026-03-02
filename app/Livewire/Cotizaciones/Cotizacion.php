@@ -102,14 +102,14 @@ class Cotizacion extends Component
         $productos = Producto::where('activo', 1)
             ->orderBy('nombre')
             ->take(300)
-            ->get(['id','nombre','precio']);
+            ->get(['id', 'nombre', 'precio']);
 
         $bodegas = Bodega::query()
             ->when(Schema::hasColumn('bodegas', 'activo'), fn($q) => $q->where('activo', 1))
             ->orderBy('nombre')
-            ->get(['id','nombre']);
+            ->get(['id', 'nombre']);
 
-        return view('livewire.cotizaciones.cotizacion', compact('clientes','productos','bodegas'));
+        return view('livewire.cotizaciones.cotizacion', compact('clientes', 'productos', 'bodegas'));
     }
 
     /* =========================
@@ -117,18 +117,33 @@ class Cotizacion extends Component
      * ========================= */
     private function normalizeLinea(array &$l): void
     {
-        $cant   = (float)($l['cantidad'] ?? 0);
-        $precio = (float)($l['precio_unitario'] ?? 0);
-        $desc   = (float)($l['descuento_pct'] ?? 0);
-        $iva    = (float)($l['impuesto_pct'] ?? 0);
+        // Detectar valores vacíos sin forzar conversión inmediata
+        $cantRaw   = $l['cantidad'] ?? null;
+        $precioRaw = $l['precio_unitario'] ?? null;
+        $descRaw   = $l['descuento_pct'] ?? 0;
+        $ivaRaw    = $l['impuesto_pct'] ?? 0;
 
-        $l['cantidad']        = max(1.0,  round(is_finite($cant)   ? $cant   : 1, 3));
-        $l['precio_unitario'] = max(0.0,  round(is_finite($precio) ? $precio : 0, 2));
-        $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva)  ? $iva  : 0, 3)));
+        // Si están vacíos, mantener null (no forzar valores)
+        $cant   = ($cantRaw === '' || $cantRaw === null) ? null : (float)$cantRaw;
+        $precio = ($precioRaw === '' || $precioRaw === null) ? null : (float)$precioRaw;
+        $desc   = ($descRaw === '' || $descRaw === null) ? 0 : (float)$descRaw;
+        $iva    = ($ivaRaw === '' || $ivaRaw === null) ? 0 : (float)$ivaRaw;
 
-        // ✅ importe = base SIN impuesto (como tu modelo cotizacion_detalle)
-        $base = ($l['cantidad'] * $l['precio_unitario']) * (1 - $l['descuento_pct'] / 100);
+        // Normalizar SOLO si hay valor
+        $l['cantidad']        = is_null($cant) ? null : round(max(0, $cant), 3);
+        $l['precio_unitario'] = is_null($precio) ? null : round(max(0, $precio), 2);
+        $l['descuento_pct']   = min(100.0, max(0.0, round($desc, 3)));
+        $l['impuesto_pct']    = min(100.0, max(0.0, round($iva, 3)));
+
+        // Calcular importe SOLO si cantidad y precio existen
+        if (is_null($l['cantidad']) || is_null($l['precio_unitario'])) {
+            $l['importe'] = 0;
+            return;
+        }
+
+        $base = ($l['cantidad'] * $l['precio_unitario'])
+            * (1 - $l['descuento_pct'] / 100);
+
         $l['importe'] = round(max(0, $base), 2);
     }
 
@@ -137,7 +152,7 @@ class Cotizacion extends Component
         $l = [
             'producto_id'     => null,
             'bodega_id'       => null,
-            'cantidad'        => 1,
+            'cantidad'        => null,
             'precio_unitario' => 0,
             'descuento_pct'   => 0,
             'impuesto_pct'    => 0,

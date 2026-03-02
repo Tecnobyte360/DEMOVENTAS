@@ -327,7 +327,7 @@
                 <td class="px-4 py-3 text-right">
                   <input
                     type="number" step="0.001" min="1"
-                    wire:model.live.debounce.200ms="lineas.{{ $i }}.cantidad"
+                    wire:model.lazy="lineas.{{ $i }}.cantidad"
                     class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white
                            focus:outline-none focus:ring-4 focus:ring-violet-300/60"
                   >
@@ -338,7 +338,7 @@
                 <td class="px-4 py-3 text-right">
                   <input
                     type="number" step="0.01" min="0"
-                    wire:model.live.debounce.200ms="lineas.{{ $i }}.precio_unitario"
+                    wire:model.lazy="lineas.{{ $i }}.precio_unitario"
                     class="w-32 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white
                            focus:outline-none focus:ring-4 focus:ring-violet-300/60"
                   >

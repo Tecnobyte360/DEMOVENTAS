@@ -460,43 +460,45 @@
   </div>
 
   {{-- Tabla compacta (SIN min-w fijo / SIN scroll forzado) --}}
-  <div class="w-full overflow-x-hidden">
+ <div class="w-full overflow-x-auto overscroll-x-contain">
+  {{-- ✅ Esto fuerza ancho y habilita scroll horizontal real --}}
+  <div class="min-w-[1200px]">
+
     <table
-      class="w-full table-fixed bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden text-xs text-gray-700 dark:text-gray-300">
+      class="min-w-full table-auto bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden text-xs text-gray-700 dark:text-gray-300">
 
       <thead class="bg-gray-700 text-white">
         <tr class="whitespace-nowrap">
-          <th class="px-2 py-2 text-left font-semibold w-[60px]">#ID</th>
-          <th class="px-2 py-2 text-left font-semibold w-[64px]">Img</th>
 
-          <th class="px-2 py-2 text-left font-semibold w-[220px]">Nombre</th>
+          {{-- ✅ STICKY IZQUIERDA --}}
+          <th class="px-2 py-2 text-left font-semibold w-[60px] sticky left-0 z-30 bg-gray-700">#ID</th>
+          <th class="px-2 py-2 text-left font-semibold w-[64px] sticky left-[60px] z-30 bg-gray-700">Img</th>
+          <th class="px-2 py-2 text-left font-semibold w-[220px] sticky left-[124px] z-30 bg-gray-700">Nombre</th>
 
-          {{-- ✅ Oculta en pantallas pequeñas para evitar scroll --}}
+          {{-- ✅ Oculta en pantallas pequeñas para evitar tanta carga visual --}}
           <th class="px-2 py-2 text-left font-semibold hidden lg:table-cell w-[260px]">Descripción</th>
 
           <th class="px-2 py-2 text-center font-semibold w-[120px]">Tipo</th>
 
-          {{-- ✅ Oculta en pantallas pequeñas --}}
           <th class="px-2 py-2 text-center font-semibold hidden md:table-cell w-[140px]">U. Medida</th>
 
           <th class="px-2 py-2 text-center font-semibold w-[120px]">Precio</th>
 
-          {{-- ✅ Oculta en pantallas pequeñas --}}
           <th class="px-2 py-2 text-center font-semibold hidden xl:table-cell w-[200px]">Impuesto</th>
 
           <th class="px-2 py-2 text-center font-semibold w-[130px]">Precio c/ IVA</th>
 
-          {{-- ✅ Oculta en pantallas pequeñas --}}
           <th class="px-2 py-2 text-center font-semibold hidden xl:table-cell w-[160px]">Subcat.</th>
 
           <th class="px-2 py-2 text-center font-semibold w-[120px]">Stock</th>
 
-          {{-- ✅ Oculta en pantallas pequeñas --}}
           <th class="px-2 py-2 text-center font-semibold hidden 2xl:table-cell w-[150px]">CPU Global</th>
 
           <th class="px-2 py-2 text-center font-semibold w-[120px]">Estado</th>
           <th class="px-2 py-2 text-center font-semibold w-[90px]">Bod.</th>
-          <th class="px-2 py-2 text-center font-semibold w-[90px]">Acc.</th>
+
+          {{-- ✅ STICKY DERECHA --}}
+          <th class="px-2 py-2 text-center font-semibold w-[90px] sticky right-0 z-30 bg-gray-700">Acc.</th>
         </tr>
       </thead>
 
@@ -504,9 +506,12 @@
         @forelse($productos as $prod)
           <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
 
-            <td class="px-2 py-2">{{ $prod->id }}</td>
+            {{-- ✅ STICKY IZQUIERDA --}}
+            <td class="px-2 py-2 sticky left-0 z-20 bg-white dark:bg-gray-800">
+              {{ $prod->id }}
+            </td>
 
-            <td class="px-2 py-2">
+            <td class="px-2 py-2 sticky left-[60px] z-20 bg-white dark:bg-gray-800">
               @if($prod->imagen_url)
                 <img src="{{ $prod->imagen_url }}" alt="img"
                   class="h-9 w-9 rounded-lg object-cover ring-1 ring-gray-200 dark:ring-gray-700">
@@ -517,8 +522,9 @@
               @endif
             </td>
 
-            {{-- Nombre (truncate) --}}
-            <td class="px-2 py-2 truncate" title="{{ $prod->nombre }}">
+            {{-- Nombre (sticky) --}}
+            <td class="px-2 py-2 sticky left-[124px] z-20 bg-white dark:bg-gray-800 truncate"
+                title="{{ $prod->nombre }}">
               {{ $prod->nombre }}
             </td>
 
@@ -612,13 +618,14 @@
               @endif
             </td>
 
-            {{-- Acciones --}}
-            <td class="px-2 py-2 text-center">
+            {{-- ✅ STICKY DERECHA: Acciones --}}
+            <td class="px-2 py-2 text-center sticky right-0 z-20 bg-white dark:bg-gray-800">
               <button wire:click="edit({{ $prod->id }})"
                 class="text-blue-600 hover:text-blue-800 transition-colors" title="Editar">
                 <i class="fas fa-edit"></i>
               </button>
             </td>
+
           </tr>
 
           {{-- Detalle bodegas (solo si inventariable) --}}
@@ -707,7 +714,9 @@
       </tbody>
 
     </table>
+
   </div>
+</div>
 </section>
 
   {{-- ===================== MODAL: Configurar Cuentas ===================== --}}

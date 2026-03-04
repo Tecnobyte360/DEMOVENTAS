@@ -531,11 +531,13 @@
     {{-- ================= FIN FOOTER STICKY ================= --}}
 
   </section>
-  <script>
+ <script>
 document.addEventListener('livewire:init', () => {
 
   const ensureTomSelect = (el) => {
     if (!el) return null;
+
+    // Ya existe
     if (el.tomselect) return el.tomselect;
 
     const linea = parseInt(el.dataset.linea || '0', 10);
@@ -550,9 +552,7 @@ document.addEventListener('livewire:init', () => {
       searchField: ['text'],
       onChange(value) {
         const pid = value ? parseInt(value, 10) : null;
-        @this.set(`lineas.${linea}.producto_id`, pid); // ✅ directo
-        // o si prefieres método:
-        // @this.call('setProducto', linea, pid);
+        @this.set(`lineas.${linea}.producto_id`, pid);
       }
     });
 
@@ -561,24 +561,59 @@ document.addEventListener('livewire:init', () => {
 
   const initAll = () => {
     document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-      ensureTomSelect(el);
+      const ts = ensureTomSelect(el);
+
+      // ✅ Si Livewire ya tiene valor, asegúralo en TomSelect (sin disparar onChange)
+      const selected = el.querySelector('option[selected]')?.value || '';
+      if (ts && selected && ts.getValue() !== selected) {
+        ts.setValue(selected, true);
+      }
     });
   };
 
+  const destroyOrphans = () => {
+    // ✅ Si un select ya no está en el DOM, destruye su tomselect
+    document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+      // nada
+    });
+    // TomSelect queda referenciado en el elemento, así que orphans reales se limpian
+    // mejor destruyendo ANTES del morph (ver hook below)
+  };
+
+  // Inicial
   initAll();
 
-  Livewire.hook('message.processed', () => {
+  // ✅ LIVEWIRE 3: antes de que Livewire cambie el DOM, destruye tomselects afectados
+  Livewire.hook('morph.removing', ({ el }) => {
+    // Si el nodo que se remueve contiene selects, destruye sus instancias
+    el.querySelectorAll?.('select[data-producto-select]')?.forEach((s) => {
+      if (s.tomselect) {
+        s.tomselect.destroy();
+        s.tomselect = null;
+      }
+    });
+  });
+
+  // ✅ LIVEWIRE 3: después del morph, inicializa los nuevos
+  Livewire.hook('morph.updated', () => {
     initAll();
   });
 
-  // opcional: si cargas cotización en editar y necesitas sincronizar
+  // ✅ LIVEWIRE 2 fallback (si aplica en algún entorno)
+  Livewire.hook?.('message.processed', () => {
+    initAll();
+  });
+
+  // ✅ Sync manual (editar)
   Livewire.on('sync-productos-tomselect', (payload) => {
     const lineas = payload?.lineas || [];
     lineas.forEach((l, i) => {
       const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
       if (!el) return;
+
       const ts = ensureTomSelect(el);
       if (!ts) return;
+
       ts.setValue(l?.producto_id ? String(l.producto_id) : '', true);
     });
   });

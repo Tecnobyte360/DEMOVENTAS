@@ -3,6 +3,7 @@
 @once
   @push('styles')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
   @endpush
 @endonce
 
@@ -13,10 +14,13 @@
         document.addEventListener('livewire:init', alpineInit)
       }
     </script>
+
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+    {{-- ✅ TomSelect --}}
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
   @endpush
 @endonce
-
 <div
   x-data="{
     goPicker(){
@@ -303,25 +307,29 @@
 
                 {{-- Producto --}}
                 <td class="px-4 py-3 min-w-[360px]">
-                  <select
-                    @if($i === 0) data-first-product @endif
-                    wire:model.live="lineas.{{ $i }}.producto_id"
-                    class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white
-                           focus:outline-none focus:ring-4 focus:ring-violet-300/60"
-                  >
-                    <option value="">— Seleccione —</option>
-                    @foreach($productos as $p)
-                      <option value="{{ $p->id }}">{{ $p->nombre }}</option>
-                    @endforeach
-                  </select>
-                  @error('lineas.'.$i.'.producto_id') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
+  <div wire:ignore>
+    <select
+      id="producto-select-{{ $i }}"
+      data-producto-select
+      data-linea="{{ $i }}"
+      @if($i === 0) data-first-product @endif
+      class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white"
+    >
+      <option value="">— Seleccione —</option>
+      @foreach($productos as $p)
+        <option value="{{ $p->id }}"
+          @selected((int)($lineas[$i]['producto_id'] ?? 0) === (int)$p->id)
+        >
+          {{ $p->nombre }}
+        </option>
+      @endforeach
+    </select>
+  </div>
 
-                  @if($prodSel)
-                    <div class="mt-2 text-xs text-gray-500 dark:text-gray-300">
-                      Precio base: <span class="font-semibold">${{ number_format((float)($prodSel->precio ?? 0), 2) }}</span>
-                    </div>
-                  @endif
-                </td>
+  @error('lineas.'.$i.'.producto_id')
+    <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+  @enderror
+</td>
 
                 {{-- Cantidad --}}
                 <td class="px-4 py-3 text-right">
@@ -523,5 +531,58 @@
     {{-- ================= FIN FOOTER STICKY ================= --}}
 
   </section>
-  
+  <script>
+document.addEventListener('livewire:init', () => {
+
+  const ensureTomSelect = (el) => {
+    if (!el) return null;
+    if (el.tomselect) return el.tomselect;
+
+    const linea = parseInt(el.dataset.linea || '0', 10);
+
+    const ts = new TomSelect(el, {
+      placeholder: '— Seleccione —',
+      allowEmptyOption: true,
+      create: false,
+      maxOptions: 500,
+      hideSelected: false,
+      closeAfterSelect: true,
+      searchField: ['text'],
+      onChange(value) {
+        const pid = value ? parseInt(value, 10) : null;
+        @this.set(`lineas.${linea}.producto_id`, pid); // ✅ directo
+        // o si prefieres método:
+        // @this.call('setProducto', linea, pid);
+      }
+    });
+
+    return ts;
+  };
+
+  const initAll = () => {
+    document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+      ensureTomSelect(el);
+    });
+  };
+
+  initAll();
+
+  Livewire.hook('message.processed', () => {
+    initAll();
+  });
+
+  // opcional: si cargas cotización en editar y necesitas sincronizar
+  Livewire.on('sync-productos-tomselect', (payload) => {
+    const lineas = payload?.lineas || [];
+    lineas.forEach((l, i) => {
+      const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
+      if (!el) return;
+      const ts = ensureTomSelect(el);
+      if (!ts) return;
+      ts.setValue(l?.producto_id ? String(l.producto_id) : '', true);
+    });
+  });
+
+});
+</script>
 </div>

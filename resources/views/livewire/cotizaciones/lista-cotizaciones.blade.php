@@ -1,7 +1,12 @@
-@assets
+@once
+  @push('styles')
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  @endpush
+
+  @push('scripts')
     <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
-@endassets
+  @endpush
+@endonce
 
 <div class="space-y-4">
 

@@ -16,6 +16,7 @@ use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 
 use App\Models\CondicionPago\CondicionPago;
+use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Factura\Factura;
 use App\Models\Productos\ProductoCuentaTipo;
@@ -33,7 +34,7 @@ class FacturaForm extends Component
     public string $documento = 'factura';
     public string $modo = 'venta';
     public ?Serie $serieDefault = null;
-
+    public ?int $bodega_predeterminada_empresa_id = null;
     public ?int $serie_id = null;
     public ?int $socio_negocio_id = null;
     public string $fecha = '';
@@ -110,8 +111,6 @@ class FacturaForm extends Component
         $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
 
-
-
     public function mount(?int $id = null): void
     {
         try {
@@ -124,26 +123,28 @@ class FacturaForm extends Component
             // ✅ Auto-emitir SOLO en modo venta (para compra NO)
             $this->autoEmitirContado = ($this->modo === 'venta');
 
+            // ✅ Empresa activa / primera empresa
+            $empresa = Empresa::query()
+                ->where('is_activa', true)
+                ->first() ?? Empresa::query()->first();
+
+            $this->bodega_predeterminada_empresa_id = $empresa?->bodega_predeterminada_id;
+
             if ($id) {
-                // Cargar factura existente
                 $this->cargarFactura($id);
 
-                // Asignar serie si no tiene
                 if (!$this->factura->serie_id && $this->serieDefault) {
                     $this->serie_id = $this->serieDefault->id;
                 }
 
-                // Aplicar forma de pago actual
                 $this->aplicarFormaPago($this->tipo_pago);
 
-                // Definir términos si no existen
                 if (empty($this->terminos_pago)) {
                     $this->terminos_pago = $this->tipo_pago === 'credito'
                         ? 'Crédito a ' . (int)($this->plazo_dias ?: 30) . ' días'
                         : 'Contado';
                 }
             } else {
-                // Nueva factura
                 $this->addLinea();
                 $this->aplicarFormaPago('contado');
                 $this->terminos_pago = 'Contado';
@@ -153,7 +154,6 @@ class FacturaForm extends Component
                     ?: ($this->serieDefault?->id)
                 );
 
-                // Si ya viene socio seleccionado
                 if ($this->socio_negocio_id) {
                     $this->setPagoDesdeCliente((int)$this->socio_negocio_id);
 
@@ -164,7 +164,6 @@ class FacturaForm extends Component
                 }
             }
 
-            // 👇 Según el modo usa cuenta por cobrar (CxC) o por pagar (CxP)
             $this->setCuentaCobroPorDefecto();
         } catch (\Throwable $e) {
             report($e);
@@ -174,6 +173,8 @@ class FacturaForm extends Component
                 ->duration(7000);
         }
     }
+
+
 
 
     public function render()
@@ -551,7 +552,7 @@ class FacturaForm extends Component
         $l = [
             'producto_id'       => null,
             'cuenta_ingreso_id' => null,
-            'bodega_id'         => null,
+            'bodega_id'         => $this->bodega_predeterminada_empresa_id,
             'descripcion'       => null,
             'cantidad'          => null,
             'precio_unitario'   => 0,
@@ -559,11 +560,23 @@ class FacturaForm extends Component
             'impuesto_id'       => null,
             'impuesto_pct'      => 0,
         ];
+
         $this->normalizeLinea($l);
         $this->lineas[] = $l;
         $this->dispatch('$refresh');
     }
+    private function aplicarBodegaPredeterminadaALineasVacias(): void
+    {
+        if (!$this->bodega_predeterminada_empresa_id) {
+            return;
+        }
 
+        foreach ($this->lineas as &$linea) {
+            if (empty($linea['bodega_id'])) {
+                $linea['bodega_id'] = $this->bodega_predeterminada_empresa_id;
+            }
+        }
+    }
     public function removeLinea(int $i): void
     {
         if ($this->bloqueada) return;

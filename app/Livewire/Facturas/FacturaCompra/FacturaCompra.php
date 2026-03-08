@@ -13,6 +13,7 @@ use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\TiposDocumento\TipoDocumento;
 use App\Models\CondicionPago\CondicionPago;
 use App\Services\InventarioService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -1000,6 +1001,8 @@ class FacturaCompra extends Component
         // Si ya tienes tu método setProducto(), reutilízalo:
         $this->setProducto($index, $productoId);
     }
+
+
     protected function persistirBorrador(): void
     {
         if ($this->bloqueada) {
@@ -1007,41 +1010,45 @@ class FacturaCompra extends Component
         }
 
         DB::transaction(function () {
+        $usuarioId = Auth::id();
 
             if (!$this->factura) {
                 $this->factura = new Factura();
             }
 
+            $esNueva = empty($this->factura->id);
+
             $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
 
             $dataCab = [
-                'serie_id'          => $serieId,
-                'socio_negocio_id'  => $this->socio_negocio_id,
-                'fecha'             => $this->fecha,
-                'vencimiento'       => $this->vencimiento ?? $this->fecha,
-                'moneda'            => $this->moneda,
-                'notas'             => $this->notas,
-                'estado'            => 'borrador',
-                'cuenta_cobro_id'   => $this->cuenta_cobro_id,
-                'condicion_pago_id' => $this->condicion_pago_id,
-                'plazo_dias'        => $this->plazo_dias,
+                'serie_id'            => $serieId,
+                'socio_negocio_id'    => $this->socio_negocio_id,
+                'fecha'               => $this->fecha,
+                'vencimiento'         => $this->vencimiento ?? $this->fecha,
+                'moneda'              => $this->moneda,
+                'notas'               => $this->notas,
+                'estado'              => 'borrador',
+                'cuenta_cobro_id'     => $this->cuenta_cobro_id,
+                'condicion_pago_id'   => $this->condicion_pago_id,
+                'plazo_dias'          => $this->plazo_dias,
+                'actualizado_por_id'  => $usuarioId,
             ];
+
+            if ($esNueva) {
+                $dataCab['creado_por_id'] = $usuarioId;
+            }
 
             \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
                 $this->factura->forceFill($dataCab)->save();
             });
 
-            // 🔥 Si estás en modo "borrador", puedes borrar y recrear líneas
             $this->factura->detalles()->delete();
 
             $detallesPayload = [];
 
             foreach ($this->lineas as $l) {
-
-                // ✅ EVITA QUE SE GUARDE 1 CUANDO VIENE VACÍO/NULL
                 $cantidad = ($l['cantidad'] ?? null);
 
-                // Si viene '', null o no numérico => 0 (no forzar 1)
                 $cantidad = ($cantidad === '' || $cantidad === null || !is_numeric($cantidad))
                     ? 0
                     : (float) $cantidad;
@@ -1051,10 +1058,7 @@ class FacturaCompra extends Component
                     'cuenta_inventario_id' => isset($l['cuenta_inventario_id']) ? (int) $l['cuenta_inventario_id'] : null,
                     'bodega_id'            => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
                     'descripcion'          => $l['descripcion'] ?? null,
-
-                    // ✅ aquí el fix
                     'cantidad'             => $cantidad,
-
                     'precio_unitario'      => (float) ($l['precio_unitario'] ?? $l['costo_unitario'] ?? 0),
                     'descuento_pct'        => (float) ($l['descuento_pct'] ?? 0),
                     'impuesto_id'          => $l['impuesto_id'] ?? null,
@@ -1073,9 +1077,10 @@ class FacturaCompra extends Component
 
             $this->estado = $this->factura->estado;
 
-            Log::info('Factura guardada (borrador)', [
+            Log::info('Factura compra guardada (borrador)', [
                 'factura_id' => $this->factura->id,
                 'detalles'   => $this->factura->detalles->count(),
+                'usuario_id' => $usuarioId,
             ]);
         }, 3);
     }
@@ -1144,52 +1149,56 @@ class FacturaCompra extends Component
             PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')->duration(9000);
         }
     }
+   
 
     public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-        try {
-            $this->ensureCuentasEnLineas();
-            if (!$this->validarConToast()) return;
+    try {
+        $this->ensureCuentasEnLineas();
+        if (!$this->validarConToast()) return;
 
-            DB::transaction(function () {
-                $this->persistirBorrador();
+        DB::transaction(function () {
+            $this->persistirBorrador();
 
-                $this->factura->refresh()
-                    ->loadMissing(['detalles', 'socioNegocio'])
-                    ->recalcularTotales()
-                    ->save();
+            $this->factura->refresh()
+                ->loadMissing(['detalles', 'socioNegocio'])
+                ->recalcularTotales()
+                ->save();
 
-                if (!$this->serieDefault) {
-                    throw new \RuntimeException('No hay serie default activa para este documento.');
-                }
+            if (!$this->serieDefault) {
+                throw new \RuntimeException('No hay serie default activa para este documento.');
+            }
 
-                $numero = $this->serieDefault->tomarConsecutivo();
-                $this->factura->update([
-                    'serie_id' => $this->serieDefault->id,
-                    'numero'   => $numero,
-                    'prefijo'  => $this->serieDefault->prefijo,
-                    'estado'   => 'emitida',
-                ]);
+            $numero = $this->serieDefault->tomarConsecutivo();
 
-                \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
-                InventarioService::aumentarPorFacturaCompra($this->factura);
+            $this->factura->update([
+                'serie_id'       => $this->serieDefault->id,
+                'numero'         => $numero,
+                'prefijo'        => $this->serieDefault->prefijo,
+                'estado'         => 'emitida',
+              'emitido_por_id' => Auth::id(),
+                'emitido_en'     => now(),
+            ]);
 
-                $this->estado = $this->factura->estado;
-            }, 3);
+            \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
+            InventarioService::aumentarPorFacturaCompra($this->factura);
 
-            PendingToast::create()->success()->message(
-                'Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
-            )->duration(6000);
+            $this->estado = $this->factura->estado;
+        }, 3);
 
-            $this->resetFormulario();
-            $this->dispatch('refrescar-lista-facturas');
-        } catch (\Throwable $e) {
-            Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()->message($e->getMessage())->duration(12000);
-        }
+        PendingToast::create()->success()->message(
+            'Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
+        )->duration(6000);
+
+        $this->resetFormulario();
+        $this->dispatch('refrescar-lista-facturas');
+    } catch (\Throwable $e) {
+        Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
+        PendingToast::create()->error()->message($e->getMessage())->duration(12000);
     }
+}
 
     public function validarAntesDeEmitir(): void
     {

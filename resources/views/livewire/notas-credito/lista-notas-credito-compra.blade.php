@@ -50,7 +50,6 @@
                  class="h-10 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white" />
           <input type="date" wire:model.live="hasta"
                  class="h-10 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white" />
-
         </div>
       </div>
     </header>
@@ -67,17 +66,31 @@
             <th class="px-4 py-3 text-left">
               <button wire:click="sortBy('numero')" class="font-semibold">Número</button>
             </th>
+            <th class="px-4 py-3 text-left">Empleado</th>
             <th class="px-4 py-3 text-left">Estado</th>
             <th class="px-4 py-3 text-right">
               <button wire:click="sortBy('total')" class="font-semibold">Total NC</button>
             </th>
             <th class="px-4 py-3 text-center">Aplicado</th>
-            <th class="px-4 py-3 text-right">Acciones</th>
+            {{-- <th class="px-4 py-3 text-right">Acciones</th> --}}
           </tr>
         </thead>
 
         <tbody class="divide-y divide-gray-200 dark:divide-gray-800">
           @forelse($items as $nc)
+            @php
+              $chip = match($nc->estado) {
+                'borrador' => 'bg-slate-100 text-slate-700',
+                'emitida'  => 'bg-indigo-100 text-indigo-700',
+                'cerrado'  => 'bg-teal-100 text-teal-700',
+                'anulada'  => 'bg-rose-100 text-rose-700',
+                default    => 'bg-gray-100 text-gray-700',
+              };
+
+              $empleado = $nc->creadoPor->name ?? '—';
+              $inicial = $empleado !== '—' ? strtoupper(mb_substr($empleado, 0, 1)) : '—';
+            @endphp
+
             <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40" wire:key="nc-compra-{{ $nc->id }}">
               <td class="px-4 py-3">
                 {{ \Illuminate\Support\Carbon::parse($nc->fecha)->format('Y-m-d') }}
@@ -102,16 +115,19 @@
                 @endif
               </td>
 
+              {{-- Empleado --}}
+              <td class="px-4 py-3 whitespace-nowrap">
+                <div class="flex items-center gap-2 min-w-[160px]">
+                  <div class="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-bold">
+                    {{ $inicial }}
+                  </div>
+                  <div class="truncate max-w-[140px]">
+                    {{ $empleado }}
+                  </div>
+                </div>
+              </td>
+
               <td class="px-4 py-3">
-                @php
-                  $chip = match($nc->estado) {
-                    'borrador' => 'bg-slate-100 text-slate-700',
-                    'emitida'  => 'bg-indigo-100 text-indigo-700',
-                    'cerrado'  => 'bg-teal-100 text-teal-700',
-                    'anulada'  => 'bg-rose-100 text-rose-700',
-                    default    => 'bg-gray-100 text-gray-700',
-                  };
-                @endphp
                 <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $chip }}">
                   {{ ucfirst($nc->estado) }}
                 </span>
@@ -133,20 +149,19 @@
                 @endif
               </td>
 
-              <td class="px-4 py-3 text-right">
+              {{-- <td class="px-4 py-3 text-right">
                 <div class="inline-flex gap-2">
-                  {{-- puedes usar preview() o un evento para abrir el form --}}
                   <button
                     wire:click="$dispatch('abrir-nota-credito-compra', { id: {{ $nc->id }} })"
                     class="h-9 px-3 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs">
                     Abrir
                   </button>
                 </div>
-              </td>
+              </td> --}}
             </tr>
           @empty
             <tr>
-              <td colspan="8" class="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
+              <td colspan="9" class="px-4 py-10 text-center text-gray-500 dark:text-gray-400">
                 No hay resultados con los filtros actuales.
               </td>
             </tr>

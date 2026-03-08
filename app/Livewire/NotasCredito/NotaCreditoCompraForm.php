@@ -14,6 +14,7 @@ use App\Models\TiposDocumento\TipoDocumento;
 use App\Services\ContabilidadNotaCreditoCompraService;
 use App\Services\InventarioService;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -24,7 +25,7 @@ use Masmerise\Toaster\PendingToast;
 class NotaCreditoCompraForm extends Component
 {
     public ?NotaCredito $nota = null;
-  public string $documento = 'NOTACREDITOCOMPRA'; 
+    public string $documento = 'NOTACREDITOCOMPRA';
     public ?Serie $serieDefault = null;
 
     public ?int $serie_id = null;
@@ -56,8 +57,8 @@ class NotaCreditoCompraForm extends Component
         'socio_negocio_id'          => 'required|integer|exists:socio_negocios,id',
         'fecha'                     => 'required|date',
         'vencimiento'               => 'nullable|date|after_or_equal:fecha',
-      
-       
+
+
         'terminos_pago'             => 'nullable|string|max:255',
         'moneda'                    => 'required|string|size:3',
         'cuenta_cobro_id'           => 'required|integer|exists:plan_cuentas,id',
@@ -69,7 +70,7 @@ class NotaCreditoCompraForm extends Component
 
         'lineas'                    => 'required|array|min:1',
         'lineas.*.producto_id'      => 'required|integer|exists:productos,id',
-      'lineas.*.bodega_id'        => 'nullable|integer|exists:bodegas,id',
+        'lineas.*.bodega_id'        => 'nullable|integer|exists:bodegas,id',
 
         'lineas.*.descripcion'      => 'required|string|max:255',
         'lineas.*.cantidad'         => 'required|numeric|min:1',
@@ -86,7 +87,7 @@ class NotaCreditoCompraForm extends Component
         'fecha'                        => 'fecha',
         'vencimiento'                  => 'vencimiento',
         'tipo_pago'                    => 'tipo de pago',
-       
+
         'terminos_pago'                => 'términos de pago',
         'moneda'                       => 'moneda',
         'cuenta_cobro_id'              => 'cuenta CxP proveedor',
@@ -110,30 +111,30 @@ class NotaCreditoCompraForm extends Component
         $this->cargarNota($id);
     }
 
-   public function mount(?int $id = null, ?int $factura_compra_id = null): void
-{
-    try {
-        $this->fecha = now()->toDateString();
+    public function mount(?int $id = null, ?int $factura_compra_id = null): void
+    {
+        try {
+            $this->fecha = now()->toDateString();
 
-        // Ahora sí va a encontrar la serie default
-        $this->serieDefault = Serie::defaultParaCodigo($this->documento);
-        $this->serie_id     = $this->serieDefault?->id;
+            // Ahora sí va a encontrar la serie default
+            $this->serieDefault = Serie::defaultParaCodigo($this->documento);
+            $this->serie_id     = $this->serieDefault?->id;
 
-        if ($id) {
-            $this->cargarNota($id);
-        } else {
-            $this->addLinea();
-            $this->terminos_pago = 'Nota crédito de compra';
+            if ($id) {
+                $this->cargarNota($id);
+            } else {
+                $this->addLinea();
+                $this->terminos_pago = 'Nota crédito de compra';
 
-            if ($factura_compra_id) {
-                $this->factura_compra_id = $factura_compra_id;
-                $this->precargarDesdeFacturaCompra($factura_compra_id);
+                if ($factura_compra_id) {
+                    $this->factura_compra_id = $factura_compra_id;
+                    $this->precargarDesdeFacturaCompra($factura_compra_id);
+                }
             }
-        }
 
-        $this->setCuentaCxPPorDefecto();
-        $this->refrescarFacturasProveedor();
-    } catch (\Throwable $e) {
+            $this->setCuentaCxPPorDefecto();
+            $this->refrescarFacturasProveedor();
+        } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo inicializar la NC de compra.')->duration(7000);
         }
@@ -160,22 +161,22 @@ class NotaCreditoCompraForm extends Component
 
             $cuentasCXP = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
                 ->where('clase_cuenta', 'CXP_PROVEEDORES')
-                ->orderBy('codigo')->get(['id','codigo','nombre']);
+                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
 
             $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
-                ->whereIn('clase_cuenta', ['CAJA_GENERAL','BANCOS','CAJA'])
-                ->orderBy('codigo')->get(['id','codigo','nombre']);
+                ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
+                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
 
             $impuestosCompras = Impuesto::activos()
-                ->whereIn('aplica_sobre', ['COMPRAS','COMPRA','AMBOS','TODOS'])
+                ->whereIn('aplica_sobre', ['COMPRAS', 'COMPRA', 'AMBOS', 'TODOS'])
                 ->orderBy('prioridad')->orderBy('nombre')
-                ->get(['id','codigo','nombre','porcentaje','monto_fijo','incluido_en_precio']);
+                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
 
             $tipoId = \App\Models\TiposDocumento\TipoDocumento::whereRaw('LOWER(codigo)=?', [strtolower($this->documento)])->value('id');
             $series = Serie::query()
                 ->when($tipoId, fn($q) => $q->where('tipo_documento_id', $tipoId))
                 ->orderBy('nombre')
-                ->get(['id','nombre','prefijo','desde','hasta','proximo','longitud','es_default','activa']);
+                ->get(['id', 'nombre', 'prefijo', 'desde', 'hasta', 'proximo', 'longitud', 'es_default', 'activa']);
 
             $serieActualId = (int)($this->serie_id ?? $this->nota?->serie_id ?? 0);
             if ($serieActualId && !$series->contains('id', $serieActualId)) {
@@ -193,18 +194,23 @@ class NotaCreditoCompraForm extends Component
                 'cuentasCaja'      => $cuentasCaja,
                 'impuestosCompras' => $impuestosCompras,
                 'bloqueada'        => $this->bloqueada,
-                'facturasProveedor'=> collect($this->facturasProveedor),
+                'facturasProveedor' => collect($this->facturasProveedor),
             ]);
         } catch (\Throwable $e) {
-            Log::error('NC Compra render() fallo', ['msg'=>$e->getMessage()]);
+            Log::error('NC Compra render() fallo', ['msg' => $e->getMessage()]);
             PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
 
             return view('livewire.notas-credito.nota-credito-compra-form', [
-                'proveedores'=>collect(),'productos'=>collect(),'bodegas'=>collect(),
-                'series'=>collect(),'serieDefault'=>$this->serieDefault,
-                'cuentasCXP'=>collect(),'cuentasCaja'=>collect(),
-                'impuestosCompras'=>collect(),'bloqueada'=>$this->bloqueada,
-                'facturasProveedor'=>collect(),
+                'proveedores' => collect(),
+                'productos' => collect(),
+                'bodegas' => collect(),
+                'series' => collect(),
+                'serieDefault' => $this->serieDefault,
+                'cuentasCXP' => collect(),
+                'cuentasCaja' => collect(),
+                'impuestosCompras' => collect(),
+                'bloqueada' => $this->bloqueada,
+                'facturasProveedor' => collect(),
             ]);
         }
     }
@@ -213,10 +219,10 @@ class NotaCreditoCompraForm extends Component
     public function getBloqueadaProperty(): bool
     {
         $estado = $this->nota->estado ?? $this->estado ?? 'borrador';
-        return in_array($estado, ['emitida','anulada'], true);
+        return in_array($estado, ['emitida', 'anulada'], true);
     }
 
-    private function abortIfLocked(string $accion='editar'): bool
+    private function abortIfLocked(string $accion = 'editar'): bool
     {
         if ($this->bloqueada) {
             PendingToast::create()->warning()->message("La nota está {$this->estado}; no se puede {$accion}.")->duration(7000);
@@ -247,12 +253,14 @@ class NotaCreditoCompraForm extends Component
             $i = (int)$m[1];
             $this->setProducto($i, $value);
             $this->refreshStockLinea($i);
-            $this->resetErrorBag(); $this->resetValidation();
+            $this->resetErrorBag();
+            $this->resetValidation();
             $this->dispatch('$refresh');
             return;
         }
         if (preg_match('/^lineas\.(\d+)\.bodega_id$/', $name, $m)) {
-            $this->refreshStockLinea((int)$m[1]); return;
+            $this->refreshStockLinea((int)$m[1]);
+            return;
         }
         if (preg_match('/^lineas\.(\d+)\.(cantidad|precio_unitario|descuento_pct|impuesto_pct)$/', $name, $m)) {
             $i = (int)$m[1];
@@ -289,23 +297,28 @@ class NotaCreditoCompraForm extends Component
         $this->lineas[$i]['producto_id'] = $prodId;
 
         if (!$prodId) {
-            foreach (['precio_unitario','impuesto_id','impuesto_pct'] as $k) $this->lineas[$i][$k] = 0;
-            $this->normalizeLinea($this->lineas[$i]); $this->dispatch('$refresh'); return;
+            foreach (['precio_unitario', 'impuesto_id', 'impuesto_pct'] as $k) $this->lineas[$i][$k] = 0;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->dispatch('$refresh');
+            return;
         }
 
         $p = Producto::with(['impuesto'])->find($prodId);
         if (!$p) {
-            foreach (['precio_unitario','impuesto_id','impuesto_pct'] as $k) $this->lineas[$i][$k] = 0;
-            $this->normalizeLinea($this->lineas[$i]); $this->dispatch('$refresh'); return;
+            foreach (['precio_unitario', 'impuesto_id', 'impuesto_pct'] as $k) $this->lineas[$i][$k] = 0;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->dispatch('$refresh');
+            return;
         }
 
         $precioBase = (float)($p->costo ?? $p->precio_compra ?? $p->precio ?? 0.0);
 
-        $ivaPct = 0.0; $impId = null;
+        $ivaPct = 0.0;
+        $impId = null;
         $imp = $p->impuesto;
         if ($imp && (int)($imp->activo ?? 0) === 1) {
             $aplica = strtoupper((string)($imp->aplica_sobre ?? ''));
-            $aplicaCompras = in_array($aplica, ['COMPRAS','COMPRA','AMBOS','TODOS'], true);
+            $aplicaCompras = in_array($aplica, ['COMPRAS', 'COMPRA', 'AMBOS', 'TODOS'], true);
 
             $hoy = now()->startOfDay();
             $desde = $imp->vigente_desde ? Carbon::parse($imp->vigente_desde) : null;
@@ -317,7 +330,7 @@ class NotaCreditoCompraForm extends Component
                 if (!is_null($imp->porcentaje)) {
                     $ivaPct = (float)$imp->porcentaje;
                     if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
-                        $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct/100), 2) : 0.0;
+                        $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct / 100), 2) : 0.0;
                     }
                 }
             }
@@ -349,7 +362,7 @@ class NotaCreditoCompraForm extends Component
             if ($imp && $imp->activo && !is_null($imp->porcentaje)) {
                 if ($imp->incluido_en_precio && $imp->porcentaje > 0) {
                     $pu = (float)$this->lineas[$i]['precio_unitario'];
-                    $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje/100), 2) : 0.0;
+                    $this->lineas[$i]['precio_unitario'] = $pu > 0 ? round($pu / (1 + $imp->porcentaje / 100), 2) : 0.0;
                 }
                 $this->lineas[$i]['impuesto_pct'] = (float)$imp->porcentaje;
             } else {
@@ -401,124 +414,135 @@ class NotaCreditoCompraForm extends Component
         }
     }
 
-    public function updatedFecha(): void 
-    { 
-        if (!$this->bloqueada) $this->aplicarFormaPago($this->tipo_pago); 
+    public function updatedFecha(): void
+    {
+        if (!$this->bloqueada) $this->aplicarFormaPago($this->tipo_pago);
     }
 
     public function updatedPlazoDias(): void
     {
-        if ($this->bloqueada || $this->tipo_pago!=='credito') return;
+        if ($this->bloqueada || $this->tipo_pago !== 'credito') return;
         $d = max((int)$this->plazo_dias, 1);
         $this->plazo_dias  = $d;
         $this->vencimiento = Carbon::parse($this->fecha)->addDays($d)->toDateString();
-        $this->terminos_pago = 'Crédito a '.$d.' días';
+        $this->terminos_pago = 'Crédito a ' . $d . ' días';
     }
 
     /* ====== Totales ====== */
     public function getSubtotalProperty(): float
     {
-        $s=0.0; 
+        $s = 0.0;
         foreach ($this->lineas as $l) {
-            $cant=max(1,(float)($l['cantidad']??1));
-            $precio=max(0,(float)($l['precio_unitario']??0));
-            $desc=min(100,max(0,(float)($l['descuento_pct']??0)));
-            $s += $cant*$precio*(1-$desc/100);
-        } 
-        return round($s,2);
+            $cant = max(1, (float)($l['cantidad'] ?? 1));
+            $precio = max(0, (float)($l['precio_unitario'] ?? 0));
+            $desc = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+            $s += $cant * $precio * (1 - $desc / 100);
+        }
+        return round($s, 2);
     }
 
     public function getImpuestosTotalProperty(): float
     {
-        $i=0.0; 
+        $i = 0.0;
         foreach ($this->lineas as $l) {
-            $cant=max(1,(float)($l['cantidad']??1));
-            $precio=max(0,(float)($l['precio_unitario']??0));
-            $desc=min(100,max(0,(float)($l['descuento_pct']??0)));
-            $iva=min(100,max(0,(float)($l['impuesto_pct']??0)));
-            $i += ($cant*$precio*(1-$desc/100))*$iva/100;
-        } 
-        return round($i,2);
+            $cant = max(1, (float)($l['cantidad'] ?? 1));
+            $precio = max(0, (float)($l['precio_unitario'] ?? 0));
+            $desc = min(100, max(0, (float)($l['descuento_pct'] ?? 0)));
+            $iva = min(100, max(0, (float)($l['impuesto_pct'] ?? 0)));
+            $i += ($cant * $precio * (1 - $desc / 100)) * $iva / 100;
+        }
+        return round($i, 2);
     }
 
-    public function getTotalProperty(): float 
-    { 
-        return round($this->subtotal + $this->impuestosTotal, 2); 
+    public function getTotalProperty(): float
+    {
+        return round($this->subtotal + $this->impuestosTotal, 2);
     }
 
     /* ====== Persistencia ====== */
     private function normalizarPagoAntesDeValidar(): void
     {
-        if ($this->tipo_pago==='contado') {
-            $this->plazo_dias=null; 
-            $this->vencimiento=$this->fecha; 
-            $this->terminos_pago='Contado';
+        if ($this->tipo_pago === 'contado') {
+            $this->plazo_dias = null;
+            $this->vencimiento = $this->fecha;
+            $this->terminos_pago = 'Contado';
         } else {
-            $d=max((int)($this->plazo_dias?:30),1);
-            $this->plazo_dias=$d; 
-            $this->vencimiento=Carbon::parse($this->fecha)->addDays($d)->toDateString();
-            $this->terminos_pago='Crédito a '.$d.' días';
+            $d = max((int)($this->plazo_dias ?: 30), 1);
+            $this->plazo_dias = $d;
+            $this->vencimiento = Carbon::parse($this->fecha)->addDays($d)->toDateString();
+            $this->terminos_pago = 'Crédito a ' . $d . ' días';
         }
     }
 
-   private function sanearLineasAntesDeValidar(): void
-{
-    // Ajusta "lineas" si en FacturaCompra se llama distinto (por ej. "detalles")
-    foreach ($this->lineas as $i => $l) {
-        $this->lineas[$i]['bodega_id'] = 
-            isset($l['bodega_id']) && $l['bodega_id'] !== '' 
-                ? (int) $l['bodega_id'] 
+    private function sanearLineasAntesDeValidar(): void
+    {
+        // Ajusta "lineas" si en FacturaCompra se llama distinto (por ej. "detalles")
+        foreach ($this->lineas as $i => $l) {
+            $this->lineas[$i]['bodega_id'] =
+                isset($l['bodega_id']) && $l['bodega_id'] !== ''
+                ? (int) $l['bodega_id']
                 : null;
 
-        $this->lineas[$i]['producto_id'] = 
-            isset($l['producto_id']) && $l['producto_id'] !== '' 
-                ? (int) $l['producto_id'] 
+            $this->lineas[$i]['producto_id'] =
+                isset($l['producto_id']) && $l['producto_id'] !== ''
+                ? (int) $l['producto_id']
                 : null;
+        }
     }
-}
 
     private function validarConToast(): bool
     {
-        try { 
-            $this->validate($this->rules, [], $this->validationAttributes); 
-            return true; 
-        }
-        catch (ValidationException $e) {
+        try {
+            $this->validate($this->rules, [], $this->validationAttributes);
+            return true;
+        } catch (ValidationException $e) {
             $first = collect($e->validator->errors()->all())->first() ?: 'Revisa los campos obligatorios.';
             PendingToast::create()->error()->message($first)->duration(9000);
             return false;
         }
     }
-
     protected function persistirBorrador(): void
     {
-        if ($this->bloqueada) throw new \RuntimeException('La nota está bloqueada.');
+        if ($this->bloqueada) {
+            throw new \RuntimeException('La nota está bloqueada.');
+        }
 
         DB::transaction(function () {
             $this->normalizarPagoAntesDeValidar();
             $this->sanearLineasAntesDeValidar();
 
-            if (!$this->nota) $this->nota = new NotaCredito();
+            if (!$this->nota) {
+                $this->nota = new NotaCredito();
+            }
+
+            $esNueva = !$this->nota->exists;
+            $uid = Auth::id();
 
             $serieId = $this->serie_id ?? ($this->serieDefault?->id ?? $this->nota?->serie_id);
 
-          $dataCab = [
-    'serie_id'          => $serieId,
-    'socio_negocio_id'  => $this->socio_negocio_id,
-    'factura_id'        => $this->factura_compra_id,
-    'fecha'             => $this->fecha,
-    'vencimiento'       => $this->vencimiento,
-    'moneda'            => $this->moneda,
-    'tipo_pago'         => $this->tipo_pago,
-    'plazo_dias'        => $this->plazo_dias,
-    'terminos_pago'     => $this->terminos_pago,
-    'notas'             => $this->notas,
-    'motivo'            => $this->motivo,
-    'estado'            => 'borrador',
-    'cuenta_cobro_id'   => $this->cuenta_cobro_id,
-    'condicion_pago_id' => $this->condicion_pago_id,
-    'reponer_inventario'=> 0,
-];
+            $dataCab = [
+                'serie_id'            => $serieId,
+                'socio_negocio_id'    => $this->socio_negocio_id,
+                'factura_id'          => $this->factura_compra_id,
+                'fecha'               => $this->fecha,
+                'vencimiento'         => $this->vencimiento,
+                'moneda'              => $this->moneda,
+                'tipo_pago'           => $this->tipo_pago,
+                'plazo_dias'          => $this->plazo_dias,
+                'terminos_pago'       => $this->terminos_pago,
+                'notas'               => $this->notas,
+                'motivo'              => $this->motivo,
+                'estado'              => 'borrador',
+                'cuenta_cobro_id'     => $this->cuenta_cobro_id,
+                'condicion_pago_id'   => $this->condicion_pago_id,
+                'reponer_inventario'  => 0,
+                'actualizado_por_id'  => $uid,
+            ];
+
+            if ($esNueva) {
+                $dataCab['creado_por_id'] = $uid;
+            }
+
             \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
                 $this->nota->forceFill($dataCab)->save();
             });
@@ -529,7 +553,7 @@ class NotaCreditoCompraForm extends Component
             foreach ($this->lineas as $l) {
                 $detallesPayload[] = [
                     'producto_id'      => $l['producto_id'] ?? null,
-                    'bodega_id'        => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
+                    'bodega_id'        => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
                     'descripcion'      => $l['descripcion'] ?? null,
                     'cantidad'         => (float) ($l['cantidad'] ?? 1),
                     'precio_unitario'  => (float) ($l['precio_unitario'] ?? 0),
@@ -546,11 +570,16 @@ class NotaCreditoCompraForm extends Component
             }
 
             $this->nota->load('detalles');
-            if (method_exists($this->nota, 'recalcularTotales')) $this->nota->recalcularTotales()->save();
+
+            if (method_exists($this->nota, 'recalcularTotales')) {
+                $this->nota->recalcularTotales()->save();
+            }
 
             $this->estado = $this->nota->estado;
         }, 3);
     }
+
+
 
     public function guardar(): void
     {
@@ -561,143 +590,124 @@ class NotaCreditoCompraForm extends Component
             if (!$this->validarConToast()) return;
 
             $this->persistirBorrador();
-            PendingToast::create()->success()->message('NC de compra guardada (ID: '.$this->nota->id.').')->duration(5000);
+            PendingToast::create()->success()->message('NC de compra guardada (ID: ' . $this->nota->id . ').')->duration(5000);
             $this->dispatch('refrescar-lista-nc-compra');
         } catch (\Throwable $e) {
-            Log::error('NC COMPRA GUARDAR ERROR', ['msg'=>$e->getMessage()]);
-            PendingToast::create()->error()->message(config('app.debug')?$e->getMessage():'No se pudo guardar.')->duration(9000);
+            Log::error('NC COMPRA GUARDAR ERROR', ['msg' => $e->getMessage()]);
+            PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')->duration(9000);
         }
     }
 
     public function emitir(): void
-{
-    if ($this->abortIfLocked('emitir')) return;
+    {
+        if ($this->abortIfLocked('emitir')) return;
 
-    try {
-        // 👇 Ya no llamamos a normalizarPagoAntesDeValidar()
-        $this->sanearLineasAntesDeValidar();
-        if (!$this->validarConToast()) return;
+        try {
+            $this->sanearLineasAntesDeValidar();
+            if (!$this->validarConToast()) return;
 
-        DB::transaction(function () {
+            DB::transaction(function () {
+                $this->persistirBorrador();
 
-            // 1) Guardar borrador
-            $this->persistirBorrador();
+                $this->nota->refresh()->loadMissing(['detalles.producto', 'cliente']);
 
-            // Asegurarnos de tener productos cargados
-            $this->nota->refresh()->loadMissing(['detalles.producto', 'cliente']);
+                $hayInventariables = false;
 
-            // 2) Validar líneas (producto obligatorio, bodega solo para inventariables)
-            $hayInventariables = false;
-
-            foreach ($this->nota->detalles as $idx => $d) {
-
-                if (!$d->producto_id) {
-                    throw new \RuntimeException(
-                        "La fila #" . ($idx + 1) . " debe tener producto."
-                    );
-                }
-
-                // Cargar producto (por si no viene cargado)
-                $producto = $d->relationLoaded('producto')
-                    ? $d->producto
-                    : \App\Models\Productos\Producto::find($d->producto_id);
-
-                if (!$producto) {
-                    throw new \RuntimeException(
-                        "La fila #" . ($idx + 1) . " tiene un producto inválido."
-                    );
-                }
-
-                // 🔥 Detectar si es inventariable o servicio
-                // Ajusta estos campos a como lo tengas en tu modelo:
-                // es_inventariable / maneja_inventario / tipo_articulo, etc.
-                $esInventariable = (bool) (
-                    $producto->es_inventariable
-                    ?? $producto->maneja_inventario
-                    ?? true     // Por defecto asumimos que sí es inventariable si no hay campo
-                );
-
-                if ($esInventariable) {
-                    $hayInventariables = true;
-
-                    // Si es inventariable y se va a descontar inventario → obligo bodega
-                    if ($this->descontar_inventario && !$d->bodega_id) {
+                foreach ($this->nota->detalles as $idx => $d) {
+                    if (!$d->producto_id) {
                         throw new \RuntimeException(
-                            "La fila #" . ($idx + 1) .
-                            " es un producto inventariable y debe tener bodega para descontar inventario."
+                            "La fila #" . ($idx + 1) . " debe tener producto."
                         );
                     }
+
+                    $producto = $d->relationLoaded('producto')
+                        ? $d->producto
+                        : \App\Models\Productos\Producto::find($d->producto_id);
+
+                    if (!$producto) {
+                        throw new \RuntimeException(
+                            "La fila #" . ($idx + 1) . " tiene un producto inválido."
+                        );
+                    }
+
+                    $esInventariable = (bool) (
+                        $producto->es_inventariable
+                        ?? $producto->maneja_inventario
+                        ?? true
+                    );
+
+                    if ($esInventariable) {
+                        $hayInventariables = true;
+
+                        if ($this->descontar_inventario && !$d->bodega_id) {
+                            throw new \RuntimeException(
+                                "La fila #" . ($idx + 1) .
+                                    " es un producto inventariable y debe tener bodega para descontar inventario."
+                            );
+                        }
+                    }
                 }
-                // Si NO es inventariable (servicio) → NO obligamos bodega
-            }
 
-            // 3) Validar stock SOLO si hay productos inventariables
-            if ($this->descontar_inventario && $hayInventariables) {
-                \App\Services\InventarioService::verificarDisponibilidadParaNotaCreditoCompra(
-                    $this->nota
-                );
-            }
+                if ($this->descontar_inventario && $hayInventariables) {
+                    \App\Services\InventarioService::verificarDisponibilidadParaNotaCreditoCompra($this->nota);
+                }
 
-            // 4) Serie
-            $serie = $this->serie_id
-                ? Serie::find((int)$this->serie_id)
-                : $this->serieDefault;
+                $serie = $this->serie_id
+                    ? Serie::find((int) $this->serie_id)
+                    : $this->serieDefault;
 
-            if (!$serie) {
-                throw new \RuntimeException('No hay serie activa para Nota Crédito de Compra.');
-            }
-            if ((int)($serie->activa ?? 0) !== 1) {
-                throw new \RuntimeException('La serie seleccionada no está activa.');
-            }
+                if (!$serie) {
+                    throw new \RuntimeException('No hay serie activa para Nota Crédito de Compra.');
+                }
 
-            $len     = (int)($serie->longitud ?? 6);
-            $proximo = (int)($serie->proximo ?? 0);
-            $hasta   = (int)($serie->hasta ?? 0);
-            if ($hasta > 0 && $proximo > $hasta) {
-                throw new \RuntimeException('La serie seleccionada está agotada.');
-            }
+                if ((int) ($serie->activa ?? 0) !== 1) {
+                    throw new \RuntimeException('La serie seleccionada no está activa.');
+                }
 
-            // 5) Consecutivo
-            $numero = $serie->tomarConsecutivo();
+                $proximo = (int) ($serie->proximo ?? 0);
+                $hasta   = (int) ($serie->hasta ?? 0);
 
-            // 6) Actualizar NC
-            $this->nota->update([
-                'serie_id' => $serie->id,
-                'numero'   => $numero,
-                'prefijo'  => (string)($serie->prefijo ?? ''),
-                'estado'   => 'emitida',
-            ]);
+                if ($hasta > 0 && $proximo > $hasta) {
+                    throw new \RuntimeException('La serie seleccionada está agotada.');
+                }
 
-            // 7) 🔥 SALIDA de inventario por NC COMPRA
-            // Solo si hay productos inventariables
-            if ($this->descontar_inventario && $hayInventariables) {
-                \App\Services\InventarioService::salidaPorNotaCreditoCompra($this->nota);
-            }
+                $numero = $serie->tomarConsecutivo();
+                $uid = Auth::id();
 
-            // 8) Contabilidad
-            \App\Services\ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
+                $this->nota->update([
+                    'serie_id'           => $serie->id,
+                    'numero'             => $numero,
+                    'prefijo'            => (string) ($serie->prefijo ?? ''),
+                    'estado'             => 'emitida',
+                    'emitido_por_id'     => $uid,
+                    'emitido_en'         => now(),
+                    'actualizado_por_id' => $uid,
+                ]);
 
-            // 9) Estado local
-            $this->estado = $this->nota->estado;
+                if ($this->descontar_inventario && $hayInventariables) {
+                    \App\Services\InventarioService::salidaPorNotaCreditoCompra($this->nota);
+                }
 
-        }, 3);
+                \App\Services\ContabilidadNotaCreditoCompraService::asientoDesdeNotaCreditoCompra($this->nota);
 
-        PendingToast::create()
-            ->success()
-            ->message('Nota Crédito de compra emitida correctamente.')
-            ->duration(6000);
+                $this->estado = $this->nota->estado;
+            }, 3);
 
-        $this->dispatch('refrescar-lista-nc-compra');
+            PendingToast::create()
+                ->success()
+                ->message('Nota Crédito de compra emitida correctamente.')
+                ->duration(6000);
 
-    } catch (\Throwable $e) {
-        Log::error('NC COMPRA EMITIR ERROR', ['msg' => $e->getMessage()]);
+            $this->dispatch('refrescar-lista-nc-compra');
+        } catch (\Throwable $e) {
+            Log::error('NC COMPRA EMITIR ERROR', ['msg' => $e->getMessage()]);
 
-        PendingToast::create()
-            ->error()
-            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo emitir.')
-            ->duration(9000);
+            PendingToast::create()
+                ->error()
+                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo emitir.')
+                ->duration(9000);
+        }
     }
-}
 
 
 
@@ -718,10 +728,17 @@ class NotaCreditoCompraForm extends Component
                     InventarioService::revertirSalidaPorNotaCreditoCompra($this->nota);
                 }
 
-                // ✅ Usar el servicio contable de COMPRAS, no el genérico de ventas
                 ContabilidadNotaCreditoCompraService::revertirAsientoNotaCreditoCompra($this->nota);
 
-                $this->nota->update(['estado' => 'anulada']);
+                $uid = Auth::id();
+
+                $this->nota->update([
+                    'estado'             => 'anulada',
+                    'anulado_por_id'     => $uid,
+                    'anulado_en'         => now(),
+                    'actualizado_por_id' => $uid,
+                ]);
+
                 $this->estado = 'anulada';
             }, 3);
 
@@ -732,21 +749,20 @@ class NotaCreditoCompraForm extends Component
             PendingToast::create()->error()->message('No se pudo anular.')->duration(7000);
         }
     }
-
     /* ====== Vistas auxiliares ====== */
     public function getProximoPreviewProperty(): ?string
     {
         $serieId = (int)($this->serie_id ?? 0);
         if ($serieId <= 0) return null;
-        $s = Serie::find($serieId); 
+        $s = Serie::find($serieId);
         if (!$s) return null;
 
-        $len=(int)($s->longitud ?? 6); 
-        $proximo=(int)($s->proximo ?? 0);
-        $hasta=(int)($s->hasta ?? 0); 
-        $pref=(string)($s->prefijo ?? '');
-        if ($hasta>0 && $proximo>$hasta) return 'Serie agotada';
-        $num = $len>0 ? str_pad((string)$proximo,$len,'0',STR_PAD_LEFT) : (string)$proximo;
+        $len = (int)($s->longitud ?? 6);
+        $proximo = (int)($s->proximo ?? 0);
+        $hasta = (int)($s->hasta ?? 0);
+        $pref = (string)($s->prefijo ?? '');
+        if ($hasta > 0 && $proximo > $hasta) return 'Serie agotada';
+        $num = $len > 0 ? str_pad((string)$proximo, $len, '0', STR_PAD_LEFT) : (string)$proximo;
         return trim($pref) !== '' ? "{$pref}-{$num}" : $num;
     }
 
@@ -761,15 +777,15 @@ class NotaCreditoCompraForm extends Component
         $pid = (int)($this->lineas[$i]['producto_id'] ?? 0);
         $bid = (int)($this->lineas[$i]['bodega_id'] ?? 0);
 
-        if ($pid<=0 || $bid<=0) { 
-            $this->stockVista[$i]=0.0; 
-            $this->dispatch('$refresh'); 
-            return; 
+        if ($pid <= 0 || $bid <= 0) {
+            $this->stockVista[$i] = 0.0;
+            $this->dispatch('$refresh');
+            return;
         }
 
         $stock = \App\Models\Productos\ProductoBodega::query()
-            ->where('producto_id',$pid)
-            ->where('bodega_id',$bid)
+            ->where('producto_id', $pid)
+            ->where('bodega_id', $bid)
             ->value('stock');
 
         $this->stockVista[$i] = (float)($stock ?? 0);
@@ -780,36 +796,58 @@ class NotaCreditoCompraForm extends Component
     private function refrescarFacturasProveedor(): void
     {
         $this->facturasProveedor = [];
-        $provId = (int)($this->socio_negocio_id ?? 0);
-        if ($provId <= 0) return;
+
+        $provId = (int) ($this->socio_negocio_id ?? 0);
+        if ($provId <= 0) {
+            return;
+        }
 
         try {
             $tipoId = \App\Models\TiposDocumento\TipoDocumento::whereRaw('LOWER(codigo)=?', ['factura_compra'])
                 ->value('id');
 
+            $facturaActualId = (int) ($this->factura_compra_id ?? 0);
+            $notaActualId = (int) ($this->nota?->id ?? 0);
+
             $q = \App\Models\Factura\Factura::query()
                 ->where('socio_negocio_id', $provId)
-                ->when($tipoId, fn ($qq) =>
-                    $qq->whereHas('serie', fn ($s) => $s->where('tipo_documento_id', $tipoId))
+                ->when(
+                    $tipoId,
+                    fn($qq) =>
+                    $qq->whereHas('serie', fn($s) => $s->where('tipo_documento_id', $tipoId))
                 )
-                ->orderByDesc('fecha')->orderByDesc('id')
+                ->where(function ($qq) use ($facturaActualId, $notaActualId) {
+                    $qq->whereNotIn('id', function ($sub) use ($notaActualId) {
+                        $sub->select('factura_id')
+                            ->from('nota_creditos')
+                            ->whereNotNull('factura_id')
+                            ->whereIn('estado', ['borrador', 'emitida', 'cerrado'])
+                            ->when($notaActualId > 0, fn($x) => $x->where('id', '<>', $notaActualId));
+                    });
+
+                    if ($facturaActualId > 0) {
+                        $qq->orWhere('id', $facturaActualId);
+                    }
+                })
+                ->orderByDesc('fecha')
+                ->orderByDesc('id')
                 ->limit(200)
-                ->select(['id','prefijo','numero','fecha','total','saldo']);
+                ->select(['id', 'prefijo', 'numero', 'fecha', 'total', 'saldo']);
 
             $rows = $q->get();
 
             $this->facturasProveedor = $rows->map(function ($f) {
-                $num   = (string)($f->numero ?? '');
-                $pref  = trim((string)($f->prefijo ?? ''));
+                $num = (string) ($f->numero ?? '');
+                $pref = trim((string) ($f->prefijo ?? ''));
                 $numFmt = $pref !== '' ? "{$pref}-{$num}" : $num;
-                $fecha = $f->fecha instanceof \Carbon\Carbon ? $f->fecha->toDateString() : (string)$f->fecha;
+                $fecha = $f->fecha instanceof \Carbon\Carbon ? $f->fecha->toDateString() : (string) $f->fecha;
 
                 return [
-                    'id'    => (int)$f->id,
-                    'numero'=> $numFmt,
+                    'id'    => (int) $f->id,
+                    'numero' => $numFmt,
                     'fecha' => $fecha,
-                    'total' => (float)($f->total ?? 0),
-                    'saldo' => (float)($f->saldo ?? 0),
+                    'total' => (float) ($f->total ?? 0),
+                    'saldo' => (float) ($f->saldo ?? 0),
                 ];
             })->all();
         } catch (\Throwable $e) {
@@ -849,16 +887,16 @@ class NotaCreditoCompraForm extends Component
             $this->socio_negocio_id = (int) $f->socio_negocio_id;
             $this->moneda        = $f->moneda ?? $this->moneda;
             $this->tipo_pago     = 'credito';
-            $this->terminos_pago = 'NC compra por factura ' . trim(($f->prefijo ?? '').'-'.($f->numero ?? $id), '-');
+            $this->terminos_pago = 'NC compra por factura ' . trim(($f->prefijo ?? '') . '-' . ($f->numero ?? $id), '-');
 
             $this->lineas = collect($f->detalles)->map(function ($d) {
                 $producto = $d->producto;
                 $cuentaInventarioId = null;
-                
+
                 if (!empty($d->cuenta_inventario_id)) {
                     $cuentaInventarioId = (int) $d->cuenta_inventario_id;
                 }
-                
+
                 if (!$cuentaInventarioId && $producto) {
                     $cuentaInventarioId = $this->resolveCuentaInventarioParaProducto($producto);
                 }
@@ -874,13 +912,13 @@ class NotaCreditoCompraForm extends Component
                     'impuesto_pct'    => (float) ($d->impuesto_pct ?? $d->iva_pct ?? 0),
                     'cuenta_devolucion_id' => $cuentaInventarioId,
                 ];
-                
+
                 $this->normalizeLinea($l);
                 return $l;
             })->values()->all();
 
             $this->setCuentaCxPDesdeProveedor($f->socio_negocio_id);
-            
+
             if (!empty($f->cuenta_cobro_id) && PlanCuentas::whereKey($f->cuenta_cobro_id)->exists()) {
                 $this->cuenta_cobro_id = (int) $f->cuenta_cobro_id;
             }
@@ -899,14 +937,13 @@ class NotaCreditoCompraForm extends Component
                 ->success()
                 ->message('Productos cargados desde factura de compra ✓')
                 ->duration(4000);
-
         } catch (\Throwable $e) {
             Log::error('precargarDesdeFacturaCompra ERROR', [
                 'factura_id' => $id,
                 'msg' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             PendingToast::create()
                 ->error()
                 ->message('No se pudo cargar la factura: ' . $e->getMessage())
@@ -927,13 +964,19 @@ class NotaCreditoCompraForm extends Component
         }
 
         // 2. Buscar en cuentas del producto por tipo "INVENTARIO"
-        $tipoInvId = cache()->remember('producto_cuenta_tipo_inventario_id', 600, fn () =>
+        $tipoInvId = cache()->remember(
+            'producto_cuenta_tipo_inventario_id',
+            600,
+            fn() =>
             ProductoCuentaTipo::where('codigo', 'INVENTARIO')->value('id')
         );
 
         if (!$tipoInvId) {
             // Fallback: buscar tipo "GASTO_COMPRAS"
-            $tipoInvId = cache()->remember('producto_cuenta_tipo_gasto_compras_id', 600, fn () =>
+            $tipoInvId = cache()->remember(
+                'producto_cuenta_tipo_gasto_compras_id',
+                600,
+                fn() =>
                 ProductoCuentaTipo::where('codigo', 'GASTO_COMPRAS')->value('id')
             );
         }
@@ -952,9 +995,10 @@ class NotaCreditoCompraForm extends Component
         }
 
         // Opción B: Movimiento contable según subcategoría
-        if (($p->mov_contable_segun === 'SUBCATEGORIA' || $p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA) 
-            && !empty($p->subcategoria_id)) {
-            
+        if (($p->mov_contable_segun === 'SUBCATEGORIA' || $p->mov_contable_segun === Producto::MOV_SEGUN_SUBCATEGORIA)
+            && !empty($p->subcategoria_id)
+        ) {
+
             if ($p->relationLoaded('subcategoria') && $p->subcategoria?->relationLoaded('cuentas')) {
                 $sc = $p->subcategoria->cuentas->firstWhere('tipo_id', (int)$tipoInvId);
                 if ($sc && !empty($sc->plan_cuentas_id)) {
@@ -1073,12 +1117,11 @@ class NotaCreditoCompraForm extends Component
     }
 
     public static function defaultParaCodigo(string $codigo): ?self
-{
-    $tipoId = TipoDocumento::whereRaw('LOWER(codigo) = ?', [strtolower($codigo)])->value('id');
+    {
+        $tipoId = TipoDocumento::whereRaw('LOWER(codigo) = ?', [strtolower($codigo)])->value('id');
 
-    return static::where('tipo_documento_id', $tipoId)
-        ->where('es_default', 1)
-        ->first();
-}
-
+        return static::where('tipo_documento_id', $tipoId)
+            ->where('es_default', 1)
+            ->first();
+    }
 }

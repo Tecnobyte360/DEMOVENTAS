@@ -1,11 +1,11 @@
 @once
-  @push('styles')
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-  @endpush
+    @push('styles')
+        <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    @endpush
 
-  @push('scripts')
-    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
-  @endpush
+    @push('scripts')
+        <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.5/qz-tray.js"></script>
+    @endpush
 @endonce
 
 <div class="space-y-4">
@@ -92,6 +92,7 @@
                         <th class="px-4 py-3 text-left font-bold">Número</th>
                         <th class="px-4 py-3 text-left font-bold">Fecha</th>
                         <th class="px-4 py-3 text-left font-bold">Cliente</th>
+                        <th class="px-4 py-3 text-left font-bold">Empleado de ventas</th>
                         <th class="px-4 py-3 text-right font-bold">Subtotal</th>
                         <th class="px-4 py-3 text-right font-bold">Impuestos</th>
                         <th class="px-4 py-3 text-right font-bold">Total</th>
@@ -145,6 +146,11 @@
                                 </div>
                             </td>
 
+                            {{-- Generó --}}
+                            <td class="px-4 py-3 text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                                {{ $c->creadoPor->name ?? '—' }}
+                            </td>
+
                             {{-- Subtotal --}}
                             <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-200 whitespace-nowrap">
                                 ${{ number_format((float) ($c->subtotal ?? 0), 2) }}
@@ -193,6 +199,8 @@
                                         title="PDF">
                                         <i class="fa-solid fa-file-pdf text-xs"></i>
                                     </button>
+
+                                    {{-- Imprimir --}}
                                     <button type="button" wire:click.stop="imprimir({{ $c->id }})"
                                         class="h-9 w-9 rounded-lg bg-amber-500 hover:bg-amber-600 text-white inline-flex items-center justify-center"
                                         title="Imprimir">
@@ -204,7 +212,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="p-8 text-center text-slate-500 dark:text-slate-400">
+                            <td colspan="9" class="p-8 text-center text-slate-500 dark:text-slate-400">
                                 Sin resultados…
                             </td>
                         </tr>

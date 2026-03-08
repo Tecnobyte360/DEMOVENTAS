@@ -41,7 +41,6 @@
 
   {{-- ============================ BLOQUE TURNO ACTUAL ============================ --}}
   @if(!$turno || $turno->estado === 'cerrado')
-    {{-- SIN TURNO --}}
     <div class="max-w-2xl mx-auto text-center space-y-6">
       <div class="flex items-center justify-center gap-3">
         <i class="fa-solid fa-cash-register text-3xl text-indigo-600"></i>
@@ -78,7 +77,6 @@
       </p>
     </div>
   @else
-    {{-- CON TURNO --}}
     <section class="card p-5">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div class="space-y-1">
@@ -86,11 +84,39 @@
             <i class="fa-solid fa-cash-register text-indigo-600"></i>
             Turno de Caja #{{ $turno->id }}
           </h2>
-          <div class="text-sm muted">
-            Inicio:
-            <span class="font-medium text-gray-700 dark:text-gray-200">
-              {{ $turno->fecha_inicio }}
-            </span>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+            <div class="text-sm muted">
+              Inicio:
+              <span class="font-medium text-gray-700 dark:text-gray-200">
+                {{ $turno->fecha_inicio }}
+              </span>
+            </div>
+
+            <div class="text-sm muted">
+              Abrió:
+              <span class="font-medium text-gray-700 dark:text-gray-200">
+                {{ $turno->abiertoPor?->name ?? $turno->user?->name ?? '—' }}
+              </span>
+            </div>
+
+            @if($turno->fecha_cierre)
+              <div class="text-sm muted">
+                Cierre:
+                <span class="font-medium text-gray-700 dark:text-gray-200">
+                  {{ $turno->fecha_cierre }}
+                </span>
+              </div>
+            @endif
+
+            @if($turno->cerradoPor)
+              <div class="text-sm muted">
+                Cerró:
+                <span class="font-medium text-gray-700 dark:text-gray-200">
+                  {{ $turno->cerradoPor?->name ?? '—' }}
+                </span>
+              </div>
+            @endif
           </div>
         </div>
 
@@ -108,7 +134,6 @@
         </div>
       </div>
 
-      {{-- Tabs --}}
       <div class="mt-4 flex flex-wrap gap-2">
         <button @click="tab='resumen'" :class="tab==='resumen' ? 'tab-btn tab-active' : 'tab-btn tab-idle'">
           <i class="fa-solid fa-chart-pie mr-2"></i> Resumen
@@ -120,7 +145,6 @@
       </div>
     </section>
 
-    {{-- ===== TAB: CIERRE ===== --}}
     <section x-show="tab==='cierre'" x-cloak class="space-y-4">
       <div class="grid md:grid-cols-3 gap-4">
         <div class="md:col-span-2 card p-4">
@@ -137,29 +161,13 @@
               <span class="muted">Cobrado (todos los medios)</span>
               <span class="font-semibold">${{ $fmt($resumen['total_ventas'] ?? 0) }}</span>
             </div>
-            {{-- <div class="flex justify-between">
-              <span class="muted">Ingresos</span>
-              <span class="font-semibold">${{ $fmt($resumen['ingresos'] ?? 0) }}</span>
-            </div> --}}
             <div class="flex justify-between">
               <span class="muted">Retiros</span>
               <span class="font-semibold text-rose-600">-${{ $fmt($resumen['retiros'] ?? 0) }}</span>
             </div>
-          
           </div>
 
           <div class="border-t border-gray-200 dark:border-gray-700 my-3"></div>
-
-          <div class="grid sm:grid-cols-2 gap-3 text-sm">
-            {{-- <div class="flex justify-between">
-              <span class="muted">Efectivo esperado</span>
-              <span class="font-bold">${{ $fmt($turno->efectivoEsperado()) }}</span>
-            </div> --}}
-            {{-- <div class="flex justify-between">
-              <span class="muted">Cobrado sin CxC</span>
-              <span class="font-bold">${{ $fmt($turno->totalCobrado()) }}</span>
-            </div> --}}
-          </div>
 
           <div class="mt-4">
             <button wire:click="cerrar"
@@ -184,7 +192,7 @@
     </section>
   @endif
 
-  {{-- ============================ INFORME HISTÓRICO (SIEMPRE) ============================ --}}
+  {{-- ============================ INFORME HISTÓRICO ============================ --}}
   <section class="mt-8 space-y-4">
     <div class="card p-4">
       <h3 class="title mb-3 flex items-center gap-2">
@@ -213,7 +221,6 @@
       </div>
     </div>
 
-    {{-- Tabla de turnos --}}
     <div class="card p-4 overflow-x-auto">
       <h3 class="title mb-3 flex items-center gap-2">
         <i class="fa-solid fa-table"></i> Detalle de turnos
@@ -225,16 +232,13 @@
             <th class="th">#</th>
             <th class="th">Inicio</th>
             <th class="th">Cierre</th>
+            <th class="th">Abrió</th>
+            <th class="th">Cerró</th>
             <th class="th text-right">Base inicial</th>
             <th class="th text-right">Ventas</th>
-           
-
             <th class="th text-right">Retiros</th>
-          <th class="th text-right">Neto del efectivo</th>
-
-         
+            <th class="th text-right">Neto del efectivo</th>
             <th class="th">Medios de pago</th>
-
             <th class="th">Estado</th>
           </tr>
         </thead>
@@ -242,49 +246,45 @@
         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
           @forelse($turnosInforme as $t)
             @php
-              // Para turnos cerrados: esto viene guardado en $t->resumen (cast array)
-              $porTipo = (array) data_get($t->resumen, 'por_tipo', []);
+              $ventas  = (float) $t->total_ventas;
+              $retiros = (float) $t->retiros_efectivo;
+              $neto    = $ventas - $retiros;
+
+              $abiertoPor = $t->abiertoPor?->name ?? $t->user?->name ?? '—';
+              $cerradoPor = $t->cerradoPor?->name ?? '—';
             @endphp
 
             <tr>
               <td class="td">{{ $t->id }}</td>
               <td class="td muted">{{ $t->fecha_inicio }}</td>
               <td class="td muted">{{ $t->fecha_cierre ?? '—' }}</td>
-
+              <td class="td">{{ $abiertoPor }}</td>
+              <td class="td">{{ $cerradoPor }}</td>
               <td class="td text-right font-semibold">${{ $fmt($t->base_inicial) }}</td>
               <td class="td text-right font-semibold">${{ $fmt($t->total_ventas) }}</td>
-            
+              <td class="td text-right text-rose-600">-${{ $fmt($t->retiros_efectivo) }}</td>
 
-              <td class="td text-right text-rose-600">-{{ $fmt($t->retiros_efectivo) }}</td>
-          @php
-  $ventas  = (float) $t->total_ventas;
-  $retiros = (float) $t->retiros_efectivo;
-  $neto    = $ventas - $retiros;
-@endphp
-
-<td class="td text-right font-bold {{ $neto < 0 ? 'text-rose-600' : 'text-emerald-600' }}">
-  ${{ $fmt($neto) }}
-</td>
-
+              <td class="td text-right font-bold {{ $neto < 0 ? 'text-rose-600' : 'text-emerald-600' }}">
+                ${{ $fmt($neto) }}
+              </td>
 
               <td class="td">
-  <div class="flex gap-2 whitespace-nowrap overflow-x-auto py-1">
-    @foreach($mediosActivos as $medio)
-      @php
-        $total = $mapMediosPorTurno[$t->id][$medio['id']] ?? 0;
-      @endphp
+                <div class="flex gap-2 whitespace-nowrap overflow-x-auto py-1">
+                  @foreach($mediosActivos as $medio)
+                    @php
+                      $total = $mapMediosPorTurno[$t->id][$medio['id']] ?? 0;
+                    @endphp
 
-      <span class="chip
-        {{ $total > 0
-            ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200'
-            : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' }}">
-        {{ strtoupper($medio['nombre']) }}:
-        ${{ $fmt($total) }}
-      </span>
-    @endforeach
-  </div>
-</td>
-
+                    <span class="chip
+                      {{ $total > 0
+                          ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200'
+                          : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' }}">
+                      {{ strtoupper($medio['nombre']) }}:
+                      ${{ $fmt($total) }}
+                    </span>
+                  @endforeach
+                </div>
+              </td>
 
               <td class="td">
                 <span class="chip {{ $t->estado === 'cerrado'

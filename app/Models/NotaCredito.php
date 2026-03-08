@@ -116,4 +116,24 @@ class NotaCredito extends Model
     return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
 }
 
+public function creadoPor()
+{
+    return $this->belongsTo(\App\Models\User::class, 'creado_por_id');
+}
+
+public function actualizadoPor()
+{
+    return $this->belongsTo(\App\Models\User::class, 'actualizado_por_id');
+}
+
+public function emitidoPor()
+{
+    return $this->belongsTo(\App\Models\User::class, 'emitido_por_id');
+}
+
+public function anuladoPor()
+{
+    return $this->belongsTo(\App\Models\User::class, 'anulado_por_id');
+}
+
 }

@@ -23,6 +23,7 @@ use App\Models\Impuestos\Impuesto;
 use App\Models\NotaCredito;
 use App\Services\ContabilidadNotaCreditoService;
 use App\Services\InventarioService;
+use Illuminate\Support\Facades\Auth;
 use Masmerise\Toaster\PendingToast;
 
 class NotaCreditoForm extends Component
@@ -960,74 +961,89 @@ class NotaCreditoForm extends Component
     }
 
     protected function persistirBorrador(): void
-    {
-        if ($this->bloqueada) throw new \RuntimeException('La nota está bloqueada y no se puede modificar.');
-
-        DB::transaction(function () {
-            $this->normalizarPagoAntesDeValidar();
-            $this->sanearLineasAntesDeValidar();
-
-            if (!$this->nota) $this->nota = new NotaCredito();
-
-            $serieId = $this->serie_id ?? ($this->serieDefault?->id ?? $this->nota?->serie_id);
-
-
-            $dataCab = [
-                'serie_id'          => $serieId,
-                'socio_negocio_id'  => $this->socio_negocio_id,
-                'factura_id'        => $this->factura_id,
-                'fecha'             => $this->fecha,
-                'vencimiento'       => $this->vencimiento,
-                'moneda'            => $this->moneda,
-                'tipo_pago'         => $this->tipo_pago,
-                'plazo_dias'        => $this->plazo_dias,
-                'terminos_pago'     => $this->terminos_pago,
-                'notas'             => $this->notas,
-                'motivo'            => $this->motivo,
-                'reponer_inventario' => (bool)$this->reponer_inventario,
-                'estado'            => 'borrador',
-                'cuenta_cobro_id'   => $this->cuenta_cobro_id,
-                'condicion_pago_id' => $this->condicion_pago_id,
-            ];
-
-            \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
-                $this->nota->forceFill($dataCab)->save();
-            });
-
-            $this->nota->detalles()->delete();
-
-            $detallesPayload = [];
-            foreach ($this->lineas as $l) {
-                $detallesPayload[] = [
-                    'producto_id'       => $l['producto_id'] ?? null,
-                    'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int) $l['cuenta_ingreso_id'] : null,
-                    'bodega_id'         => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
-                    'descripcion'       => $l['descripcion'] ?? null,
-                    'cantidad'          => (float) ($l['cantidad'] ?? 1),
-                    'precio_unitario'   => (float) ($l['precio_unitario'] ?? 0),
-                    'descuento_pct'     => (float) ($l['descuento_pct'] ?? 0),
-                    'impuesto_id'       => $l['impuesto_id'] ?? null,
-                    'impuesto_pct'      => (float) ($l['impuesto_pct'] ?? 0),
-                ];
-            }
-
-            if (!empty($detallesPayload)) {
-                \Illuminate\Database\Eloquent\Model::unguarded(function () use ($detallesPayload) {
-                    $this->nota->detalles()->createMany($detallesPayload);
-                });
-            }
-
-            $this->nota->load('detalles');
-            $this->nota->recalcularTotales()->save();
-
-            $this->estado = $this->nota->estado;
-
-            Log::info('Nota crédito guardada (borrador)', [
-                'nota_id'   => $this->nota->id,
-                'detalles'  => $this->nota->detalles->count(),
-            ]);
-        }, 3);
+{
+    if ($this->bloqueada) {
+        throw new \RuntimeException('La nota está bloqueada y no se puede modificar.');
     }
+
+    DB::transaction(function () {
+        $this->normalizarPagoAntesDeValidar();
+        $this->sanearLineasAntesDeValidar();
+
+        if (!$this->nota) {
+            $this->nota = new NotaCredito();
+        }
+
+        $esNueva = !$this->nota->exists;
+        $uid     = Auth::id();
+
+        $serieId = $this->serie_id ?? ($this->serieDefault?->id ?? $this->nota?->serie_id);
+
+        $dataCab = [
+            'serie_id'            => $serieId,
+            'socio_negocio_id'    => $this->socio_negocio_id,
+            'factura_id'          => $this->factura_id,
+            'fecha'               => $this->fecha,
+            'vencimiento'         => $this->vencimiento,
+            'moneda'              => $this->moneda,
+            'tipo_pago'           => $this->tipo_pago,
+            'plazo_dias'          => $this->plazo_dias,
+            'terminos_pago'       => $this->terminos_pago,
+            'notas'               => $this->notas,
+            'motivo'              => $this->motivo,
+            'reponer_inventario'  => (bool) $this->reponer_inventario,
+            'estado'              => 'borrador',
+            'cuenta_cobro_id'     => $this->cuenta_cobro_id,
+            'condicion_pago_id'   => $this->condicion_pago_id,
+        ];
+
+        if ($uid) {
+            $dataCab['actualizado_por_id'] = $uid;
+
+            if ($esNueva) {
+                $dataCab['creado_por_id'] = $uid;
+            }
+        }
+
+        \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
+            $this->nota->forceFill($dataCab)->save();
+        });
+
+        $this->nota->detalles()->delete();
+
+        $detallesPayload = [];
+        foreach ($this->lineas as $l) {
+            $detallesPayload[] = [
+                'producto_id'       => $l['producto_id'] ?? null,
+                'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int) $l['cuenta_ingreso_id'] : null,
+                'bodega_id'         => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
+                'descripcion'       => $l['descripcion'] ?? null,
+                'cantidad'          => (float) ($l['cantidad'] ?? 1),
+                'precio_unitario'   => (float) ($l['precio_unitario'] ?? 0),
+                'descuento_pct'     => (float) ($l['descuento_pct'] ?? 0),
+                'impuesto_id'       => $l['impuesto_id'] ?? null,
+                'impuesto_pct'      => (float) ($l['impuesto_pct'] ?? 0),
+            ];
+        }
+
+        if (!empty($detallesPayload)) {
+            \Illuminate\Database\Eloquent\Model::unguarded(function () use ($detallesPayload) {
+                $this->nota->detalles()->createMany($detallesPayload);
+            });
+        }
+
+        $this->nota->load('detalles');
+        $this->nota->recalcularTotales()->save();
+
+        $this->estado = $this->nota->estado;
+
+        Log::info('Nota crédito guardada (borrador)', [
+            'nota_id'  => $this->nota->id,
+            'detalles' => $this->nota->detalles->count(),
+            'user_id'  => $uid,
+        ]);
+    }, 3);
+}
 
     public function guardar(): void
     {
@@ -1049,114 +1065,128 @@ class NotaCreditoForm extends Component
         }
     }
 
-    public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+   public function emitir(): void
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-        try {
-            // 🔹 Verificar factura origen
-            if ($this->factura_id) {
-                $factura = \App\Models\Factura\Factura::find($this->factura_id);
+    try {
+        // 🔹 Verificar factura origen
+        if ($this->factura_id) {
+            $factura = \App\Models\Factura\Factura::find($this->factura_id);
 
-                if ($factura && $factura->estado === 'borrador') {
-                    PendingToast::create()
-                        ->warning()
-                        ->message('No puedes emitir una Nota Crédito sobre una factura que aún está en borrador.')
-                        ->duration(6000);
-                    return;
+            if ($factura && $factura->estado === 'borrador') {
+                PendingToast::create()
+                    ->warning()
+                    ->message('No puedes emitir una Nota Crédito sobre una factura que aún está en borrador.')
+                    ->duration(6000);
+                return;
+            }
+        }
+
+        $this->normalizarPagoAntesDeValidar();
+        $this->sanearLineasAntesDeValidar();
+
+        if (!$this->validarConToast()) return;
+
+        DB::transaction(function () {
+            $this->persistirBorrador();
+
+            $this->nota->refresh()
+                ->loadMissing(['detalles', 'cliente'])
+                ->recalcularTotales()
+                ->save();
+
+            if (!$this->serieDefault) {
+                throw new \RuntimeException('No hay serie default activa para Nota Crédito.');
+            }
+
+            foreach ($this->nota->detalles as $idx => $d) {
+                if (!$d->producto_id || !$d->bodega_id) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
                 }
             }
 
-            $this->normalizarPagoAntesDeValidar();
-            $this->sanearLineasAntesDeValidar();
+            $numero = $this->serieDefault->tomarConsecutivo();
+            $uid = Auth::id();
 
-            if (!$this->validarConToast()) return;
+            $this->nota->update([
+                'serie_id'           => $this->serieDefault->id,
+                'numero'             => $numero,
+                'prefijo'            => $this->serieDefault->prefijo,
+                'estado'             => 'emitida',
+                'emitido_por_id'     => $uid,
+                'emitido_en'         => now(),
+                'actualizado_por_id' => $uid,
+            ]);
 
-            DB::transaction(function () {
-                $this->persistirBorrador();
-                $this->nota->refresh()
-                    ->loadMissing(['detalles', 'cliente'])
-                    ->recalcularTotales()
-                    ->save();
+            if ($this->nota->reponer_inventario) {
+                \App\Services\InventarioService::reponerPorNotaCredito($this->nota);
+            }
 
-                if (!$this->serieDefault) {
-                    throw new \RuntimeException('No hay serie default activa para Nota Crédito.');
-                }
+            \App\Services\ContabilidadNotaCreditoService::asientoDesdeNotaCredito($this->nota);
 
-                foreach ($this->nota->detalles as $idx => $d) {
-                    if (!$d->producto_id || !$d->bodega_id) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
-                    }
-                }
+            $this->estado = $this->nota->estado;
+        }, 3);
 
-                $numero = $this->serieDefault->tomarConsecutivo();
-                $this->nota->update([
-                    'serie_id' => $this->serieDefault->id,
-                    'numero'   => $numero,
-                    'prefijo'  => $this->serieDefault->prefijo,
-                    'estado'   => 'emitida',
-                ]);
+        PendingToast::create()
+            ->success()
+            ->message('Nota crédito emitida correctamente.')
+            ->duration(6000);
 
-                // 🔹 Solo reponer inventario si corresponde
-                if ($this->nota->reponer_inventario) {
-                    \App\Services\InventarioService::reponerPorNotaCredito($this->nota);
-                }
+        $this->dispatch('refrescar-lista-notas');
+    } catch (\Throwable $e) {
+        Log::error('NC EMITIR ERROR', ['msg' => $e->getMessage()]);
+        $msg = config('app.debug') ? $e->getMessage() : 'No se pudo emitir la Nota Crédito.';
+        PendingToast::create()->error()->message($msg)->duration(9000);
+    }
+}
 
-                \App\Services\ContabilidadNotaCreditoService::asientoDesdeNotaCredito($this->nota);
 
-                $this->estado = $this->nota->estado;
-            }, 3);
-
-            PendingToast::create()
-                ->success()
-                ->message('Nota crédito emitida correctamente.')
-                ->duration(6000);
-
-            $this->dispatch('refrescar-lista-notas');
-        } catch (\Throwable $e) {
-            Log::error('NC EMITIR ERROR', ['msg' => $e->getMessage()]);
-            $msg = config('app.debug') ? $e->getMessage() : 'No se pudo emitir la Nota Crédito.';
-            PendingToast::create()->error()->message($msg)->duration(9000);
-        }
+public function anular(): void
+{
+    if ($this->estado !== 'emitida') {
+        PendingToast::create()->warning()->message('Solo puedes anular notas crédito emitidas.')->duration(5000);
+        return;
     }
 
+    try {
+        if (!$this->nota?->id) return;
 
-    public function anular(): void
-    {
-        // Permitir anular solo si está emitida (y no ya anulada)
-        if ($this->estado !== 'emitida') {
-            PendingToast::create()->warning()->message('Solo puedes anular notas crédito emitidas.')->duration(5000);
-            return;
-        }
+        DB::transaction(function () {
+            $this->nota->refresh()->loadMissing('detalles');
 
-        try {
-            if (!$this->nota?->id) return;
+            $aplicaReposicion = (bool) $this->nota->reponer_inventario
+                || (is_string($this->nota->motivo) && mb_stripos($this->nota->motivo, 'falla') !== false);
 
-            DB::transaction(function () {
-                $this->nota->refresh()->loadMissing('detalles');
+            if (
+                $aplicaReposicion &&
+                class_exists(InventarioService::class) &&
+                method_exists(InventarioService::class, 'revertirReposicionPorNotaCredito')
+            ) {
+                InventarioService::revertirReposicionPorNotaCredito($this->nota);
+            }
 
-                // Revertir inventario solo si se había repuesto
-                $aplicaReposicion = (bool)$this->nota->reponer_inventario
-                    || (is_string($this->nota->motivo) && mb_stripos($this->nota->motivo, 'falla') !== false);
+            ContabilidadNotaCreditoService::revertirAsientoNotaCredito($this->nota);
 
-                if ($aplicaReposicion && class_exists(InventarioService::class) && method_exists(InventarioService::class, 'revertirReposicionPorNotaCredito')) {
-                    InventarioService::revertirReposicionPorNotaCredito($this->nota);
-                }
+            $uid = Auth::id();
 
-                // Reversar asiento
-                ContabilidadNotaCreditoService::revertirAsientoNotaCredito($this->nota);
+            $this->nota->update([
+                'estado'             => 'anulada',
+                'anulado_por_id'     => $uid,
+                'anulado_en'         => now(),
+                'actualizado_por_id' => $uid,
+            ]);
 
-                $this->nota->update(['estado' => 'anulada']);
-                $this->estado = 'anulada';
-            }, 3);
+            $this->estado = 'anulada';
+        }, 3);
 
-            PendingToast::create()->info()->message('Nota crédito anulada.')->duration(4500);
-            $this->dispatch('refrescar-lista-notas');
-        } catch (\Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo anular.')->duration(7000);
-        }
+        PendingToast::create()->info()->message('Nota crédito anulada.')->duration(4500);
+        $this->dispatch('refrescar-lista-notas');
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()->error()->message('No se pudo anular.')->duration(7000);
     }
+}
 
     /* ===== Accessors para la vista ===== */
 

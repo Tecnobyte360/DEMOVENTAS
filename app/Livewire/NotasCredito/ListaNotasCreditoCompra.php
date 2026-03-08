@@ -42,7 +42,7 @@ class ListaNotasCreditoCompra extends Component
 
     public function updating($name, $value): void
     {
-        if (in_array($name, ['search','proveedor_id','serie_id','estado','desde','hasta','perPage'])) {
+        if (in_array($name, ['search', 'proveedor_id', 'serie_id', 'estado', 'desde', 'hasta', 'perPage'])) {
             $this->resetPage();
         }
     }
@@ -87,7 +87,7 @@ class ListaNotasCreditoCompra extends Component
         $idTipo = TipoDocumento::whereRaw('LOWER(codigo) = ?', ['notacreditocompra'])->value('id');
 
         $q = NotaCredito::query()
-            ->with(['socioNegocio', 'serie'])
+            ->with(['socioNegocio', 'serie', 'creadoPor', 'emitidoPor'])
             ->when($idTipo, function (Builder $q) use ($idTipo) {
                 $q->whereHas('serie', function (Builder $s) use ($idTipo) {
                     $s->where('tipo_documento_id', $idTipo);
@@ -96,16 +96,16 @@ class ListaNotasCreditoCompra extends Component
 
         // === Búsqueda libre ===
         if (trim($this->search) !== '') {
-            $s = '%'.trim($this->search).'%';
+            $s = '%' . trim($this->search) . '%';
             $q->where(function ($qq) use ($s) {
                 $qq->where('numero',  'like', $s)
-                   ->orWhere('prefijo','like', $s)
-                   ->orWhere('estado', 'like', $s)
-                   ->orWhere('motivo', 'like', $s)
-                   ->orWhereHas('socioNegocio', function ($c) use ($s) {
-                        $c->where('razon_social','like',$s)
-                          ->orWhere('nit','like',$s);
-                   });
+                    ->orWhere('prefijo', 'like', $s)
+                    ->orWhere('estado', 'like', $s)
+                    ->orWhere('motivo', 'like', $s)
+                    ->orWhereHas('socioNegocio', function ($c) use ($s) {
+                        $c->where('razon_social', 'like', $s)
+                            ->orWhere('nit', 'like', $s);
+                    });
             });
         }
 
@@ -128,7 +128,7 @@ class ListaNotasCreditoCompra extends Component
 
         // Orden + paginación
         $items = $q->orderBy($this->sortField, $this->sortDir)
-                   ->paginate($this->perPage);
+            ->paginate($this->perPage);
 
         // combos
         $proveedores = SocioNegocio::orderBy('razon_social')->get();

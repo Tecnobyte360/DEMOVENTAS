@@ -24,6 +24,7 @@ use Masmerise\Toaster\PendingToast;
 use App\Models\Impuestos\Impuesto;
 use App\Services\InventarioService;
 use App\Models\TiposDocumento\TipoDocumento;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 
 class FacturaForm extends Component
@@ -447,100 +448,99 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
-   private function cargarFactura(int $id): void
-{
-    try {
-        $f = Factura::with(['detalles'])->findOrFail($id);
-        $this->factura = $f;
+    private function cargarFactura(int $id): void
+    {
+        try {
+            $f = Factura::with(['detalles'])->findOrFail($id);
+            $this->factura = $f;
 
-        // =========================
-        // Cabecera
-        // =========================
-        $this->fill($f->only([
-            'serie_id',
-            'socio_negocio_id',
-            'fecha',
-            'vencimiento',
-            'tipo_pago',
-            'plazo_dias',
-            'terminos_pago',
-            'notas',
-            'moneda',
-            'estado',
-            'cuenta_cobro_id',
-            'condicion_pago_id',
-        ]));
+            // =========================
+            // Cabecera
+            // =========================
+            $this->fill($f->only([
+                'serie_id',
+                'socio_negocio_id',
+                'fecha',
+                'vencimiento',
+                'tipo_pago',
+                'plazo_dias',
+                'terminos_pago',
+                'notas',
+                'moneda',
+                'estado',
+                'cuenta_cobro_id',
+                'condicion_pago_id',
+            ]));
 
-        // =========================
-        // Líneas (desde DB)
-        // =========================
-        $this->lineas = $f->detalles->map(function ($d) {
-            $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
+            // =========================
+            // Líneas (desde DB)
+            // =========================
+            $this->lineas = $f->detalles->map(function ($d) {
+                $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
 
-            if (!$cuentaId && $d->producto_id) {
-                $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
-                    ->find($d->producto_id);
+                if (!$cuentaId && $d->producto_id) {
+                    $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
+                        ->find($d->producto_id);
 
-                if ($p) {
-                    $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                    if ($p) {
+                        $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                    }
                 }
+
+                $l = [
+                    'id'                => $d->id,
+                    'producto_id'       => $d->producto_id ? (int)$d->producto_id : null,
+                    'cuenta_ingreso_id' => $cuentaId,
+                    'bodega_id'         => $d->bodega_id ? (int)$d->bodega_id : null,
+                    'descripcion'       => $d->descripcion,
+                    'cantidad'          => is_null($d->cantidad) ? null : (float)$d->cantidad,
+                    'precio_unitario'   => (float)$d->precio_unitario,
+                    'descuento_pct'     => (float)$d->descuento_pct,
+                    'impuesto_id'       => $d->impuesto_id ? (int)$d->impuesto_id : null,
+                    'impuesto_pct'      => (float)$d->impuesto_pct,
+                ];
+
+                $this->normalizeLinea($l);
+                return $l;
+            })->toArray();
+
+            // =========================================================
+            // ✅ (RECOMENDADO) Rehidratar líneas con lógica actual
+            // - Esto vuelve a ejecutar tu setProducto() por cada línea
+            // - Actualiza cuenta_ingreso_id, impuesto, precio, etc.
+            //
+            // ⚠️ Si NO quieres recalcular nada al editar (mantener DB tal cual),
+            //    comenta este bloque.
+            // =========================================================
+            foreach ($this->lineas as $i => $l) {
+                $pid = (int)($l['producto_id'] ?? 0);
+                if ($pid > 0) {
+                    // setProducto respeta descripción si ya existe (tu código lo hace)
+                    $this->setProducto($i, $pid);
+                }
+
+                // Stock (si hay bodega + producto)
+                $this->refreshStockLinea($i);
             }
 
-            $l = [
-                'id'                => $d->id,
-                'producto_id'       => $d->producto_id ? (int)$d->producto_id : null,
-                'cuenta_ingreso_id' => $cuentaId,
-                'bodega_id'         => $d->bodega_id ? (int)$d->bodega_id : null,
-                'descripcion'       => $d->descripcion,
-                'cantidad'          => is_null($d->cantidad) ? null : (float)$d->cantidad,
-                'precio_unitario'   => (float)$d->precio_unitario,
-                'descuento_pct'     => (float)$d->descuento_pct,
-                'impuesto_id'       => $d->impuesto_id ? (int)$d->impuesto_id : null,
-                'impuesto_pct'      => (float)$d->impuesto_pct,
-            ];
+            // Limpieza
+            $this->resetErrorBag();
+            $this->resetValidation();
 
-            $this->normalizeLinea($l);
-            return $l;
-        })->toArray();
+            // ✅ IMPORTANTÍSIMO para TomSelect (wire:ignore)
+            // Esto hace que el select visual se “setee” al editar
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
 
-        // =========================================================
-        // ✅ (RECOMENDADO) Rehidratar líneas con lógica actual
-        // - Esto vuelve a ejecutar tu setProducto() por cada línea
-        // - Actualiza cuenta_ingreso_id, impuesto, precio, etc.
-        //
-        // ⚠️ Si NO quieres recalcular nada al editar (mantener DB tal cual),
-        //    comenta este bloque.
-        // =========================================================
-        foreach ($this->lineas as $i => $l) {
-            $pid = (int)($l['producto_id'] ?? 0);
-            if ($pid > 0) {
-                // setProducto respeta descripción si ya existe (tu código lo hace)
-                $this->setProducto($i, $pid);
-            }
-
-            // Stock (si hay bodega + producto)
-            $this->refreshStockLinea($i);
+            // (opcional) refrescar UI
+            $this->dispatch('$refresh');
+        } catch (Throwable $e) {
+            report($e);
+            PendingToast::create()
+                ->error()
+                ->message('No se pudo cargar la factura.')
+                ->duration(7000);
         }
-
-        // Limpieza
-        $this->resetErrorBag();
-        $this->resetValidation();
-
-        // ✅ IMPORTANTÍSIMO para TomSelect (wire:ignore)
-        // Esto hace que el select visual se “setee” al editar
-        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-
-        // (opcional) refrescar UI
-        $this->dispatch('$refresh');
-
-    } catch (Throwable $e) {
-        report($e);
-        PendingToast::create()
-            ->error()
-            ->message('No se pudo cargar la factura.')
-            ->duration(7000);
     }
-}
 
 
 
@@ -848,6 +848,9 @@ class FacturaForm extends Component
 
             if (!$this->factura) $this->factura = new Factura();
 
+            $esNueva = !$this->factura->exists;
+            $uid     = Auth::id(); // ✅ evita intelephense "Undefined method id"
+
             $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
 
             $dataCab = [
@@ -865,6 +868,16 @@ class FacturaForm extends Component
                 'condicion_pago_id' => $this->condicion_pago_id,
             ];
 
+            // ✅ Auditoría cabecera (solo si existen columnas)
+            if ($uid) {
+                if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
+                    $dataCab['actualizado_por_id'] = $uid;
+                }
+                if ($esNueva && Schema::hasColumn('facturas', 'creado_por_id')) {
+                    $dataCab['creado_por_id'] = $uid;
+                }
+            }
+
             \Illuminate\Database\Eloquent\Model::unguarded(function () use ($dataCab) {
                 $this->factura->forceFill($dataCab)->save();
             });
@@ -874,7 +887,8 @@ class FacturaForm extends Component
 
             $detallesPayload = [];
             foreach ($this->lineas as $l) {
-                $detallesPayload[] = [
+
+                $row = [
                     'producto_id'       => $l['producto_id'] ?? null,
                     'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int)$l['cuenta_ingreso_id'] : null,
                     'bodega_id'         => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
@@ -885,6 +899,18 @@ class FacturaForm extends Component
                     'impuesto_id'       => $l['impuesto_id'] ?? null,
                     'impuesto_pct'      => (float)($l['impuesto_pct'] ?? 0),
                 ];
+
+                // ✅ Auditoría detalles (solo si existen columnas)
+                if ($uid) {
+                    if (Schema::hasColumn('factura_detalles', 'actualizado_por_id')) {
+                        $row['actualizado_por_id'] = $uid;
+                    }
+                    if ($esNueva && Schema::hasColumn('factura_detalles', 'creado_por_id')) {
+                        $row['creado_por_id'] = $uid;
+                    }
+                }
+
+                $detallesPayload[] = $row;
             }
 
             if (!empty($detallesPayload)) {
@@ -904,7 +930,6 @@ class FacturaForm extends Component
             ]);
         }, 3);
     }
-
     private function ensureCuentasEnLineas(): void
     {
         foreach ($this->lineas as $i => &$l) {
@@ -1186,11 +1211,20 @@ class FacturaForm extends Component
 
                 // 6) Tomar consecutivo y marcar como emitida
                 $numero = $this->serieDefault->tomarConsecutivo();
+                $uid = Auth::id();
+
                 $this->factura->update([
                     'serie_id' => $this->serieDefault->id,
                     'numero'   => $numero,
                     'prefijo'  => $this->serieDefault->prefijo,
                     'estado'   => 'emitida',
+
+                    // ✅ auditoría emisión
+                    'emitido_por_id' => $uid,
+                    'emitido_en'     => now(),
+
+                    // ✅ deja también rastro de última edición
+                    'actualizado_por_id' => $uid,
                 ]);
 
                 // 7) Contabilizar (VENTA) y mover inventario (KÁRDEX SALIDA)
@@ -1236,7 +1270,16 @@ class FacturaForm extends Component
                     \App\Services\InventarioService::revertirPorFactura($this->factura);
                 }
 
-                $this->factura->update(['estado' => 'anulada']);
+                $uid = Auth::id();
+
+                $this->factura->update([
+                    'estado'         => 'anulada',
+                    'anulado_por_id' => $uid,
+                    'anulado_en'     => now(),
+
+
+                    'actualizado_por_id' => $uid,
+                ]);
                 $this->estado = 'anulada';
             }, 3);
 

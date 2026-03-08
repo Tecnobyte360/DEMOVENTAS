@@ -52,11 +52,11 @@
           <th class="p-2 sm:p-3 text-left font-semibold whitespace-nowrap">Número</th>
           <th class="p-2 sm:p-3 text-left font-semibold whitespace-nowrap">Fecha</th>
           <th class="p-2 sm:p-3 text-left font-semibold">Cliente</th>
+          <th class="p-2 sm:p-3 text-left font-semibold whitespace-nowrap">Empleado</th>
           <th class="p-2 sm:p-3 text-right font-semibold whitespace-nowrap">Subtotal</th>
           <th class="p-2 sm:p-3 text-right font-semibold whitespace-nowrap">Impuestos</th>
           <th class="p-2 sm:p-3 text-right font-semibold whitespace-nowrap">Total</th>
           <th class="p-2 sm:p-3 text-left font-semibold whitespace-nowrap">Estado</th>
-          {{-- <th class="p-2 sm:p-3 text-left font-semibold whitespace-nowrap">Acciones</th> --}}
         </tr>
       </thead>
 
@@ -64,78 +64,78 @@
         @forelse($items as $n)
           @php
             $len = $n->serie->longitud ?? 6;
-            $num = $n->numero !== null ? str_pad((string)$n->numero, $len, '0', STR_PAD_LEFT) : '—';
+            $num = $n->numero !== null ? str_pad((string) $n->numero, $len, '0', STR_PAD_LEFT) : '—';
+
             $badge = [
               'borrador' => 'bg-slate-100 text-slate-700',
               'emitida'  => 'bg-indigo-100 text-indigo-700',
               'aplicada' => 'bg-emerald-100 text-emerald-700',
               'anulada'  => 'bg-rose-100 text-rose-700',
             ][$n->estado] ?? 'bg-slate-100 text-slate-700';
+
+            $empleado = $n->creadoPor->name ?? '—';
+            $inicial = $empleado !== '—' ? strtoupper(mb_substr($empleado, 0, 1)) : '—';
           @endphp
 
           <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/60 transition-all duration-200 ease-in-out">
-            <td class="p-2 sm:p-3 font-medium whitespace-nowrap">{{ $n->prefijo ?? '—' }}</td>
-            <td class="p-2 sm:p-3 font-semibold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{{ $num }}</td>
-            <td class="p-2 sm:p-3 whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($n->fecha)->format('d/m/Y') }}</td>
+            <td class="p-2 sm:p-3 font-medium whitespace-nowrap">
+              {{ $n->prefijo ?? '—' }}
+            </td>
+
+            <td class="p-2 sm:p-3 font-semibold text-indigo-700 dark:text-indigo-300 whitespace-nowrap">
+              {{ $num }}
+            </td>
+
+            <td class="p-2 sm:p-3 whitespace-nowrap">
+              {{ \Illuminate\Support\Carbon::parse($n->fecha)->format('d/m/Y') }}
+            </td>
+
             <td class="p-2 sm:p-3">
               <div class="truncate max-w-[220px] sm:max-w-[340px]">
                 {{ $n->cliente->razon_social ?? '—' }}
                 @if(!empty($n->cliente?->nit))
-                  <span class="text-[10px] sm:text-xs text-gray-400">({{ $n->cliente->nit }})</span>
+                  <span class="text-[10px] sm:text-xs text-gray-400">
+                    ({{ $n->cliente->nit }})
+                  </span>
                 @endif
               </div>
             </td>
-            <td class="p-2 sm:p-3 text-right whitespace-nowrap">${{ number_format($n->subtotal,2) }}</td>
-            <td class="p-2 sm:p-3 text-right whitespace-nowrap">${{ number_format($n->impuestos,2) }}</td>
-            <td class="p-2 sm:p-3 text-right font-semibold whitespace-nowrap">${{ number_format($n->total,2) }}</td>
+
+            {{-- Empleado --}}
             <td class="p-2 sm:p-3 whitespace-nowrap">
-              <span class="px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold {{ $badge }} shadow-sm">
-                {{ ucwords(str_replace('_',' ',$n->estado)) }}
-              </span>
+              <div class="flex items-center gap-2 min-w-[160px]">
+                <div class="w-7 h-7 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 flex items-center justify-center text-xs font-bold">
+                  {{ $inicial }}
+                </div>
+                <div class="truncate max-w-[130px] sm:max-w-[180px]">
+                  {{ $empleado }}
+                </div>
+              </div>
             </td>
 
-            {{-- Acciones --}}
-            {{-- <td class="p-2 sm:p-3 whitespace-nowrap">
-              <div class="flex items-center gap-1.5 sm:gap-2"> --}}
-                {{-- Editar --}}
-                {{-- <button type="button" title="Editar"
-                        wire:click="abrir({{ $n->id }})"
-                        class="group relative px-2.5 py-1.5 rounded-lg bg-gray-900 text-white text-xs hover:bg-black/80 transition">
-                  <i class="fa-solid fa-pen-to-square"></i>
-                  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-gray-900 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Editar</span>
-                </button> --}}
+            <td class="p-2 sm:p-3 text-right whitespace-nowrap">
+              ${{ number_format($n->subtotal, 2) }}
+            </td>
 
-                {{-- Enviar --}}
-                {{-- <button type="button" title="Enviar por correo"
-                        wire:click="enviarPorCorreo({{ $n->id }})"
-                        class="group relative px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs hover:bg-indigo-700 transition">
-                  <i class="fa-solid fa-envelope"></i>
-                  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-indigo-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Enviar por correo</span>
-                </button> --}}
+            <td class="p-2 sm:p-3 text-right whitespace-nowrap">
+              ${{ number_format($n->impuestos, 2) }}
+            </td>
 
-                {{-- Vista previa --}}
-                {{-- <button type="button" title="Vista previa"
-                        wire:click="preview({{ $n->id }})"
-                        class="group relative px-2.5 py-1.5 rounded-lg bg-amber-600 text-white text-xs hover:bg-amber-700 transition">
-                  <i class="fa-solid fa-eye"></i>
-                  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-amber-600 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">
-                    Vista previa
-                  </span>
-                </button> --}}
+            <td class="p-2 sm:p-3 text-right font-semibold whitespace-nowrap">
+              ${{ number_format($n->total, 2) }}
+            </td>
 
-                {{-- Imprimir --}}
-                {{-- <button type="button" title="Imprimir"
-                        onclick="imprimirPOSNota({{ $n->id }})"
-                        class="group relative px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-700 transition">
-                  <i class="fa-solid fa-receipt"></i>
-                  <span class="hidden sm:block pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 bg-emerald-700 text-white text-[11px] px-2 py-1 rounded-md whitespace-nowrap transition-all duration-200 shadow-lg">Imprimir</span>
-                </button> --}}
-              {{-- </div>
-            </td> --}}
+            <td class="p-2 sm:p-3 whitespace-nowrap">
+              <span class="px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-[11px] font-semibold {{ $badge }} shadow-sm">
+                {{ ucwords(str_replace('_', ' ', $n->estado)) }}
+              </span>
+            </td>
           </tr>
         @empty
           <tr>
-            <td colspan="9" class="p-6 text-center text-gray-500 dark:text-gray-400">Sin resultados…</td>
+            <td colspan="9" class="p-6 text-center text-gray-500 dark:text-gray-400">
+              Sin resultados…
+            </td>
           </tr>
         @endforelse
       </tbody>
@@ -146,3 +146,4 @@
     {{ $items->links() }}
   </div>
 
+</div>

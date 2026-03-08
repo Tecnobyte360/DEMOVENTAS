@@ -14,6 +14,8 @@ class turnos_caja extends Model
 
     protected $fillable = [
         'user_id',
+        'abierto_por_id',
+        'cerrado_por_id',
         'fecha_inicio',
         'fecha_cierre',
         'base_inicial',
@@ -46,15 +48,19 @@ class turnos_caja extends Model
         'resumen'                => 'array',
     ];
 
-    /*
-    |--------------------------------------------------------------------------
-    | Relaciones
-    |--------------------------------------------------------------------------
-    */
-
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function abiertoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'abierto_por_id');
+    }
+
+    public function cerradoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cerrado_por_id');
     }
 
     public function pagos(): HasMany
@@ -66,12 +72,6 @@ class turnos_caja extends Model
     {
         return $this->hasMany(CajaMovimiento::class, 'turno_id');
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Scopes
-    |--------------------------------------------------------------------------
-    */
 
     public function scopeAbierto($query)
     {
@@ -88,12 +88,6 @@ class turnos_caja extends Model
         return $query->where('user_id', $userId);
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Helpers
-    |--------------------------------------------------------------------------
-    */
-
     public function estaAbierto(): bool
     {
         return $this->estado === 'abierto';
@@ -104,9 +98,6 @@ class turnos_caja extends Model
         return $this->estado === 'cerrado';
     }
 
-    /**
-     * Calcula el efectivo esperado en caja.
-     */
     public function efectivoEsperado(): float
     {
         return (float) $this->base_inicial
@@ -116,9 +107,6 @@ class turnos_caja extends Model
             - (float) $this->devoluciones;
     }
 
-    /**
-     * Calcula el total de ventas cobradas (sin CxC).
-     */
     public function totalCobrado(): float
     {
         return (float) $this->ventas_efectivo
@@ -127,12 +115,10 @@ class turnos_caja extends Model
             + (float) $this->ventas_transferencias;
     }
 
-    /**
-     * 🔹 Turno abierto único por usuario.
-     */
     public static function turnoAbiertoDe(int $userId): ?self
     {
-        return self::where('user_id', $userId)
+        return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
+            ->where('user_id', $userId)
             ->where('estado', 'abierto')
             ->latest('id')
             ->first();

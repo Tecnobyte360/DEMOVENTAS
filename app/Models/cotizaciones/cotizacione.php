@@ -4,18 +4,34 @@ namespace App\Models\cotizaciones;
 
 use Illuminate\Database\Eloquent\Model;
 use App\Models\SocioNegocio\SocioNegocio;
+use App\Models\User;
 
 class cotizacione extends Model
 {
     protected $table = 'cotizaciones';
 
     protected $fillable = [
-        'socio_negocio_id','fecha','vencimiento','lista_precio','terminos_pago',
-        'estado','notas','subtotal','impuestos','total','pedido_id',
-        'aprobada_at','aprobada_por'
+        'socio_negocio_id',
+        'fecha',
+        'vencimiento',
+        'lista_precio',
+        'terminos_pago',
+        'estado',
+        'notas',
+        'subtotal',
+        'impuestos',
+        'total',
+        'pedido_id',
+        'aprobada_at',
+        'aprobada_por',
+        'creado_por_id',
+        'actualizado_por_id',
+        'anulado_por_id',
+        'anulado_en',
+        'emitido_por_id',
+        'emitido_en',
     ];
 
-    // Relaciones
     public function detalles()
     {
         return $this->hasMany(cotizacion_detalle::class, 'cotizacion_id');
@@ -26,13 +42,31 @@ class cotizacione extends Model
         return $this->belongsTo(SocioNegocio::class, 'socio_negocio_id');
     }
 
-    // (opcional) número legible
+    public function creadoPor()
+    {
+        return $this->belongsTo(User::class, 'creado_por_id');
+    }
+
+    public function actualizadoPor()
+    {
+        return $this->belongsTo(User::class, 'actualizado_por_id');
+    }
+
+    public function anuladoPor()
+    {
+        return $this->belongsTo(User::class, 'anulado_por_id');
+    }
+
+    public function emitidoPor()
+    {
+        return $this->belongsTo(User::class, 'emitido_por_id');
+    }
+
     public function getNumeroAttribute(): string
     {
         return 'S'.str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }
 
-    // (opcional) recalcular totales
     public function recalcularTotales(): void
     {
         $sub = $this->detalles()->sum('importe');

@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use App\Models\SocioNegocio\SocioNegocio;
 use App\Models\Productos\Producto;
 use App\Models\Bodega;
+use App\Models\ConfiguracionEmpresas\Empresa;
 use App\Models\cotizaciones\cotizacione as CotizacionModel;
 
 use Maatwebsite\Excel\Validators\ValidationException;
@@ -21,7 +22,7 @@ use Masmerise\Toaster\PendingToast;
 class Cotizacion extends Component
 {
     public $cotizacion = null;
-
+    public ?int $bodega_predeterminada_empresa_id = null;
     public ?int $socio_negocio_id = null;
     public string $fecha = '';
     public ?string $vencimiento = null;
@@ -75,6 +76,13 @@ class Cotizacion extends Component
         try {
             $this->fecha = now()->toDateString();
             $this->vencimiento = now()->addDays(7)->toDateString();
+
+            // ✅ empresa activa o primera empresa
+            $empresa = Empresa::query()
+                ->where('is_activa', true)
+                ->first() ?? Empresa::query()->first();
+
+            $this->bodega_predeterminada_empresa_id = $empresa?->bodega_predeterminada_id;
 
             if ($id) {
                 $this->cargarCotizacion($id);
@@ -144,7 +152,7 @@ class Cotizacion extends Component
     {
         $l = [
             'producto_id'     => null,
-            'bodega_id'       => null,
+            'bodega_id'       => $this->bodega_predeterminada_empresa_id,
             'cantidad'        => null,
             'precio_unitario' => 0,
             'descuento_pct'   => 0,
@@ -158,7 +166,6 @@ class Cotizacion extends Component
         $this->markDirtyIfNeeded();
         $this->dispatch('$refresh');
     }
-
     public function removeLinea(int $i): void
     {
         if (!isset($this->lineas[$i])) {
@@ -174,7 +181,18 @@ class Cotizacion extends Component
         $this->markDirtyIfNeeded();
         $this->dispatch('$refresh');
     }
+private function aplicarBodegaPredeterminadaALineasVacias(): void
+{
+    if (!$this->bodega_predeterminada_empresa_id) {
+        return;
+    }
 
+    foreach ($this->lineas as &$linea) {
+        if (empty($linea['bodega_id'])) {
+            $linea['bodega_id'] = $this->bodega_predeterminada_empresa_id;
+        }
+    }
+}
     public function updated($name, $value): void
     {
         if (preg_match('/^lineas\.(\d+)\.producto_id$/', $name, $m)) {

@@ -1,37 +1,41 @@
 {{-- resources/views/pdf/cotizacion.blade.php --}}
 @php
-    // ============ Normalización ============
+    // ============================================
+    // Normalización de empresa
+    // ============================================
     if (isset($empresa) && is_array($empresa)) {
         $empresa = (object) $empresa;
     }
+
     if (!isset($empresa) || $empresa === null) {
         $empresa = (object) [];
     }
 
-    /** -----------------------------------------------------------
-     *  Solo trabajar con el pdf_theme de la empresa (igual factura)
-     * ---------------------------------------------------------- */
-    $theme =
-        is_object($empresa) && method_exists($empresa, 'pdfTheme')
-            ? $empresa->pdfTheme()
-            : (is_array($theme ?? null)
-                ? $theme
-                : []);
+    // ============================================
+    // Theme PDF (igual lógica de factura)
+    // ============================================
+    $theme = is_object($empresa) && method_exists($empresa, 'pdfTheme')
+        ? $empresa->pdfTheme()
+        : (is_array($theme ?? null) ? $theme : []);
 
+    // ============================================
     // Colores base
-    $primary = $theme['primary'] ?? '#223361';
-    $base = $theme['base'] ?? '#ffffff';
-    $ink = $theme['ink'] ?? '#1f2937';
-    $muted = $theme['muted'] ?? '#6b7280';
-    $border = $theme['border'] ?? '#e5e7eb';
-    $theadBg = $theme['theadBg'] ?? '#eef2f8';
+    // ============================================
+    $primary   = $theme['primary']   ?? '#223361';
+    $base      = $theme['base']      ?? '#ffffff';
+    $ink       = $theme['ink']       ?? '#1f2937';
+    $muted     = $theme['muted']     ?? '#6b7280';
+    $border    = $theme['border']    ?? '#e5e7eb';
+    $theadBg   = $theme['theadBg']   ?? '#eef2f8';
     $theadText = $theme['theadText'] ?? $primary;
-    $stripe = $theme['stripe'] ?? '#f7f9fc';
-    $grandBg = $theme['grandBg'] ?? $primary;
-    $grandTx = $theme['grandTx'] ?? '#ffffff';
-    $wmColor = $theme['wmColor'] ?? 'rgba(34, 51, 97, .06)';
+    $stripe    = $theme['stripe']    ?? '#f7f9fc';
+    $grandBg   = $theme['grandBg']   ?? $primary;
+    $grandTx   = $theme['grandTx']   ?? '#ffffff';
+    $wmColor   = $theme['wmColor']   ?? 'rgba(34, 51, 97, .06)';
 
-    // ✅ Logo (igual factura)
+    // ============================================
+    // Resolución del logo
+    // ============================================
     $logoSrc = null;
 
     if (!empty($empresa->logo_path)) {
@@ -45,6 +49,7 @@
     }
 
     $logoPdfSrc = null;
+
     if ($logoSrc) {
         if (
             str_starts_with($logoSrc, 'http://') ||
@@ -53,72 +58,83 @@
         ) {
             $logoPdfSrc = $logoSrc;
         } else {
-            if (str_starts_with($logoSrc, 'storage/')) {
-                $logoPdfSrc = public_path($logoSrc);
-            } else {
-                $logoPdfSrc = public_path($logoSrc);
-            }
+            $logoPdfSrc = public_path($logoSrc);
         }
     }
 
+    // ============================================
+    // Datos empresa
+    // ============================================
     $E = [
-        'nombre' => $empresa->nombre ?? 'Empresa',
-        'nit' => !empty($empresa->nit) ? 'NIT ' . $empresa->nit : null,
+        'nombre'    => $empresa->nombre ?? 'Empresa',
+        'nit'       => !empty($empresa->nit) ? 'NIT ' . $empresa->nit : null,
         'direccion' => $empresa->direccion ?? null,
-        'telefono' => $empresa->telefono ?? null,
-        'telefono' => $empresa->telefono ?? '3004385756',
-        'whatsapp' => $empresa->whatsapp ?? '3104530264',
-        'email' => $empresa->email ?? null,
-        'website' => $empresa->sitio_web ?? null,
-        'logo_src' => $logoPdfSrc,
+        'telefono'  => $empresa->telefono ?? '3004385756',
+        'whatsapp'  => $empresa->whatsapp ?? '3104530264',
+        'email'     => $empresa->email ?? null,
+        'website'   => $empresa->sitio_web ?? null,
+        'logo_src'  => $logoPdfSrc,
     ];
 
+    // ============================================
     // Helpers
+    // ============================================
     $money = fn($v) => '$' . number_format((float) $v, 2, '.', ',');
     $fmtPct = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.') . '%';
 
-    // Folio / referencia cotización
+    // ============================================
+    // Folio / referencia
+    // ============================================
     $folio = $ref ?? 'S' . str_pad($cotizacion->id, 5, '0', STR_PAD_LEFT);
 
-    // Badge estados cotización (ajústalo a tus estados reales)
+    // ============================================
+    // Estado
+    // ============================================
     $estado = $cotizacion->estado ?? 'borrador';
+
     $colors = [
-        'borrador' => ['#e5e7eb', '#374151'],
-        'enviada' => ['#e9edf6', $primary],
+        'borrador'   => ['#e5e7eb', '#374151'],
+        'enviada'    => ['#e9edf6', $primary],
         'confirmada' => ['#dbeafe', '#1e40af'],
         'convertida' => ['#dcfce7', '#166534'],
-        'cancelada' => ['#ffe4e6', '#9f1239'],
+        'cancelada'  => ['#ffe4e6', '#9f1239'],
     ][$estado] ?? ['#e5e7eb', '#374151'];
 
     $estadoLabel = $estado === 'convertida' ? 'Orden de venta' : ucfirst($estado);
+
+    // ============================================
+    // Fechas
+    // ============================================
+    $fechaDocumento = \Illuminate\Support\Carbon::parse($cotizacion->fecha ?? $cotizacion->created_at)->format('d/m/Y');
+    $fechaVencimiento = !empty($cotizacion->vencimiento)
+        ? \Illuminate\Support\Carbon::parse($cotizacion->vencimiento)->format('d/m/Y')
+        : null;
 @endphp
 
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="utf-8">
     <title>Cotización {{ $folio }}</title>
 
     <style>
-        /* Igual factura */
         @page {
-            margin: 105px 36px 95px 36px;
+            margin: 118px 36px 95px 36px;
         }
 
         body {
             font-family: DejaVu Sans, sans-serif;
-            color: {{ $ink }};
             font-size: 12px;
+            color: {{ $ink }};
             background: {{ $base }};
         }
 
         header {
             position: fixed;
-            top: -89px;
+            top: -95px;
             left: 0;
             right: 0;
-            height: 93px;
+            height: 105px;
         }
 
         footer {
@@ -138,27 +154,34 @@
         .brand {
             display: table;
             width: 100%;
-            margin-top: 8px;
+            margin-top: 10px;
         }
 
         .brand .col {
             display: table-cell;
-            vertical-align: middle;
+            vertical-align: top;
         }
 
         .brand .right {
+            width: 290px;
             text-align: right;
             vertical-align: top;
             padding-top: 2px;
         }
 
-        .doc-title {
-            font-size: 24px;
-            letter-spacing: .5px;
-            margin: 0;
-            color: {{ $primary }};
+        .brand-name {
+            font-size: 15px;
             font-weight: 800;
+            color: {{ $ink }};
+        }
+
+        .doc-title {
+            margin: 0;
+            font-size: 24px;
             line-height: 1.1;
+            letter-spacing: .5px;
+            font-weight: 800;
+            color: {{ $primary }};
         }
 
         .badge {
@@ -174,11 +197,11 @@
             position: fixed;
             top: 43%;
             left: 12%;
+            z-index: 0;
             font-size: 82px;
+            font-weight: 800;
             color: {{ $wmColor }};
             transform: rotate(-20deg);
-            font-weight: 800;
-            z-index: 0;
         }
 
         .pane {
@@ -195,21 +218,103 @@
             letter-spacing: .4px;
         }
 
+        .header-meta {
+            margin-top: 6px;
+        }
+
+        .header-meta-row {
+            margin-top: 2px;
+            font-size: 11px;
+            color: {{ $muted }};
+        }
+
+        .header-contact {
+            margin-top: 8px;
+            margin-left: auto;
+            display: inline-table;
+            border-collapse: collapse;
+        }
+
+        .header-contact .contact-row {
+            display: table-row;
+        }
+
+        .header-contact .contact-label,
+        .header-contact .contact-value {
+            display: table-cell;
+            font-size: 11px;
+            color: {{ $muted }};
+            padding: 1px 0;
+            vertical-align: top;
+        }
+
+        .header-contact .contact-label {
+            padding-right: 8px;
+            text-align: right;
+            white-space: nowrap;
+            font-weight: 700;
+        }
+
+        .header-contact .contact-value {
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        .header-status {
+            margin-top: 8px;
+        }
+
+        table.info-grid {
+            width: 100%;
+            border-spacing: 12px 0;
+        }
+
+        table.info-grid td {
+            vertical-align: top;
+        }
+
+        table.condiciones-table {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        table.condiciones-table td {
+            padding: 3px 0;
+            vertical-align: top;
+        }
+
+        .cond-label {
+            width: 34%;
+            color: {{ $muted }};
+            font-size: 10px;
+            padding-right: 10px;
+        }
+
+        .cond-value {
+            width: 66%;
+            font-size: 10px;
+            text-align: right;
+            word-wrap: break-word;
+            word-break: break-word;
+            white-space: normal;
+            line-height: 1.35;
+        }
+
         table.items {
             width: 100%;
-            border-collapse: collapse;
             margin-top: 12px;
+            border-collapse: collapse;
         }
 
         table.items thead th {
-            background: {{ $theadBg }};
-            color: {{ $theadText }};
-            font-weight: 700;
-            font-size: 11px;
-            border-bottom: 1px solid {{ $border }};
             padding: 8px;
+            font-size: 11px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: .3px;
+            background: {{ $theadBg }};
+            color: {{ $theadText }};
+            border-bottom: 1px solid {{ $border }};
         }
 
         table.items tbody td {
@@ -233,9 +338,17 @@
             width: 50%;
         }
 
+        .small {
+            font-size: 10px;
+        }
+
+        .muted {
+            color: {{ $muted }};
+        }
+
         .totals {
-            margin-top: 10px;
             width: 100%;
+            margin-top: 10px;
         }
 
         .totals td {
@@ -247,9 +360,9 @@
         }
 
         .totals .grand {
+            font-weight: 700;
             background: {{ $grandBg }};
             color: {{ $grandTx }};
-            font-weight: 700;
             border-radius: 8px;
         }
 
@@ -257,26 +370,11 @@
             margin-top: 12px;
         }
 
-        .muted {
-            color: {{ $muted }};
-        }
-
-        .small {
-            font-size: 10px;
-        }
-
         .page-number:after {
             content: counter(page) " / " counter(pages);
         }
-
-        .brand-name {
-            font-size: 15px;
-            font-weight: 800;
-            color: {{ $ink }};
-        }
     </style>
 </head>
-
 <body>
 
     <header>
@@ -284,15 +382,16 @@
 
         <div class="brand">
             <div class="col" style="width:320px;">
-                <table style="width:100%">
+                <table style="width:100%;">
                     <tr>
                         <td style="text-align:left; vertical-align:middle; padding:0;">
-
-                            {{-- LOGO (igual factura) --}}
                             @if (!empty($E['logo_src']))
                                 <div style="max-width:320px; max-height:65px; display:flex; align-items:center;">
-                                    <img src="{{ $E['logo_src'] }}" alt="Logo {{ $E['nombre'] }}"
-                                        style="max-width:320px; max-height:65px; width:auto; height:auto; object-fit:contain; object-position:left center;">
+                                    <img
+                                        src="{{ $E['logo_src'] }}"
+                                        alt="Logo {{ $E['nombre'] }}"
+                                        style="max-width:320px; max-height:65px; width:auto; height:auto; object-fit:contain; object-position:left center;"
+                                    >
                                 </div>
                             @else
                                 <div class="brand-name">{{ $E['nombre'] }}</div>
@@ -300,7 +399,6 @@
                                     <div class="small muted" style="margin-top:2px;">{{ $E['nit'] }}</div>
                                 @endif
                             @endif
-
                         </td>
                     </tr>
                 </table>
@@ -309,40 +407,52 @@
             <div class="col right">
                 <div class="doc-title">COTIZACIÓN</div>
 
-                <div style="margin-top:3px;">
-                    <span class="small muted">Número:</span>
-                    <strong style="font-size:14px;">{{ $folio }}</strong>
-                </div>
+                <div class="header-meta">
+                    <div class="header-meta-row">
+                        <span class="small muted">Número:</span>
+                        <strong style="font-size:14px; color: {{ $ink }};">{{ $folio }}</strong>
+                    </div>
 
-                <div class="small muted" style="margin-top:2px;">
-                    Fecha:
-                    {{ \Illuminate\Support\Carbon::parse($cotizacion->fecha ?? $cotizacion->created_at)->format('d/m/Y') }}
-                    @if (!empty($cotizacion->vencimiento))
-                        · Vence: {{ \Illuminate\Support\Carbon::parse($cotizacion->vencimiento)->format('d/m/Y') }}
-                    @endif
-                </div>
-                <div class="small muted" style="margin-top:3px;">
-                    📱 WhatsApp: {{ $E['whatsapp'] }} · ☎ Cel: {{ $E['telefono'] }}
-                </div>
+                    <div class="header-meta-row">
+                        Fecha: {{ $fechaDocumento }}
+                        @if ($fechaVencimiento)
+                            · Vence: {{ $fechaVencimiento }}
+                        @endif
+                    </div>
 
-                <div style="margin-top:6px;">
-                    <span class="badge" style="background: {{ $colors[0] }}; color: {{ $colors[1] }};">
-                        {{ $estadoLabel }}
-                    </span>
+                    <div class="header-contact">
+                        <div class="contact-row">
+                            <div class="contact-label">WhatsApp:</div>
+                            <div class="contact-value">{{ $E['whatsapp'] }}</div>
+                        </div>
+                        <div class="contact-row">
+                            <div class="contact-label">Celular:</div>
+                            <div class="contact-value">{{ $E['telefono'] }}</div>
+                        </div>
+                    </div>
+
+                    <div class="header-status">
+                        <span class="badge" style="background: {{ $colors[0] }}; color: {{ $colors[1] }};">
+                            {{ $estadoLabel }}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
     </header>
 
     <footer>
-        <table style="width:100%">
+        <table style="width:100%;">
             <tr>
                 <td class="small muted">
-                    {{ $E['nombre'] }} @if (!empty($E['website']))
+                    {{ $E['nombre'] }}
+                    @if (!empty($E['website']))
                         · {{ $E['website'] }}
                     @endif
                 </td>
-                <td class="small muted text-right">Página <span class="page-number"></span></td>
+                <td class="small muted text-right">
+                    Página <span class="page-number"></span>
+                </td>
             </tr>
         </table>
     </footer>
@@ -353,17 +463,20 @@
         <div class="watermark">COTIZACIÓN</div>
     @endif
 
-    <main style="position: relative; z-index:1">
+    <main style="position: relative; z-index:1;">
 
-        {{-- Cliente / Condiciones (misma estructura de factura) --}}
-        <table style="width:100%; border-spacing: 10px 0">
+        {{-- Cliente / Condiciones --}}
+        <table class="info-grid">
             <tr>
                 <td class="w-50">
                     <div class="pane">
                         <h4>Cliente</h4>
-                        <div style="font-size:13px; font-weight:700">
-                            {{ $cotizacion->cliente->razon_social ?? 'Cliente' }}</div>
-                        <div class="small muted">
+
+                        <div style="font-size:13px; font-weight:700;">
+                            {{ $cotizacion->cliente->razon_social ?? 'Cliente' }}
+                        </div>
+
+                        <div class="small muted" style="line-height:1.45;">
                             NIT: {{ $cotizacion->cliente->nit ?? '—' }}<br>
                             Email: {{ $cotizacion->cliente->correo ?? '—' }}<br>
                             Tel: {{ $cotizacion->cliente->telefono ?? '—' }}
@@ -374,26 +487,30 @@
                 <td class="w-50">
                     <div class="pane">
                         <h4>Condiciones</h4>
-                        <table style="width:100%">
+
+                        <table class="condiciones-table">
                             <tr>
-                                <td class="small muted">Moneda</td>
-                                <td class="small" style="text-align:right">{{ $cotizacion->moneda ?? 'COP' }}</td>
+                                <td class="cond-label">Moneda</td>
+                                <td class="cond-value">{{ $cotizacion->moneda ?? 'COP' }}</td>
                             </tr>
+
                             @if (!empty($cotizacion->lista_precio))
                                 <tr>
-                                    <td class="small muted">Lista de precios</td>
-                                    <td class="small" style="text-align:right">{{ $cotizacion->lista_precio }}</td>
+                                    <td class="cond-label">Lista de precios</td>
+                                    <td class="cond-value">{{ $cotizacion->lista_precio }}</td>
                                 </tr>
                             @endif
+
                             @if (!empty($cotizacion->terminos_pago))
                                 <tr>
-                                    <td class="small muted">Términos</td>
-                                    <td class="small" style="text-align:right">{{ $cotizacion->terminos_pago }}</td>
+                                    <td class="cond-label">Términos</td>
+                                    <td class="cond-value">{{ $cotizacion->terminos_pago }}</td>
                                 </tr>
                             @endif
+
                             <tr>
-                                <td class="small muted">Validez</td>
-                                <td class="small" style="text-align:right">15 días (salvo acuerdo)</td>
+                                <td class="cond-label">Validez</td>
+                                <td class="cond-value">15 días (salvo acuerdo)</td>
                             </tr>
                         </table>
                     </div>
@@ -401,33 +518,31 @@
             </tr>
         </table>
 
-        {{-- Ítems (igual factura pero con Bodega) --}}
+        {{-- Ítems --}}
         <table class="items">
             <thead>
                 <tr>
-                    <th style="width:34%">Producto</th>
-                    <th style="width:12%" class="text-center">Bodega</th>
-                    <th style="width:8%" class="text-right">Cant.</th>
-                    <th style="width:12%" class="text-right">Precio</th>
-                    <th style="width:8%" class="text-right">Desc</th>
-                    <th style="width:8%" class="text-right">IVA</th>
-                    <th style="width:18%" class="text-right">Total línea</th>
+                    <th style="width:34%;">Producto</th>
+                    <th style="width:12%;" class="text-center">Bodega</th>
+                    <th style="width:8%;" class="text-right">Cant.</th>
+                    <th style="width:12%;" class="text-right">Precio</th>
+                    <th style="width:8%;" class="text-right">Desc</th>
+                    <th style="width:8%;" class="text-right">IVA</th>
+                    <th style="width:18%;" class="text-right">Total línea</th>
                 </tr>
             </thead>
-
             <tbody>
                 @foreach ($cotizacion->detalles ?? [] as $d)
                     @php
-                        $nombre = $d->producto->nombre ?? ($d->descripcion ?? '#' . $d->producto_id);
-                        $bodega = $d->bodega->nombre ?? '—';
-
-                        $cant = (float) $d->cantidad;
-                        $precio = (float) $d->precio_unitario;
+                        $nombre  = $d->producto->nombre ?? ($d->descripcion ?? '#' . $d->producto_id);
+                        $bodega  = $d->bodega->nombre ?? '—';
+                        $cant    = (float) $d->cantidad;
+                        $precio  = (float) $d->precio_unitario;
                         $descPct = (float) ($d->descuento_pct ?? 0);
-                        $ivaPct = (float) ($d->impuesto_pct ?? 0);
+                        $ivaPct  = (float) ($d->impuesto_pct ?? 0);
 
-                        $baseLn = $cant * $precio * (1 - $descPct / 100);
-                        $ivaLn = ($baseLn * $ivaPct) / 100;
+                        $baseLn  = $cant * $precio * (1 - $descPct / 100);
+                        $ivaLn   = ($baseLn * $ivaPct) / 100;
                         $totalLn = $baseLn + $ivaLn;
                     @endphp
 
@@ -444,7 +559,7 @@
             </tbody>
         </table>
 
-        {{-- Totales (usa los campos guardados) --}}
+        {{-- Totales --}}
         <table class="totals">
             <tr>
                 <td class="w-50"></td>
@@ -466,26 +581,29 @@
         {{-- Notas --}}
         <div class="terms pane">
             <h4>Notas y condiciones</h4>
+
             @if (!empty($cotizacion->notas))
-                <div style="white-space: pre-line">{{ $cotizacion->notas }}</div>
+                <div style="white-space: pre-line;">{{ $cotizacion->notas }}</div>
             @else
-                <div class="muted small">
-                    • Precios en moneda local. • Validez: 15 días. • Entrega sujeta a disponibilidad. • Garantía según
-                    fabricante.
+                <div class="muted small" style="line-height:1.5;">
+                    • Precios en moneda local.
+                    • Validez: 15 días.
+                    • Entrega sujeta a disponibilidad.
+                    • Garantía según fabricante.
                 </div>
             @endif
         </div>
 
         {{-- Aceptación --}}
-        <table style="width:100%; margin-top:16px">
+        <table style="width:100%; margin-top:16px;">
             <tr>
                 <td class="w-50">
                     <div class="small muted">Aprobado por (cliente):</div>
-                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%"></div>
+                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%;"></div>
                 </td>
                 <td class="w-50">
                     <div class="small muted">Firma y sello:</div>
-                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%"></div>
+                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%;"></div>
                 </td>
             </tr>
         </table>
@@ -493,12 +611,12 @@
     </main>
 
 </body>
-
 </html>
+
 @push('scripts')
     @if (!empty($autoPrint))
         <script>
-            window.addEventListener('load', () => {
+            window.addEventListener('load', function () {
                 window.focus();
                 window.print();
             });

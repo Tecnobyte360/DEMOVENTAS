@@ -2,6 +2,7 @@
 
 namespace App\Livewire\ConfiguracionEmpresas;
 
+use App\Models\Bodega;
 use App\Models\ConfiguracionEmpresas\Empresa;
 use Illuminate\Support\Facades\Log;
 use Livewire\Component;
@@ -23,9 +24,13 @@ class Empresas extends Component
     public ?string $telefono = null;
     public ?string $sitio_web = null;
     public ?string $direccion = null;
+    public ?int $bodega_predeterminada_id = null; // ✅ NUEVO
     public bool $is_activa = true;
     public ?string $color_primario = null;
     public ?string $color_secundario = null;
+
+    // Catálogo de bodegas
+    public array $bodegas = []; // ✅ NUEVO
 
     // Imágenes Base64 (nuevas subidas)
     public ?string $logo_b64 = null;
@@ -50,11 +55,21 @@ class Empresas extends Component
     public function mount(): void
     {
         $this->theme = $this->defaultTheme();
+        $this->cargarBodegas(); // ✅ NUEVO
 
         if ($empresa = Empresa::query()->first()) {
             $this->empresa_id = $empresa->id;
             $this->fillFromModel($empresa);
         }
+    }
+
+    private function cargarBodegas(): void
+    {
+        $this->bodegas = Bodega::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre'])
+            ->toArray();
     }
 
     private function defaultTheme(): array
@@ -77,25 +92,33 @@ class Empresas extends Component
     protected function rules(): array
     {
         return [
-            'nombre'           => ['required', 'string', 'max:255'],
-            'nit'              => ['nullable', 'string', 'max:50'],
-            'email'            => ['nullable', 'email', 'max:255'],
-            'telefono'         => ['nullable', 'string', 'max:50'],
-            'sitio_web'        => ['nullable', 'url', 'max:255'],
-            'direccion'        => ['nullable', 'string', 'max:255'],
-            'is_activa'        => ['boolean'],
-            'color_primario'   => ['nullable', 'string', 'max:32'],
-            'color_secundario' => ['nullable', 'string', 'max:32'],
-            'theme.*'          => ['nullable', 'string', 'max:64'],
+            'nombre'                   => ['required', 'string', 'max:255'],
+            'nit'                      => ['nullable', 'string', 'max:50'],
+            'email'                    => ['nullable', 'email', 'max:255'],
+            'telefono'                 => ['nullable', 'string', 'max:50'],
+            'sitio_web'                => ['nullable', 'url', 'max:255'],
+            'direccion'                => ['nullable', 'string', 'max:255'],
+            'bodega_predeterminada_id' => ['nullable', 'integer', 'exists:bodegas,id'], // ✅ NUEVO
+            'is_activa'                => ['boolean'],
+            'color_primario'           => ['nullable', 'string', 'max:32'],
+            'color_secundario'         => ['nullable', 'string', 'max:32'],
+            'theme.*'                  => ['nullable', 'string', 'max:64'],
 
-            'logo_b64'         => ['nullable', 'string'],
-            'logo_dark_b64'    => ['nullable', 'string'],
-            'favicon_b64'      => ['nullable', 'string'],
+            'logo_b64'                 => ['nullable', 'string'],
+            'logo_dark_b64'            => ['nullable', 'string'],
+            'favicon_b64'              => ['nullable', 'string'],
         ];
     }
 
-    public function updatingQ() { $this->resetPage(); }
-    public function updatingPerPage() { $this->resetPage(); }
+    public function updatingQ()
+    {
+        $this->resetPage();
+    }
+
+    public function updatingPerPage()
+    {
+        $this->resetPage();
+    }
 
     public function createNew(): void
     {
@@ -126,7 +149,6 @@ class Empresas extends Component
         try {
             $this->theme = array_replace($this->defaultTheme(), $this->theme ?? []);
 
-            // normalizar colores
             $this->color_primario   = $this->normalizeHex($this->color_primario);
             $this->color_secundario = $this->normalizeHex($this->color_secundario);
 
@@ -137,37 +159,36 @@ class Empresas extends Component
                 : new Empresa();
 
             $empresa->fill([
-                'nombre'           => $this->nombre,
-                'nit'              => $this->nit,
-                'email'            => $this->email,
-                'telefono'         => $this->telefono,
-                'sitio_web'        => $this->sitio_web,
-                'direccion'        => $this->direccion,
-                'is_activa'        => $this->is_activa,
-                'color_primario'   => $this->color_primario,
-                'color_secundario' => $this->color_secundario,
-                'pdf_theme'        => $this->theme,
+                'nombre'                   => $this->nombre,
+                'nit'                      => $this->nit,
+                'email'                    => $this->email,
+                'telefono'                 => $this->telefono,
+                'sitio_web'                => $this->sitio_web,
+                'direccion'                => $this->direccion,
+                'bodega_predeterminada_id' => $this->bodega_predeterminada_id, // ✅ NUEVO
+                'is_activa'                => $this->is_activa,
+                'color_primario'           => $this->color_primario,
+                'color_secundario'         => $this->color_secundario,
+                'pdf_theme'                => $this->theme,
             ]);
 
-            // ✅ Guardar primero para tener ID (si es nueva)
             $empresa->save();
             $this->empresa_id = $empresa->id;
 
-            // ✅ guardar imágenes DIRECTO EN PUBLIC/empresas/{id}/...
             if ($this->logo_b64) {
                 $empresa->logo_path = $this->storeBase64ImagePublic($this->logo_b64, $empresa->id, 'logos', 'logo');
             }
+
             if ($this->logo_dark_b64) {
                 $empresa->logo_dark_path = $this->storeBase64ImagePublic($this->logo_dark_b64, $empresa->id, 'logos', 'logo-dark');
             }
+
             if ($this->favicon_b64) {
                 $empresa->favicon_path = $this->storeBase64ImagePublic($this->favicon_b64, $empresa->id, 'favicons', 'favicon');
             }
 
-            // guardar rutas si cambiaron
             $empresa->save();
 
-            // refrescar previews
             $this->logo_actual      = $this->toPublicUrl($empresa->logo_path);
             $this->logo_dark_actual = $this->toPublicUrl($empresa->logo_dark_path);
             $this->favicon_actual   = $this->toPublicUrl($empresa->favicon_path);
@@ -199,19 +220,22 @@ class Empresas extends Component
     private function normalizeHex(?string $hex): ?string
     {
         $hex = trim((string) $hex);
-        if ($hex === '') return null;
+
+        if ($hex === '') {
+            return null;
+        }
 
         $hex = ltrim($hex, '#');
 
         if (strlen($hex) === 3) {
-            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+            $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
         }
 
         if (!preg_match('/^[0-9a-fA-F]{6}$/', $hex)) {
             return null;
         }
 
-        return '#'.strtoupper($hex);
+        return '#' . strtoupper($hex);
     }
 
     /**
@@ -237,12 +261,13 @@ class Empresas extends Component
         };
 
         $binary = base64_decode($encoded);
+
         if ($binary === false) {
             throw new \RuntimeException('No se pudo decodificar la imagen.');
         }
 
-        $relativeDir  = "empresas/{$empresaId}/{$folder}";
-        $absoluteDir  = public_path($relativeDir);
+        $relativeDir = "empresas/{$empresaId}/{$folder}";
+        $absoluteDir = public_path($relativeDir);
 
         if (!is_dir($absoluteDir)) {
             @mkdir($absoluteDir, 0755, true);
@@ -253,6 +278,7 @@ class Empresas extends Component
         $absolutePath = public_path($relativePath);
 
         $ok = @file_put_contents($absolutePath, $binary);
+
         if ($ok === false) {
             throw new \RuntimeException('No se pudo guardar la imagen en public/. Verifica permisos.');
         }
@@ -263,15 +289,16 @@ class Empresas extends Component
     private function fillFromModel(Empresa $m): void
     {
         $this->fill([
-            'nombre'           => $m->nombre,
-            'nit'              => $m->nit,
-            'email'            => $m->email,
-            'telefono'         => $m->telefono,
-            'sitio_web'        => $m->sitio_web,
-            'direccion'        => $m->direccion,
-            'is_activa'        => (bool) $m->is_activa,
-            'color_primario'   => $m->color_primario,
-            'color_secundario' => $m->color_secundario,
+            'nombre'                   => $m->nombre,
+            'nit'                      => $m->nit,
+            'email'                    => $m->email,
+            'telefono'                 => $m->telefono,
+            'sitio_web'                => $m->sitio_web,
+            'direccion'                => $m->direccion,
+            'bodega_predeterminada_id' => $m->bodega_predeterminada_id, // ✅ NUEVO
+            'is_activa'                => (bool) $m->is_activa,
+            'color_primario'           => $m->color_primario,
+            'color_secundario'         => $m->color_secundario,
         ]);
 
         $this->theme = array_replace($this->defaultTheme(), (array) $m->pdf_theme);
@@ -286,15 +313,25 @@ class Empresas extends Component
     private function resetForm(): void
     {
         $this->reset([
-            'nombre','nit','email','telefono','sitio_web','direccion',
-            'is_activa','color_primario','color_secundario',
-            'logo_actual','logo_dark_actual','favicon_actual',
+            'nombre',
+            'nit',
+            'email',
+            'telefono',
+            'sitio_web',
+            'direccion',
+            'bodega_predeterminada_id', // ✅ NUEVO
+            'is_activa',
+            'color_primario',
+            'color_secundario',
+            'logo_actual',
+            'logo_dark_actual',
+            'favicon_actual',
         ]);
 
-        $this->is_activa      = true;
-        $this->theme          = $this->defaultTheme();
+        $this->is_activa = true;
+        $this->theme = $this->defaultTheme();
         $this->usar_gradiente = false;
-        $this->grad_angle     = 0;
+        $this->grad_angle = 0;
 
         $this->resetUploads();
     }
@@ -318,6 +355,7 @@ class Empresas extends Component
     public function render()
     {
         $rows = Empresa::query()
+            ->with('bodegaPredeterminada') // ✅ NUEVO
             ->when($this->q !== '', function ($q) {
                 $q->where(function ($sub) {
                     $sub->where('nombre', 'like', "%{$this->q}%")
@@ -335,10 +373,10 @@ class Empresas extends Component
     private function handleException(Throwable $e, string $userMessage): void
     {
         Log::error($userMessage, [
-            'component'   => static::class,
-            'empresa_id'  => $this->empresa_id,
-            'exception'   => get_class($e),
-            'message'     => $e->getMessage(),
+            'component'  => static::class,
+            'empresa_id' => $this->empresa_id,
+            'exception'  => get_class($e),
+            'message'    => $e->getMessage(),
         ]);
 
         $this->addError('general', $userMessage);

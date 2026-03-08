@@ -3,8 +3,10 @@
 namespace App\Models\ConfiguracionEmpresas;
 
 use App\Models\Factura\Factura;
+use App\Models\Bodega;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Empresa extends Model
 {
@@ -21,6 +23,7 @@ class Empresa extends Model
         'telefono',
         'sitio_web',
         'direccion',
+        'bodega_predeterminada_id', // ✅ NUEVO
         'logo_path',
         'logo_dark_path',
         'favicon_path',
@@ -44,6 +47,12 @@ class Empresa extends Model
     public function facturas(): HasMany
     {
         return $this->hasMany(Factura::class, 'empresa_id');
+    }
+
+    // ✅ Bodega predeterminada
+    public function bodegaPredeterminada(): BelongsTo
+    {
+        return $this->belongsTo(Bodega::class, 'bodega_predeterminada_id');
     }
 
     /* ============================================================
@@ -121,7 +130,6 @@ class Empresa extends Model
 
         if (str_starts_with($path, 'data:image/')) return $path;
 
-        // si viene ya como url absoluta
         if (preg_match('/^https?:\/\//i', $path)) return $path;
 
         return asset($path);
@@ -133,7 +141,6 @@ class Empresa extends Model
 
         $path = ltrim($path, '/');
 
-        // data:image no aplica para PDF path
         if (str_starts_with($path, 'data:image/')) return null;
 
         $abs = public_path($path);

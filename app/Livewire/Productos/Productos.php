@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Productos;
 
+use App\Imports\ProductosImport;
 use App\Models\Bodega;
 use Livewire\Component;
 use Illuminate\Support\Facades\Log;
@@ -14,10 +15,13 @@ use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Productos\ProductoCuentaTipo;
 use App\Models\UnidadesMedida;
 use Illuminate\Support\Facades\DB;
+use Livewire\Features\SupportFileUploads\WithFileUploads;
+use Maatwebsite\Excel\Facades\Excel;
 use Masmerise\Toaster\PendingToast;
 
 class Productos extends Component
 {
+     use WithFileUploads;
     /** ===== Listas ===== */
     public $productos, $subcategorias, $bodegas, $impuestos, $unidades;
 
@@ -27,7 +31,7 @@ class Productos extends Component
     public bool $es_inventariable = true;
     /** Selección de cuentas por tipo_id: [tipo_id => plan_cuentas_id] */
     public array $cuentasPorTipo = [];
-
+    public $archivoExcel;
     /** Campos producto */
     public $nombre, $descripcion, $costo, $precio, $activo = true, $subcategoria_id;
     public ?int $impuesto_id = null;
@@ -99,7 +103,37 @@ class Productos extends Component
         $this->mov_contable_segun = Producto::MOV_SEGUN_ARTICULO;
     }
 
+   public function importarProductosExcel()
+{
+    try {
+        $this->validate([
+            'archivoExcel' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+        ], [
+            'archivoExcel.required' => 'Debes seleccionar un archivo.',
+            'archivoExcel.mimes'    => 'El archivo debe ser Excel (.xlsx, .xls) o CSV.',
+            'archivoExcel.max'      => 'El archivo no debe superar los 10 MB.',
+        ]);
 
+        \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\ProductosImport, $this->archivoExcel);
+
+        $this->archivoExcel = null;
+
+        PendingToast::create()
+            ->success()
+            ->message('Productos importados correctamente.')
+            ->duration(5000);
+
+    } catch (\Throwable $e) {
+        Log::error('Error al importar productos desde Excel', [
+            'message' => $e->getMessage(),
+        ]);
+
+        PendingToast::create()
+            ->error()
+            ->message('Error al importar productos: ' . Str::limit($e->getMessage(), 220))
+            ->duration(10000);
+    }
+}
 
     public function render()
     {
@@ -285,231 +319,229 @@ class Productos extends Component
     }
 
     /* ========================= Store ========================= */
-  public function store()
-{
-    try {
-        $this->erroresFormulario = false;
+    public function store()
+    {
+        try {
+            $this->erroresFormulario = false;
 
-        $this->validate(array_merge([
-            'nombre'             => 'required|string|max:255',
-            'descripcion'        => 'nullable|string|max:500',
-            'subcategoria_id'    => 'required|exists:subcategorias,id',
-            'precio'             => 'required|numeric|min:0',
-            'costo'              => 'nullable|numeric|min:0',
-            'activo'             => 'required|boolean',
-            'impuesto_id'        => 'nullable|exists:impuestos,id',
-            'unidad_medida_id'   => 'nullable|exists:unidades_medida,id',
-            'stockMinimoGlobal'  => 'nullable|integer|min:0',
-            'stockMaximoGlobal'  => 'nullable|integer|min:0|gte:stockMinimoGlobal',
-            'mov_contable_segun' => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
-        ], $this->reglasCuentas()));
+            $this->validate(array_merge([
+                'nombre'             => 'required|string|max:255',
+                'descripcion'        => 'nullable|string|max:500',
+                'subcategoria_id'    => 'required|exists:subcategorias,id',
+                'precio'             => 'required|numeric|min:0',
+                'costo'              => 'nullable|numeric|min:0',
+                'activo'             => 'required|boolean',
+                'impuesto_id'        => 'nullable|exists:impuestos,id',
+                'unidad_medida_id'   => 'nullable|exists:unidades_medida,id',
+                'stockMinimoGlobal'  => 'nullable|integer|min:0',
+                'stockMaximoGlobal'  => 'nullable|integer|min:0|gte:stockMinimoGlobal',
+                'mov_contable_segun' => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
+            ], $this->reglasCuentas()));
 
-        // Imagen (si viene)
-        $this->validarDataUrl($this->imagen_base64, 5);
-
-        if (Producto::where('nombre', $this->nombre)->exists()) {
-            $this->addError('nombre', 'Ya existe un producto registrado con este nombre.');
-            $this->erroresFormulario = true;
-            return;
-        }
-
-        // aplica global -> llena stocksPorBodega si definiste global
-        $this->aplicarStockGlobalSiExiste();
-
-        $producto = Producto::create([
-            'nombre'             => $this->nombre,
-            'descripcion'        => $this->descripcion,
-            'precio'             => $this->precio,
-            'costo'              => $this->costo ?? 0,
-            'stock'              => 0,
-            'stock_minimo'       => 0,
-            'stock_maximo'       => null,
-            'activo'             => $this->activo,
-            'subcategoria_id'    => $this->subcategoria_id,
-            'impuesto_id'        => $this->impuesto_id,
-            'unidad_medida_id'   => $this->unidad_medida_id,
-            'imagen_path'        => $this->imagen_base64,
-            'mov_contable_segun' => $this->mov_contable_segun,
-            'es_inventariable'   => $this->es_inventariable,
-        ]);
-
-        // =========================
-        // CUENTAS CONTABLES
-        // =========================
-        if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-            foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
-                if (!$pucId) continue;
-                $producto->cuentas()->updateOrCreate(
-                    ['tipo_id' => (int)$tipoId],
-                    ['plan_cuentas_id' => (int)$pucId]
-                );
-            }
-        }
-
-        // =========================
-        // BODEGAS (PIVOT)
-        // ✅ PERMITE CREAR SIN BODEGAS
-        // ✅ SI HAY BODEGAS, INSERTA CON COSTOS EN 0 (NO NULL)
-        // =========================
-        if ($this->es_inventariable && !empty($this->stocksPorBodega)) {
-            foreach ($this->stocksPorBodega as $bodegaId => $stockData) {
-                $bodegaId = (int) $bodegaId;
-
-                $stockMin = isset($stockData['stock_minimo']) ? (float)$stockData['stock_minimo'] : 0.0;
-                $stockMax = (array_key_exists('stock_maximo', $stockData) && $stockData['stock_maximo'] !== '' && $stockData['stock_maximo'] !== null)
-                    ? (float)$stockData['stock_maximo']
-                    : null;
-
-                $producto->bodegas()->attach($bodegaId, [
-                    'stock'          => 0.0,
-                    'stock_minimo'   => $stockMin,
-                    'stock_maximo'   => $stockMax,
-
-                    // 🔥 CLAVE: jamás null
-                    'costo_promedio' => 0.0,
-                    'ultimo_costo'   => 0.0,
-                    'metodo_costeo'  => 'PROMEDIO',
-                ]);
-            }
-        }
-
-        $this->resetInput();
-        PendingToast::create()->success()->message('Producto creado exitosamente.')->duration(5000);
-
-    } catch (\Throwable $e) {
-        Log::error('Error al guardar producto', ['message' => $e->getMessage()]);
-
-        PendingToast::create()
-            ->error()
-            ->message('Error al guardar el producto: ' . Str::limit($e->getMessage(), 220))
-            ->duration(9000);
-    }
-}
-
-
-    /* ========================= Update ========================= */
- 
-public function update()
-{
-    try {
-        $this->validate(array_merge([
-            'nombre'             => 'required|string|max:255',
-            'subcategoria_id'    => 'required|exists:subcategorias,id',
-            'precio'             => 'required|numeric|min:0',
-            'costo'              => 'nullable|numeric|min:0',
-            'impuesto_id'        => 'nullable|exists:impuestos,id',
-            'unidad_medida_id'   => 'nullable|exists:unidades_medida,id',
-            'mov_contable_segun' => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
-        ], $this->reglasCuentas()));
-
-        if (!empty($this->imagen_base64)) {
+            // Imagen (si viene)
             $this->validarDataUrl($this->imagen_base64, 5);
-        }
 
-        $this->aplicarStockGlobalSiExiste();
-
-        /** @var \App\Models\Productos\Producto $producto */
-        $producto = Producto::query()->with('bodegas')->findOrFail($this->producto_id);
-
-        // =========================
-        // UPDATE PRODUCTO
-        // =========================
-        $data = [
-            'nombre'             => $this->nombre,
-            'descripcion'        => $this->descripcion,
-            'precio'             => (float) $this->precio,
-            'costo'              => (float) ($this->costo ?? 0),
-            'activo'             => (bool) $this->activo,
-            'subcategoria_id'    => (int) $this->subcategoria_id,
-            'impuesto_id'        => $this->impuesto_id ? (int)$this->impuesto_id : null,
-            'unidad_medida_id'   => $this->unidad_medida_id ? (int)$this->unidad_medida_id : null,
-            'mov_contable_segun' => $this->mov_contable_segun,
-            'es_inventariable'   => (bool) $this->es_inventariable,
-        ];
-
-        if (!empty($this->imagen_base64)) {
-            $data['imagen_path'] = $this->imagen_base64;
-        }
-
-        $producto->update($data);
-
-        // =========================
-        // CUENTAS CONTABLES
-        // =========================
-        if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
-            foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
-                if (!$pucId) continue;
-
-                $producto->cuentas()->updateOrCreate(
-                    ['tipo_id' => (int)$tipoId],
-                    ['plan_cuentas_id' => (int)$pucId]
-                );
+            if (Producto::where('nombre', $this->nombre)->exists()) {
+                $this->addError('nombre', 'Ya existe un producto registrado con este nombre.');
+                $this->erroresFormulario = true;
+                return;
             }
-        } else {
-            $producto->cuentas()->delete();
-        }
 
-        // =========================
-        // BODEGAS (PIVOT)
-        // =========================
-        if (!$this->es_inventariable) {
-            // servicio: sin bodegas
-            $producto->bodegas()->detach();
-        } else {
-            // ✅ PERMITIR GUARDAR AUNQUE NO HAYA BODEGAS
-            $stocksUI = $this->stocksPorBodega ?? [];
+            // aplica global -> llena stocksPorBodega si definiste global
+            $this->aplicarStockGlobalSiExiste();
 
-            if (!empty($stocksUI)) {
-                $bodegasSync = [];
+            $producto = Producto::create([
+                'nombre'             => $this->nombre,
+                'descripcion'        => $this->descripcion,
+                'precio'             => $this->precio,
+                'costo'              => $this->costo ?? 0,
+                'stock'              => 0,
+                'stock_minimo'       => 0,
+                'stock_maximo'       => null,
+                'activo'             => $this->activo,
+                'subcategoria_id'    => $this->subcategoria_id,
+                'impuesto_id'        => $this->impuesto_id,
+                'unidad_medida_id'   => $this->unidad_medida_id,
+                'imagen_path'        => $this->imagen_base64,
+                'mov_contable_segun' => $this->mov_contable_segun,
+                'es_inventariable'   => $this->es_inventariable,
+            ]);
 
-                foreach ($stocksUI as $bodegaId => $stockData) {
+            // =========================
+            // CUENTAS CONTABLES
+            // =========================
+            if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+                foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
+                    if (!$pucId) continue;
+                    $producto->cuentas()->updateOrCreate(
+                        ['tipo_id' => (int)$tipoId],
+                        ['plan_cuentas_id' => (int)$pucId]
+                    );
+                }
+            }
+
+            // =========================
+            // BODEGAS (PIVOT)
+            // ✅ PERMITE CREAR SIN BODEGAS
+            // ✅ SI HAY BODEGAS, INSERTA CON COSTOS EN 0 (NO NULL)
+            // =========================
+            if ($this->es_inventariable && !empty($this->stocksPorBodega)) {
+                foreach ($this->stocksPorBodega as $bodegaId => $stockData) {
                     $bodegaId = (int) $bodegaId;
 
-                    $actual = $producto->bodegas->firstWhere('id', $bodegaId);
-
-                    // ✅ COALESCE: si en BD viene NULL => 0
-                    $costoProm   = $actual ? (float)($actual->pivot->costo_promedio ?? 0) : 0.0;
-                    $ultimoCosto = $actual ? (float)($actual->pivot->ultimo_costo ?? 0) : 0.0;
-                    $metodo      = $actual ? ($actual->pivot->metodo_costeo ?: 'PROMEDIO') : 'PROMEDIO';
-
-                    // UI
-                    $min = isset($stockData['stock_minimo']) ? (float)$stockData['stock_minimo'] : 0.0;
-                    $max = (array_key_exists('stock_maximo', $stockData) && $stockData['stock_maximo'] !== null && $stockData['stock_maximo'] !== '')
+                    $stockMin = isset($stockData['stock_minimo']) ? (float)$stockData['stock_minimo'] : 0.0;
+                    $stockMax = (array_key_exists('stock_maximo', $stockData) && $stockData['stock_maximo'] !== '' && $stockData['stock_maximo'] !== null)
                         ? (float)$stockData['stock_maximo']
                         : null;
 
-                    $bodegasSync[$bodegaId] = [
-                        'stock'          => $actual ? (float)($actual->pivot->stock ?? 0) : 0.0,
-                        'stock_minimo'   => $min,
-                        'stock_maximo'   => $max,
+                    $producto->bodegas()->attach($bodegaId, [
+                        'stock'          => 0.0,
+                        'stock_minimo'   => $stockMin,
+                        'stock_maximo'   => $stockMax,
 
-                        // ✅ NUNCA NULL
-                        'costo_promedio' => $costoProm,
-                        'ultimo_costo'   => $ultimoCosto,
-                        'metodo_costeo'  => $metodo,
-                    ];
+                        // 🔥 CLAVE: jamás null
+                        'costo_promedio' => 0.0,
+                        'ultimo_costo'   => 0.0,
+                        'metodo_costeo'  => 'PROMEDIO',
+                    ]);
                 }
-
-                $producto->bodegas()->sync($bodegasSync);
             }
-            // ✅ Si está vacío, NO hacemos nada: queda como está (permitido)
+
+            $this->resetInput();
+            PendingToast::create()->success()->message('Producto creado exitosamente.')->duration(5000);
+        } catch (\Throwable $e) {
+            Log::error('Error al guardar producto', ['message' => $e->getMessage()]);
+
+            PendingToast::create()
+                ->error()
+                ->message('Error al guardar el producto: ' . Str::limit($e->getMessage(), 220))
+                ->duration(9000);
         }
-
-        $this->resetInput();
-        PendingToast::create()->success()->message('Producto actualizado exitosamente.')->duration(5000);
-
-    } catch (\Throwable $e) {
-        Log::error('Error al actualizar producto', [
-            'id'  => $this->producto_id,
-            'msg' => $e->getMessage(),
-        ]);
-
-        PendingToast::create()
-            ->error()
-            ->message('Error al actualizar el producto: ' . Str::limit($e->getMessage(), 220))
-            ->duration(12000);
     }
-}
+
+
+    /* ========================= Update ========================= */
+
+    public function update()
+    {
+        try {
+            $this->validate(array_merge([
+                'nombre'             => 'required|string|max:255',
+                'subcategoria_id'    => 'required|exists:subcategorias,id',
+                'precio'             => 'required|numeric|min:0',
+                'costo'              => 'nullable|numeric|min:0',
+                'impuesto_id'        => 'nullable|exists:impuestos,id',
+                'unidad_medida_id'   => 'nullable|exists:unidades_medida,id',
+                'mov_contable_segun' => 'required|in:' . Producto::MOV_SEGUN_ARTICULO . ',' . Producto::MOV_SEGUN_SUBCATEGORIA,
+            ], $this->reglasCuentas()));
+
+            if (!empty($this->imagen_base64)) {
+                $this->validarDataUrl($this->imagen_base64, 5);
+            }
+
+            $this->aplicarStockGlobalSiExiste();
+
+            /** @var \App\Models\Productos\Producto $producto */
+            $producto = Producto::query()->with('bodegas')->findOrFail($this->producto_id);
+
+            // =========================
+            // UPDATE PRODUCTO
+            // =========================
+            $data = [
+                'nombre'             => $this->nombre,
+                'descripcion'        => $this->descripcion,
+                'precio'             => (float) $this->precio,
+                'costo'              => (float) ($this->costo ?? 0),
+                'activo'             => (bool) $this->activo,
+                'subcategoria_id'    => (int) $this->subcategoria_id,
+                'impuesto_id'        => $this->impuesto_id ? (int)$this->impuesto_id : null,
+                'unidad_medida_id'   => $this->unidad_medida_id ? (int)$this->unidad_medida_id : null,
+                'mov_contable_segun' => $this->mov_contable_segun,
+                'es_inventariable'   => (bool) $this->es_inventariable,
+            ];
+
+            if (!empty($this->imagen_base64)) {
+                $data['imagen_path'] = $this->imagen_base64;
+            }
+
+            $producto->update($data);
+
+            // =========================
+            // CUENTAS CONTABLES
+            // =========================
+            if ($this->mov_contable_segun === Producto::MOV_SEGUN_ARTICULO) {
+                foreach ($this->cuentasPorTipo as $tipoId => $pucId) {
+                    if (!$pucId) continue;
+
+                    $producto->cuentas()->updateOrCreate(
+                        ['tipo_id' => (int)$tipoId],
+                        ['plan_cuentas_id' => (int)$pucId]
+                    );
+                }
+            } else {
+                $producto->cuentas()->delete();
+            }
+
+            // =========================
+            // BODEGAS (PIVOT)
+            // =========================
+            if (!$this->es_inventariable) {
+                // servicio: sin bodegas
+                $producto->bodegas()->detach();
+            } else {
+                // ✅ PERMITIR GUARDAR AUNQUE NO HAYA BODEGAS
+                $stocksUI = $this->stocksPorBodega ?? [];
+
+                if (!empty($stocksUI)) {
+                    $bodegasSync = [];
+
+                    foreach ($stocksUI as $bodegaId => $stockData) {
+                        $bodegaId = (int) $bodegaId;
+
+                        $actual = $producto->bodegas->firstWhere('id', $bodegaId);
+
+                        // ✅ COALESCE: si en BD viene NULL => 0
+                        $costoProm   = $actual ? (float)($actual->pivot->costo_promedio ?? 0) : 0.0;
+                        $ultimoCosto = $actual ? (float)($actual->pivot->ultimo_costo ?? 0) : 0.0;
+                        $metodo      = $actual ? ($actual->pivot->metodo_costeo ?: 'PROMEDIO') : 'PROMEDIO';
+
+                        // UI
+                        $min = isset($stockData['stock_minimo']) ? (float)$stockData['stock_minimo'] : 0.0;
+                        $max = (array_key_exists('stock_maximo', $stockData) && $stockData['stock_maximo'] !== null && $stockData['stock_maximo'] !== '')
+                            ? (float)$stockData['stock_maximo']
+                            : null;
+
+                        $bodegasSync[$bodegaId] = [
+                            'stock'          => $actual ? (float)($actual->pivot->stock ?? 0) : 0.0,
+                            'stock_minimo'   => $min,
+                            'stock_maximo'   => $max,
+
+                            // ✅ NUNCA NULL
+                            'costo_promedio' => $costoProm,
+                            'ultimo_costo'   => $ultimoCosto,
+                            'metodo_costeo'  => $metodo,
+                        ];
+                    }
+
+                    $producto->bodegas()->sync($bodegasSync);
+                }
+                // ✅ Si está vacío, NO hacemos nada: queda como está (permitido)
+            }
+
+            $this->resetInput();
+            PendingToast::create()->success()->message('Producto actualizado exitosamente.')->duration(5000);
+        } catch (\Throwable $e) {
+            Log::error('Error al actualizar producto', [
+                'id'  => $this->producto_id,
+                'msg' => $e->getMessage(),
+            ]);
+
+            PendingToast::create()
+                ->error()
+                ->message('Error al actualizar el producto: ' . Str::limit($e->getMessage(), 220))
+                ->duration(12000);
+        }
+    }
 
 
 

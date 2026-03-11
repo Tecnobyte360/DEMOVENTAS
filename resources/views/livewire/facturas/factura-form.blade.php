@@ -94,21 +94,23 @@
                                 Cargar desde cotización
                             </label>
 
-                            <select wire:model.live="cotizacion_id"
-                                class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-indigo-300/60 @error('cotizacion_id') border-red-500 focus:ring-red-300 @enderror">
-                                <option value="">— Seleccione una cotización —</option>
+                            <div wire:ignore>
+                                <select id="cotizacion-select" data-cotizacion-select
+                                    class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-indigo-300/60 @error('cotizacion_id') border-red-500 focus:ring-red-300 @enderror">
+                                    <option value="">Buscar cotizacion...</option>
 
-                                @foreach ($cotizaciones as $cot)
-                                    <option value="{{ $cot->id }}">
-                                        #{{ $cot->id }}
-                                        — {{ \Carbon\Carbon::parse($cot->fecha)->format('Y-m-d') }}
-                                        — {{ $cot->socioNegocio->razon_social ?? 'Cliente' }}
-                                        @if (!empty($cot->estado))
-                                            — {{ ucfirst($cot->estado) }}
-                                        @endif
-                                    </option>
-                                @endforeach
-                            </select>
+                                    @foreach ($cotizaciones as $cot)
+                                        <option value="{{ $cot->id }}" @selected((int) ($cotizacion_id ?? 0) === (int) $cot->id)>
+                                            #{{ $cot->id }}
+                                            — {{ \Carbon\Carbon::parse($cot->fecha)->format('Y-m-d') }}
+                                            — {{ $cot->socioNegocio->razon_social ?? 'Cliente' }}
+                                            @if (!empty($cot->estado))
+                                                — {{ ucfirst($cot->estado) }}
+                                            @endif
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
 
                             @error('cotizacion_id')
                                 <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -166,7 +168,7 @@
                             </button>
 
                             @if ($cotizacion_id)
-                                <button type="button" wire:click="$set('cotizacion_id', null)"
+                                <button type="button" wire:click="setCotizacion(null)"
                                     class="h-12 md:h-14 px-5 rounded-2xl bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 shadow">
                                     <i class="fa-solid fa-xmark mr-2"></i>
                                     Limpiar
@@ -973,6 +975,107 @@
                 });
             });
 
+        });
+    </script>
+    <script>
+        document.addEventListener('livewire:init', () => {
+
+            const ensureProductoTomSelect = (el) => {
+                if (!el) return null;
+                if (el.tomselect) return el.tomselect;
+
+                const linea = parseInt(el.dataset.linea || '0', 10);
+
+                const ts = new TomSelect(el, {
+                    placeholder: '— Seleccione —',
+                    allowEmptyOption: true,
+                    create: false,
+                    maxOptions: 500,
+                    hideSelected: false,
+                    closeAfterSelect: true,
+                    searchField: ['text'],
+
+                    onChange(value) {
+                        const pid = value ? parseInt(value, 10) : null;
+                        @this.call('setProducto', linea, pid);
+                    }
+                });
+
+                return ts;
+            };
+
+            const ensureCotizacionTomSelect = (el) => {
+                if (!el) return null;
+                if (el.tomselect) return el.tomselect;
+
+                const ts = new TomSelect(el, {
+                    placeholder: 'Buscar cotizacion',
+                    allowEmptyOption: true,
+                    create: false,
+                    maxOptions: 300,
+                    hideSelected: false,
+                    closeAfterSelect: true,
+                    searchField: ['text'],
+
+                    onChange(value) {
+                        const cotizacionId = value ? parseInt(value, 10) : null;
+                        @this.call('setCotizacion', cotizacionId);
+                    }
+                });
+
+                return ts;
+            };
+
+            const initProductoSelects = () => {
+                document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                    ensureProductoTomSelect(el);
+                });
+            };
+
+            const initCotizacionSelect = () => {
+                const el = document.querySelector('select[data-cotizacion-select]');
+                if (el) {
+                    ensureCotizacionTomSelect(el);
+                }
+            };
+
+            const initAll = () => {
+                initProductoSelects();
+                initCotizacionSelect();
+            };
+
+            initAll();
+
+            Livewire.hook('message.processed', () => {
+                initAll();
+            });
+
+            Livewire.on('sync-productos-tomselect', (payload) => {
+                const lineas = payload?.lineas || [];
+
+                lineas.forEach((l, i) => {
+                    const el = document.querySelector(
+                        `select[data-producto-select][data-linea="${i}"]`);
+                    if (!el) return;
+
+                    const ts = ensureProductoTomSelect(el);
+                    if (!ts) return;
+
+                    const pid = l?.producto_id ? String(l.producto_id) : '';
+                    ts.setValue(pid, true);
+                });
+            });
+
+            Livewire.on('sync-cotizacion-tomselect', (payload) => {
+                const cotizacionId = payload?.cotizacionId ? String(payload.cotizacionId) : '';
+                const el = document.querySelector('select[data-cotizacion-select]');
+                if (!el) return;
+
+                const ts = ensureCotizacionTomSelect(el);
+                if (!ts) return;
+
+                ts.setValue(cotizacionId, true);
+            });
         });
     </script>
 </div>

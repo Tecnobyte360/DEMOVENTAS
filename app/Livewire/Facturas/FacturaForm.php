@@ -499,7 +499,15 @@ class FacturaForm extends Component
         // refresca vista
         $this->dispatch('$refresh');
     }
-
+    public function setCotizacion($cotizacionId = null): void
+    {
+        $this->cotizacion_id = $cotizacionId ? (int) $cotizacionId : null;
+        $this->dispatch('sync-cotizacion-tomselect', cotizacionId: $this->cotizacion_id);
+    }
+    public function updatedCotizacionId($value): void
+    {
+        $this->dispatch('sync-cotizacion-tomselect', cotizacionId: $this->cotizacion_id);
+    }
     private function cargarFactura(int $id): void
     {
         try {
@@ -917,11 +925,17 @@ class FacturaForm extends Component
             $esNueva = !$this->factura->exists;
             $uid = Auth::id();
 
-            $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
+            $serieId = (int) ($this->serie_id ?: $this->factura->serie_id ?: $this->serieDefault?->id ?: 0);
+            $serie = $serieId ? Serie::find($serieId) : null;
+
+            if (!$serie) {
+                throw new \RuntimeException('Debes seleccionar una serie válida para guardar la factura.');
+            }
 
             $dataCab = [
                 'cotizacion_id'     => $this->cotizacion_id,
-                'serie_id'          => $serieId,
+                'serie_id'          => $serie->id,
+                'prefijo'           => $serie->prefijo ?: '',
                 'socio_negocio_id'  => $this->socio_negocio_id,
                 'fecha'             => $this->fecha,
                 'vencimiento'       => $this->vencimiento,
@@ -993,10 +1007,14 @@ class FacturaForm extends Component
             Log::info('Factura guardada (borrador)', [
                 'factura_id'    => $this->factura->id,
                 'cotizacion_id' => $this->cotizacion_id,
+                'serie_id'      => $serie->id,
+                'prefijo'       => $serie->prefijo,
                 'detalles'      => $this->factura->detalles->count(),
             ]);
         }, 3);
     }
+
+
     private function ensureCuentasEnLineas(): void
     {
         foreach ($this->lineas as $i => &$l) {
@@ -1690,7 +1708,9 @@ class FacturaForm extends Component
             $this->takeSnapshot();
 
             $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('sync-cotizacion-tomselect', cotizacionId: $this->cotizacion_id);
             $this->dispatch('$refresh');
+
 
             PendingToast::create()
                 ->success()

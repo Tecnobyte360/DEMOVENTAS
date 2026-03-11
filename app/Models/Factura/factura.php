@@ -93,4 +93,36 @@ class Factura extends Model
     {
         return $this->belongsTo(User::class, 'anulado_por_id');
     }
+    public function recalcularTotales(): self
+{
+    $detalles = $this->relationLoaded('detalles')
+        ? $this->detalles
+        : $this->detalles()->get();
+
+    $subtotal = 0.0;
+    $impuestos = 0.0;
+
+    foreach ($detalles as $d) {
+        $cantidad = (float) ($d->cantidad ?? 0);
+        $precio = (float) ($d->precio_unitario ?? 0);
+        $descuentoPct = (float) ($d->descuento_pct ?? 0);
+        $impuestoPct = (float) ($d->impuesto_pct ?? 0);
+
+        if ($cantidad <= 0) {
+            continue;
+        }
+
+        $base = $cantidad * $precio * (1 - ($descuentoPct / 100));
+        $iva = $base * ($impuestoPct / 100);
+
+        $subtotal += $base;
+        $impuestos += $iva;
+    }
+
+    $this->subtotal = round($subtotal, 2);
+    $this->impuestos = round($impuestos, 2);
+    $this->total = round($subtotal + $impuestos, 2);
+
+    return $this;
+}
 }

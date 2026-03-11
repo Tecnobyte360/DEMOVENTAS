@@ -134,7 +134,7 @@
                         Precio (sin IVA) <span class="text-red-500">*</span>
                     </label>
                     <div class="mt-1 relative">
-                        <span class="absolute inset-y-0 left-3 grid place-items-center text-gray-500">$</span>
+                       
                         <input wire:model.lazy="precio" type="number" step="0.01" inputmode="decimal"
                             placeholder="0.00"
                             class="w-full pl-7 pr-3 py-2.5 rounded-xl border bg-white dark:bg-gray-800 dark:text-white

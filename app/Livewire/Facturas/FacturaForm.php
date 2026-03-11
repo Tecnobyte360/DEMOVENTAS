@@ -56,7 +56,7 @@ class FacturaForm extends Component
     public ?int $cotizacion_id = null;
     /** Condición de pago seleccionada (contado / crédito del cliente) */
     public ?int $condicion_pago_id = null;
-
+public array $productosSeleccionados = [];
     /** NUEVO: controlas si quieres auto-emitir al pagar 100% contado */
     public bool $autoEmitirContado = false;
 
@@ -196,17 +196,7 @@ class FacturaForm extends Component
         }
 
         try {
-            $productos = Producto::with([
-                'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-                'cuentaIngreso:id,codigo,nombre',
-                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-                'cuentas.cuentaPUC:id,codigo,nombre',
-                'cuentas.tipo:id,codigo,nombre',
-            ])
-                ->where('activo', 1)
-                ->orderBy('nombre')
-                ->take(300)
-                ->get();
+            $this->syncProductosSeleccionados();
 
             $bodegas = Bodega::query()
                 ->orderBy('nombre')
@@ -279,18 +269,19 @@ class FacturaForm extends Component
             ]);
 
             return view('livewire.facturas.factura-form', [
-                'clientes'        => $clientes,
-                'productos'       => $productos,
-                'bodegas'         => $bodegas,
-                'series'          => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
-                'serieDefault'    => $this->serieDefault,
-                'cuentasIngresos' => $cuentasIngresos,
-                'cuentasCXC'      => $cuentasCXC,
-                'cuentasCaja'     => $cuentasCaja,
-                'impuestosVentas' => $impuestosVentas,
-                'bloqueada'       => $this->bloqueada,
-                'condicionesPago' => $condicionesPago,
-                'cotizaciones'    => $cotizaciones,
+                'clientes'              => $clientes,
+                'productos'             => collect(), // 👈 ya no cargas catálogo completo
+                'productosSeleccionados' => $this->productosSeleccionados,
+                'bodegas'               => $bodegas,
+                'series'                => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
+                'serieDefault'          => $this->serieDefault,
+                'cuentasIngresos'       => $cuentasIngresos,
+                'cuentasCXC'            => $cuentasCXC,
+                'cuentasCaja'           => $cuentasCaja,
+                'impuestosVentas'       => $impuestosVentas,
+                'bloqueada'             => $this->bloqueada,
+                'condicionesPago'       => $condicionesPago,
+                'cotizaciones'          => $cotizaciones,
             ]);
         } catch (Throwable $e) {
             report($e);
@@ -301,18 +292,19 @@ class FacturaForm extends Component
                 ->duration(6000);
 
             return view('livewire.facturas.factura-form', [
-                'clientes'        => collect(),
-                'productos'       => collect(),
-                'bodegas'         => collect(),
-                'series'          => collect(),
-                'serieDefault'    => $this->serieDefault,
-                'cuentasIngresos' => collect(),
-                'cuentasCXC'      => collect(),
-                'cuentasCaja'     => collect(),
-                'impuestosVentas' => collect(),
-                'bloqueada'       => $this->bloqueada,
-                'condicionesPago' => collect(),
-                'cotizaciones'    => collect(),
+                'clientes'              => collect(),
+                'productos'             => collect(),
+                'productosSeleccionados' => [],
+                'bodegas'               => collect(),
+                'series'                => collect(),
+                'serieDefault'          => $this->serieDefault,
+                'cuentasIngresos'       => collect(),
+                'cuentasCXC'            => collect(),
+                'cuentasCaja'           => collect(),
+                'impuestosVentas'       => collect(),
+                'bloqueada'             => $this->bloqueada,
+                'condicionesPago'       => collect(),
+                'cotizaciones'          => collect(),
             ]);
         }
     }
@@ -622,8 +614,12 @@ class FacturaForm extends Component
 
         $this->normalizeLinea($l);
         $this->lineas[] = $l;
+
+        $this->syncProductosSeleccionados();
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
         $this->dispatch('$refresh');
     }
+
     private function aplicarBodegaPredeterminadaALineasVacias(): void
     {
         if (!$this->bodega_predeterminada_empresa_id) {
@@ -640,90 +636,121 @@ class FacturaForm extends Component
     {
         if ($this->bloqueada) return;
         if (!isset($this->lineas[$i])) return;
+
         array_splice($this->lineas, $i, 1);
+
+        $this->syncProductosSeleccionados();
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
         $this->dispatch('$refresh');
     }
 
-    public function setProducto(int $i, $id): void
-    {
-        if ($this->bloqueada) return;
 
-        try {
-            if (!isset($this->lineas[$i])) return;
+   public function setProducto(int $i, $id): void
+{
+    if ($this->bloqueada) {
+        return;
+    }
 
-            $prodId = $id ? (int) $id : null;
-            $this->lineas[$i]['producto_id'] = $prodId;
+    try {
+        if (!isset($this->lineas[$i])) {
+            return;
+        }
 
-            if (!$prodId) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
-                $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
-                return;
-            }
+        $prodId = $id ? (int) $id : null;
+        $this->lineas[$i]['producto_id'] = $prodId;
 
-            $p = Producto::with([
-                'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-                'cuentaIngreso:id',
-                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-            ])->find($prodId);
-
-            if (!$p) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
-                $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
-                return;
-            }
-
-            $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
-
-            $precioBase = (float) ($p->precio ?? $p->precio_venta ?? 0.0);
-            $ivaPct     = 0.0;
-            $impId      = null;
-
-            $imp = $p->impuesto;
-            if ($imp && (int)($imp->activo ?? 0) === 1) {
-                $aplica = strtoupper((string)($imp->aplica_sobre ?? ''));
-                $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
-
-                $hoy   = now()->startOfDay();
-                $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
-                $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
-                $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
-
-                if ($aplicaVentas && $vigente) {
-                    $impId = (int)$imp->id;
-                    if (!is_null($imp->porcentaje)) {
-                        $ivaPct = (float) $imp->porcentaje;
-                        if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
-                            $precioBase = $precioBase > 0 ? round($precioBase / (1 + $ivaPct / 100), 2) : 0.0;
-                        }
-                    } else {
-                        $ivaPct = 0.0;
-                    }
-                }
-            }
+        if (!$prodId) {
+            $this->lineas[$i]['cuenta_ingreso_id'] = null;
+            $this->lineas[$i]['precio_unitario']   = 0.0;
+            $this->lineas[$i]['impuesto_id']       = null;
+            $this->lineas[$i]['impuesto_pct']      = 0.0;
 
             if (empty($this->lineas[$i]['descripcion'])) {
-                $this->lineas[$i]['descripcion'] = (string) $p->nombre;
+                $this->lineas[$i]['descripcion'] = null;
             }
 
-            $this->lineas[$i]['precio_unitario'] = $precioBase;
-            $this->lineas[$i]['impuesto_id']     = $impId;
-            $this->lineas[$i]['impuesto_pct']    = $ivaPct;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->syncProductosSeleccionados();
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('$refresh');
+            return;
+        }
+
+        $p = Producto::with([
+            'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+            'cuentaIngreso:id,codigo,nombre',
+            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+        ])->find($prodId);
+
+        if (!$p) {
+            $this->lineas[$i]['cuenta_ingreso_id'] = null;
+            $this->lineas[$i]['precio_unitario']   = 0.0;
+            $this->lineas[$i]['impuesto_id']       = null;
+            $this->lineas[$i]['impuesto_pct']      = 0.0;
 
             $this->normalizeLinea($this->lineas[$i]);
+            $this->syncProductosSeleccionados();
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
             $this->dispatch('$refresh');
-        } catch (\Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo establecer el producto.')->duration(5000);
+            return;
         }
+
+        $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+
+        $precioBase = (float) ($p->precio ?? $p->precio_venta ?? 0.0);
+        $ivaPct = 0.0;
+        $impId = null;
+
+        $imp = $p->impuesto;
+
+        if ($imp && (int) ($imp->activo ?? 0) === 1) {
+            $aplica = strtoupper((string) ($imp->aplica_sobre ?? ''));
+            $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
+
+            $hoy = now()->startOfDay();
+            $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
+            $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
+            $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
+
+            if ($aplicaVentas && $vigente) {
+                $impId = (int) $imp->id;
+
+                if (!is_null($imp->porcentaje)) {
+                    $ivaPct = (float) $imp->porcentaje;
+
+                    if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
+                        $precioBase = $precioBase > 0
+                            ? round($precioBase / (1 + $ivaPct / 100), 2)
+                            : 0.0;
+                    }
+                } else {
+                    $ivaPct = 0.0;
+                }
+            }
+        }
+
+        if (empty($this->lineas[$i]['descripcion'])) {
+            $this->lineas[$i]['descripcion'] = (string) $p->nombre;
+        }
+
+        $this->lineas[$i]['precio_unitario'] = $precioBase;
+        $this->lineas[$i]['impuesto_id']     = $impId;
+        $this->lineas[$i]['impuesto_pct']    = $ivaPct;
+
+        $this->normalizeLinea($this->lineas[$i]);
+
+        $this->syncProductosSeleccionados();
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+        $this->dispatch('$refresh');
+    } catch (\Throwable $e) {
+        report($e);
+
+        PendingToast::create()
+            ->error()
+            ->message('No se pudo establecer el producto.')
+            ->duration(5000);
     }
+}
 
     public function setImpuesto(int $i, $impuestoId): void
     {
@@ -1014,6 +1041,66 @@ class FacturaForm extends Component
         }, 3);
     }
 
+    public function buscarProductos(string $search = ''): array
+    {
+        $search = trim($search);
+
+        $query = Producto::query()
+            ->where('activo', 1)
+            ->select(['id', 'nombre', 'codigo', 'ItemCode']);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'like', '%' . $search . '%')
+                    ->orWhere('codigo', 'like', '%' . $search . '%')
+                    ->orWhere('ItemCode', 'like', '%' . $search . '%');
+            });
+        }
+
+        $productos = $query
+            ->orderBy('nombre')
+            ->limit(1000)
+            ->get();
+
+        return $productos->map(function ($p) {
+            $codigo = $p->ItemCode ?? $p->codigo ?? null;
+
+            return [
+                'id'   => (string) $p->id,
+                'text' => $codigo
+                    ? ($codigo . ' - ' . $p->nombre)
+                    : $p->nombre,
+            ];
+        })->values()->toArray();
+    }
+   private function syncProductosSeleccionados(): void
+{
+    $ids = collect($this->lineas)
+        ->pluck('producto_id')
+        ->filter()
+        ->map(fn($id) => (int) $id)
+        ->unique()
+        ->values();
+
+    if ($ids->isEmpty()) {
+        $this->productosSeleccionados = [];
+        return;
+    }
+
+    $this->productosSeleccionados = Producto::query()
+        ->whereIn('id', $ids)
+        ->get(['id', 'nombre', 'codigo', 'ItemCode'])
+        ->mapWithKeys(function ($p) {
+            $codigo = $p->ItemCode ?? $p->codigo ?? null;
+
+            return [
+                (int) $p->id => $codigo
+                    ? ($codigo . ' - ' . $p->nombre)
+                    : $p->nombre,
+            ];
+        })
+        ->toArray();
+}
 
     private function ensureCuentasEnLineas(): void
     {

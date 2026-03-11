@@ -653,12 +653,13 @@ class FacturaCompra extends Component
             'impuesto_id'           => null,
             'impuesto_pct'          => 0,
         ];
+
         $this->normalizeLinea($l);
         $this->lineas[] = $l;
 
         $this->stockCheck = array_key_last($this->lineas) ?? 0;
 
-        $this->dispatch('$refresh');
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
 
     public function removeLinea(int $i): void
@@ -667,8 +668,9 @@ class FacturaCompra extends Component
         if (!isset($this->lineas[$i])) return;
 
         array_splice($this->lineas, $i, 1);
-        $this->stockCheck = max(0, min((int)$this->stockCheck, count($this->lineas) - 1));
-        $this->dispatch('$refresh');
+        $this->stockCheck = max(0, min((int) $this->stockCheck, count($this->lineas) - 1));
+
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
 
     public function setProducto(int $i, $id): void
@@ -991,15 +993,31 @@ class FacturaCompra extends Component
     {
         return round($this->subtotal + $this->impuestosTotal, 2);
     }
+
+
+
     #[On('set-producto-linea')]
-    public function setProductoLinea($index, $productoId)
+    public function setProductoLinea($index, $productoId = null): void
     {
-        $productoId = $productoId ? (int)$productoId : null;
+        if ($this->bloqueada) return;
 
-        $this->lineas[$index]['producto_id'] = $productoId;
+        $i = (int) $index;
+        $pid = $productoId ? (int) $productoId : null;
 
-        // Si ya tienes tu método setProducto(), reutilízalo:
-        $this->setProducto($index, $productoId);
+        if (!isset($this->lineas[$i])) {
+            return;
+        }
+
+        $this->stockCheck = $i;
+        $this->lineas[$i]['producto_id'] = $pid;
+
+        $this->setProducto($i, $pid);
+        $this->refreshStockLinea($i);
+
+        $this->resetErrorBag();
+        $this->resetValidation();
+
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
 
 
@@ -1010,7 +1028,7 @@ class FacturaCompra extends Component
         }
 
         DB::transaction(function () {
-        $usuarioId = Auth::id();
+            $usuarioId = Auth::id();
 
             if (!$this->factura) {
                 $this->factura = new Factura();
@@ -1149,56 +1167,56 @@ class FacturaCompra extends Component
             PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')->duration(9000);
         }
     }
-   
+
 
     public function emitir(): void
-{
-    if ($this->abortIfLocked('emitir')) return;
+    {
+        if ($this->abortIfLocked('emitir')) return;
 
-    try {
-        $this->ensureCuentasEnLineas();
-        if (!$this->validarConToast()) return;
+        try {
+            $this->ensureCuentasEnLineas();
+            if (!$this->validarConToast()) return;
 
-        DB::transaction(function () {
-            $this->persistirBorrador();
+            DB::transaction(function () {
+                $this->persistirBorrador();
 
-            $this->factura->refresh()
-                ->loadMissing(['detalles', 'socioNegocio'])
-                ->recalcularTotales()
-                ->save();
+                $this->factura->refresh()
+                    ->loadMissing(['detalles', 'socioNegocio'])
+                    ->recalcularTotales()
+                    ->save();
 
-            if (!$this->serieDefault) {
-                throw new \RuntimeException('No hay serie default activa para este documento.');
-            }
+                if (!$this->serieDefault) {
+                    throw new \RuntimeException('No hay serie default activa para este documento.');
+                }
 
-            $numero = $this->serieDefault->tomarConsecutivo();
+                $numero = $this->serieDefault->tomarConsecutivo();
 
-            $this->factura->update([
-                'serie_id'       => $this->serieDefault->id,
-                'numero'         => $numero,
-                'prefijo'        => $this->serieDefault->prefijo,
-                'estado'         => 'emitida',
-              'emitido_por_id' => Auth::id(),
-                'emitido_en'     => now(),
-            ]);
+                $this->factura->update([
+                    'serie_id'       => $this->serieDefault->id,
+                    'numero'         => $numero,
+                    'prefijo'        => $this->serieDefault->prefijo,
+                    'estado'         => 'emitida',
+                    'emitido_por_id' => Auth::id(),
+                    'emitido_en'     => now(),
+                ]);
 
-            \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
-            InventarioService::aumentarPorFacturaCompra($this->factura);
+                \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
+                InventarioService::aumentarPorFacturaCompra($this->factura);
 
-            $this->estado = $this->factura->estado;
-        }, 3);
+                $this->estado = $this->factura->estado;
+            }, 3);
 
-        PendingToast::create()->success()->message(
-            'Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
-        )->duration(6000);
+            PendingToast::create()->success()->message(
+                'Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
+            )->duration(6000);
 
-        $this->resetFormulario();
-        $this->dispatch('refrescar-lista-facturas');
-    } catch (\Throwable $e) {
-        Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
-        PendingToast::create()->error()->message($e->getMessage())->duration(12000);
+            $this->resetFormulario();
+            $this->dispatch('refrescar-lista-facturas');
+        } catch (\Throwable $e) {
+            Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
+            PendingToast::create()->error()->message($e->getMessage())->duration(12000);
+        }
     }
-}
 
     public function validarAntesDeEmitir(): void
     {

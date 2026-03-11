@@ -408,17 +408,20 @@
 
                                 {{-- Producto --}}
                                 <td class="px-4 py-3 min-w-[260px]">
-                                    <select
-                                        wire:key="producto-{{ $i }}-{{ (int) ($lineas[$i]['producto_id'] ?? 0) }}"
-                                        @if ($i === 0) data-first-product @endif
-                                        wire:model.live="lineas.{{ $i }}.producto_id"
-                                        wire:change="setProducto({{ $i }}, $event.target.value)"
-                                        class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                                        <option value="">— Seleccione —</option>
-                                        @foreach ($productos as $p)
-                                            <option value="{{ $p->id }}">{{ $p->nombre }}</option>
-                                        @endforeach
-                                    </select>
+                                    <div wire:ignore>
+                                        <select id="producto-select-{{ $i }}" data-producto-select
+                                            data-linea="{{ $i }}"
+                                            wire:key="producto-{{ $i }}-{{ (int) ($lineas[$i]['producto_id'] ?? 0) }}"
+                                            @if ($i === 0) data-first-product @endif
+                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                            <option value="">— Seleccione —</option>
+                                            @foreach ($productos as $p)
+                                                <option value="{{ $p->id }}" @selected((int) ($lineas[$i]['producto_id'] ?? 0) === (int) $p->id)>
+                                                    {{ $p->nombre }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </div>
 
                                     @error('lineas.' . $i . '.producto_id')
                                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
@@ -761,4 +764,74 @@
         });
 
     });
+</script>
+
+<script>
+document.addEventListener('livewire:init', () => {
+
+    const ensureProductoTomSelect = (el) => {
+        if (!el) return null;
+
+        if (el.tomselect) {
+            return el.tomselect;
+        }
+
+        const index = parseInt(el.dataset.linea || '0', 10);
+
+        const ts = new TomSelect(el, {
+            placeholder: '— Seleccione —',
+            allowEmptyOption: true,
+            create: false,
+            closeAfterSelect: true,
+            maxOptions: 1000,
+            hideSelected: false,
+            searchField: ['text'],
+
+            onChange(value) {
+                const pid = value ? parseInt(value, 10) : null;
+
+                Livewire.dispatch('set-producto-linea', {
+                    index,
+                    productoId: pid
+                });
+            }
+        });
+
+        return ts;
+    };
+
+    const initProductoSelects = () => {
+        requestAnimationFrame(() => {
+            document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                ensureProductoTomSelect(el);
+            });
+        });
+    };
+
+    initProductoSelects();
+
+    Livewire.hook('message.processed', () => {
+        initProductoSelects();
+    });
+
+    Livewire.on('sync-productos-tomselect', (payload) => {
+        requestAnimationFrame(() => {
+            const lineas = payload?.lineas || [];
+
+            lineas.forEach((l, i) => {
+                const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
+                if (!el) return;
+
+                const ts = ensureProductoTomSelect(el);
+                if (!ts) return;
+
+                const pid = l?.producto_id ? String(l.producto_id) : '';
+                ts.setValue(pid, true);
+            });
+
+            initProductoSelects();
+        });
+    });
+
+});
 </script>

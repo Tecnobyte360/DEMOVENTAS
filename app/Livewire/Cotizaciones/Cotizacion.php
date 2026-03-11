@@ -192,41 +192,31 @@ class Cotizacion extends Component
     |--------------------------------------------------------------------------
     */
 
-    private function normalizeLinea(array &$l): void
-    {
-        $cantRaw = $l['cantidad'] ?? null;
-        $precioRaw = $l['precio_unitario'] ?? null;
+   private function normalizeLinea(array &$l): void
+{
+    $cantRaw = $l['cantidad'] ?? null;
+    $precioRaw = $l['precio_unitario'] ?? null;
+    $descRaw = $l['descuento_pct'] ?? 0;
+    $ivaRaw = $l['impuesto_pct'] ?? 0;
 
-        $descRaw = $l['descuento_pct'] ?? 0;
-        $ivaRaw = $l['impuesto_pct'] ?? 0;
+    $cant = ($cantRaw === '' || $cantRaw === null) ? null : (float) $cantRaw;
+    $precio = ($precioRaw === '' || $precioRaw === null) ? null : (float) $precioRaw;
+    $desc = ($descRaw === '' || $descRaw === null) ? 0 : (float) $descRaw;
+    $iva = ($ivaRaw === '' || $ivaRaw === null) ? 0 : (float) $ivaRaw;
 
-        $cant = ($cantRaw === '' || $cantRaw === null) ? null : (float) $cantRaw;
+    $l['cantidad'] = is_null($cant) ? null : round(max(0, $cant), 3);
+    $l['precio_unitario'] = is_null($precio) ? null : round(max(0, $precio), 2);
+    $l['descuento_pct'] = min(100.0, max(0.0, round($desc, 3)));
+    $l['impuesto_pct'] = min(100.0, max(0.0, round($iva, 3)));
 
-        $precio = ($precioRaw === '' || $precioRaw === null) ? null : (float) $precioRaw;
-
-        $desc = ($descRaw === '' || $descRaw === null) ? 0 : (float) $descRaw;
-
-        $iva = ($ivaRaw === '' || $ivaRaw === null) ? 0 : (float) $ivaRaw;
-
-        $l['cantidad'] = is_null($cant) ? null : round(max(0, $cant), 3);
-
-        $l['precio_unitario'] = is_null($precio) ? null : round(max(0, $precio), 2);
-
-        $l['descuento_pct'] = min(100.0, max(0.0, round($desc, 3)));
-
-        $l['impuesto_pct'] = min(100.0, max(0.0, round($iva, 3)));
-
-        if (is_null($l['cantidad']) || is_null($l['precio_unitario'])) {
-
-            $l['importe'] = 0;
-
-            return;
-        }
-
-        $base = ($l['cantidad'] * $l['precio_unitario']) * (1 - $l['descuento_pct'] / 100);
-
-        $l['importe'] = round(max(0, $base), 2);
+    if (is_null($l['cantidad']) || is_null($l['precio_unitario'])) {
+        $l['importe'] = 0;
+        return;
     }
+
+    $base = ($l['cantidad'] * $l['precio_unitario']) * (1 - $l['descuento_pct'] / 100);
+    $l['importe'] = round(max(0, $base), 2);
+}
 
     /*
     |--------------------------------------------------------------------------
@@ -253,7 +243,35 @@ class Cotizacion extends Component
         $this->dispatch('$refresh');
         $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
+    public function updated($name, $value): void
+    {
+        if (preg_match('/^lineas\.(\d+)\.producto_id$/', $name, $m)) {
+            $i = (int) $m[1];
 
+            $this->setProducto($i, $value);
+
+            $this->resetErrorBag();
+            $this->resetValidation();
+            $this->markDirtyIfNeeded();
+            $this->dispatch('$refresh');
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            return;
+        }
+
+        if (preg_match('/^lineas\.(\d+)\.(cantidad|precio_unitario|descuento_pct|impuesto_pct)$/', $name, $m)) {
+            $i = (int) $m[1];
+
+            if (isset($this->lineas[$i])) {
+                $this->normalizeLinea($this->lineas[$i]);
+                $this->markDirtyIfNeeded();
+                $this->dispatch('$refresh');
+            }
+
+            return;
+        }
+
+        $this->markDirtyIfNeeded();
+    }
     public function removeLinea(int $i): void
     {
 
@@ -280,23 +298,19 @@ class Cotizacion extends Component
 
     public function setProducto(int $i, $id): void
     {
-
         if (!isset($this->lineas[$i])) {
             return;
         }
 
         $prodId = $id ? (int) $id : null;
-
         $this->lineas[$i]['producto_id'] = $prodId;
 
         if (!$prodId) {
-
             $this->lineas[$i]['precio_unitario'] = 0;
-
             $this->lineas[$i]['impuesto_pct'] = 0;
-
             $this->normalizeLinea($this->lineas[$i]);
-
+            $this->markDirtyIfNeeded();
+            $this->dispatch('$refresh');
             return;
         }
 
@@ -309,6 +323,8 @@ class Cotizacion extends Component
         $this->lineas[$i]['precio_unitario'] = (float) ($p->precio ?? 0);
 
         $this->normalizeLinea($this->lineas[$i]);
+        $this->markDirtyIfNeeded();
+        $this->dispatch('$refresh');
     }
 
     /*
@@ -319,28 +335,43 @@ class Cotizacion extends Component
 
     public function getSubtotalProperty(): float
     {
-        return round(
-            collect($this->lineas)
-                ->sum(fn($l) => (float) ($l['importe'] ?? 0)),
-            2
-        );
+        $subtotal = 0.0;
+
+        foreach ($this->lineas as $l) {
+            $cantidad = (float) ($l['cantidad'] ?? 0);
+            $precio = (float) ($l['precio_unitario'] ?? 0);
+            $descuento = (float) ($l['descuento_pct'] ?? 0);
+
+            if ($cantidad <= 0 || $precio < 0) {
+                continue;
+            }
+
+            $base = ($cantidad * $precio) * (1 - $descuento / 100);
+            $subtotal += $base;
+        }
+
+        return round($subtotal, 2);
     }
 
     public function getImpuestosTotalProperty(): float
     {
-
-        $imp = 0.0;
+        $impuestos = 0.0;
 
         foreach ($this->lineas as $l) {
+            $cantidad = (float) ($l['cantidad'] ?? 0);
+            $precio = (float) ($l['precio_unitario'] ?? 0);
+            $descuento = (float) ($l['descuento_pct'] ?? 0);
+            $iva = (float) ($l['impuesto_pct'] ?? 0);
 
-            $base = (float) ($l['importe'] ?? 0);
+            if ($cantidad <= 0 || $precio < 0) {
+                continue;
+            }
 
-            $iva = min(100, max(0, (float) ($l['impuesto_pct'] ?? 0)));
-
-            $imp += $base * $iva / 100;
+            $base = ($cantidad * $precio) * (1 - $descuento / 100);
+            $impuestos += $base * $iva / 100;
         }
 
-        return round($imp, 2);
+        return round($impuestos, 2);
     }
 
     public function getTotalProperty(): float

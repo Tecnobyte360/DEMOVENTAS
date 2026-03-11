@@ -83,7 +83,99 @@
                     Factura de ventas
                 </h2>
             </header>
+            {{-- ===== CARGAR DESDE COTIZACIÓN ===== --}}
+            <section class="mb-6">
+                <div
+                    class="rounded-2xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/70 dark:bg-indigo-900/20 p-4 md:p-5">
+                    <div class="flex flex-col lg:flex-row lg:items-end gap-4">
+                        <div class="flex-1">
+                            <label
+                                class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                                Cargar desde cotización
+                            </label>
 
+                            <select wire:model.live="cotizacion_id"
+                                class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-indigo-300/60 @error('cotizacion_id') border-red-500 focus:ring-red-300 @enderror">
+                                <option value="">— Seleccione una cotización —</option>
+
+                                @foreach ($cotizaciones as $cot)
+                                    <option value="{{ $cot->id }}">
+                                        #{{ $cot->id }}
+                                        — {{ \Carbon\Carbon::parse($cot->fecha)->format('Y-m-d') }}
+                                        — {{ $cot->socioNegocio->razon_social ?? 'Cliente' }}
+                                        @if (!empty($cot->estado))
+                                            — {{ ucfirst($cot->estado) }}
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </select>
+
+                            @error('cotizacion_id')
+                                <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                            @enderror
+
+                            @if ($cotizacion_id)
+                                @php
+                                    $cotSel = $cotizaciones->firstWhere('id', (int) $cotizacion_id);
+                                @endphp
+
+                                @if ($cotSel)
+                                    <div
+                                        class="mt-3 flex flex-wrap items-center gap-2 text-xs md:text-sm text-indigo-900 dark:text-indigo-200">
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700">
+                                            <i class="fa-solid fa-file-lines"></i>
+                                            Cotización #{{ $cotSel->id }}
+                                        </span>
+
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700">
+                                            <i class="fa-solid fa-user"></i>
+                                            {{ $cotSel->socioNegocio->razon_social ?? 'Cliente' }}
+                                        </span>
+
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700">
+                                            <i class="fa-solid fa-calendar-days"></i>
+                                            {{ \Carbon\Carbon::parse($cotSel->fecha)->format('Y-m-d') }}
+                                        </span>
+
+                                        <span
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-gray-800 border border-indigo-200 dark:border-indigo-700">
+                                            <i class="fa-solid fa-circle-dollar-to-slot"></i>
+                                            ${{ number_format((float) ($cotSel->total ?? 0), 2) }}
+                                        </span>
+                                    </div>
+                                @endif
+                            @endif
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <button type="button" wire:click="cargarCotizacionSeleccionada"
+                                wire:loading.attr="disabled"
+                                wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion"
+                                class="h-12 md:h-14 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
+                                <i class="fa-solid fa-file-import mr-2"></i>
+                                <span wire:loading.remove
+                                    wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion">
+                                    Cargar cotización
+                                </span>
+                                <span wire:loading wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion">
+                                    Cargando…
+                                </span>
+                            </button>
+
+                            @if ($cotizacion_id)
+                                <button type="button" wire:click="$set('cotizacion_id', null)"
+                                    class="h-12 md:h-14 px-5 rounded-2xl bg-white hover:bg-gray-50 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 shadow">
+                                    <i class="fa-solid fa-xmark mr-2"></i>
+                                    Limpiar
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </section>
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {{-- Cliente --}}
                 <section>
@@ -813,73 +905,74 @@
     @if ($showPagos)
         <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-' . ($factura?->id ?? 'new')" />
     @endif
-<script>
-document.addEventListener('livewire:init', () => {
+    <script>
+        document.addEventListener('livewire:init', () => {
 
-  const ensureTomSelect = (el) => {
-    if (!el) return null;
+            const ensureTomSelect = (el) => {
+                if (!el) return null;
 
-    // ya existe
-    if (el.tomselect) return el.tomselect;
+                // ya existe
+                if (el.tomselect) return el.tomselect;
 
-    const linea = parseInt(el.dataset.linea || '0', 10);
+                const linea = parseInt(el.dataset.linea || '0', 10);
 
-    const ts = new TomSelect(el, {
-      placeholder: '— Seleccione —',
-      allowEmptyOption: true,
-      create: false,
-      maxOptions: 500,
-      hideSelected: false,
-      closeAfterSelect: true,
+                const ts = new TomSelect(el, {
+                    placeholder: '— Seleccione —',
+                    allowEmptyOption: true,
+                    create: false,
+                    maxOptions: 500,
+                    hideSelected: false,
+                    closeAfterSelect: true,
 
-      // ✅ CLAVE: esto asegura búsqueda por el texto visible
-      searchField: ['text'],
+                    // ✅ CLAVE: esto asegura búsqueda por el texto visible
+                    searchField: ['text'],
 
-      // ❌ NO uses dropdown_input si quieres “filtro normal”
-      // plugins: ['dropdown_input'],
+                    // ❌ NO uses dropdown_input si quieres “filtro normal”
+                    // plugins: ['dropdown_input'],
 
-      onChange(value) {
-        const pid = value ? parseInt(value, 10) : null;
-        @this.call('setProducto', linea, pid);
-      }
-    });
+                    onChange(value) {
+                        const pid = value ? parseInt(value, 10) : null;
+                        @this.call('setProducto', linea, pid);
+                    }
+                });
 
-    return ts;
-  };
+                return ts;
+            };
 
-  const initAll = () => {
-    document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-      ensureTomSelect(el);
-    });
-  };
+            const initAll = () => {
+                document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                    ensureTomSelect(el);
+                });
+            };
 
-  // Inicial
-  initAll();
+            // Inicial
+            initAll();
 
-  // Cada vez que Livewire procese un mensaje, intenta inicializar los nuevos
-  Livewire.hook('message.processed', () => {
-    initAll();
-  });
+            // Cada vez que Livewire procese un mensaje, intenta inicializar los nuevos
+            Livewire.hook('message.processed', () => {
+                initAll();
+            });
 
-  // ✅ Evento para “sincronizar” cuando cargas/abres factura en modo editar
-  // (desde PHP: $this->dispatch('sync-productos-tomselect', lineas: $this->lineas); )
-  Livewire.on('sync-productos-tomselect', (payload) => {
-    const lineas = payload?.lineas || [];
+            // ✅ Evento para “sincronizar” cuando cargas/abres factura en modo editar
+            // (desde PHP: $this->dispatch('sync-productos-tomselect', lineas: $this->lineas); )
+            Livewire.on('sync-productos-tomselect', (payload) => {
+                const lineas = payload?.lineas || [];
 
-    lineas.forEach((l, i) => {
-      const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
-      if (!el) return;
+                lineas.forEach((l, i) => {
+                    const el = document.querySelector(
+                        `select[data-producto-select][data-linea="${i}"]`);
+                    if (!el) return;
 
-      const ts = ensureTomSelect(el);
-      if (!ts) return;
+                    const ts = ensureTomSelect(el);
+                    if (!ts) return;
 
-      const pid = l?.producto_id ? String(l.producto_id) : '';
+                    const pid = l?.producto_id ? String(l.producto_id) : '';
 
-      // ✅ setValue SIN disparar onChange (true = silent)
-      ts.setValue(pid, true);
-    });
-  });
+                    // ✅ setValue SIN disparar onChange (true = silent)
+                    ts.setValue(pid, true);
+                });
+            });
 
-});
-</script>
+        });
+    </script>
 </div>

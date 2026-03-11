@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Facturas;
 
+
 use App\Models\Bodega;
 use Livewire\Component;
 use Livewire\Attributes\On;
@@ -17,6 +18,7 @@ use App\Models\Productos\Producto;
 
 use App\Models\CondicionPago\CondicionPago;
 use App\Models\ConfiguracionEmpresas\Empresa;
+use App\Models\cotizaciones\cotizacione as CotizacionModel;
 use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Factura\Factura;
 use App\Models\Productos\ProductoCuentaTipo;
@@ -51,7 +53,7 @@ class FacturaForm extends Component
     public array $stockVista = [];
     public bool $showPagos = false;
     public ?int $cuenta_cobro_id = null;
-
+    public ?int $cotizacion_id = null;
     /** Condición de pago seleccionada (contado / crédito del cliente) */
     public ?int $condicion_pago_id = null;
 
@@ -69,7 +71,7 @@ class FacturaForm extends Component
         'moneda'                       => 'required|string|size:3',
         'cuenta_cobro_id'              => 'required|integer|exists:plan_cuentas,id',
         'condicion_pago_id'            => 'nullable|integer|exists:condicion_pagos,id',
-
+        'cotizacion_id' => 'nullable|integer|exists:cotizaciones,id',
         'lineas'                       => 'required|array|min:1',
         'lineas.*.producto_id'         => 'required|integer|exists:productos,id',
         'lineas.*.cuenta_ingreso_id'   => 'required|integer|exists:plan_cuentas,id',
@@ -90,6 +92,7 @@ class FacturaForm extends Component
         'terminos_pago' => 'términos',
         'cuenta_cobro_id' => 'cuenta para cobrar del cliente',
         'condicion_pago_id' => 'condición de pago',
+        'cotizacion_id' => 'cotización',
         'lineas' => 'líneas',
         'lineas.*.producto_id' => 'producto',
         'lineas.*.cuenta_ingreso_id' => 'cuenta de ingreso',
@@ -181,10 +184,15 @@ class FacturaForm extends Component
     {
         try {
             $clientes = SocioNegocio::clientes()
-                ->orderBy('razon_serial')->orderBy('razon_social')->take(200)->get();
+                ->orderBy('razon_serial')
+                ->orderBy('razon_social')
+                ->take(200)
+                ->get();
         } catch (\Throwable $e) {
-            // en algunos entornos no existe razon_serial
-            $clientes = SocioNegocio::clientes()->orderBy('razon_social')->take(200)->get();
+            $clientes = SocioNegocio::clientes()
+                ->orderBy('razon_social')
+                ->take(200)
+                ->get();
         }
 
         try {
@@ -194,9 +202,15 @@ class FacturaForm extends Component
                 'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
                 'cuentas.cuentaPUC:id,codigo,nombre',
                 'cuentas.tipo:id,codigo,nombre',
-            ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
+            ])
+                ->where('activo', 1)
+                ->orderBy('nombre')
+                ->take(300)
+                ->get();
 
-            $bodegas = Bodega::orderBy('nombre')->get();
+            $bodegas = Bodega::query()
+                ->orderBy('nombre')
+                ->get();
 
             $cuentasIngresos = PlanCuentas::query()
                 ->where(function ($q) {
@@ -206,13 +220,19 @@ class FacturaForm extends Component
                 ->orderBy('codigo')
                 ->get(['id', 'codigo', 'nombre']);
 
-            $cuentasCXC = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
+            $cuentasCXC = PlanCuentas::query()
+                ->where('cuenta_activa', 1)
+                ->where('titulo', 0)
                 ->where('clase_cuenta', 'CXC_CLIENTES')
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre']);
 
-            $cuentasCaja = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
+            $cuentasCaja = PlanCuentas::query()
+                ->where('cuenta_activa', 1)
+                ->where('titulo', 0)
                 ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
-                ->orderBy('codigo')->get(['id', 'codigo', 'nombre']);
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre']);
 
             $impuestosVentas = Impuesto::activos()
                 ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
@@ -220,48 +240,79 @@ class FacturaForm extends Component
                 ->orderBy('nombre')
                 ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
 
-            // 🔄 CAMBIO: Obtener TODAS las condiciones de pago (sin filtrar por tipo actual)
             $condicionesPagoQuery = CondicionPago::query()
-                ->orderBy('tipo')      // Agrupa por tipo (contado primero, luego crédito)
-                ->orderBy('nombre')    // Luego ordena por nombre
+                ->orderBy('tipo')
+                ->orderBy('nombre')
                 ->select(['id', 'nombre', 'tipo', 'plazo_dias']);
 
-            // Si existe el campo 'activo', filtra solo las activas
             if (Schema::hasColumn('condicion_pagos', 'activo')) {
                 $condicionesPagoQuery->where('activo', 1);
             }
 
             $condicionesPago = $condicionesPagoQuery->get();
 
+            $cotizacionesQuery = CotizacionModel::query()
+                ->with([
+                    'socioNegocio:id,razon_social,nit',
+                    'detalles:id,cotizacion_id,producto_id,bodega_id,cantidad,precio_unitario,descuento_pct,impuesto_pct,importe',
+                ])
+                ->orderByDesc('id')
+                ->take(100);
+
+            if (Schema::hasColumn('cotizaciones', 'estado')) {
+                $cotizacionesQuery->whereIn('estado', ['borrador', 'enviada', 'aprobada']);
+            }
+
+            if (!empty($this->socio_negocio_id)) {
+                $cotizacionesQuery->where('socio_negocio_id', (int) $this->socio_negocio_id);
+            }
+
+            $cotizaciones = $cotizacionesQuery->get([
+                'id',
+                'socio_negocio_id',
+                'fecha',
+                'vencimiento',
+                'terminos_pago',
+                'notas',
+                'total',
+                'estado',
+            ]);
+
             return view('livewire.facturas.factura-form', [
-                'clientes'         => $clientes,
-                'productos'        => $productos,
-                'bodegas'          => $bodegas,
-                'series'           => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => $cuentasIngresos,
-                'cuentasCXC'       => $cuentasCXC,
-                'cuentasCaja'      => $cuentasCaja,
-                'impuestosVentas'  => $impuestosVentas,
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => $condicionesPago,
+                'clientes'        => $clientes,
+                'productos'       => $productos,
+                'bodegas'         => $bodegas,
+                'series'          => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
+                'serieDefault'    => $this->serieDefault,
+                'cuentasIngresos' => $cuentasIngresos,
+                'cuentasCXC'      => $cuentasCXC,
+                'cuentasCaja'     => $cuentasCaja,
+                'impuestosVentas' => $impuestosVentas,
+                'bloqueada'       => $this->bloqueada,
+                'condicionesPago' => $condicionesPago,
+                'cotizaciones'    => $cotizaciones,
             ]);
         } catch (Throwable $e) {
             report($e);
-            PendingToast::create()->error()->message('No se pudo cargar datos auxiliares.')->duration(6000);
+
+            PendingToast::create()
+                ->error()
+                ->message('No se pudo cargar datos auxiliares.')
+                ->duration(6000);
 
             return view('livewire.facturas.factura-form', [
-                'clientes'         => collect(),
-                'productos'        => collect(),
-                'bodegas'          => collect(),
-                'series'           => collect(),
-                'serieDefault'     => $this->serieDefault,
-                'cuentasIngresos'  => collect(),
-                'cuentasCXC'       => collect(),
-                'cuentasCaja'      => collect(),
-                'impuestosVentas'  => collect(),
-                'bloqueada'        => $this->bloqueada,
-                'condicionesPago'  => collect(),
+                'clientes'        => collect(),
+                'productos'       => collect(),
+                'bodegas'         => collect(),
+                'series'          => collect(),
+                'serieDefault'    => $this->serieDefault,
+                'cuentasIngresos' => collect(),
+                'cuentasCXC'      => collect(),
+                'cuentasCaja'     => collect(),
+                'impuestosVentas' => collect(),
+                'bloqueada'       => $this->bloqueada,
+                'condicionesPago' => collect(),
+                'cotizaciones'    => collect(),
             ]);
         }
     }
@@ -459,6 +510,7 @@ class FacturaForm extends Component
             // Cabecera
             // =========================
             $this->fill($f->only([
+                'cotizacion_id',
                 'serie_id',
                 'socio_negocio_id',
                 'fecha',
@@ -472,7 +524,6 @@ class FacturaForm extends Component
                 'cuenta_cobro_id',
                 'condicion_pago_id',
             ]));
-
             // =========================
             // Líneas (desde DB)
             // =========================
@@ -859,14 +910,17 @@ class FacturaForm extends Component
         DB::transaction(function () {
             $this->normalizarPagoAntesDeValidar();
 
-            if (!$this->factura) $this->factura = new Factura();
+            if (!$this->factura) {
+                $this->factura = new Factura();
+            }
 
             $esNueva = !$this->factura->exists;
-            $uid     = Auth::id(); // ✅ evita intelephense "Undefined method id"
+            $uid = Auth::id();
 
             $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
 
             $dataCab = [
+                'cotizacion_id'     => $this->cotizacion_id,
                 'serie_id'          => $serieId,
                 'socio_negocio_id'  => $this->socio_negocio_id,
                 'fecha'             => $this->fecha,
@@ -881,11 +935,11 @@ class FacturaForm extends Component
                 'condicion_pago_id' => $this->condicion_pago_id,
             ];
 
-            // ✅ Auditoría cabecera (solo si existen columnas)
             if ($uid) {
                 if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
                     $dataCab['actualizado_por_id'] = $uid;
                 }
+
                 if ($esNueva && Schema::hasColumn('facturas', 'creado_por_id')) {
                     $dataCab['creado_por_id'] = $uid;
                 }
@@ -895,29 +949,28 @@ class FacturaForm extends Component
                 $this->factura->forceFill($dataCab)->save();
             });
 
-            // Reemplaza detalles
             $this->factura->detalles()->delete();
 
             $detallesPayload = [];
-            foreach ($this->lineas as $l) {
 
+            foreach ($this->lineas as $l) {
                 $row = [
                     'producto_id'       => $l['producto_id'] ?? null,
-                    'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int)$l['cuenta_ingreso_id'] : null,
-                    'bodega_id'         => isset($l['bodega_id']) ? (int)$l['bodega_id'] : null,
+                    'cuenta_ingreso_id' => isset($l['cuenta_ingreso_id']) ? (int) $l['cuenta_ingreso_id'] : null,
+                    'bodega_id'         => isset($l['bodega_id']) ? (int) $l['bodega_id'] : null,
                     'descripcion'       => $l['descripcion'] ?? null,
-                    'cantidad'          => (float)($l['cantidad'] ?? 1),
-                    'precio_unitario'   => (float)($l['precio_unitario'] ?? 0),
-                    'descuento_pct'     => (float)($l['descuento_pct'] ?? 0),
+                    'cantidad'          => (float) ($l['cantidad'] ?? 1),
+                    'precio_unitario'   => (float) ($l['precio_unitario'] ?? 0),
+                    'descuento_pct'     => (float) ($l['descuento_pct'] ?? 0),
                     'impuesto_id'       => $l['impuesto_id'] ?? null,
-                    'impuesto_pct'      => (float)($l['impuesto_pct'] ?? 0),
+                    'impuesto_pct'      => (float) ($l['impuesto_pct'] ?? 0),
                 ];
 
-                // ✅ Auditoría detalles (solo si existen columnas)
                 if ($uid) {
                     if (Schema::hasColumn('factura_detalles', 'actualizado_por_id')) {
                         $row['actualizado_por_id'] = $uid;
                     }
+
                     if ($esNueva && Schema::hasColumn('factura_detalles', 'creado_por_id')) {
                         $row['creado_por_id'] = $uid;
                     }
@@ -938,8 +991,9 @@ class FacturaForm extends Component
             $this->estado = $this->factura->estado;
 
             Log::info('Factura guardada (borrador)', [
-                'factura_id' => $this->factura->id,
-                'detalles'   => $this->factura->detalles->count(),
+                'factura_id'    => $this->factura->id,
+                'cotizacion_id' => $this->cotizacion_id,
+                'detalles'      => $this->factura->detalles->count(),
             ]);
         }, 3);
     }
@@ -1521,6 +1575,139 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
+
+    public function cargarDesdeCotizacion(int $cotizacionId): void
+    {
+        if ($this->bloqueada) {
+            PendingToast::create()
+                ->error()
+                ->message('La factura está bloqueada y no puede cargarse una cotización.')
+                ->duration(7000);
+            return;
+        }
+
+        try {
+            $cotizacion = CotizacionModel::with('detalles')->findOrFail($cotizacionId);
+
+            $facturaExistente = Factura::query()
+                ->where('cotizacion_id', $cotizacion->id)
+                ->whereNotIn('estado', ['anulada'])
+                ->first();
+
+            if ($facturaExistente && (!$this->factura || $this->factura->id !== $facturaExistente->id)) {
+                PendingToast::create()
+                    ->error()
+                    ->message('Esta cotización ya fue asociada a la factura #' . $facturaExistente->id . '.')
+                    ->duration(8000);
+                return;
+            }
+
+            $this->cotizacion_id = (int) $cotizacion->id;
+            $this->socio_negocio_id = (int) $cotizacion->socio_negocio_id;
+            $this->fecha = now()->toDateString();
+            $this->notas = $cotizacion->notas;
+            $this->terminos_pago = $cotizacion->terminos_pago ?: 'Contado';
+            $this->vencimiento = $cotizacion->vencimiento ?: $this->fecha;
+
+            if ($this->socio_negocio_id) {
+                $this->setCuentaDesdeCliente((int) $this->socio_negocio_id);
+                $this->setPagoDesdeCliente((int) $this->socio_negocio_id);
+
+                $socio = SocioNegocio::with('condicionPago')->find((int) $this->socio_negocio_id);
+                $this->condicion_pago_id = $socio?->condicionPago?->id ?: null;
+            }
+
+            $this->lineas = [];
+            $this->stockVista = [];
+
+            foreach ($cotizacion->detalles as $d) {
+                $producto = null;
+
+                if (!empty($d->producto_id)) {
+                    $producto = Producto::with([
+                        'impuesto:id,nombre,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+                        'cuentaIngreso:id,codigo,nombre',
+                        'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+                    ])->find($d->producto_id);
+                }
+
+                $cuentaIngresoId = null;
+                $descripcion = null;
+                $impuestoId = null;
+                $impuestoPct = (float) ($d->impuesto_pct ?? 0);
+                $precioUnitario = (float) ($d->precio_unitario ?? 0);
+
+                if ($producto) {
+                    $cuentaIngresoId = $this->resolveCuentaIngresoParaProducto($producto);
+                    $descripcion = $producto->nombre ?: 'Producto';
+
+                    if ($producto->impuesto && (int) ($producto->impuesto->activo ?? 0) === 1) {
+                        $imp = $producto->impuesto;
+
+                        $aplica = strtoupper((string) ($imp->aplica_sobre ?? ''));
+                        $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
+
+                        $hoy = now()->startOfDay();
+                        $desde = $imp->vigente_desde ? Carbon::parse($imp->vigente_desde) : null;
+                        $hasta = $imp->vigente_hasta ? Carbon::parse($imp->vigente_hasta) : null;
+                        $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
+
+                        if ($aplicaVentas && $vigente) {
+                            $impuestoId = (int) $imp->id;
+                            $impuestoPct = !is_null($imp->porcentaje) ? (float) $imp->porcentaje : 0.0;
+                        }
+                    }
+                }
+
+                $linea = [
+                    'producto_id'       => !empty($d->producto_id) ? (int) $d->producto_id : null,
+                    'cuenta_ingreso_id' => $cuentaIngresoId,
+                    'bodega_id'         => !empty($d->bodega_id)
+                        ? (int) $d->bodega_id
+                        : $this->bodega_predeterminada_empresa_id,
+                    'descripcion'       => $descripcion ?: 'Producto importado desde cotización',
+                    'cantidad'          => is_null($d->cantidad) ? null : (float) $d->cantidad,
+                    'precio_unitario'   => $precioUnitario,
+                    'descuento_pct'     => (float) ($d->descuento_pct ?? 0),
+                    'impuesto_id'       => $impuestoId,
+                    'impuesto_pct'      => (float) $impuestoPct,
+                ];
+
+                $this->normalizeLinea($linea);
+                $this->lineas[] = $linea;
+            }
+
+            if (empty($this->lineas)) {
+                $this->addLinea();
+            }
+
+            foreach ($this->lineas as $i => $linea) {
+                $this->refreshStockLinea($i);
+            }
+
+            $this->resetErrorBag();
+            $this->resetValidation();
+            $this->takeSnapshot();
+
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('$refresh');
+
+            PendingToast::create()
+                ->success()
+                ->message('Cotización #' . $cotizacion->id . ' cargada correctamente en la factura.')
+                ->duration(5000);
+        } catch (\Throwable $e) {
+            report($e);
+
+            PendingToast::create()
+                ->error()
+                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo cargar la cotización.')
+                ->duration(9000);
+        }
+    }
+
+
+
     /** Factura “fake” solo para validar stock con las líneas actuales. */
     /** Factura "fake" solo para validar stock con las líneas actuales. */
     private function buildFakeFacturaFromLines(): \App\Models\Factura\Factura
@@ -1553,6 +1740,7 @@ class FacturaForm extends Component
     private function resetFormulario(): void
     {
         $this->factura = null;
+        $this->cotizacion_id = null;
         $this->serie_id = $this->serieDefault?->id;
         $this->socio_negocio_id = null;
         $this->fecha = now()->toDateString();
@@ -1568,53 +1756,53 @@ class FacturaForm extends Component
         $this->cuenta_cobro_id = null;
         $this->condicion_pago_id = null;
         $this->autoEmitirContado = true;
+        $this->habilitarActualizar = false;
+        $this->originalHash = null;
 
-        // reinicia con una línea vacía
         $this->addLinea();
+        $this->setCuentaCobroPorDefecto();
 
-        // refresca vista
         $this->dispatch('$refresh');
 
         PendingToast::create()
-            ->info()->message('Formulario reiniciado, listo para nueva factura.')
+            ->info()
+            ->message('Formulario reiniciado, listo para nueva factura.')
             ->duration(4000);
     }
     /** Hash estable del estado relevante del form */
     private function computeHash(): string
     {
         $payload = [
-            'serie_id'          => (int)($this->serie_id ?? 0),
-            'socio_negocio_id'  => (int)($this->socio_negocio_id ?? 0),
-            'fecha'             => (string)$this->fecha,
-            'vencimiento'       => (string)($this->vencimiento ?? ''),
-            'tipo_pago'         => (string)$this->tipo_pago,
-            'plazo_dias'        => (int)($this->plazo_dias ?? 0),
-            'terminos_pago'     => (string)($this->terminos_pago ?? ''),
-            'notas'             => (string)($this->notas ?? ''),
-            'moneda'            => (string)$this->moneda,
-            'estado'            => (string)$this->estado,
-            'cuenta_cobro_id'   => (int)($this->cuenta_cobro_id ?? 0),
-            'condicion_pago_id' => (int)($this->condicion_pago_id ?? 0),
-
-            // Normalizamos líneas para que el hash sea consistente
-            'lineas' => array_values(array_map(function ($l) {
+            'cotizacion_id'     => (int) ($this->cotizacion_id ?? 0),
+            'serie_id'          => (int) ($this->serie_id ?? 0),
+            'socio_negocio_id'  => (int) ($this->socio_negocio_id ?? 0),
+            'fecha'             => (string) $this->fecha,
+            'vencimiento'       => (string) ($this->vencimiento ?? ''),
+            'tipo_pago'         => (string) $this->tipo_pago,
+            'plazo_dias'        => (int) ($this->plazo_dias ?? 0),
+            'terminos_pago'     => (string) ($this->terminos_pago ?? ''),
+            'notas'             => (string) ($this->notas ?? ''),
+            'moneda'            => (string) $this->moneda,
+            'estado'            => (string) $this->estado,
+            'cuenta_cobro_id'   => (int) ($this->cuenta_cobro_id ?? 0),
+            'condicion_pago_id' => (int) ($this->condicion_pago_id ?? 0),
+            'lineas'            => array_values(array_map(function ($l) {
                 return [
-                    'producto_id'       => (int)($l['producto_id'] ?? 0),
-                    'cuenta_ingreso_id' => (int)($l['cuenta_ingreso_id'] ?? 0),
-                    'bodega_id'         => (int)($l['bodega_id'] ?? 0),
-                    'descripcion'       => (string)($l['descripcion'] ?? ''),
-                    'cantidad'          => round((float)($l['cantidad'] ?? 0), 3),
-                    'precio_unitario'   => round((float)($l['precio_unitario'] ?? 0), 2),
-                    'descuento_pct'     => round((float)($l['descuento_pct'] ?? 0), 3),
-                    'impuesto_id'       => (int)($l['impuesto_id'] ?? 0),
-                    'impuesto_pct'      => round((float)($l['impuesto_pct'] ?? 0), 3),
+                    'producto_id'       => (int) ($l['producto_id'] ?? 0),
+                    'cuenta_ingreso_id' => (int) ($l['cuenta_ingreso_id'] ?? 0),
+                    'bodega_id'         => (int) ($l['bodega_id'] ?? 0),
+                    'descripcion'       => (string) ($l['descripcion'] ?? ''),
+                    'cantidad'          => round((float) ($l['cantidad'] ?? 0), 3),
+                    'precio_unitario'   => round((float) ($l['precio_unitario'] ?? 0), 2),
+                    'descuento_pct'     => round((float) ($l['descuento_pct'] ?? 0), 3),
+                    'impuesto_id'       => (int) ($l['impuesto_id'] ?? 0),
+                    'impuesto_pct'      => round((float) ($l['impuesto_pct'] ?? 0), 3),
                 ];
             }, $this->lineas ?? [])),
         ];
 
         return hash('sha256', json_encode($payload));
     }
-
     /** Congela el snapshot actual como base “sin cambios” */
     private function takeSnapshot(): void
     {
@@ -1650,5 +1838,18 @@ class FacturaForm extends Component
             report($e);
             PendingToast::create()->error()->message('No se pudieron actualizar los cambios.')->duration(8000);
         }
+    }
+
+    public function cargarCotizacionSeleccionada(): void
+    {
+        if (!$this->cotizacion_id) {
+            PendingToast::create()
+                ->error()
+                ->message('Debes seleccionar una cotización.')
+                ->duration(5000);
+            return;
+        }
+
+        $this->cargarDesdeCotizacion((int) $this->cotizacion_id);
     }
 }

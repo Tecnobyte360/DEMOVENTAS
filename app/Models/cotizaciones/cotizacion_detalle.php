@@ -39,4 +39,8 @@ class cotizacion_detalle extends Model
         $this->importe = round($base, 2);
         $this->save();
     }
+    public function detalles()
+{
+    return $this->hasMany(cotizacion_detalle::class, 'cotizacion_id');
+}
 }

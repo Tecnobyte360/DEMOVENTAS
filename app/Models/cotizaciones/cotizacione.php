@@ -64,20 +64,28 @@ class cotizacione extends Model
 
     public function getNumeroAttribute(): string
     {
-        return 'S'.str_pad($this->id, 5, '0', STR_PAD_LEFT);
+        return 'S' . str_pad($this->id, 5, '0', STR_PAD_LEFT);
     }
 
     public function recalcularTotales(): void
     {
         $sub = $this->detalles()->sum('importe');
-        $imp = $this->detalles->sum(function($d){
-            $base = ($d->cantidad * $d->precio_unitario) * (1 - $d->descuento_pct/100);
-            return $base * ($d->impuesto_pct/100);
+        $imp = $this->detalles->sum(function ($d) {
+            $base = ($d->cantidad * $d->precio_unitario) * (1 - $d->descuento_pct / 100);
+            return $base * ($d->impuesto_pct / 100);
         });
 
         $this->subtotal  = $sub;
         $this->impuestos = $imp;
         $this->total     = $sub + $imp;
         $this->save();
+    }
+    public function facturas()
+    {
+        return $this->hasMany(\App\Models\Factura\Factura::class, 'cotizacion_id');
+    }
+    public function socioNegocio()
+    {
+        return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
     }
 }

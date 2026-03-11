@@ -508,7 +508,9 @@
 
     </section>
 
-    <script>
+    
+</div>
+<script>
         document.addEventListener('livewire:init', () => {
             const instances = {};
 
@@ -637,4 +639,3 @@
             });
         });
     </script>
-</div>

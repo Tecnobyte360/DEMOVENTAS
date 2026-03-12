@@ -36,7 +36,10 @@
 </head>
 
 <body class="ui-compact font-sans antialiased bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400"
-    :class="{ 'sidebar-expanded': sidebarExpanded }" x-data="{ sidebarOpen: false, sidebarExpanded: localStorage.getItem('sidebar-expanded') == 'true' }" x-init="$watch('sidebarExpanded', value => localStorage.setItem('sidebar-expanded', value))">
+    :class="{ 'sidebar-expanded': sidebarExpanded }"
+    x-data="{ sidebarOpen: false, sidebarExpanded: localStorage.getItem('sidebar-expanded') == 'true' }"
+    x-init="$watch('sidebarExpanded', value => localStorage.setItem('sidebar-expanded', value))">
+
     <script>
         if (localStorage.getItem('sidebar-expanded') == 'true') {
             document.body.classList.add('sidebar-expanded');
@@ -53,8 +56,9 @@
         <x-app.sidebar :variant="$attributes['sidebarVariant']" />
 
         <div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden
-        @if ($attributes['background']) {{ $attributes['background'] }} @endif"
+            @if ($attributes['background']) {{ $attributes['background'] }} @endif"
             x-ref="contentarea">
+
             <x-app.header :variant="$attributes['headerVariant']" />
 
             {{-- MAIN --}}
@@ -64,30 +68,182 @@
         </div>
     </div>
 
-    {{-- ✅ Chart.js GLOBAL (OBLIGATORIO PARA LOS GRÁFICOS) --}}
+    {{-- Chart.js GLOBAL --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     @livewireScripts
+
+    {{-- Tom Select --}}
+    <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
+
+    {{-- =========================================
+         CONTROL DE SESIÓN POR INACTIVIDAD
+         ========================================= --}}
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // minutos de la sesión en Laravel
-            const sessionLifetimeMinutes = {{ config('session.lifetime') }};
-            const warningBeforeMinutes = 2; // avisar 2 minutos antes
+            const sessionLifetimeMinutes = {{ (int) config('session.lifetime', 120) }};
+            const warningBeforeMinutes = 2;
 
-            const warningTime = (sessionLifetimeMinutes - warningBeforeMinutes) * 60 * 1000;
+            const sessionLifetimeMs = sessionLifetimeMinutes * 60 * 1000;
+            const warningMs = warningBeforeMinutes * 60 * 1000;
 
-            setTimeout(() => {
-                const continuar = confirm(
-                    'Tu sesión está por expirar por inactividad. Presiona Aceptar para recargar la página y continuar.'
-                );
+            // Evita valores negativos o absurdos
+            const inactivityLimitMs = Math.max(sessionLifetimeMs - warningMs, 60 * 1000);
 
-                if (continuar) {
-                    window.location.reload();
+            let inactivityTimer = null;
+            let countdownInterval = null;
+            let alertOpen = false;
+            let heartbeatInterval = null;
+
+            function clearInactivityTimer() {
+                if (inactivityTimer) {
+                    clearTimeout(inactivityTimer);
+                    inactivityTimer = null;
                 }
-            }, warningTime);
+            }
+
+            function clearCountdown() {
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            }
+
+            function restartInactivityTimer() {
+                if (alertOpen) return;
+
+                clearInactivityTimer();
+
+                inactivityTimer = setTimeout(() => {
+                    showSessionWarning();
+                }, inactivityLimitMs);
+            }
+
+            function heartbeat() {
+                fetch('{{ url('/heartbeat') }}', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                }).catch(() => {});
+            }
+
+            function startHeartbeat() {
+                // Cada 5 minutos
+                heartbeatInterval = setInterval(() => {
+                    if (!document.hidden) {
+                        heartbeat();
+                    }
+                }, 5 * 60 * 1000);
+            }
+
+            function showSessionWarning() {
+                if (alertOpen) return;
+
+                alertOpen = true;
+                let remainingSeconds = warningBeforeMinutes * 60;
+
+                Swal.fire({
+                    title: 'Tu sesión está por expirar',
+                    html: `
+                        <div style="font-size:14px; line-height:1.6;">
+                            Llevas mucho tiempo sin actividad.<br>
+                            Tu sesión vencerá en
+                            <strong id="session-countdown">${remainingSeconds}</strong> segundos.
+                        </div>
+                    `,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonText: 'Continuar en la sesión',
+                    cancelButtonText: 'Recargar ahora',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    reverseButtons: true,
+                    didOpen: () => {
+                        const countdownEl = document.getElementById('session-countdown');
+
+                        clearCountdown();
+
+                        countdownInterval = setInterval(() => {
+                            remainingSeconds--;
+
+                            if (countdownEl) {
+                                countdownEl.textContent = remainingSeconds;
+                            }
+
+                            if (remainingSeconds <= 0) {
+                                clearCountdown();
+                                window.location.reload();
+                            }
+                        }, 1000);
+                    }
+                }).then((result) => {
+                    alertOpen = false;
+                    clearCountdown();
+                    clearInactivityTimer();
+
+                    // Ambas opciones recargan para renovar CSRF y sesión
+                    if (result.isConfirmed) {
+                        window.location.reload();
+                    } else if (result.dismiss) {
+                        window.location.reload();
+                    }
+                });
+            }
+
+            function registerActivity() {
+                if (alertOpen) return;
+                restartInactivityTimer();
+            }
+
+            ['click', 'mousemove', 'keydown', 'scroll', 'touchstart', 'touchmove'].forEach(eventName => {
+                window.addEventListener(eventName, registerActivity, { passive: true });
+            });
+
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    registerActivity();
+                }
+            });
+
+            restartInactivityTimer();
+            startHeartbeat();
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
-</body>
 
+    {{-- =========================================
+         MANEJO DE ERROR 419 EN LIVEWIRE
+         ========================================= --}}
+    <script>
+        document.addEventListener('livewire:init', () => {
+            if (!window.Livewire) return;
+
+            try {
+                Livewire.hook('request', ({ fail }) => {
+                    fail(({ status, preventDefault }) => {
+                        if (status === 419) {
+                            preventDefault();
+
+                            Swal.fire({
+                                icon: 'info',
+                                title: 'Sesión expirada',
+                                text: 'Tu sesión expiró por inactividad. La página se recargará para continuar.',
+                                confirmButtonText: 'Aceptar',
+                                allowOutsideClick: false,
+                                allowEscapeKey: false
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        }
+                    });
+                });
+            } catch (error) {
+                console.warn('No se pudo registrar el hook de Livewire para 419:', error);
+            }
+        });
+    </script>
+
+</body>
 </html>

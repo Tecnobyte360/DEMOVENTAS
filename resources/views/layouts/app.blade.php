@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-  <head>
+
+<head>
     <meta charset="utf-8">
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $empresaActual?->nombre ?? config('app.name') }}</title>
 
@@ -14,12 +12,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
 
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
-      crossorigin="anonymous"
-      referrerpolicy="no-referrer"
-    />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
 
     <link href="https://cdn.jsdelivr.net/npm/tom-select/dist/css/tom-select.default.css" rel="stylesheet">
 
@@ -30,57 +24,70 @@
     @livewireStyles
 
     <script>
-      // Modo oscuro
-      if (localStorage.getItem('dark-mode') === 'false' || !('dark-mode' in localStorage)) {
-        document.documentElement.classList.remove('dark');
-        document.documentElement.style.colorScheme = 'light';
-      } else {
-        document.documentElement.classList.add('dark');
-        document.documentElement.style.colorScheme = 'dark';
-      }
+        // Modo oscuro
+        if (localStorage.getItem('dark-mode') === 'false' || !('dark-mode' in localStorage)) {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.style.colorScheme = 'light';
+        } else {
+            document.documentElement.classList.add('dark');
+            document.documentElement.style.colorScheme = 'dark';
+        }
     </script>
-  </head>
+</head>
 
-  <body
-    class="ui-compact font-sans antialiased bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400"
-    :class="{ 'sidebar-expanded': sidebarExpanded }"
-    x-data="{ sidebarOpen: false, sidebarExpanded: localStorage.getItem('sidebar-expanded') == 'true' }"
-    x-init="$watch('sidebarExpanded', value => localStorage.setItem('sidebar-expanded', value))"
-  >
+<body class="ui-compact font-sans antialiased bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400"
+    :class="{ 'sidebar-expanded': sidebarExpanded }" x-data="{ sidebarOpen: false, sidebarExpanded: localStorage.getItem('sidebar-expanded') == 'true' }" x-init="$watch('sidebarExpanded', value => localStorage.setItem('sidebar-expanded', value))">
     <script>
-      if (localStorage.getItem('sidebar-expanded') == 'true') {
-        document.body.classList.add('sidebar-expanded');
-      } else {
-        document.body.classList.remove('sidebar-expanded');
-      }
+        if (localStorage.getItem('sidebar-expanded') == 'true') {
+            document.body.classList.add('sidebar-expanded');
+        } else {
+            document.body.classList.remove('sidebar-expanded');
+        }
     </script>
 
     <div class="fixed inset-0 pointer-events-none z-[9999]">
-      <x-toaster-hub class="pointer-events-auto top-4 right-4" />
+        <x-toaster-hub class="pointer-events-auto top-4 right-4" />
     </div>
 
     <div class="flex h-[100dvh] overflow-hidden">
-      <x-app.sidebar :variant="$attributes['sidebarVariant']" />
+        <x-app.sidebar :variant="$attributes['sidebarVariant']" />
 
-      <div
-        class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden
-        @if($attributes['background']){{ $attributes['background'] }}@endif"
-        x-ref="contentarea"
-      >
-        <x-app.header :variant="$attributes['headerVariant']" />
+        <div class="relative flex flex-col flex-1 overflow-y-auto overflow-x-hidden
+        @if ($attributes['background']) {{ $attributes['background'] }} @endif"
+            x-ref="contentarea">
+            <x-app.header :variant="$attributes['headerVariant']" />
 
-        {{-- MAIN --}}
-        <main class="grow w-full max-w-full px-1 sm:px-2 lg:px-3">
-          {{ $slot }}
-        </main>
-      </div>
+            {{-- MAIN --}}
+            <main class="grow w-full max-w-full px-1 sm:px-2 lg:px-3">
+                {{ $slot }}
+            </main>
+        </div>
     </div>
 
     {{-- ✅ Chart.js GLOBAL (OBLIGATORIO PARA LOS GRÁFICOS) --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     @livewireScripts
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // minutos de la sesión en Laravel
+            const sessionLifetimeMinutes = {{ config('session.lifetime') }};
+            const warningBeforeMinutes = 2; // avisar 2 minutos antes
 
+            const warningTime = (sessionLifetimeMinutes - warningBeforeMinutes) * 60 * 1000;
+
+            setTimeout(() => {
+                const continuar = confirm(
+                    'Tu sesión está por expirar por inactividad. Presiona Aceptar para recargar la página y continuar.'
+                );
+
+                if (continuar) {
+                    window.location.reload();
+                }
+            }, warningTime);
+        });
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
-  </body>
+</body>
+
 </html>

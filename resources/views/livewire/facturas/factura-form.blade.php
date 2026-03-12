@@ -1,4 +1,3 @@
-{{-- resources/views/livewire/facturas/form-factura.blade.php --}}
 @once
     @push('styles')
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
@@ -14,7 +13,6 @@
             }
         </script>
         <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-
         <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
     @endpush
 @endonce
@@ -29,25 +27,20 @@
     }
 }" x-on:keydown.window.ctrl.k.prevent="goPicker()"
     x-on:keydown.window.meta.k.prevent="goPicker()" class="p-6 md:p-8">
-
-    {{-- ================= PREVISUALIZADOR DE IMÁGENES (Lightbox) ================= --}}
-    {{-- ================= PREVISUALIZADOR DE IMÁGENES (Lightbox) ================= --}}
+    {{-- ================= PREVISUALIZADOR DE IMÁGENES ================= --}}
     <div x-data="{ open: false, src: null, title: '' }"
         x-on:preview-image.window="
-      src   = $event.detail.src;
-      title = $event.detail.title || '';
-      open  = true;
-  "
+            src   = $event.detail.src;
+            title = $event.detail.title || '';
+            open  = true;
+        "
         x-id="['imgviewer']">
         <div x-show="open" x-transition.opacity x-cloak class="fixed inset-0 z-[200] flex items-center justify-center"
             @keydown.escape.window="open = false">
-            {{-- Fondo oscuro --}}
             <div class="absolute inset-0 bg-black/70" @click="open = false"></div>
 
-            {{-- Contenedor de la imagen --}}
             <div
                 class="relative z-10 max-w-4xl w-[90vw] max-h-[90vh] bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden">
-                {{-- Header --}}
                 <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800">
                     <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100"
                         x-text="title || 'Imagen de producto'"></h3>
@@ -58,7 +51,6 @@
                     </button>
                 </div>
 
-                {{-- Imagen --}}
                 <div class="p-3 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                     <img :src="src" :alt="title || 'Imagen de producto'"
                         class="max-h-[80vh] w-auto object-contain rounded-xl">
@@ -66,9 +58,6 @@
             </div>
         </div>
     </div>
-    {{-- ================= FIN PREVISUALIZADOR ================= --}}
-
-
 
     {{-- ================= CARD PRINCIPAL ================= --}}
     <section
@@ -79,10 +68,13 @@
             <header class="mb-6">
                 <h2 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                     <span
-                        class="inline-grid place-items-center w-9 md:w-10 h-9 md:h-10 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">1</span>
+                        class="inline-grid place-items-center w-9 md:w-10 h-9 md:h-10 rounded-xl bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200">
+                        1
+                    </span>
                     Factura de ventas
                 </h2>
             </header>
+
             {{-- ===== CARGAR DESDE COTIZACIÓN ===== --}}
             <section class="mb-6">
                 <div
@@ -97,8 +89,7 @@
                             <div wire:ignore>
                                 <select id="cotizacion-select" data-cotizacion-select
                                     class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-indigo-200 dark:border-indigo-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-indigo-300/60 @error('cotizacion_id') border-red-500 focus:ring-red-300 @enderror">
-                                    <option value="">Buscar cotizacion...</option>
-
+                                    <option value="">Buscar cotización...</option>
                                     @foreach ($cotizaciones as $cot)
                                         <option value="{{ $cot->id }}" @selected((int) ($cotizacion_id ?? 0) === (int) $cot->id)>
                                             #{{ $cot->id }}
@@ -159,12 +150,10 @@
                                 class="h-12 md:h-14 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed">
                                 <i class="fa-solid fa-file-import mr-2"></i>
                                 <span wire:loading.remove
-                                    wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion">
-                                    Cargar cotización
-                                </span>
-                                <span wire:loading wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion">
-                                    Cargando…
-                                </span>
+                                    wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion">Cargar
+                                    cotización</span>
+                                <span wire:loading
+                                    wire:target="cargarCotizacionSeleccionada,cargarDesdeCotizacion">Cargando…</span>
                             </button>
 
                             @if ($cotizacion_id)
@@ -178,8 +167,8 @@
                     </div>
                 </div>
             </section>
+
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {{-- Cliente --}}
                 <section>
                     <label
                         class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
@@ -197,17 +186,20 @@
                     @enderror
                 </section>
 
-                {{-- Serie --}}
                 <section>
                     <label
-                        class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Serie</label>
+                        class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                        Serie
+                    </label>
                     <div class="flex items-center gap-3">
                         <select wire:model.live="serie_id"
                             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white text-base focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                             <option value="">— Seleccione —</option>
                             @foreach ($series as $s)
-                                <option value="{{ $s->id }}">{{ $s->nombre }} ({{ $s->prefijo }}:
-                                    {{ $s->proximo }} → {{ $s->hasta }})</option>
+                                <option value="{{ $s->id }}">
+                                    {{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} →
+                                    {{ $s->hasta }})
+                                </option>
                             @endforeach
                         </select>
 
@@ -220,12 +212,12 @@
                     </div>
                 </section>
 
-                {{-- Fechas --}}
                 <section class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label
-                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Fecha
-                            <span class="text-red-500">*</span></label>
+                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                            Fecha <span class="text-red-500">*</span>
+                        </label>
                         <input type="date" wire:model.live="fecha"
                             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('fecha') border-red-500 focus:ring-red-300 @enderror">
                         @error('fecha')
@@ -235,7 +227,9 @@
 
                     <div>
                         <label
-                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Vencimiento</label>
+                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                            Vencimiento
+                        </label>
                         <input type="date" wire:model.live="vencimiento"
                             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                     </div>
@@ -243,17 +237,13 @@
             </div>
 
             <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {{-- Condición de pago --}}
                 <section>
                     <label
                         class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
                         Condición de pago
                     </label>
                     <select wire:model.live="condicion_pago_id"
-                        class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 
-                   bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 
-                   focus:ring-violet-300/60">
-
+                        class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                         @foreach ($condicionesPago as $cond)
                             <option value="{{ $cond->id }}">
                                 {{ $cond->nombre }}
@@ -265,17 +255,16 @@
                     </select>
                 </section>
 
-                {{-- Plazo --}}
                 <section>
                     <label
-                        class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Plazo
-                        (días)</label>
+                        class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                        Plazo (días)
+                    </label>
                     <input type="number" min="1" wire:model.live.debounce.250ms="plazo_dias"
                         class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 disabled:opacity-50"
                         @if ($tipo_pago !== 'credito') disabled @endif>
                 </section>
 
-                {{-- Cuenta de cobro --}}
                 <section>
                     <label
                         class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
@@ -296,8 +285,9 @@
                     <select wire:model.live.number="cuenta_cobro_id"
                         class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                         @if ($opActual)
-                            <option value="{{ $opActual->id }}"> {{ $opActual->codigo }} — {{ $opActual->nombre }}
-                                (actual) </option>
+                            <option value="{{ $opActual->id }}">
+                                {{ $opActual->codigo }} — {{ $opActual->nombre }} (actual)
+                            </option>
                         @endif
 
                         @if ($cuentasCXC->count())
@@ -326,18 +316,21 @@
             </div>
 
             <div class="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {{-- Términos / Notas --}}
                 <section class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label
-                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Términos</label>
+                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                            Términos
+                        </label>
                         <input type="text" placeholder="Condiciones, notas de crédito…"
                             wire:model.live.debounce.400ms="terminos_pago"
                             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                     </div>
                     <div>
                         <label
-                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">Notas</label>
+                            class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+                            Notas
+                        </label>
                         <input type="text" placeholder="Observaciones visibles en el documento"
                             wire:model.live.debounce.400ms="notas"
                             class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
@@ -351,7 +344,9 @@
             <header class="mb-6">
                 <h2 class="text-xl md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
                     <span
-                        class="inline-grid place-items-center w-9 h-9 md:w-10 md:h-10 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">2</span>
+                        class="inline-grid place-items-center w-9 h-9 md:w-10 md:h-10 rounded-xl bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-200">
+                        2
+                    </span>
                     Agrega productos
                 </h2>
             </header>
@@ -382,158 +377,161 @@
                             @php
                                 $ivaMonto = \App\Helpers\Money::ivaImporte($l);
                                 $totalLin = \App\Helpers\Money::totalLinea($l);
-                                $prodSel = !empty($l['producto_id'])
-                                    ? $productos->firstWhere('id', $l['producto_id'])
+
+                                $productoIdActual = (int) ($lineas[$i]['producto_id'] ?? 0);
+                                $productoNombreActual = $productosSeleccionados[$productoIdActual] ?? null;
+
+                                $pid = $productoIdActual;
+                                $bid = (int) ($lineas[$i]['bodega_id'] ?? 0);
+
+                                $prodSel = $pid
+                                    ? \App\Models\Productos\Producto::with(['cuentaIngreso', 'impuesto'])
+                                        ->select('id', 'nombre', 'cuenta_ingreso_id', 'impuesto_id')
+                                        ->find($pid)
                                     : null;
-                                $imgUrl = $prodSel?->imagen_url ?? null;
+
+                                $imgUrl = null;
                             @endphp
 
                             <tr wire:key="linea-{{ $i }}"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                                 {{-- Imagen --}}
-                                @php
-                                    $pid = (int) ($lineas[$i]['producto_id'] ?? 0);
-                                    $bid = (int) ($lineas[$i]['bodega_id'] ?? 0);
-                                @endphp
+                                <td class="px-4 py-3 w-[72px]">
+                                    <div
+                                        class="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 grid place-items-center overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700">
+                                        @if ($imgUrl)
+                                            <button type="button" class="group relative h-full w-full"
+                                                @click.stop="$dispatch('preview-image', { src: '{{ $imgUrl }}', title: '{{ e($prodSel->nombre ?? 'Producto') }}' })"
+                                                aria-label="Ver imagen de {{ $prodSel->nombre ?? 'producto' }}"
+                                                title="Ver imagen">
+                                                <img src="{{ $imgUrl }}"
+                                                    class="h-full w-full object-cover transition group-hover:scale-105"
+                                                    alt="img-{{ $prodSel->nombre ?? 'producto' }}">
+                                                <span
+                                                    class="pointer-events-none absolute inset-0 ring-2 ring-indigo-400/0 group-hover:ring-indigo-400/60 transition"></span>
+                                                <span
+                                                    class="pointer-events-none absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition">
+                                                    Ver
+                                                </span>
+                                            </button>
+                                        @else
+                                            <div class="h-full w-full grid place-items-center">
+                                                <svg viewBox="0 0 24 24" class="h-6 w-6 text-gray-400">
+                                                    <path fill="currentColor"
+                                                        d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h12l2 2Zm-5-9a2 2 0 1 1-4.001-.001A2 2 0 0 1 16 10Z" />
+                                                </svg>
+                                            </div>
+                                        @endif
+                                    </div>
+                                </td>
 
-                                <div class="mt-2" wire:key="stock-linea-{{ $i }}">
-                                    {{-- Estado cargando cuando cambia producto/bodega --}}
-                                    <div wire:loading.flex
-                                        wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                                        class="items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        <span class="text-sm italic">Consultando stock…</span>
+                                {{-- Producto --}}
+                                <td class="px-4 py-3 min-w-[260px]">
+                                    <div wire:ignore>
+                                        <select id="producto-select-{{ $i }}" data-producto-select
+                                            data-linea="{{ $i }}"
+                                            @if ($i === 0) data-first-product @endif
+                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
+                                            <option value="">— Seleccione —</option>
+
+                                            @if ($productoIdActual && $productoNombreActual)
+                                                <option value="{{ $productoIdActual }}" selected>
+                                                    {{ $productoNombreActual }}
+                                                </option>
+                                            @endif
+                                        </select>
                                     </div>
 
-                                    {{-- Sin selección completa --}}
-                                    @if (!$pid || !$bid)
-                                        <div wire:loading.remove
-                                            wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                                            class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 border border-dashed border-gray-300 dark:border-gray-600">
-                                            <i class="fas fa-info-circle"></i>
-                                            <span class="text-sm italic">Seleccione producto y bodega para consultar
-                                                stock</span>
-                                        </div>
-                                    @else
-                                        @php $stock = $this->getStockDeLinea($i); @endphp
-                                        <div wire:loading.remove
-                                            wire:target="lineas.{{ $i }}.producto_id, lineas.{{ $i }}.bodega_id"
-                                            class="flex items-center gap-2 px-4 py-2 rounded-xl {{ $stock > 0 ? 'bg-green-50 border border-green-300 text-green-700' : 'bg-red-50 border border-red-300 text-red-700' }}">
-                                            <i
-                                                class="fas {{ $stock > 0 ? 'fa-check-circle' : 'fa-exclamation-circle' }}"></i>
-                                            <span class="text-sm font-semibold">Stock disponible:
-                                                {{ number_format($stock, 0) }}</span>
-                                        </div>
-                                    @endif
-                                    <br>
-                                    <td class="px-4 py-3 w-[72px]">
-                                        <div
-                                            class="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 grid place-items-center overflow-hidden ring-1 ring-gray-200 dark:ring-gray-700">
-                                            @if ($imgUrl)
-                                                <button type="button" class="group relative h-full w-full"
-                                                    @click.stop="$dispatch('preview-image', { src: '{{ $imgUrl }}', title: '{{ e($prodSel->nombre ?? 'Producto') }}' })"
-                                                    aria-label="Ver imagen de {{ $prodSel->nombre ?? 'producto' }}"
-                                                    title="Ver imagen">
-                                                    <img src="{{ $imgUrl }}"
-                                                        class="h-full w-full object-cover transition group-hover:scale-105"
-                                                        alt="img-{{ $prodSel->nombre ?? 'producto' }}">
-                                                    <span
-                                                        class="pointer-events-none absolute inset-0 ring-2 ring-indigo-400/0 group-hover:ring-indigo-400/60 transition"></span>
-                                                    <span
-                                                        class="pointer-events-none absolute bottom-1 right-1 bg-black/60 text-white text-[10px] px-1.5 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition">Ver</span>
-                                                </button>
-                                            @else
-                                                <div class="h-full w-full grid place-items-center">
-                                                    <svg viewBox="0 0 24 24" class="h-6 w-6 text-gray-400"
-                                                        aria-hidden="true">
-                                                        <path fill="currentColor"
-                                                            d="M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14l4-4h12l2 2Zm-5-9a2 2 0 1 1-4.001-.001A2 2 0 0 1 16 10Z" />
-                                                    </svg>
-                                                </div>
-                                            @endif
-                                        </div>
-                                    </td>
+                                    @error('lineas.' . $i . '.producto_id')
+                                        <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                    @enderror
+                                </td>
 
-                                    {{-- Producto --}}
-                                    {{-- Producto --}}
-                                    <td class="px-4 py-3 min-w-[260px]">
-                                        <div wire:ignore>
-                                            <select id="producto-select-{{ $i }}" data-producto-select
-                                                data-linea="{{ $i }}"
-                                                class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
-                                                <option value="">— Seleccione —</option>
-                                                @foreach ($productos as $p)
-                                                    <option value="{{ $p->id }}" @selected((int) ($lineas[$i]['producto_id'] ?? 0) === (int) $p->id)>
-                                                        {{ $p->nombre }}
-                                                    </option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-
-                                        @error('lineas.' . $i . '.producto_id')
-                                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
-                                        @enderror
-                                    </td>
-
-
-                                    <td class="px-4 py-3 min-w-[260px]">
-                                        <div class="space-y-1">
-                                            <select
-                                                wire:model.live.number="lineas.{{ $i }}.cuenta_ingreso_id"
-                                                class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('lineas.' . $i . '.cuenta_ingreso_id') border-red-500 focus:ring-red-300 @enderror">
-                                                <option value="">— Seleccione —</option>
-                                                @if ($prodSel && $prodSel->cuentaIngreso)
-                                                    <option value="{{ $prodSel->cuentaIngreso->id }}">
-                                                        {{ $prodSel->cuentaIngreso->codigo }} —
-                                                        {{ $prodSel->cuentaIngreso->nombre }} (del producto)
-                                                    </option>
-                                                @endif
-                                                @if ($cuentasIngresos->count())
-                                                    <optgroup label="PUC · Ingresos">
-                                                        @foreach ($cuentasIngresos as $cu)
-                                                            <option value="{{ $cu->id }}">{{ $cu->codigo }} —
-                                                                {{ $cu->nombre }}</option>
-                                                        @endforeach
-                                                    </optgroup>
-                                                @endif
-                                            </select>
-
-                                            @error('lineas.' . $i . '.cuenta_ingreso_id')
-                                                <p class="text-xs text-red-600">{{ $message }}</p>
-                                            @enderror
-
-                                            @if (
-                                                $prodSel &&
-                                                    $prodSel->cuentaIngreso &&
-                                                    (int) ($lineas[$i]['cuenta_ingreso_id'] ?? 0) !== (int) $prodSel->cuentaIngreso->id)
-                                                <span
-                                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 text-[11px]">
-                                                    Sugerida: {{ $prodSel->cuentaIngreso->codigo }}
-                                                </span>
-                                            @endif
-                                        </div>
-                                    </td>
-
-                                    {{-- Descripción --}}
-                                    <td class="px-4 py-3 min-w-[200px]">
-                                        <input type="text" placeholder="Descripción (opcional)"
-                                            wire:model.live.debounce.250ms="lineas.{{ $i }}.descripcion"
-                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                                    </td>
-
-                                    {{-- Bodega + STOCK --}}
-                                    <td class="px-4 py-3 min-w-[160px]">
-                                        <select wire:model.live="lineas.{{ $i }}.bodega_id"
-                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                {{-- Cuenta ingreso --}}
+                                <td class="px-4 py-3 min-w-[260px]">
+                                    <div class="space-y-1">
+                                        <select wire:model.live.number="lineas.{{ $i }}.cuenta_ingreso_id"
+                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('lineas.' . $i . '.cuenta_ingreso_id') border-red-500 focus:ring-red-300 @enderror">
                                             <option value="">— Seleccione —</option>
-                                            @foreach ($bodegas as $b)
-                                                <option value="{{ $b->id }}">{{ $b->nombre }}</option>
-                                            @endforeach
+
+                                            @if ($prodSel && $prodSel->cuentaIngreso)
+                                                <option value="{{ $prodSel->cuentaIngreso->id }}">
+                                                    {{ $prodSel->cuentaIngreso->codigo }} —
+                                                    {{ $prodSel->cuentaIngreso->nombre }} (del producto)
+                                                </option>
+                                            @endif
+
+                                            @if ($cuentasIngresos->count())
+                                                <optgroup label="PUC · Ingresos">
+                                                    @foreach ($cuentasIngresos as $cu)
+                                                        <option value="{{ $cu->id }}">
+                                                            {{ $cu->codigo }} — {{ $cu->nombre }}
+                                                        </option>
+                                                    @endforeach
+                                                </optgroup>
+                                            @endif
                                         </select>
 
-                                        {{-- BLOQUE DE STOCK (usa $i del forelse) --}}
+                                        @error('lineas.' . $i . '.cuenta_ingreso_id')
+                                            <p class="text-xs text-red-600">{{ $message }}</p>
+                                        @enderror
 
-                                </div>
+                                        @if (
+                                            $prodSel &&
+                                                $prodSel->cuentaIngreso &&
+                                                (int) ($lineas[$i]['cuenta_ingreso_id'] ?? 0) !== (int) $prodSel->cuentaIngreso->id)
+                                            <span
+                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 text-[11px]">
+                                                Sugerida: {{ $prodSel->cuentaIngreso->codigo }}
+                                            </span>
+                                        @endif
+                                    </div>
+                                </td>
+
+                                {{-- Descripción --}}
+                                <td class="px-4 py-3 min-w-[200px]">
+                                    <input type="text" placeholder="Descripción (opcional)"
+                                        wire:model.live.debounce.250ms="lineas.{{ $i }}.descripcion"
+                                        class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                </td>
+
+                                {{-- Bodega --}}
+                                <td class="px-4 py-3 min-w-[160px]">
+                                    <select wire:model.live="lineas.{{ $i }}.bodega_id"
+                                        class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                        <option value="">— Seleccione —</option>
+                                        @foreach ($bodegas as $b)
+                                            <option value="{{ $b->id }}">{{ $b->nombre }}</option>
+                                        @endforeach
+                                    </select>
+
+                                    <div class="mt-2" wire:key="stock-linea-{{ $i }}">
+                                        <div wire:loading.flex
+                                            wire:target="lineas.{{ $i }}.producto_id,lineas.{{ $i }}.bodega_id"
+                                            class="items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600">
+                                            <i class="fas fa-spinner fa-spin"></i>
+                                            <span class="text-xs italic">Consultando stock…</span>
+                                        </div>
+
+                                        @if (!$pid || !$bid)
+                                            {{-- <div wire:loading.remove
+                                                wire:target="lineas.{{ $i }}.producto_id,lineas.{{ $i }}.bodega_id"
+                                                class="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-500 border border-dashed border-gray-300 dark:border-gray-600">
+                                                <i class="fas fa-info-circle"></i>
+                                                <span class="text-xs italic">Seleccione producto y bodega</span>
+                                            </div> --}}
+                                        @else
+                                            @php $stock = $this->getStockDeLinea($i); @endphp
+                                            <div wire:loading.remove
+                                                wire:target="lineas.{{ $i }}.producto_id,lineas.{{ $i }}.bodega_id"
+                                                class="flex items-center gap-2 px-3 py-2 rounded-xl {{ $stock > 0 ? 'bg-green-50 border border-green-300 text-green-700' : 'bg-red-50 border border-red-300 text-red-700' }}">
+                                                <i
+                                                    class="fas {{ $stock > 0 ? 'fa-check-circle' : 'fa-exclamation-circle' }}"></i>
+                                                <span class="text-xs font-semibold">Stock:
+                                                    {{ number_format($stock, 0) }}</span>
+                                            </div>
+                                        @endif
+                                    </div>
                                 </td>
 
                                 {{-- Cantidad --}}
@@ -557,7 +555,7 @@
                                         class="w-24 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                                 </td>
 
-                                {{-- Impuesto (selector) --}}
+                                {{-- Impuesto --}}
                                 <td class="px-4 py-3 min-w-[240px]">
                                     <select wire:model.live="lineas.{{ $i }}.impuesto_id"
                                         wire:change="setImpuesto({{ $i }}, $event.target.value)"
@@ -589,7 +587,7 @@
                                     </select>
                                 </td>
 
-                                {{-- % Impuesto (editable) --}}
+                                {{-- % impuesto --}}
                                 <td class="px-4 py-3 text-right">
                                     <input type="number" step="0.001" min="0"
                                         wire:model.live.debounce.200ms="lineas.{{ $i }}.impuesto_pct"
@@ -597,11 +595,14 @@
                                 </td>
 
                                 {{-- Impuesto $ --}}
-                                <td class="px-4 py-3 text-right">${{ number_format($ivaMonto, 2) }}</td>
+                                <td class="px-4 py-3 text-right">
+                                    ${{ number_format($ivaMonto, 2) }}
+                                </td>
 
                                 {{-- Total línea --}}
                                 <td class="px-4 py-3 text-right font-semibold text-gray-900 dark:text-gray-100">
-                                    ${{ number_format($totalLin, 2) }}</td>
+                                    ${{ number_format($totalLin, 2) }}
+                                </td>
 
                                 {{-- Acciones --}}
                                 <td class="px-4 py-3 text-right">
@@ -624,8 +625,12 @@
                         @empty
                             <tr>
                                 <td colspan="13" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
-                                    No hay líneas. Usa <button type="button" class="text-violet-600 hover:underline"
-                                        wire:click="addLinea">+ Línea</button> o el selector rápido de arriba.
+                                    No hay líneas. Usa
+                                    <button type="button" class="text-violet-600 hover:underline"
+                                        wire:click="addLinea">
+                                        + Línea
+                                    </button>
+                                    o el selector rápido de arriba.
                                 </td>
                             </tr>
                         @endforelse
@@ -637,7 +642,8 @@
                             <td class="px-4 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Subtotal:
                             </td>
                             <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">
-                                ${{ number_format($this->subtotal, 2) }}</td>
+                                ${{ number_format($this->subtotal, 2) }}
+                            </td>
                             <td></td>
                         </tr>
                         <tr>
@@ -645,14 +651,16 @@
                             <td class="px-4 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Impuestos:
                             </td>
                             <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">
-                                ${{ number_format($this->impuestosTotal, 2) }}</td>
+                                ${{ number_format($this->impuestosTotal, 2) }}
+                            </td>
                             <td></td>
                         </tr>
                         <tr class="bg-gray-100 dark:bg-gray-800/60">
                             <td colspan="10"></td>
                             <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">Total:</td>
                             <td class="px-4 py-2 text-right text-lg font-extrabold text-gray-900 dark:text-white">
-                                ${{ number_format($this->total, 2) }}</td>
+                                ${{ number_format($this->total, 2) }}
+                            </td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -660,19 +668,12 @@
             </section>
         </section>
 
-        {{-- ===== FOOTER STICKY DE ACCIONES ===== --}}
         @php
             $esContado = $tipo_pago === 'contado';
-            $esCredito = $tipo_pago === 'credito';
-
-            // ✅ Si ya hay factura, usa los valores persistidos en BD (fuente de verdad)
             $totalVista = round((float) ($factura?->total ?? ($this->total ?? 0)), 2);
             $pagadoVista = round((float) ($factura?->pagado ?? 0), 2);
-
             $saldoVista = max(round($totalVista - $pagadoVista, 2), 0);
             $tieneFactura = (bool) $factura?->id;
-
-            // 🔒 Bloquea emitir solo si es contado y NO está pagada totalmente
             $bloqueaEmitir = $esContado && (!$tieneFactura || $saldoVista > 0.01);
         @endphp
 
@@ -681,8 +682,6 @@
             aria-label="Acciones de factura">
             <div class="px-4 md:px-8 py-4">
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-center">
-
-                    {{-- Totales / estado de pago --}}
                     <div
                         class="xl:col-span-3 flex flex-wrap items-center gap-2 text-sm md:text-base text-gray-700 dark:text-gray-300">
                         <span class="font-semibold">Total:</span>
@@ -692,8 +691,7 @@
 
                         @if ($esContado)
                             <span
-                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px]
-                           {{ $bloqueaEmitir ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700' }}">
+                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] {{ $bloqueaEmitir ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700' }}">
                                 <i class="fa-solid {{ $bloqueaEmitir ? 'fa-lock' : 'fa-unlock' }}"></i>
                                 Contado
                             </span>
@@ -706,7 +704,6 @@
                         @endif
                     </div>
 
-                    {{-- Stepper / Progreso --}}
                     <div class="xl:col-span-6">
                         <div x-data="{
                             estado: @entangle('estado'),
@@ -743,8 +740,7 @@
                                                     1) !== 'upcoming',
                                                 'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': stepStatus(
                                                     1) === 'upcoming'
-                                            }"
-                                            title="Borrador / Guardar">
+                                            }">
                                             <i class="fa-solid fa-pen text-sm md:text-base"></i>
                                         </div>
                                         <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Borrador</div>
@@ -758,8 +754,7 @@
                                                     2) !== 'upcoming',
                                                 'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': stepStatus(
                                                     2) === 'upcoming'
-                                            }"
-                                            title="Pagos (si es contado, debe cubrir total antes de emitir)">
+                                            }">
                                             <i class="fa-solid fa-cash-register text-sm md:text-base"></i>
                                         </div>
                                         <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Pagos</div>
@@ -767,28 +762,21 @@
                                             x-text="contado ? 'Contado' : 'Crédito'"></div>
                                     </li>
 
-                                    <li class="flex flex-col items-center textcenter">
+                                    <li class="flex flex-col items-center text-center">
                                         <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
                                             :class="{
                                                 'bg-violet-600 text-white border-violet-600 shadow': stepStatus(
                                                     3) !== 'upcoming',
                                                 'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600': stepStatus(
                                                     3) === 'upcoming'
-                                            }"
-                                            title="Emitir documento">
+                                            }">
                                             <i class="fa-solid fa-stamp text-sm md:text-base"></i>
                                         </div>
                                         <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium">Emitir</div>
                                         <div class="hidden md:block text-xs text-rose-600" x-show="bloqueaEmitir">
                                             Requiere pago total</div>
                                     </li>
-                                    @if ($habilitarActualizar)
-                                        <button type="button" wire:click="actualizar" wire:loading.attr="disabled"
-                                            class="h-11 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white shadow">
-                                            <i class="fa-solid fa-rotate mr-2"></i>
-                                            Actualizar cambios
-                                        </button>
-                                    @endif
+
                                     <li class="flex flex-col items-center text-center">
                                         <div class="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center rounded-full border-2"
                                             :class="{
@@ -796,9 +784,7 @@
                                                 'bg-teal-600 text-white border-teal-600 shadow': estado === 'cerrado',
                                                 'bg-white dark:bg-slate-900 text-slate-500 border-slate-300 dark:border-slate-600':
                                                     !['anulada', 'cerrado'].includes(estado)
-                                            }"
-                                            :title="estado === 'anulada' ? 'Anulada' : (estado === 'cerrado' ? 'Cerrada' :
-                                                'Cierre / Anular')">
+                                            }">
                                             <i :class="estado === 'anulada' ? 'fa-solid fa-ban' : (estado === 'cerrado' ?
                                                 'fa-solid fa-check' : 'fa-regular fa-circle')"
                                                 class="text-sm md:text-base"></i>
@@ -813,7 +799,6 @@
                         </div>
                     </div>
 
-                    {{-- Acciones --}}
                     <div class="xl:col-span-3">
                         <div x-data="{
                             estado: @entangle('estado'),
@@ -831,8 +816,7 @@
                                 return 'emitir'
                             },
                             labelNext() {
-                                return this.next === 'pagos' ? 'Ir a Pagos' :
-                                    this.next === 'emitir' ? 'Emitir documento' : ''
+                                return this.next === 'pagos' ? 'Ir a Pagos' : this.next === 'emitir' ? 'Emitir documento' : ''
                             },
                             isNext(btn) { return this.next === btn }
                         }" class="flex flex-col items-end gap-2">
@@ -848,8 +832,7 @@
 
                             <div class="flex flex-wrap justify-end gap-2">
                                 <button type="button"
-                                    class="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed
-                               transition ring-offset-2"
+                                    class="h-11 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
                                     :class="isNext('pagos') ? 'ring-4 ring-emerald-300 animate-pulse' : ''"
                                     wire:click="abrirPagos" wire:loading.attr="disabled"
                                     wire:target="abrirPagos,guardar,emitir" x-data="{ e: @entangle('estado') }"
@@ -858,7 +841,6 @@
                                     <span>Pagos</span>
                                 </button>
 
-                                {{-- Botón Guardar (sin cambios relevantes) --}}
                                 <button type="button"
                                     class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
                                     :class="isNext('guardar') ? 'ring-4 ring-slate-300 animate-pulse' : ''"
@@ -869,12 +851,17 @@
                                     <span wire:loading wire:target="guardar">Guardando…</span>
                                 </button>
 
-                                {{-- Botón Emitir (modificado) --}}
-                                {{-- Botón Emitir (permitir contado si ya está pagada) --}}
+                                @if ($habilitarActualizar)
+                                    <button type="button" wire:click="actualizar" wire:loading.attr="disabled"
+                                        class="h-11 px-4 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white shadow">
+                                        <i class="fa-solid fa-rotate mr-2"></i>
+                                        Actualizar cambios
+                                    </button>
+                                @endif
+
                                 <button type="button" x-data="{
                                     e: @entangle('estado'),
                                     tipo: @entangle('tipo_pago'),
-                                    // viene del PHP: contado y (no hay factura o hay saldo)
                                     bloquea: @js((bool) ($bloqueaEmitir ?? false)),
                                     get contado() { return this.tipo === 'contado' }
                                 }" wire:click="emitir"
@@ -886,196 +873,196 @@
                                         'bg-gray-400 text-gray-100 cursor-not-allowed' :
                                         'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white'
                                     ]"
-                                    :title="(contado && bloquea) ?
-                                    'Factura de contado: requiere pago total antes de emitir' :
+                                    :title="(contado && bloquea) ? 'Factura de contado: requiere pago total antes de emitir' :
                                     'Emitir documento'">
                                     <i class="fa-solid fa-stamp mr-2"></i>
                                     <span wire:loading.remove wire:target="emitir">Emitir</span>
                                     <span wire:loading wire:target="emitir">Emitiendo…</span>
                                 </button>
-
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
         </footer>
     </section>
 
-    {{-- *** IMPORTANTE: el componente del modal debe estar montado en el DOM *** --}}
     @if ($showPagos)
         <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-' . ($factura?->id ?? 'new')" />
     @endif
-    <script>
-        document.addEventListener('livewire:init', () => {
 
-            const ensureTomSelect = (el) => {
-                if (!el) return null;
+</div>
 
-                // ya existe
-                if (el.tomselect) return el.tomselect;
+<script>
+    document.addEventListener('livewire:init', () => {
+        const productoInstances = {};
+        let cotizacionInstance = null;
 
-                const linea = parseInt(el.dataset.linea || '0', 10);
+        const buildLineasPayload = (lineas) => {
+            return (lineas || []).map((l) => ({
+                ...l,
+                producto_id: l?.producto_id ?? null,
+                producto_nombre: l?.producto_nombre ?? ''
+            }));
+        };
 
-                const ts = new TomSelect(el, {
-                    placeholder: '— Seleccione —',
-                    allowEmptyOption: true,
-                    create: false,
-                    maxOptions: 500,
-                    hideSelected: false,
-                    closeAfterSelect: true,
+        const ensureProductoTomSelect = (el) => {
+            if (!el) return null;
 
-                    // ✅ CLAVE: esto asegura búsqueda por el texto visible
-                    searchField: ['text'],
+            const linea = parseInt(el.dataset.linea || '0', 10);
+            const key = `producto-select-${linea}`;
 
-                    // ❌ NO uses dropdown_input si quieres “filtro normal”
-                    // plugins: ['dropdown_input'],
+            if (productoInstances[key]) {
+                return productoInstances[key];
+            }
 
-                    onChange(value) {
-                        const pid = value ? parseInt(value, 10) : null;
-                        @this.call('setProducto', linea, pid);
+            const ts = new TomSelect(el, {
+                valueField: 'id',
+                labelField: 'text',
+                searchField: ['text'],
+                placeholder: 'Escribe para buscar un producto...',
+                allowEmptyOption: true,
+                create: false,
+                preload: false,
+                closeAfterSelect: true,
+                loadThrottle: 250,
+                maxOptions: 100,
+
+                render: {
+                    option: function(item, escape) {
+                        return `<div>${escape(item.text)}</div>`;
+                    },
+                    item: function(item, escape) {
+                        return `<div>${escape(item.text)}</div>`;
+                    },
+                    no_results: function(data, escape) {
+                        return `<div class="px-3 py-2 text-sm text-gray-500">No se encontraron productos para "${escape(data.input)}"</div>`;
+                    },
+                    loading: function() {
+                        return `<div class="px-3 py-2 text-sm text-gray-500">Buscando productos...</div>`;
                     }
-                });
+                },
 
-                return ts;
-            };
+                load: function(query, callback) {
+                    @this.call('buscarProductos', query)
+                        .then((results) => callback(results || []))
+                        .catch(() => callback());
+                },
 
-            const initAll = () => {
-                document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-                    ensureTomSelect(el);
-                });
-            };
-
-            // Inicial
-            initAll();
-
-            // Cada vez que Livewire procese un mensaje, intenta inicializar los nuevos
-            Livewire.hook('message.processed', () => {
-                initAll();
-            });
-
-            // ✅ Evento para “sincronizar” cuando cargas/abres factura en modo editar
-            // (desde PHP: $this->dispatch('sync-productos-tomselect', lineas: $this->lineas); )
-            Livewire.on('sync-productos-tomselect', (payload) => {
-                const lineas = payload?.lineas || [];
-
-                lineas.forEach((l, i) => {
-                    const el = document.querySelector(
-                        `select[data-producto-select][data-linea="${i}"]`);
-                    if (!el) return;
-
-                    const ts = ensureTomSelect(el);
-                    if (!ts) return;
-
-                    const pid = l?.producto_id ? String(l.producto_id) : '';
-
-                    // ✅ setValue SIN disparar onChange (true = silent)
-                    ts.setValue(pid, true);
-                });
-            });
-
-        });
-    </script>
-    <script>
-        document.addEventListener('livewire:init', () => {
-
-            const ensureProductoTomSelect = (el) => {
-                if (!el) return null;
-                if (el.tomselect) return el.tomselect;
-
-                const linea = parseInt(el.dataset.linea || '0', 10);
-
-                const ts = new TomSelect(el, {
-                    placeholder: '— Seleccione —',
-                    allowEmptyOption: true,
-                    create: false,
-                    maxOptions: 500,
-                    hideSelected: false,
-                    closeAfterSelect: true,
-                    searchField: ['text'],
-
-                    onChange(value) {
-                        const pid = value ? parseInt(value, 10) : null;
-                        @this.call('setProducto', linea, pid);
-                    }
-                });
-
-                return ts;
-            };
-
-            const ensureCotizacionTomSelect = (el) => {
-                if (!el) return null;
-                if (el.tomselect) return el.tomselect;
-
-                const ts = new TomSelect(el, {
-                    placeholder: 'Buscar cotizacion',
-                    allowEmptyOption: true,
-                    create: false,
-                    maxOptions: 300,
-                    hideSelected: false,
-                    closeAfterSelect: true,
-                    searchField: ['text'],
-
-                    onChange(value) {
-                        const cotizacionId = value ? parseInt(value, 10) : null;
-                        @this.call('setCotizacion', cotizacionId);
-                    }
-                });
-
-                return ts;
-            };
-
-            const initProductoSelects = () => {
-                document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-                    ensureProductoTomSelect(el);
-                });
-            };
-
-            const initCotizacionSelect = () => {
-                const el = document.querySelector('select[data-cotizacion-select]');
-                if (el) {
-                    ensureCotizacionTomSelect(el);
+                onChange(value) {
+                    const pid = value ? parseInt(value, 10) : null;
+                    @this.call('setProducto', linea, pid);
                 }
-            };
+            });
 
-            const initAll = () => {
-                initProductoSelects();
-                initCotizacionSelect();
-            };
+            productoInstances[key] = ts;
+            return ts;
+        };
 
+        const destroyProductoTomSelect = (el) => {
+            if (!el) return;
+
+            const linea = parseInt(el.dataset.linea || '0', 10);
+            const key = `producto-select-${linea}`;
+
+            if (productoInstances[key]) {
+                productoInstances[key].destroy();
+                delete productoInstances[key];
+            }
+        };
+
+        const ensureCotizacionTomSelect = (el) => {
+            if (!el) return null;
+            if (cotizacionInstance) return cotizacionInstance;
+
+            cotizacionInstance = new TomSelect(el, {
+                placeholder: 'Buscar cotización...',
+                allowEmptyOption: true,
+                create: false,
+                maxOptions: 300,
+                hideSelected: false,
+                closeAfterSelect: true,
+                searchField: ['text'],
+                onChange(value) {
+                    const cotizacionId = value ? parseInt(value, 10) : null;
+                    @this.call('setCotizacion', cotizacionId);
+                }
+            });
+
+            return cotizacionInstance;
+        };
+
+        const initProductoSelects = () => {
+            document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                ensureProductoTomSelect(el);
+            });
+        };
+
+        const initCotizacionSelect = () => {
+            const el = document.querySelector('select[data-cotizacion-select]');
+            if (el) ensureCotizacionTomSelect(el);
+        };
+
+        const initAll = () => {
+            initProductoSelects();
+            initCotizacionSelect();
+        };
+
+        initAll();
+
+        Livewire.hook('morph.removing', ({
+            el
+        }) => {
+            if (el.matches && el.matches('select[data-producto-select]')) {
+                destroyProductoTomSelect(el);
+            }
+
+            el.querySelectorAll?.('select[data-producto-select]').forEach((select) => {
+                destroyProductoTomSelect(select);
+            });
+        });
+
+        Livewire.hook('morph.updated', () => {
             initAll();
+        });
 
-            Livewire.hook('message.processed', () => {
-                initAll();
-            });
+        Livewire.on('sync-productos-tomselect', (payload) => {
+            const lineas = buildLineasPayload(payload?.lineas || []);
 
-            Livewire.on('sync-productos-tomselect', (payload) => {
-                const lineas = payload?.lineas || [];
-
-                lineas.forEach((l, i) => {
-                    const el = document.querySelector(
-                        `select[data-producto-select][data-linea="${i}"]`);
-                    if (!el) return;
-
-                    const ts = ensureProductoTomSelect(el);
-                    if (!ts) return;
-
-                    const pid = l?.producto_id ? String(l.producto_id) : '';
-                    ts.setValue(pid, true);
-                });
-            });
-
-            Livewire.on('sync-cotizacion-tomselect', (payload) => {
-                const cotizacionId = payload?.cotizacionId ? String(payload.cotizacionId) : '';
-                const el = document.querySelector('select[data-cotizacion-select]');
+            lineas.forEach((l, i) => {
+                const el = document.querySelector(
+                    `select[data-producto-select][data-linea="${i}"]`);
                 if (!el) return;
 
-                const ts = ensureCotizacionTomSelect(el);
+                const ts = ensureProductoTomSelect(el);
                 if (!ts) return;
 
-                ts.setValue(cotizacionId, true);
+                const productoId = l?.producto_id ? String(l.producto_id) : '';
+                const productoNombre = l?.producto_nombre || '';
+
+                if (productoId && productoNombre) {
+                    if (!ts.options[productoId]) {
+                        ts.addOption({
+                            id: productoId,
+                            text: productoNombre
+                        });
+                    }
+                    ts.setValue(productoId, true);
+                } else if (!productoId) {
+                    ts.clear(true);
+                }
             });
         });
-    </script>
-</div>
+
+        Livewire.on('sync-cotizacion-tomselect', (payload) => {
+            const cotizacionId = payload?.cotizacionId ? String(payload.cotizacionId) : '';
+            const el = document.querySelector('select[data-cotizacion-select]');
+            if (!el) return;
+
+            const ts = ensureCotizacionTomSelect(el);
+            if (!ts) return;
+
+            ts.setValue(cotizacionId, true);
+        });
+    });
+</script>

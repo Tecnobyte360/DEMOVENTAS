@@ -415,7 +415,7 @@ public function guardarPago(): void
                     'monto'         => $monto,
                     'notas'         => $this->notas,
                     'turno_id'      => $asociaTurno ? $turno->id : null,
-                    'user_id'       => Auth::id(),
+                    // 'user_id'       => Auth::id(),
                 ]);
 
                 $pagos[] = $pago;

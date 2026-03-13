@@ -670,11 +670,19 @@
 
         @php
             $esContado = $tipo_pago === 'contado';
-            $totalVista = round((float) ($factura?->total ?? ($this->total ?? 0)), 2);
-            $pagadoVista = round((float) ($factura?->pagado ?? 0), 2);
-            $saldoVista = max(round($totalVista - $pagadoVista, 2), 0);
             $tieneFactura = (bool) $factura?->id;
-            $bloqueaEmitir = $esContado && (!$tieneFactura || $saldoVista > 0.01);
+
+            $totalVista = round((float) ($factura?->total ?? ($this->total ?? 0)), 2);
+
+            // ✅ usar saldo real de la factura si existe
+            $pagadoVista = round((float) ($factura?->pagado ?? 0), 2);
+            $saldoVista = round((float) ($factura?->saldo ?? max($totalVista - $pagadoVista, 0)), 2);
+
+            // ✅ si está paga, no bloquear emitir
+            $facturaPagada = $tieneFactura && $saldoVista <= 0.01;
+
+            // ✅ bloquear solo si es contado y aún no está completamente paga
+            $bloqueaEmitir = $esContado && (!$tieneFactura || !$facturaPagada);
         @endphp
 
         <footer
@@ -888,7 +896,7 @@
     </section>
 
     @if ($showPagos)
-       <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-fixed'" />
+        <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-fixed'" />
     @endif
 
 </div>

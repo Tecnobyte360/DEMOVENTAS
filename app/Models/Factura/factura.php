@@ -95,10 +95,10 @@ class Factura extends Model
         return $this->belongsTo(User::class, 'anulado_por_id');
     }
 
-public function pagos(): HasMany
-{
-    return $this->hasMany(FacturaPago::class, 'factura_id');
-}
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(FacturaPago::class, 'factura_id');
+    }
 
     public function recalcularTotales(): self
     {
@@ -132,4 +132,21 @@ public function pagos(): HasMany
 
         return $this;
     }
+    public function registrarPago(array $data): FacturaPago
+{
+    $pago = $this->pagos()->create([
+        'fecha'         => $data['fecha'] ?? now()->toDateString(),
+        'medio_pago_id' => $data['medio_pago_id'] ?? null,
+        'metodo'        => $data['metodo'] ?? null,
+        'referencia'    => $data['referencia'] ?? null,
+        'monto'         => (float) ($data['monto'] ?? 0),
+        'notas'         => $data['notas'] ?? null,
+        'turno_id'      => $data['turno_id'] ?? null,
+        'user_id'       => $data['user_id'] ?? null,
+    ]);
+
+    $this->refresh()->recalcularTotales()->save();
+
+    return $pago;
+}
 }

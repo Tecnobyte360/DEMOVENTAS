@@ -73,52 +73,73 @@ class IngresosVsEgresos extends Component
         $months = $this->months();
 
         // ==========================
-        // 1) FACTURAS (VENTAS)  ✅ serie_id = 4
+        // 1) INGRESOS: misma lógica de VentasPorMes
+        //    FRM suma / NCV resta
         // ==========================
-        $qFacturas = Factura::query()
-            ->selectRaw('MONTH(fecha) as mes, SUM(total) as total')
-            ->whereBetween('fecha', [$start, $end])
-            ->whereNotIn('estado', ['anulada'])
-            ->where('serie_id', 4); // ✅ SOLO INGRESOS SERIE 4
+        $qIngresos = DB::table('facturas as f')
+            ->join('series as s', 's.id', '=', 'f.serie_id')
+            ->selectRaw('MONTH(f.fecha) as mes')
 
-        if ($this->empresa_id) {
-            $qFacturas->where('empresa_id', $this->empresa_id);
+            ->selectRaw("
+            SUM(
+                CASE
+                    WHEN s.prefijo = 'FRM'
+                     AND f.total > 0
+                     AND f.numero IS NOT NULL
+                     AND f.numero <> ''
+                     AND f.estado <> 'anulada'
+                    THEN f.total
+                    ELSE 0
+                END
+            ) as facturas
+        ")
+
+            ->selectRaw("
+            SUM(
+                CASE
+                    WHEN s.prefijo = 'NCV'
+                     AND f.numero IS NOT NULL
+                     AND f.numero <> ''
+                     AND f.estado <> 'anulada'
+                    THEN ABS(f.total)
+                    ELSE 0
+                END
+            ) as notas_credito
+        ")
+
+            ->selectRaw("
+            SUM(
+                CASE
+                    WHEN s.prefijo = 'FRM'
+                     AND f.numero IS NOT NULL
+                     AND f.numero <> ''
+                     AND f.estado <> 'anulada'
+                    THEN f.total
+                    WHEN s.prefijo = 'NCV'
+                     AND f.numero IS NOT NULL
+                     AND f.numero <> ''
+                     AND f.estado <> 'anulada'
+                    THEN -ABS(f.total)
+                    ELSE 0
+                END
+            ) as neto
+        ")
+
+            ->whereBetween('f.fecha', [$start, $end])
+            ->whereIn('s.prefijo', ['FRM', 'NCV']);
+
+        if ($this->empresa_id && SchemaHasColumn('facturas', 'empresa_id')) {
+            $qIngresos->where('f.empresa_id', $this->empresa_id);
         }
 
-        $facturasPorMes = $qFacturas
-            ->groupByRaw('MONTH(fecha)')
-            ->pluck('total', 'mes')
-            ->map(fn($v) => (float) $v)
-            ->toArray();
+        $ingresosPorMes = $qIngresos
+            ->groupByRaw('MONTH(f.fecha)')
+            ->orderByRaw('MONTH(f.fecha)')
+            ->get()
+            ->keyBy('mes');
 
         // ==========================
-        // 2) NOTAS CRÉDITO (VENTA)  (opcional filtrar serie_id=4 si existe)
-        // ==========================
-        $qNCVenta = NotaCredito::query()
-            ->selectRaw('MONTH(fecha) as mes, SUM(total) as total')
-            ->whereBetween('fecha', [$start, $end]);
-
-        if (SchemaHasColumn('notas_credito', 'estado')) {
-            $qNCVenta->whereNotIn('estado', ['anulada']);
-        }
-
-        if ($this->empresa_id && SchemaHasColumn('notas_credito', 'empresa_id')) {
-            $qNCVenta->where('empresa_id', $this->empresa_id);
-        }
-
-        // ✅ Si NotaCredito tiene serie_id y quieres que afecte SOLO a serie 4
-        if (SchemaHasColumn('notas_credito', 'serie_id')) {
-            $qNCVenta->where('serie_id', 4);
-        }
-
-        $ncVentaPorMes = $qNCVenta
-            ->groupByRaw('MONTH(fecha)')
-            ->pluck('total', 'mes')
-            ->map(fn($v) => (float) $v)
-            ->toArray();
-
-        // ==========================
-        // 3) GASTOS (EGRESOS)
+        // 2) GASTOS / EGRESOS
         // ==========================
         $gastosPorMes = $this->sumByMonth(
             table: 'gastos_ruta',
@@ -130,38 +151,38 @@ class IngresosVsEgresos extends Component
         );
 
         // ==========================
-        // 4) COMPRAS (EGRESOS) ✅ serie_id = 13
+        // 3) COMPRAS (si aplica)
         // ==========================
         $comprasPorMes = $this->sumByMonth(
-            table: 'compras',           // <- AJUSTA
-            dateColumn: 'fecha',        // <- AJUSTA
-            amountColumn: 'total',      // <- AJUSTA
+            table: 'compras',
+            dateColumn: 'fecha',
+            amountColumn: 'total',
             start: $start,
             end: $end,
-            empresaColumn: 'empresa_id', // <- AJUSTA o null
-            extraWhere: ['serie_id' => 13] // ✅ SOLO COMPRAS SERIE 13
+            empresaColumn: 'empresa_id',
+            extraWhere: ['serie_id' => 13]
         );
 
         // ==========================
-        // 5) NOTAS CRÉDITO COMPRA (RESTAN EGRESOS) (opcional serie_id=13)
+        // 4) NC COMPRA (si aplica)
         // ==========================
         $ncCompraPorMes = $this->sumByMonth(
-            table: 'notas_credito_compra', // <- AJUSTA
-            dateColumn: 'fecha',            // <- AJUSTA
-            amountColumn: 'total',          // <- AJUSTA
+            table: 'notas_credito_compra',
+            dateColumn: 'fecha',
+            amountColumn: 'total',
             start: $start,
             end: $end,
-            empresaColumn: 'empresa_id',    // <- AJUSTA o null
-            extraWhere: ['serie_id' => 13]  // ✅ si existe la columna
+            empresaColumn: 'empresa_id',
+            extraWhere: ['serie_id' => 13]
         );
 
         // ==========================
-        // Construcción final arrays
+        // 5) Construcción final
         // ==========================
-        $labels  = [];
-        $ingArr  = [];
-        $egrArr  = [];
-        $netArr  = [];
+        $labels = [];
+        $ingArr = [];
+        $egrArr = [];
+        $netArr = [];
 
         $tIng = 0.0;
         $tEgr = 0.0;
@@ -169,19 +190,15 @@ class IngresosVsEgresos extends Component
         foreach ($months as $m => $label) {
             $labels[] = $label;
 
-            $fact = (float) ($facturasPorMes[$m] ?? 0);
-            $ncV  = (float) ($ncVentaPorMes[$m] ?? 0);
+            $rowIngresos = $ingresosPorMes->get($m);
 
-            // Ingresos = facturas - NC venta
-            $ing = max($fact - $ncV, 0);
+            $ing = (float) ($rowIngresos->neto ?? 0);
 
             $gas = (float) ($gastosPorMes[$m] ?? 0);
             $com = (float) ($comprasPorMes[$m] ?? 0);
             $ncC = (float) ($ncCompraPorMes[$m] ?? 0);
 
-            // Egresos = gastos + compras - NC compra
             $egr = max(($gas + $com) - $ncC, 0);
-
             $net = $ing - $egr;
 
             $ingArr[] = round($ing, 2);
@@ -202,10 +219,6 @@ class IngresosVsEgresos extends Component
         $this->totalNeto     = round($tIng - $tEgr, 2);
     }
 
-    /**
-     * Suma por mes una tabla genérica.
-     * Devuelve: [mes => total]
-     */
     private function sumByMonth(
         string $table,
         string $dateColumn,
@@ -213,9 +226,11 @@ class IngresosVsEgresos extends Component
         Carbon $start,
         Carbon $end,
         ?string $empresaColumn = null,
-        array $extraWhere = [] // ✅ NUEVO
+        array $extraWhere = []
     ): array {
         if (!SchemaHasTable($table)) return [];
+        if (!SchemaHasColumn($table, $dateColumn)) return [];
+        if (!SchemaHasColumn($table, $amountColumn)) return [];
 
         $q = DB::table($table)
             ->selectRaw("MONTH($dateColumn) as mes, SUM($amountColumn) as total")
@@ -225,7 +240,6 @@ class IngresosVsEgresos extends Component
             $q->where($empresaColumn, $this->empresa_id);
         }
 
-        // ✅ filtros extra (ej: serie_id)
         foreach ($extraWhere as $col => $val) {
             if (SchemaHasColumn($table, $col)) {
                 $q->where($col, $val);

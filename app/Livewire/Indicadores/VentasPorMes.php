@@ -23,56 +23,60 @@ class VentasPorMes extends Component
     {
         $this->cargar();
     }
-protected function cargar(): void
-{
-    $year = now()->year;
+    protected function cargar(): void
+    {
+        $year = now()->year;
 
-    $rows = DB::table('facturas as f')
-    ->selectRaw('MONTH(f.fecha) as mes')
-    ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'contado' THEN f.total ELSE 0 END) as contado")
-    ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'credito' THEN f.total ELSE 0 END) as credito")
-    ->selectRaw("SUM(CASE WHEN f.total < 0 THEN f.total ELSE 0 END) as notas_credito")
-    ->selectRaw("SUM(f.total) as neto")
-    ->whereYear('f.fecha', $year)
-    ->groupByRaw('MONTH(f.fecha)')
-    ->orderByRaw('MONTH(f.fecha)')
-    ->get()
-    ->keyBy('mes');
-    $meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+        $rows = DB::table('facturas as f')
+            ->join('series as s', 's.id', '=', 'f.serie_id')
+            ->selectRaw('MONTH(f.fecha) as mes')
+            ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'contado' THEN f.total ELSE 0 END) as contado")
+            ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'credito' THEN f.total ELSE 0 END) as credito")
+            ->selectRaw("SUM(CASE WHEN f.total < 0 THEN f.total ELSE 0 END) as notas_credito")
+            ->selectRaw("SUM(f.total) as neto")
+            ->whereYear('f.fecha', $year)
+            ->where('s.prefijo', 'FRM')
+            ->whereIn('f.estado', ['emitida', 'cerrado', 'pagada'])
+            ->groupByRaw('MONTH(f.fecha)')
+            ->orderByRaw('MONTH(f.fecha)')
+            ->get()
+            ->keyBy('mes');
 
-    $this->labels = $meses;
+        $meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-    $this->dataContado = [];
-    $this->dataCredito = [];
-    $this->dataNotasCredito = [];
-    $this->dataNeto = [];
+        $this->labels = $meses;
 
-    $this->totalAnioContado = 0;
-    $this->totalAnioCredito = 0;
-    $this->totalAnioNotasCredito = 0;
-    $this->totalAnioNeto = 0;
+        $this->dataContado = [];
+        $this->dataCredito = [];
+        $this->dataNotasCredito = [];
+        $this->dataNeto = [];
 
-    for ($m = 1; $m <= 12; $m++) {
-        $r = $rows->get($m);
+        $this->totalAnioContado = 0;
+        $this->totalAnioCredito = 0;
+        $this->totalAnioNotasCredito = 0;
+        $this->totalAnioNeto = 0;
 
-        $contado = (float) ($r->contado ?? 0);
-        $credito = (float) ($r->credito ?? 0);
-        $ncNeg   = (float) ($r->notas_credito ?? 0);
-        $neto    = (float) ($r->neto ?? 0);
+        for ($m = 1; $m <= 12; $m++) {
+            $r = $rows->get($m);
 
-        $this->dataContado[] = $contado;
-        $this->dataCredito[] = $credito;
-        $this->dataNotasCredito[] = abs($ncNeg);
-        $this->dataNeto[] = $neto;
+            $contado = (float) ($r->contado ?? 0);
+            $credito = (float) ($r->credito ?? 0);
+            $ncNeg   = (float) ($r->notas_credito ?? 0);
+            $neto    = (float) ($r->neto ?? 0);
 
-        $this->totalAnioContado += $contado;
-        $this->totalAnioCredito += $credito;
-        $this->totalAnioNotasCredito += abs($ncNeg);
-        $this->totalAnioNeto += $neto;
+            $this->dataContado[] = $contado;
+            $this->dataCredito[] = $credito;
+            $this->dataNotasCredito[] = abs($ncNeg);
+            $this->dataNeto[] = $neto;
+
+            $this->totalAnioContado += $contado;
+            $this->totalAnioCredito += $credito;
+            $this->totalAnioNotasCredito += abs($ncNeg);
+            $this->totalAnioNeto += $neto;
+        }
     }
-}
 
-   
+
 
     public function render()
     {

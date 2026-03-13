@@ -1539,7 +1539,7 @@ class FacturaForm extends Component
         }
     }
 
-   public function abrirPagos(): void
+  public function abrirPagos(): void
 {
     if ($this->abortIfLocked('registrar pagos')) return;
 

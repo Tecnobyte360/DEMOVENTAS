@@ -87,31 +87,30 @@ class PagosFactura extends Component
     }
 
     #[On('abrir-modal-pago')]
-    public function abrir(?int $facturaId = null): void
-    {
-        $this->show          = true;
-        $this->fecha         = now()->toDateString();
-        $this->notas         = null;
-        $this->buscarFactura = '';
-        $this->tipoDocumento = 'venta';
+public function abrir(?int $facturaId = null): void
+{
+    $this->show          = true;
+    $this->fecha         = now()->toDateString();
+    $this->notas         = null;
+    $this->buscarFactura = '';
+    $this->tipoDocumento = 'venta';
 
-        $this->cargarMedios();
+    $this->cargarMedios();
 
-        $this->facturaId = $facturaId;
+    $this->facturaId = $facturaId;
 
-        if ($facturaId) {
-            $this->cargarFacturaSeleccionada($facturaId, true);
-        } else {
-            $this->resetFacturaYItems();
-        }
-
-        $this->resetErrorBag();
-        $this->resetValidation();
-        $this->recalc();
-
-        // ✅ Livewire 3
-        $this->dispatch('refresh-factura-select');
+    if ($facturaId) {
+        $this->cargarFacturaSeleccionada($facturaId, true);
+    } else {
+        $this->resetFacturaYItems();
     }
+
+    $this->resetErrorBag();
+    $this->resetValidation();
+    $this->recalc();
+
+    $this->dispatch('refresh-factura-select');
+}
 
     public function cerrar(): void
     {

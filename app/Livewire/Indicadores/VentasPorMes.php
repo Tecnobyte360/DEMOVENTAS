@@ -23,58 +23,95 @@ class VentasPorMes extends Component
     {
         $this->cargar();
     }
-    protected function cargar(): void
-    {
-        $year = now()->year;
+   protected function cargar(): void
+{
+    $year = now()->year;
 
-        $rows = DB::table('facturas as f')
-            ->join('series as s', 's.id', '=', 'f.serie_id')
-            ->selectRaw('MONTH(f.fecha) as mes')
-            ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'contado' THEN f.total ELSE 0 END) as contado")
-            ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'credito' THEN f.total ELSE 0 END) as credito")
-            ->selectRaw("SUM(CASE WHEN f.total < 0 THEN f.total ELSE 0 END) as notas_credito")
-            ->selectRaw("SUM(f.total) as neto")
-            ->whereYear('f.fecha', $year)
-            ->where('s.prefijo', 'FRM')
-            ->whereIn('f.estado', ['emitida', 'cerrado', 'pagada'])
-            ->groupByRaw('MONTH(f.fecha)')
-            ->orderByRaw('MONTH(f.fecha)')
-            ->get()
-            ->keyBy('mes');
+    $rows = DB::table('facturas as f')
+        ->join('series as s', 's.id', '=', 'f.serie_id')
 
-        $meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        ->selectRaw('MONTH(f.fecha) as mes')
 
-        $this->labels = $meses;
+        ->selectRaw("
+            SUM(
+                CASE 
+                    WHEN f.total > 0 AND f.tipo_pago = 'contado' 
+                    THEN f.total 
+                    ELSE 0 
+                END
+            ) as contado
+        ")
 
-        $this->dataContado = [];
-        $this->dataCredito = [];
-        $this->dataNotasCredito = [];
-        $this->dataNeto = [];
+        ->selectRaw("
+            SUM(
+                CASE 
+                    WHEN f.total > 0 AND f.tipo_pago = 'credito' 
+                    THEN f.total 
+                    ELSE 0 
+                END
+            ) as credito
+        ")
 
-        $this->totalAnioContado = 0;
-        $this->totalAnioCredito = 0;
-        $this->totalAnioNotasCredito = 0;
-        $this->totalAnioNeto = 0;
+        ->selectRaw("
+            SUM(
+                CASE 
+                    WHEN f.total < 0 
+                    THEN f.total 
+                    ELSE 0 
+                END
+            ) as notas_credito
+        ")
 
-        for ($m = 1; $m <= 12; $m++) {
-            $r = $rows->get($m);
+        ->selectRaw("SUM(f.total) as neto")
 
-            $contado = (float) ($r->contado ?? 0);
-            $credito = (float) ($r->credito ?? 0);
-            $ncNeg   = (float) ($r->notas_credito ?? 0);
-            $neto    = (float) ($r->neto ?? 0);
+        ->whereYear('f.fecha', $year)
 
-            $this->dataContado[] = $contado;
-            $this->dataCredito[] = $credito;
-            $this->dataNotasCredito[] = abs($ncNeg);
-            $this->dataNeto[] = $neto;
+        // SOLO FACTURAS DE VENTA
+        ->where('s.prefijo', 'FRM')
 
-            $this->totalAnioContado += $contado;
-            $this->totalAnioCredito += $credito;
-            $this->totalAnioNotasCredito += abs($ncNeg);
-            $this->totalAnioNeto += $neto;
-        }
+        // ❗ NO CONTAR ANULADAS
+        ->where('f.estado', '!=', 'anulada')
+
+        ->groupByRaw('MONTH(f.fecha)')
+        ->orderByRaw('MONTH(f.fecha)')
+
+        ->get()
+        ->keyBy('mes');
+
+    $meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+    $this->labels = $meses;
+
+    $this->dataContado = [];
+    $this->dataCredito = [];
+    $this->dataNotasCredito = [];
+    $this->dataNeto = [];
+
+    $this->totalAnioContado = 0;
+    $this->totalAnioCredito = 0;
+    $this->totalAnioNotasCredito = 0;
+    $this->totalAnioNeto = 0;
+
+    for ($m = 1; $m <= 12; $m++) {
+
+        $r = $rows->get($m);
+
+        $contado = (float) ($r->contado ?? 0);
+        $credito = (float) ($r->credito ?? 0);
+        $ncNeg   = (float) ($r->notas_credito ?? 0);
+        $neto    = (float) ($r->neto ?? 0);
+
+        $this->dataContado[] = $contado;
+        $this->dataCredito[] = $credito;
+        $this->dataNotasCredito[] = abs($ncNeg);
+        $this->dataNeto[] = $neto;
+
+        $this->totalAnioContado += $contado;
+        $this->totalAnioCredito += $credito;
+        $this->totalAnioNotasCredito += abs($ncNeg);
+        $this->totalAnioNeto += $neto;
     }
+}
 
 
 

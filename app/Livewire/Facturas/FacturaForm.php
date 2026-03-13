@@ -1538,38 +1538,42 @@ class FacturaForm extends Component
             PendingToast::create()->error()->message('No se pudo anular.')->duration(7000);
         }
     }
+    public function abrirPagos(): void
+    {
+        if ($this->abortIfLocked('registrar pagos')) return;
 
-  public function abrirPagos(): void
-{
-    if ($this->abortIfLocked('registrar pagos')) return;
+        try {
+            if (!$this->verificarStockParaLineas()) {
+                PendingToast::create()
+                    ->error()
+                    ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                    ->duration(8000);
+                return;
+            }
 
-    try {
-        if (!$this->verificarStockParaLineas()) {
+            if (!$this->factura?->id) {
+                $this->guardar();
+                if (!$this->factura?->id) return;
+            }
+
+            $this->showPagos = true;
+        } catch (\Throwable $e) {
+            $msg = trim((string) $e->getMessage());
+            if ($msg === '') $msg = 'Ocurrió un error inesperado.';
+
             PendingToast::create()
                 ->error()
-                ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
-                ->duration(8000);
-            return;
+                ->message('Error al abrir pagos: ' . $msg)
+                ->duration(9000);
         }
-
-        if (!$this->factura?->id) {
-            $this->guardar();
-            if (!$this->factura?->id) return;
-        }
-
-        $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
-            ->to(\App\Livewire\Facturas\PagosFactura::class);
-    } catch (\Throwable $e) {
-        $msg = trim((string) $e->getMessage());
-        if ($msg === '') $msg = 'Ocurrió un error inesperado.';
-
-        PendingToast::create()
-            ->error()
-            ->message('Error al abrir pagos: ' . $msg)
-            ->duration(9000);
     }
-}
-
+    public function updatedShowPagos($value): void
+    {
+        if ($value && $this->factura?->id) {
+            $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
+                ->to(\App\Livewire\Facturas\PagosFactura::class);
+        }
+    }
 
     public function getProximoPreviewProperty(): ?string
     {

@@ -1539,32 +1539,36 @@ class FacturaForm extends Component
         }
     }
 
-    public function abrirPagos(): void
-    {
-        if ($this->abortIfLocked('registrar pagos')) return;
+   public function abrirPagos(): void
+{
+    if ($this->abortIfLocked('registrar pagos')) return;
 
-        try {
-            if (!$this->verificarStockParaLineas()) {
-                PendingToast::create()
-                    ->error()
-                    ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
-                    ->duration(8000);
-                return;
-            }
-
-            if (!$this->factura?->id) {
-                $this->guardar();
-                if (!$this->factura?->id) return;
-            }
-
-            $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
-                ->to(\App\Livewire\Facturas\PagosFactura::class);
-        } catch (\Throwable $e) {
-            $msg = trim((string) $e->getMessage());
-            if ($msg === '') $msg = 'Ocurrió un error inesperado.';
-            PendingToast::create()->error()->message('Error al abrir pagos: ' . $msg)->duration(9000);
+    try {
+        if (!$this->verificarStockParaLineas()) {
+            PendingToast::create()
+                ->error()
+                ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                ->duration(8000);
+            return;
         }
+
+        if (!$this->factura?->id) {
+            $this->guardar();
+            if (!$this->factura?->id) return;
+        }
+
+        $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
+            ->to(\App\Livewire\Facturas\PagosFactura::class);
+    } catch (\Throwable $e) {
+        $msg = trim((string) $e->getMessage());
+        if ($msg === '') $msg = 'Ocurrió un error inesperado.';
+
+        PendingToast::create()
+            ->error()
+            ->message('Error al abrir pagos: ' . $msg)
+            ->duration(9000);
     }
+}
 
 
     public function getProximoPreviewProperty(): ?string
@@ -1689,58 +1693,58 @@ class FacturaForm extends Component
         }
     }
 
-#[On('pago-registrado')]
-public function onPagoRegistrado(int $facturaId): void
-{
-    try {
-        $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
-        $this->factura->recalcularTotales()->save();
-        $this->factura->refresh();
+    #[On('pago-registrado')]
+    public function onPagoRegistrado(int $facturaId): void
+    {
+        try {
+            $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
+            $this->factura->recalcularTotales()->save();
+            $this->factura->refresh();
 
-        $this->cargarFactura($facturaId);
+            $this->cargarFactura($facturaId);
 
-        $this->estado    = (string) ($this->factura->estado ?? 'borrador');
-        $this->tipo_pago = (string) ($this->factura->tipo_pago ?? $this->tipo_pago);
+            $this->estado    = (string) ($this->factura->estado ?? 'borrador');
+            $this->tipo_pago = (string) ($this->factura->tipo_pago ?? $this->tipo_pago);
 
-        $total    = round((float) ($this->factura->total ?? 0), 2);
-        $pagado   = round((float) $this->factura->pagos()->sum('monto'), 2);
-        $faltante = round($total - $pagado, 2);
+            $total    = round((float) ($this->factura->total ?? 0), 2);
+            $pagado   = round((float) $this->factura->pagos()->sum('monto'), 2);
+            $faltante = round($total - $pagado, 2);
 
-        $esContado = ($this->factura->tipo_pago ?? '') === 'contado';
-        $pagoTotal = ($faltante <= 0.01);
+            $esContado = ($this->factura->tipo_pago ?? '') === 'contado';
+            $pagoTotal = ($faltante <= 0.01);
 
-        $noEmitida = empty($this->factura->numero)
-            && !in_array(($this->factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
+            $noEmitida = empty($this->factura->numero)
+                && !in_array(($this->factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
 
-        if ($esContado && $pagoTotal && $noEmitida) {
-            $this->emitir();
+            if ($esContado && $pagoTotal && $noEmitida) {
+                $this->emitir();
+
+                $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
+                $this->factura->recalcularTotales()->save();
+                $this->factura->refresh();
+            }
+
+            $this->marcarPagadaSiAplica();
 
             $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
             $this->factura->recalcularTotales()->save();
             $this->factura->refresh();
+
+            $this->estado = (string) ($this->factura->estado ?? 'borrador');
+
+            $this->dispatch('refrescar-lista-facturas');
+            $this->dispatch('$refresh');
+        } catch (\Throwable $e) {
+            Log::error('onPagoRegistrado error', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            PendingToast::create()->error()
+                ->message('El pago se registró, pero no se pudo refrescar la factura.')
+                ->duration(9000);
         }
-
-        $this->marcarPagadaSiAplica();
-
-        $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
-        $this->factura->recalcularTotales()->save();
-        $this->factura->refresh();
-
-        $this->estado = (string) ($this->factura->estado ?? 'borrador');
-
-        $this->dispatch('refrescar-lista-facturas');
-        $this->dispatch('$refresh');
-    } catch (\Throwable $e) {
-        Log::error('onPagoRegistrado error', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        PendingToast::create()->error()
-            ->message('El pago se registró, pero no se pudo refrescar la factura.')
-            ->duration(9000);
     }
-}
 
 
 

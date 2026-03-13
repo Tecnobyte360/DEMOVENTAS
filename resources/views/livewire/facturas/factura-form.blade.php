@@ -888,11 +888,9 @@
             </div>
         </footer>
     </section>
-
     @if ($showPagos)
         <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-fixed'" />
     @endif
-
 </div>
 
 <script>
@@ -1012,9 +1010,7 @@
 
         initAll();
 
-        Livewire.hook('morph.removing', ({
-            el
-        }) => {
+        Livewire.hook('morph.removing', ({ el }) => {
             if (el.matches && el.matches('select[data-producto-select]')) {
                 destroyProductoTomSelect(el);
             }
@@ -1032,8 +1028,7 @@
             const lineas = buildLineasPayload(payload?.lineas || []);
 
             lineas.forEach((l, i) => {
-                const el = document.querySelector(
-                    `select[data-producto-select][data-linea="${i}"]`);
+                const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
                 if (!el) return;
 
                 const ts = ensureProductoTomSelect(el);
@@ -1065,6 +1060,20 @@
             if (!ts) return;
 
             ts.setValue(cotizacionId, true);
+        });
+
+        // ✅ esto ayuda a que, después de renderizar el componente PagosFactura,
+        // se abra correctamente el modal
+        Livewire.on('preparar-modal-pago', (payload) => {
+            const facturaId = payload?.facturaId ?? null;
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    Livewire.dispatch('abrir-modal-pago', {
+                        facturaId: facturaId
+                    });
+                });
+            });
         });
     });
 </script>

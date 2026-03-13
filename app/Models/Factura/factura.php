@@ -141,9 +141,11 @@ class Factura extends Model
 
     return $this;
 }
-    public function registrarPago(array $data): FacturaPago
+
+
+   public function registrarPago(array $data): FacturaPago
 {
-    $pago = $this->pagos()->create([
+    $payload = [
         'fecha'         => $data['fecha'] ?? now()->toDateString(),
         'medio_pago_id' => $data['medio_pago_id'] ?? null,
         'metodo'        => $data['metodo'] ?? null,
@@ -151,8 +153,17 @@ class Factura extends Model
         'monto'         => (float) ($data['monto'] ?? 0),
         'notas'         => $data['notas'] ?? null,
         'turno_id'      => $data['turno_id'] ?? null,
-        'user_id'       => $data['user_id'] ?? null,
-    ]);
+    ];
+
+    if (\Illuminate\Support\Facades\Schema::hasColumn('factura_pagos', 'creado_por_id')) {
+        $payload['creado_por_id'] = auth()->id();
+    }
+
+    if (\Illuminate\Support\Facades\Schema::hasColumn('factura_pagos', 'actualizado_por_id')) {
+        $payload['actualizado_por_id'] = auth()->id();
+    }
+
+    $pago = $this->pagos()->create($payload);
 
     $this->refresh()->recalcularTotales()->save();
 

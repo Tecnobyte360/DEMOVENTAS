@@ -1040,6 +1040,7 @@ class FacturaCompra extends Component
 
             $dataCab = [
                 'serie_id'            => $serieId,
+                'prefijo'             => $this->serieDefault?->prefijo ?? $this->factura?->prefijo,
                 'socio_negocio_id'    => $this->socio_negocio_id,
                 'fecha'               => $this->fecha,
                 'vencimiento'         => $this->vencimiento ?? $this->fecha,

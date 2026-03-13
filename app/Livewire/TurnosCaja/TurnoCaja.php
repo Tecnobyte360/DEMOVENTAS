@@ -64,34 +64,33 @@ class TurnoCaja extends Component
         $t->message($message)->duration($duration)->dispatch();
     }
 
-  public function mount(): void
-{
-    try {
-        $this->turno = turnos_caja::turnoAbiertoDe(Auth::id());
+    public function mount(): void
+    {
+        try {
+            $this->turno = turnos_caja::turnoAbiertoGlobal();
 
-        $this->filtro_desde = now()->subDays(30)->toDateString();
-        $this->filtro_hasta = now()->toDateString();
+            $this->filtro_desde = now()->subDays(30)->toDateString();
+            $this->filtro_hasta = now()->toDateString();
 
-        $this->refrescarResumenes();
-        $this->actualizarInforme();
-    } catch (\Throwable $e) {
-        Log::error('Error en mount TurnoCaja', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'user_id' => Auth::id(),
-        ]);
+            $this->refrescarResumenes();
+            $this->actualizarInforme();
+        } catch (\Throwable $e) {
+            Log::error('Error en mount TurnoCaja', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id(),
+            ]);
 
-        $this->toast('error', 'Ocurrió un error cargando el turno de caja.', 8000);
+            $this->toast('error', 'Ocurrió un error cargando el turno de caja.', 8000);
+        }
     }
-}
 
-    public function render()
+  public function render()
 {
     try {
-        if ($this->turno) {
-            $this->turno = turnos_caja::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
-                ->find($this->turno->id);
+        $this->turno = turnos_caja::turnoAbiertoGlobal();
 
+        if ($this->turno) {
             $this->refrescarResumenes();
 
             $mediosDePago = MedioPagos::where('activo', true)->get();
@@ -168,43 +167,49 @@ class TurnoCaja extends Component
     /* =========================================================
      * ABRIR TURNO
      * =======================================================*/
-public function abrir(): void
-{
-    $this->validateOnly('base_inicial');
+    public function abrir(): void
+    {
+        $this->validateOnly('base_inicial');
 
-    try {
-        $turnoAbierto = turnos_caja::turnoAbiertoDe(Auth::id());
+        try {
+            $turnoAbierto = turnos_caja::turnoAbiertoGlobal();
 
-        if ($turnoAbierto) {
-            $this->toast('error', 'Ya tienes un turno abierto.', 6000);
-            return;
+            if ($turnoAbierto) {
+                $abiertoPor = $turnoAbierto->abiertoPor?->name ?? 'otro usuario';
+
+                $this->toast(
+                    'error',
+                    "Ya existe una caja abierta (Turno #{$turnoAbierto->id}) abierta por {$abiertoPor}. Debe cerrarse antes de abrir una nueva.",
+                    8000
+                );
+                return;
+            }
+
+            $this->turno = turnos_caja::create([
+                'user_id'        => Auth::id(),
+                'abierto_por_id' => Auth::id(),
+                'fecha_inicio'   => now(),
+                'base_inicial'   => $this->base_inicial,
+                'estado'         => 'abierto',
+                'resumen'        => [],
+            ]);
+
+            $this->turno->load(['abiertoPor:id,name', 'cerradoPor:id,name']);
+
+            $this->toast('success', 'Caja abierta correctamente.', 6000);
+
+            $this->refrescarResumenes();
+            $this->actualizarInforme();
+        } catch (\Throwable $e) {
+            Log::error('Error al abrir turno de caja', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id(),
+            ]);
+
+            $this->toast('error', 'No se pudo abrir la caja.', 8000);
         }
-
-        $this->turno = turnos_caja::create([
-            'user_id'        => Auth::id(),
-            'abierto_por_id' => Auth::id(),
-            'fecha_inicio'   => now(),
-            'base_inicial'   => $this->base_inicial,
-            'estado'         => 'abierto',
-            'resumen'        => [],
-        ]);
-
-        $this->turno->load(['abiertoPor:id,name', 'cerradoPor:id,name']);
-
-        $this->toast('success', 'Turno abierto correctamente.', 6000);
-
-        $this->refrescarResumenes();
-        $this->actualizarInforme();
-    } catch (\Throwable $e) {
-        Log::error('Error al abrir turno de caja', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'user_id' => Auth::id(),
-        ]);
-
-        $this->toast('error', 'No se pudo abrir el turno de caja.', 8000);
     }
-}
 
     /* =========================================================
      * MOVIMIENTOS MANUALES
@@ -270,75 +275,75 @@ public function abrir(): void
     /* =========================================================
      * CERRAR TURNO
      * =======================================================*/
-   public function cerrar(): void
-{
-    try {
-        if (!$this->turno || $this->turno->estaCerrado()) {
-            $this->toast('error', 'No hay turno abierto.', 6000);
-            return;
-        }
+    public function cerrar(): void
+    {
+        try {
+            if (!$this->turno || $this->turno->estaCerrado()) {
+                $this->toast('error', 'No hay turno abierto.', 6000);
+                return;
+            }
 
-        DB::transaction(function () {
-            $pagos = FacturaPago::where('turno_id', $this->turno->id)->get();
+            DB::transaction(function () {
+                $pagos = FacturaPago::where('turno_id', $this->turno->id)->get();
 
-            $byTipo  = $pagos->groupBy('medio_tipo')->map->sum('monto')->toArray();
-            $byMedio = $pagos->groupBy('medio_codigo')->map(function ($g) {
-                return [
-                    'codigo' => $g->first()->medio_codigo,
-                    'tipo'   => $g->first()->medio_tipo,
-                    'nombre' => $g->first()->medio_codigo,
-                    'total'  => (float) $g->sum('monto'),
+                $byTipo  = $pagos->groupBy('medio_tipo')->map->sum('monto')->toArray();
+                $byMedio = $pagos->groupBy('medio_codigo')->map(function ($g) {
+                    return [
+                        'codigo' => $g->first()->medio_codigo,
+                        'tipo'   => $g->first()->medio_tipo,
+                        'nombre' => $g->first()->medio_codigo,
+                        'total'  => (float) $g->sum('monto'),
+                    ];
+                })->values()->toArray();
+
+                $totalVentas = (float) $pagos->sum('monto');
+
+                $resumen = [
+                    'base_inicial'          => (float) $this->turno->base_inicial,
+                    'total_ventas'          => $totalVentas,
+                    'por_tipo'              => $byTipo,
+                    'por_medio'             => $byMedio,
+                    'ingresos_efectivo'     => (float) $this->turno->ingresos_efectivo,
+                    'retiros_efectivo'      => (float) $this->turno->retiros_efectivo,
+                    'devoluciones'          => (float) $this->turno->devoluciones,
+                    'efectivo_esperado'     => $this->turno->efectivoEsperado(),
+                    'total_cobrado_sin_cxc' => $this->turno->totalCobrado(),
+                    'cerrado_por'           => Auth::id(),
                 ];
-            })->values()->toArray();
 
-            $totalVentas = (float) $pagos->sum('monto');
+                $this->turno->update([
+                    'estado'                 => 'cerrado',
+                    'fecha_cierre'           => now(),
+                    'cerrado_por_id'         => Auth::id(),
+                    'total_ventas'           => $totalVentas,
+                    'ventas_efectivo'        => (float) ($byTipo['EFECTIVO'] ?? 0),
+                    'ventas_debito'          => (float) ($byTipo['DEBITO'] ?? 0),
+                    'ventas_credito_tarjeta' => (float) ($byTipo['CREDITO'] ?? 0),
+                    'ventas_transferencias'  => (float) ($byTipo['TRANSFERENCIA'] ?? 0),
+                    'ventas_a_credito'       => (float) ($byTipo['CREDITO_CLIENTE'] ?? 0),
+                    'resumen'                => $resumen,
+                ]);
+            });
 
-            $resumen = [
-                'base_inicial'          => (float) $this->turno->base_inicial,
-                'total_ventas'          => $totalVentas,
-                'por_tipo'              => $byTipo,
-                'por_medio'             => $byMedio,
-                'ingresos_efectivo'     => (float) $this->turno->ingresos_efectivo,
-                'retiros_efectivo'      => (float) $this->turno->retiros_efectivo,
-                'devoluciones'          => (float) $this->turno->devoluciones,
-                'efectivo_esperado'     => $this->turno->efectivoEsperado(),
-                'total_cobrado_sin_cxc' => $this->turno->totalCobrado(),
-                'cerrado_por'           => Auth::id(),
-            ];
+            $this->toast('success', 'Turno cerrado.', 6000);
 
-            $this->turno->update([
-                'estado'                 => 'cerrado',
-                'fecha_cierre'           => now(),
-                'cerrado_por_id'         => Auth::id(),
-                'total_ventas'           => $totalVentas,
-                'ventas_efectivo'        => (float) ($byTipo['EFECTIVO'] ?? 0),
-                'ventas_debito'          => (float) ($byTipo['DEBITO'] ?? 0),
-                'ventas_credito_tarjeta' => (float) ($byTipo['CREDITO'] ?? 0),
-                'ventas_transferencias'  => (float) ($byTipo['TRANSFERENCIA'] ?? 0),
-                'ventas_a_credito'       => (float) ($byTipo['CREDITO_CLIENTE'] ?? 0),
-                'resumen'                => $resumen,
+            $this->turno    = null;
+            $this->resumen  = [];
+            $this->porTipo  = [];
+            $this->porMedio = [];
+
+            $this->actualizarInforme();
+        } catch (\Throwable $e) {
+            Log::error('Error al cerrar turno de caja', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id(),
+                'turno_id' => $this->turno?->id,
             ]);
-        });
 
-        $this->toast('success', 'Turno cerrado.', 6000);
-
-        $this->turno    = null;
-        $this->resumen  = [];
-        $this->porTipo  = [];
-        $this->porMedio = [];
-
-        $this->actualizarInforme();
-    } catch (\Throwable $e) {
-        Log::error('Error al cerrar turno de caja', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'user_id' => Auth::id(),
-            'turno_id' => $this->turno?->id,
-        ]);
-
-        $this->toast('error', 'No se pudo cerrar el turno de caja.', 8000);
+            $this->toast('error', 'No se pudo cerrar el turno de caja.', 8000);
+        }
     }
-}
 
     /* =========================================================
      * RESUMEN DEL TURNO ACTUAL
@@ -411,90 +416,90 @@ public function abrir(): void
     /* =========================================================
      * INFORME HISTÓRICO POR RANGO
      * =======================================================*/
- public function actualizarInforme(): void
-{
-    try {
-        $this->validate([
-            'filtro_desde' => 'nullable|date',
-            'filtro_hasta' => 'nullable|date|after_or_equal:filtro_desde',
-        ]);
+    public function actualizarInforme(): void
+    {
+        try {
+            $this->validate([
+                'filtro_desde' => 'nullable|date',
+                'filtro_hasta' => 'nullable|date|after_or_equal:filtro_desde',
+            ]);
 
-        $query = turnos_caja::query()
-            ->with(['abiertoPor:id,name', 'cerradoPor:id,name']);
+            $query = turnos_caja::query()
+                ->with(['abiertoPor:id,name', 'cerradoPor:id,name']);
 
-        if ($this->filtro_desde) {
-            $query->whereDate('fecha_inicio', '>=', $this->filtro_desde);
-        }
+            if ($this->filtro_desde) {
+                $query->whereDate('fecha_inicio', '>=', $this->filtro_desde);
+            }
 
-        if ($this->filtro_hasta) {
-            $query->whereDate('fecha_inicio', '<=', $this->filtro_hasta);
-        }
+            if ($this->filtro_hasta) {
+                $query->whereDate('fecha_inicio', '<=', $this->filtro_hasta);
+            }
 
-        $turnos = $query
-            ->orderByDesc('fecha_inicio')
-            ->get();
+            $turnos = $query
+                ->orderByDesc('fecha_inicio')
+                ->get();
 
-        $this->turnosInforme = $turnos;
+            $this->turnosInforme = $turnos;
 
-        $this->mediosActivos = MedioPagos::query()
-            ->where('activo', true)
-            ->orderBy('nombre')
-            ->get(['id', 'nombre'])
-            ->toArray();
+            $this->mediosActivos = MedioPagos::query()
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'nombre'])
+                ->toArray();
 
-        $turnoIds = $turnos->pluck('id')->all();
+            $turnoIds = $turnos->pluck('id')->all();
 
-        if (empty($turnoIds)) {
-            $this->mapMediosPorTurno = [];
+            if (empty($turnoIds)) {
+                $this->mapMediosPorTurno = [];
+                $this->totalesInforme = [
+                    'conteo'         => 0,
+                    'total_base'     => 0,
+                    'total_ventas'   => 0,
+                    'total_efectivo' => 0,
+                    'total_ingresos' => 0,
+                    'total_retiros'  => 0,
+                    'total_devol'    => 0,
+                ];
+                return;
+            }
+
+            $rows = FacturaPago::query()
+                ->selectRaw('turno_id, medio_pago_id, SUM(monto) as total')
+                ->whereIn('turno_id', $turnoIds)
+                ->whereNotNull('medio_pago_id')
+                ->groupBy('turno_id', 'medio_pago_id')
+                ->get();
+
+            $map = [];
+            foreach ($rows as $r) {
+                $map[$r->turno_id][$r->medio_pago_id] = (float) $r->total;
+            }
+            $this->mapMediosPorTurno = $map;
+
             $this->totalesInforme = [
-                'conteo'         => 0,
-                'total_base'     => 0,
-                'total_ventas'   => 0,
-                'total_efectivo' => 0,
-                'total_ingresos' => 0,
-                'total_retiros'  => 0,
-                'total_devol'    => 0,
+                'conteo'         => $turnos->count(),
+                'total_base'     => (float) $turnos->sum('base_inicial'),
+                'total_ventas'   => (float) $turnos->sum('total_ventas'),
+                'total_efectivo' => (float) $turnos->sum('ventas_efectivo'),
+                'total_ingresos' => (float) $turnos->sum('ingresos_efectivo'),
+                'total_retiros'  => (float) $turnos->sum('retiros_efectivo'),
+                'total_devol'    => (float) $turnos->sum('devoluciones'),
             ];
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            $primer = $ve->validator->errors()->first() ?? 'Revisa los campos marcados.';
+            $this->toast('error', $primer, 9000);
+            Log::warning('TurnoCaja validation actualizarInforme', [
+                'errors' => $ve->validator->errors()->toArray()
+            ]);
             return;
+        } catch (\Throwable $e) {
+            Log::error('Error al actualizar informe', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id(),
+            ]);
+
+            $this->toast('error', 'No se pudo generar el informe.', 8000);
         }
-
-        $rows = FacturaPago::query()
-            ->selectRaw('turno_id, medio_pago_id, SUM(monto) as total')
-            ->whereIn('turno_id', $turnoIds)
-            ->whereNotNull('medio_pago_id')
-            ->groupBy('turno_id', 'medio_pago_id')
-            ->get();
-
-        $map = [];
-        foreach ($rows as $r) {
-            $map[$r->turno_id][$r->medio_pago_id] = (float) $r->total;
-        }
-        $this->mapMediosPorTurno = $map;
-
-        $this->totalesInforme = [
-            'conteo'         => $turnos->count(),
-            'total_base'     => (float) $turnos->sum('base_inicial'),
-            'total_ventas'   => (float) $turnos->sum('total_ventas'),
-            'total_efectivo' => (float) $turnos->sum('ventas_efectivo'),
-            'total_ingresos' => (float) $turnos->sum('ingresos_efectivo'),
-            'total_retiros'  => (float) $turnos->sum('retiros_efectivo'),
-            'total_devol'    => (float) $turnos->sum('devoluciones'),
-        ];
-    } catch (\Illuminate\Validation\ValidationException $ve) {
-        $primer = $ve->validator->errors()->first() ?? 'Revisa los campos marcados.';
-        $this->toast('error', $primer, 9000);
-        Log::warning('TurnoCaja validation actualizarInforme', [
-            'errors' => $ve->validator->errors()->toArray()
-        ]);
-        return;
-    } catch (\Throwable $e) {
-        Log::error('Error al actualizar informe', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'user_id' => Auth::id(),
-        ]);
-
-        $this->toast('error', 'No se pudo generar el informe.', 8000);
     }
-}
 }

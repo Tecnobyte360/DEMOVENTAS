@@ -153,7 +153,7 @@ class PagosFactura extends Component
         $this->medios = MedioPagos::query()
             ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
             ->orderBy('nombre')
-            ->get(['id','codigo','nombre','requiere_turno','contar_en_total','crear_movimiento','tipo_movimiento','clave_turno']);
+            ->get(['id', 'codigo', 'nombre', 'requiere_turno', 'contar_en_total', 'crear_movimiento', 'tipo_movimiento', 'clave_turno']);
     }
 
     private function queryFacturasPendientes()
@@ -171,24 +171,26 @@ class PagosFactura extends Component
         $q = Factura::query()
             ->with(['socioNegocio', 'serie'])
             ->where('saldo', '>', 0)
-            ->when(!empty($seriesIds), fn ($qq) => $qq->whereIn('serie_id', $seriesIds))
-            ->when(empty($seriesIds), fn ($qq) => $qq->whereRaw('1=0'));
+            ->when(!empty($seriesIds), fn($qq) => $qq->whereIn('serie_id', $seriesIds))
+            ->when(empty($seriesIds), fn($qq) => $qq->whereRaw('1=0'));
 
         if (trim($this->buscarFactura) !== '') {
             $b = '%' . trim($this->buscarFactura) . '%';
             $q->where(function ($w) use ($b) {
-                $w->whereHas('socioNegocio', fn($qq) =>
-                        $qq->where('razon_social', 'like', $b)
-                           ->orWhere('numero_documento', 'like', $b)
-                    )
-                  ->orWhere('numero', 'like', $b)
-                  ->orWhere('prefijo', 'like', $b);
+                $w->whereHas(
+                    'socioNegocio',
+                    fn($qq) =>
+                    $qq->where('razon_social', 'like', $b)
+                        ->orWhere('numero_documento', 'like', $b)
+                )
+                    ->orWhere('numero', 'like', $b)
+                    ->orWhere('prefijo', 'like', $b);
             });
         }
 
         return $q->orderByDesc('fecha')
             ->limit(200)
-            ->get(['id','numero','prefijo','serie_id','socio_negocio_id','fecha','total','saldo']);
+            ->get(['id', 'numero', 'prefijo', 'serie_id', 'socio_negocio_id', 'fecha', 'total', 'saldo']);
     }
 
     private function cargarFacturaSeleccionada(int $facturaId, bool $rewriteItems = true): void
@@ -278,18 +280,22 @@ class PagosFactura extends Component
     }
 
     /** Turno abierto */
-    private function turnoAbiertoActual(): ?turnos_caja
+    private function turnoPendienteAnterior(): ?turnos_caja
     {
-        $userId = Auth::id();
-        if (!$userId) return null;
-
-        return turnos_caja::query()
-            ->where('user_id', $userId)
+        return turnos_caja::turnoPendienteDeCerrar();
+    }
+    public static function turnoPendienteDeCerrar(): ?self
+    {
+        return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
             ->where('estado', 'abierto')
-            ->latest('fecha_inicio')
+            ->whereDate('fecha_inicio', '<', now()->toDateString())
+            ->orderBy('fecha_inicio')
             ->first();
     }
-
+    private function turnoAbiertoActual(): ?turnos_caja
+    {
+        return turnos_caja::turnoAbiertoDelDia();
+    }
     private function metodoDesdeMedio(?MedioPagos $medio): ?string
     {
         if (!$medio) return null;
@@ -317,15 +323,36 @@ class PagosFactura extends Component
             return;
         }
 
-        $idsMedios    = collect($this->items)->pluck('medio_pago_id')->filter()->values()->all();
-        $mediosUsados = empty($idsMedios) ? collect() : MedioPagos::whereIn('id', $idsMedios)->get();
+        $idsMedios = collect($this->items)
+            ->pluck('medio_pago_id')
+            ->filter()
+            ->values()
+            ->all();
+
+        $mediosUsados = empty($idsMedios)
+            ? collect()
+            : MedioPagos::whereIn('id', $idsMedios)->get();
 
         $requiereTurno = $mediosUsados->contains(fn($m) => $this->medioRequiereTurno($m));
+
+        // ✅ Si hay una caja abierta de un día anterior, no dejar registrar pagos
+        $turnoPendiente = $this->turnoPendienteAnterior();
+        if ($requiereTurno && $turnoPendiente) {
+            $fecha = optional($turnoPendiente->fecha_inicio)?->format('d/m/Y');
+            $abiertoPor = $turnoPendiente->abiertoPor?->name ?? 'otro usuario';
+
+            PendingToast::create()->warning()
+                ->message("Existe una caja abierta del día {$fecha}, abierta por {$abiertoPor}. Debes cerrarla antes de registrar pagos.")
+                ->duration(9000);
+            return;
+        }
+
+        // ✅ Solo usar la caja abierta del día
         $turno = $this->turnoAbiertoActual();
 
         if ($requiereTurno && !$turno) {
             PendingToast::create()->warning()
-                ->message('No hay un turno de caja abierto para registrar este pago.')
+                ->message('No hay una caja abierta para hoy.')
                 ->duration(6500);
             return;
         }
@@ -336,13 +363,19 @@ class PagosFactura extends Component
 
                 foreach ($this->items as $row) {
                     $monto = (float)($row['monto'] ?? 0);
-                    if ($monto <= 0) continue;
+                    if ($monto <= 0) {
+                        continue;
+                    }
 
                     /** @var MedioPagos|null $medio */
                     $medio = $mediosUsados->firstWhere('id', (int)($row['medio_pago_id'] ?? 0))
-                        ?: (($row['medio_pago_id'] ?? null) ? MedioPagos::find((int)$row['medio_pago_id']) : null);
+                        ?: (($row['medio_pago_id'] ?? null)
+                            ? MedioPagos::find((int)$row['medio_pago_id'])
+                            : null);
 
-                    if (!$medio) continue;
+                    if (!$medio) {
+                        continue;
+                    }
 
                     $asociaTurno = $this->medioRequiereTurno($medio) && $turno;
 
@@ -377,6 +410,7 @@ class PagosFactura extends Component
             }, 3);
         } catch (\Throwable $e) {
             report($e);
+
             PendingToast::create()->error()
                 ->message('No se pudo registrar y contabilizar el pago: ' . $e->getMessage())
                 ->duration(9000);
@@ -388,13 +422,19 @@ class PagosFactura extends Component
             ->duration(5000);
 
         $this->show = false;
+
+        $this->dispatch('pago-registrado', facturaId: $factura->id);
     }
 
     // ==== helpers de config de medios / turno ====
 
     private function col(string $table, string $column): bool
     {
-        try { return Schema::hasColumn($table, $column); } catch (\Throwable $e) { return false; }
+        try {
+            return Schema::hasColumn($table, $column);
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function boolCfg(?MedioPagos $medio, string $attr, bool $default): bool
@@ -473,7 +513,7 @@ class PagosFactura extends Component
                 'user_id'  => Auth::id(),
                 'tipo'     => $this->medioTipoMovimiento($medio),
                 'monto'    => $monto,
-                'motivo'   => 'Pago factura ID '.$facturaId.' ('.$this->metodoDesdeMedio($medio).')',
+                'motivo'   => 'Pago factura ID ' . $facturaId . ' (' . $this->metodoDesdeMedio($medio) . ')',
             ]);
         }
     }

@@ -80,7 +80,7 @@
                         'anulada' => 'bg-rose-100 text-rose-700',
                     ][$f->estado] ?? 'bg-slate-100 text-slate-700';
 
-                $empleado = $f->creadoPor->name ?? '—';
+              $empleado = optional($f->creadoPor)->name ?? '—';
                 $inicial = $empleado !== '—' ? strtoupper(mb_substr($empleado, 0, 1)) : '—';
             @endphp
 

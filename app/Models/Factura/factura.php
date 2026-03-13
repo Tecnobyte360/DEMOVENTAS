@@ -2,8 +2,8 @@
 
 namespace App\Models\Factura;
 
-use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\User;
 
 class Factura extends Model
 {
@@ -49,30 +49,57 @@ class Factura extends Model
         'emitido_en'  => 'datetime',
     ];
 
+    /*
+    |--------------------------------------------------------------------------
+    | RELACIONES
+    |--------------------------------------------------------------------------
+    */
+
     public function empresa()
     {
-        return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
+        return $this->belongsTo(
+            \App\Models\ConfiguracionEmpresas\Empresa::class,
+            'empresa_id'
+        );
     }
 
     public function serie()
     {
-        return $this->belongsTo(\App\Models\Serie\Serie::class, 'serie_id');
+        return $this->belongsTo(
+            \App\Models\Serie\Serie::class,
+            'serie_id'
+        );
     }
 
     public function cliente()
     {
-        return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
+        return $this->belongsTo(
+            \App\Models\SocioNegocio\SocioNegocio::class,
+            'socio_negocio_id'
+        );
     }
 
     public function socioNegocio()
     {
-        return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
+        return $this->belongsTo(
+            \App\Models\SocioNegocio\SocioNegocio::class,
+            'socio_negocio_id'
+        );
     }
 
     public function detalles()
     {
-        return $this->hasMany(\App\Models\Factura\FacturaDetalle::class, 'factura_id');
+        return $this->hasMany(
+            \App\Models\Factura\FacturaDetalle::class,
+            'factura_id'
+        );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | USUARIOS
+    |--------------------------------------------------------------------------
+    */
 
     public function creadoPor()
     {
@@ -93,36 +120,44 @@ class Factura extends Model
     {
         return $this->belongsTo(User::class, 'anulado_por_id');
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | LÓGICA DE NEGOCIO
+    |--------------------------------------------------------------------------
+    */
+
     public function recalcularTotales(): self
-{
-    $detalles = $this->relationLoaded('detalles')
-        ? $this->detalles
-        : $this->detalles()->get();
+    {
+        $detalles = $this->relationLoaded('detalles')
+            ? $this->detalles
+            : $this->detalles()->get();
 
-    $subtotal = 0.0;
-    $impuestos = 0.0;
+        $subtotal = 0.0;
+        $impuestos = 0.0;
 
-    foreach ($detalles as $d) {
-        $cantidad = (float) ($d->cantidad ?? 0);
-        $precio = (float) ($d->precio_unitario ?? 0);
-        $descuentoPct = (float) ($d->descuento_pct ?? 0);
-        $impuestoPct = (float) ($d->impuesto_pct ?? 0);
+        foreach ($detalles as $d) {
 
-        if ($cantidad <= 0) {
-            continue;
+            $cantidad = (float) ($d->cantidad ?? 0);
+            $precio = (float) ($d->precio_unitario ?? 0);
+            $descuentoPct = (float) ($d->descuento_pct ?? 0);
+            $impuestoPct = (float) ($d->impuesto_pct ?? 0);
+
+            if ($cantidad <= 0) {
+                continue;
+            }
+
+            $base = $cantidad * $precio * (1 - ($descuentoPct / 100));
+            $iva  = $base * ($impuestoPct / 100);
+
+            $subtotal  += $base;
+            $impuestos += $iva;
         }
 
-        $base = $cantidad * $precio * (1 - ($descuentoPct / 100));
-        $iva = $base * ($impuestoPct / 100);
+        $this->subtotal  = round($subtotal, 2);
+        $this->impuestos = round($impuestos, 2);
+        $this->total     = round($subtotal + $impuestos, 2);
 
-        $subtotal += $base;
-        $impuestos += $iva;
+        return $this;
     }
-
-    $this->subtotal = round($subtotal, 2);
-    $this->impuestos = round($impuestos, 2);
-    $this->total = round($subtotal + $impuestos, 2);
-
-    return $this;
-}
 }

@@ -106,55 +106,51 @@ class ListaFacturas extends Component
         $this->resetPage();
     }
 
-    public function render()
-    {
-        $query = Factura::query()
-            ->with(['cliente', 'serie'])
-            ->whereHas('serie.tipo', fn($t) => $t->where('codigo', 'factura'))
-            ->latest('id');
+  public function render()
+{
+    $query = Factura::query()
+        ->with(['cliente', 'serie', 'creadoPor'])
+        ->whereHas('serie.tipo', fn($t) => $t->where('codigo', 'factura'))
+        ->latest('id');
 
-        // Filtro de búsqueda
-        if (trim($this->q) !== '') {
-            $searchTerm = '%' . trim($this->q) . '%';
-            $query->where(function ($q) use ($searchTerm) {
-                $q->where('numero', 'like', $searchTerm)
-                  ->orWhere('prefijo', 'like', $searchTerm)
-                  ->orWhere('estado', 'like', $searchTerm)
-                  ->orWhereHas('cliente', function ($c) use ($searchTerm) {
-                      $c->where('razon_social', 'like', $searchTerm)
-                        ->orWhere('nit', 'like', $searchTerm);
-                  });
-            });
-        }
-
-        // Filtros adicionales
-        if ($this->estado !== 'todas') {
-            $query->where('estado', $this->estado);
-        }
-
-        if (!empty($this->serie_id)) {
-            $query->where('serie_id', $this->serie_id);
-        }
-
-        if (!empty($this->proveedor_id)) {
-            $query->where('socio_negocio_id', $this->proveedor_id);
-        }
-
-        if (!empty($this->desde)) {
-            $query->whereDate('fecha', '>=', $this->desde);
-        }
-
-        if (!empty($this->hasta)) {
-            $query->whereDate('fecha', '<=', $this->hasta);
-        }
-
-        $items = $query->paginate($this->perPage);
-
-        return view('livewire.facturas.lista-facturas', [
-            'items' => $items,
-        ]);
-
-
+    if (trim($this->q) !== '') {
+        $searchTerm = '%' . trim($this->q) . '%';
+        $query->where(function ($q) use ($searchTerm) {
+            $q->where('numero', 'like', $searchTerm)
+              ->orWhere('prefijo', 'like', $searchTerm)
+              ->orWhere('estado', 'like', $searchTerm)
+              ->orWhereHas('cliente', function ($c) use ($searchTerm) {
+                  $c->where('razon_social', 'like', $searchTerm)
+                    ->orWhere('nit', 'like', $searchTerm);
+              });
+        });
     }
+
+    if ($this->estado !== 'todas') {
+        $query->where('estado', $this->estado);
+    }
+
+    if (!empty($this->serie_id)) {
+        $query->where('serie_id', $this->serie_id);
+    }
+
+    if (!empty($this->proveedor_id)) {
+        $query->where('socio_negocio_id', $this->proveedor_id);
+    }
+
+    if (!empty($this->desde)) {
+        $query->whereDate('fecha', '>=', $this->desde);
+    }
+
+    if (!empty($this->hasta)) {
+        $query->whereDate('fecha', '<=', $this->hasta);
+    }
+
+    $items = $query->paginate($this->perPage);
+
+    return view('livewire.facturas.lista-facturas', [
+        'items' => $items,
+    ]);
+}
     
 }

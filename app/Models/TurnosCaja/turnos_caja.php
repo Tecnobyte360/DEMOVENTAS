@@ -130,7 +130,14 @@ class turnos_caja extends Model
         ->latest('id')
         ->first();
 }
-
+public static function turnoPendienteDeCerrar(): ?self
+{
+    return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
+        ->where('estado', 'abierto')
+        ->whereDate('fecha_inicio', '<', now()->toDateString())
+        ->orderBy('fecha_inicio')
+        ->first();
+}
 public static function turnoAbiertoDelDia(): ?self
 {
     return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])

@@ -299,14 +299,7 @@ class PagosFactura extends Component
     {
         return turnos_caja::turnoPendienteDeCerrar();
     }
- public static function turnoPendienteDeCerrar(): ?self
-{
-    return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
-        ->where('estado', 'abierto')
-        ->whereDate('fecha_inicio', '<', now()->toDateString())
-        ->orderBy('fecha_inicio')
-        ->first();
-}
+
     private function turnoAbiertoActual(): ?turnos_caja
     {
         return turnos_caja::turnoAbiertoDelDia();

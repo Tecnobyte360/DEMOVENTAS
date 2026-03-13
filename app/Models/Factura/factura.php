@@ -94,6 +94,10 @@ class Factura extends Model
         return $this->belongsTo(User::class, 'anulado_por_id');
     }
 
+    public function pagos()
+{
+    return $this->hasMany(\App\Models\Factura\FacturaPago::class, 'factura_id');
+}
     public function recalcularTotales(): self
     {
         $detalles = $this->relationLoaded('detalles')

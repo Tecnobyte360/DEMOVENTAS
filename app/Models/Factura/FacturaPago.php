@@ -2,6 +2,7 @@
 
 namespace App\Models\Factura;
 
+use App\Models\Asiento\Asiento;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\MediosPago\MedioPagos;
@@ -43,4 +44,8 @@ class FacturaPago extends Model
     {
         return $this->belongsTo(turnos_caja::class, 'turno_id');
     }
+    public function asiento(): BelongsTo
+{
+    return $this->belongsTo(Asiento::class, 'asiento_id');
+}
 }

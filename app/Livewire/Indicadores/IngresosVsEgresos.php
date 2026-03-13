@@ -50,8 +50,18 @@ class IngresosVsEgresos extends Component
     private function months(): array
     {
         return [
-            1 => 'Ene', 2 => 'Feb', 3 => 'Mar', 4 => 'Abr', 5 => 'May', 6 => 'Jun',
-            7 => 'Jul', 8 => 'Ago', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dic',
+            1 => 'Ene',
+            2 => 'Feb',
+            3 => 'Mar',
+            4 => 'Abr',
+            5 => 'May',
+            6 => 'Jun',
+            7 => 'Jul',
+            8 => 'Ago',
+            9 => 'Sep',
+            10 => 'Oct',
+            11 => 'Nov',
+            12 => 'Dic',
         ];
     }
 
@@ -111,12 +121,12 @@ class IngresosVsEgresos extends Component
         // 3) GASTOS (EGRESOS)
         // ==========================
         $gastosPorMes = $this->sumByMonth(
-            table: 'gastos',            // <- AJUSTA si tu tabla tiene otro nombre
-            dateColumn: 'fecha',        // <- AJUSTA
-            amountColumn: 'total',      // <- AJUSTA
+            table: 'gastos_ruta',
+            dateColumn: 'created_at',
+            amountColumn: 'monto',
             start: $start,
             end: $end,
-            empresaColumn: 'empresa_id' // <- AJUSTA o null
+            empresaColumn: null
         );
 
         // ==========================

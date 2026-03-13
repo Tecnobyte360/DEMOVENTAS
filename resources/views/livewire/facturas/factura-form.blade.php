@@ -874,14 +874,15 @@
                                     get contado() { return this.tipo === 'contado' }
                                 }" wire:click="emitir"
                                     wire:loading.attr="disabled" wire:target="emitir,guardar"
-                                    :disabled="['anulada', 'cerrado'].includes(e) || (contado && bloquea)"
+                                    :disabled="['anulada', 'cerrado', 'emitida'].includes(e) || (contado && bloquea)"
                                     :class="[
                                         'h-11 px-4 rounded-2xl transition ring-offset-2 shadow disabled:opacity-50 disabled:cursor-not-allowed',
                                         (contado && bloquea) ?
                                         'bg-gray-400 text-gray-100 cursor-not-allowed' :
                                         'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white'
                                     ]"
-                                    :title="(contado && bloquea) ? 'Factura de contado: requiere pago total antes de emitir' :
+                                    :title="(contado && bloquea) ?
+                                    'Factura de contado: requiere pago total antes de emitir' :
                                     'Emitir documento'">
                                     <i class="fa-solid fa-stamp mr-2"></i>
                                     <span wire:loading.remove wire:target="emitir">Emitir</span>

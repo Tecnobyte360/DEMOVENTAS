@@ -28,18 +28,16 @@ protected function cargar(): void
     $year = now()->year;
 
     $rows = DB::table('facturas as f')
-        ->selectRaw('MONTH(f.fecha) as mes')
-        ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'contado' THEN f.total ELSE 0 END) as contado")
-        ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'credito' THEN f.total ELSE 0 END) as credito")
-        ->selectRaw("SUM(CASE WHEN f.total < 0 THEN f.total ELSE 0 END) as notas_credito")
-        ->selectRaw("SUM(f.total) as neto")
-        ->whereYear('f.fecha', $year)
-        ->where('f.serie_id', 4) 
-        ->groupByRaw('MONTH(f.fecha)')
-        ->orderByRaw('MONTH(f.fecha)')
-        ->get()
-        ->keyBy('mes');
-
+    ->selectRaw('MONTH(f.fecha) as mes')
+    ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'contado' THEN f.total ELSE 0 END) as contado")
+    ->selectRaw("SUM(CASE WHEN f.total > 0 AND f.tipo_pago = 'credito' THEN f.total ELSE 0 END) as credito")
+    ->selectRaw("SUM(CASE WHEN f.total < 0 THEN f.total ELSE 0 END) as notas_credito")
+    ->selectRaw("SUM(f.total) as neto")
+    ->whereYear('f.fecha', $year)
+    ->groupByRaw('MONTH(f.fecha)')
+    ->orderByRaw('MONTH(f.fecha)')
+    ->get()
+    ->keyBy('mes');
     $meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
     $this->labels = $meses;

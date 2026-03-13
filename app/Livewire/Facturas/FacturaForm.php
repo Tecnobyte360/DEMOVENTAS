@@ -1299,127 +1299,53 @@ public array $productosSeleccionados = [];
         return ($b->codigo ? $b->codigo . ' - ' : '') . ($b->nombre ?? 'Bodega');
     }
 
-    public function guardar(): void
-    {
-        if ($this->abortIfLocked('guardar')) return;
+   public function guardar(): void
+{
+    if ($this->abortIfLocked('guardar')) return;
 
+    try {
+        $this->ensureCuentasEnLineas();
+        $this->normalizarPagoAntesDeValidar();
+
+        if (!$this->validarConToast()) return;
+
+        // ✅ Solo advertencia de stock al guardar, no bloqueo
         try {
-            $this->ensureCuentasEnLineas();
-            $this->normalizarPagoAntesDeValidar();
-            if (!$this->validarConToast()) return;
-
-            try {
-                InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
-            } catch (\Throwable $ex) {
-                PendingToast::create()
-                    ->error()
-                    ->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
-                    ->duration(9000);
-            }
-
-            $this->persistirBorrador();
-
-            if ($this->tipo_pago === 'contado') {
-                if (!$this->verificarStockParaLineas()) {
-                    $detalles = [];
-                    foreach ($this->lineas as $idx => $l) {
-                        $pid = (int)($l['producto_id'] ?? 0);
-                        $bid = (int)($l['bodega_id'] ?? 0);
-                        $req = (float)($l['cantidad'] ?? 0);
-
-                        if ($pid <= 0 || $bid <= 0 || $req <= 0) {
-                            continue;
-                        }
-
-                        // 🔑 NUEVO: Saltar productos no inventariables
-                        $producto = Producto::find($pid);
-                        if (!$producto || !($producto->es_inventariable ?? true)) {
-                            continue;
-                        }
-
-                        $stock = (float) (\App\Models\Productos\ProductoBodega::query()
-                            ->where('producto_id', $pid)
-                            ->where('bodega_id', $bid)
-                            ->value('stock') ?? 0);
-
-                        if ($stock + 1e-6 < $req) {
-                            $prod = \App\Models\Productos\Producto::select('codigo', 'nombre')->find($pid);
-                            $bod  = Bodega::select('nombre')->find($bid);
-
-                            $codigo   = $prod?->codigo ? (string)$prod->codigo : 's/código';
-                            $nombre   = $prod?->nombre ? (string)$prod->nombre : 'Producto';
-                            $bodegaNm = $bod?->nombre ? (string)$bod->nombre : 'Bodega';
-
-                            $faltan = max(0, $req - $stock);
-
-                            $detalles[] = sprintf(
-                                'L%s %s (%s) en %s — req: %s, disp: %s, faltan: %s',
-                                $idx + 1,
-                                $codigo,
-                                $nombre,
-                                $bodegaNm,
-                                number_format($req, 2, ',', '.'),
-                                number_format($stock, 2, ',', '.'),
-                                number_format($faltan, 2, ',', '.')
-                            );
-                        }
-                    }
-
-                    if (empty($detalles)) {
-                        PendingToast::create()
-                            ->error()->message('Hay faltante de stock: no puedes registrar pagos aún.')
-                            ->duration(8000);
-                    } else {
-                        $maxMostrar = 6;
-                        $lista = $detalles;
-                        $extra = 0;
-                        if (count($detalles) > $maxMostrar) {
-                            $lista = array_slice($detalles, 0, $maxMostrar);
-                            $extra = count($detalles) - $maxMostrar;
-                        }
-
-                        $mensaje = 'Faltante de stock en: ' . implode(' | ', $lista);
-                        if ($extra > 0) {
-                            $mensaje .= " | …y {$extra} línea(s) más.";
-                        }
-
-                        Log::warning('Faltantes de stock al guardar factura (contado)', [
-                            'factura_id' => $this->factura?->id,
-                            'faltantes'  => $detalles,
-                        ]);
-
-                        PendingToast::create()
-                            ->error()->message($mensaje)
-                            ->duration(14000);
-                    }
-
-                    return;
-                }
-
-                $this->factura->refresh();
-                $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
-                if ($faltante > 0.01) {
-                    PendingToast::create()
-                        ->error()->message('Factura de contado: registra el pago por el total antes de continuar.')
-                        ->duration(8000);
-
-                    $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
-                        ->to(\App\Livewire\Facturas\PagosFactura::class);
-                    return;
-                }
-            }
-
+            InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
+        } catch (\Throwable $ex) {
             PendingToast::create()
-                ->success()->message('Factura guardada (ID: ' . $this->factura->id . ').')
-                ->duration(5000);
-            $this->dispatch('refrescar-lista-facturas');
-        } catch (\Throwable $e) {
-            Log::error('GUARDAR ERROR', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
+                ->warning()
+                ->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
                 ->duration(9000);
         }
-    }
 
+        // ✅ Siempre guardar como borrador, incluso si es contado
+        $this->persistirBorrador();
+
+        $this->factura->refresh()->recalcularTotales()->save();
+
+        PendingToast::create()
+            ->success()
+            ->message(
+                $this->tipo_pago === 'contado'
+                    ? 'Factura de contado guardada como borrador. Ahora puedes registrar el pago cuando desees.'
+                    : 'Factura guardada como borrador.'
+            )
+            ->duration(5000);
+
+        $this->dispatch('refrescar-lista-facturas');
+    } catch (\Throwable $e) {
+        Log::error('GUARDAR ERROR', [
+            'msg' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        PendingToast::create()
+            ->error()
+            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
+            ->duration(9000);
+    }
+}
     private function verificarStockParaLineas(): bool
     {
         try {
@@ -1431,97 +1357,131 @@ public array $productosSeleccionados = [];
         }
     }
 
-    public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+   public function emitir(): void
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-        try {
-            // Asegura cuentas en líneas y normaliza pago (fecha/vencimiento)
-            $this->ensureCuentasEnLineas();
-            $this->normalizarPagoAntesDeValidar();
+    try {
+        $this->ensureCuentasEnLineas();
+        $this->normalizarPagoAntesDeValidar();
 
-            if (!$this->validarConToast()) return;
+        if (!$this->validarConToast()) return;
 
-            DB::transaction(function () {
-                // 1) Guardar como borrador y recalcular totales
-                $this->persistirBorrador();
+        DB::transaction(function () {
+            // 1) Guardar primero como borrador
+            $this->persistirBorrador();
 
-                $this->factura->refresh()
-                    ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo'])
-                    ->recalcularTotales()
-                    ->save();
+            $this->factura->refresh()
+                ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo'])
+                ->recalcularTotales()
+                ->save();
 
-                // 2) Si es contado, debe estar 100% pagada antes de emitir
-                if ($this->tipo_pago === 'contado') {
-                    $faltante = round(($this->factura->total ?? 0) - ($this->factura->pagado ?? 0), 2);
-                    if ($faltante > 0.01) {
-                        throw new \RuntimeException('Para facturas de contado, el pago debe cubrir el total antes de emitir.');
-                    }
+            // 2) Validar serie
+            $serie = $this->serie_id
+                ? Serie::find((int) $this->serie_id)
+                : $this->serieDefault;
+
+            if (!$serie) {
+                throw new \RuntimeException('No hay una serie válida para emitir este documento.');
+            }
+
+            // 3) Validaciones de líneas
+            foreach ($this->factura->detalles as $idx => $d) {
+                if (empty($d->cuenta_ingreso_id)) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
                 }
 
-                // 3) Serie / validación
-                if (!$this->serieDefault) {
-                    throw new \RuntimeException('No hay serie default activa para este documento.');
+                if (!$d->producto_id || !$d->bodega_id) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
                 }
 
-                // 4) Validaciones de líneas
-                foreach ($this->factura->detalles as $idx => $d) {
-                    if (empty($d->cuenta_ingreso_id)) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
-                    }
-                    if (!$d->producto_id || !$d->bodega_id) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
-                    }
+                if ((float) ($d->cantidad ?? 0) <= 0) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
                 }
+            }
 
-                // 5) Verificar stock para VENTA
-                \App\Services\InventarioService::verificarDisponibilidadParaFactura($this->factura);
+            // 4) Verificar stock antes de emitir
+            InventarioService::verificarDisponibilidadParaFactura($this->factura);
 
-                // 6) Tomar consecutivo y marcar como emitida
-                $numero = $this->serieDefault->tomarConsecutivo();
-                $uid = Auth::id();
+            // 5) Si es contado, exigir pago total antes de emitir
+            if ($this->tipo_pago === 'contado') {
+                $this->factura->refresh()->recalcularTotales()->save();
 
-                $this->factura->update([
-                    'serie_id' => $this->serieDefault->id,
-                    'numero'   => $numero,
-                    'prefijo'  => $this->serieDefault->prefijo,
-                    'estado'   => 'emitida',
+                $total    = round((float) ($this->factura->total ?? 0), 2);
+                $pagado   = round((float) ($this->factura->pagado ?? 0), 2);
+                $faltante = round($total - $pagado, 2);
 
-                    // ✅ auditoría emisión
-                    'emitido_por_id' => $uid,
-                    'emitido_en'     => now(),
+                if ($faltante > 0.01) {
+                    throw new \RuntimeException('Para emitir una factura de contado, primero debes registrar el pago completo.');
+                }
+            }
 
-                    // ✅ deja también rastro de última edición
-                    'actualizado_por_id' => $uid,
-                ]);
+            // 6) Si ya estaba emitida, no volver a emitir
+            if (($this->factura->estado ?? null) === 'emitida') {
+                throw new \RuntimeException('La factura ya fue emitida.');
+            }
 
-                // 7) Contabilizar (VENTA) y mover inventario (KÁRDEX SALIDA)
-                \App\Services\ContabilidadService::asientoDesdeFactura($this->factura);
-                \App\Services\InventarioService::descontarPorFactura($this->factura);
+            // 7) Tomar consecutivo y actualizar estado
+            $numero = $serie->tomarConsecutivo();
+            $uid = Auth::id();
 
-                $this->estado = $this->factura->estado;
-            }, 3);
+            $dataUpdate = [
+                'serie_id' => $serie->id,
+                'numero'   => $numero,
+                'prefijo'  => $serie->prefijo,
+                'estado'   => 'emitida',
+            ];
 
-            PendingToast::create()
-                ->success()
-                ->message('Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').')
-                ->duration(6000);
+            if (Schema::hasColumn('facturas', 'emitido_por_id')) {
+                $dataUpdate['emitido_por_id'] = $uid;
+            }
 
-            // Si era contado y ya está pagada, intenta cerrar (opcional)
-            $this->cerrarSiAplicada();
+            if (Schema::hasColumn('facturas', 'emitido_en')) {
+                $dataUpdate['emitido_en'] = now();
+            }
 
-            // Deja el formulario listo para una nueva
-            $this->resetFormulario();
+            if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
+                $dataUpdate['actualizado_por_id'] = $uid;
+            }
 
-            // Refresca listados
-            $this->dispatch('refrescar-lista-facturas');
-        } catch (\Throwable $e) {
-            Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
-            $msg = config('app.debug') ? ($e->getMessage() ?: 'No se pudo emitir la factura.') : 'No se pudo emitir la factura.';
-            PendingToast::create()->error()->message($msg)->duration(12000);
-        }
+            $this->factura->update($dataUpdate);
+
+            // 8) Contabilizar
+            ContabilidadService::asientoDesdeFactura($this->factura);
+
+            // 9) Descontar inventario
+            InventarioService::descontarPorFactura($this->factura);
+
+            $this->estado = 'emitida';
+        }, 3);
+
+        PendingToast::create()
+            ->success()
+            ->message(
+                'Factura emitida (ID: ' . $this->factura->id .
+                ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
+            )
+            ->duration(6000);
+
+        $this->cerrarSiAplicada();
+        $this->resetFormulario();
+        $this->dispatch('refrescar-lista-facturas');
+    } catch (\Throwable $e) {
+        Log::error('EMITIR ERROR', [
+            'msg' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        PendingToast::create()
+            ->error()
+            ->message(
+                config('app.debug')
+                    ? ($e->getMessage() ?: 'No se pudo emitir la factura.')
+                    : 'No se pudo emitir la factura.'
+            )
+            ->duration(12000);
     }
-
+}
 
 
     public function anular(): void

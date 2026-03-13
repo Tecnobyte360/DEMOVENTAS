@@ -670,19 +670,12 @@
 
         @php
             $esContado = $tipo_pago === 'contado';
-            $tieneFactura = (bool) $factura?->id;
-
             $totalVista = round((float) ($factura?->total ?? ($this->total ?? 0)), 2);
-
-            // ✅ usar saldo real de la factura si existe
-            $pagadoVista = round((float) ($factura?->pagado ?? 0), 2);
-            $saldoVista = round((float) ($factura?->saldo ?? max($totalVista - $pagadoVista, 0)), 2);
-
-            // ✅ si está paga, no bloquear emitir
-            $facturaPagada = $tieneFactura && $saldoVista <= 0.01;
-
-            // ✅ bloquear solo si es contado y aún no está completamente paga
-            $bloqueaEmitir = $esContado && (!$tieneFactura || !$facturaPagada);
+            $pagadoVista = round((float) ($factura?->pagos?->sum('monto') ?? ($factura?->pagado ?? 0)), 2);
+            $saldoVista = max(round($totalVista - $pagadoVista, 2), 0);
+            $tieneFactura = (bool) $factura?->id;
+            $yaEmitida = !empty($factura?->numero) || in_array($factura?->estado ?? '', ['emitida', 'cerrado'], true);
+            $bloqueaEmitir = !$tieneFactura || $yaEmitida || ($esContado && $saldoVista > 0.01);
         @endphp
 
         <footer

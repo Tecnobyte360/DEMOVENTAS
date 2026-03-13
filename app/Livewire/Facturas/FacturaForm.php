@@ -1351,132 +1351,129 @@ class FacturaForm extends Component
     }
 
     public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-        try {
-            $this->ensureCuentasEnLineas();
-            $this->normalizarPagoAntesDeValidar();
+    try {
+        $this->ensureCuentasEnLineas();
+        $this->normalizarPagoAntesDeValidar();
 
-            if (!$this->validarConToast()) return;
+        if (!$this->validarConToast()) return;
 
-            DB::transaction(function () {
-                // 1) Guardar primero como borrador
-                $this->persistirBorrador();
+        DB::transaction(function () {
+            $this->persistirBorrador();
 
-                $this->factura->refresh()
-                    ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo'])
-                    ->recalcularTotales()
-                    ->save();
+            $this->factura->refresh()
+                ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo', 'pagos'])
+                ->recalcularTotales()
+                ->save();
 
-                // 2) Validar serie
-                $serie = $this->serie_id
-                    ? Serie::find((int) $this->serie_id)
-                    : $this->serieDefault;
+            $serie = $this->serie_id
+                ? Serie::find((int) $this->serie_id)
+                : $this->serieDefault;
 
-                if (!$serie) {
-                    throw new \RuntimeException('No hay una serie válida para emitir este documento.');
+            if (!$serie) {
+                throw new \RuntimeException('No hay una serie válida para emitir este documento.');
+            }
+
+            foreach ($this->factura->detalles as $idx => $d) {
+                if (empty($d->cuenta_ingreso_id)) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
                 }
 
-                // 3) Validaciones de líneas
-                foreach ($this->factura->detalles as $idx => $d) {
-                    if (empty($d->cuenta_ingreso_id)) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
-                    }
-
-                    if (!$d->producto_id || !$d->bodega_id) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
-                    }
-
-                    if ((float) ($d->cantidad ?? 0) <= 0) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
-                    }
+                if (!$d->producto_id || !$d->bodega_id) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
                 }
 
-                // 4) Verificar stock antes de emitir
-                InventarioService::verificarDisponibilidadParaFactura($this->factura);
-
-                // 5) Si es contado, exigir pago total antes de emitir
-                if ($this->tipo_pago === 'contado') {
-                    $this->factura->loadMissing('pagos');
-                    $this->factura->recalcularTotales()->save();
-                    $this->factura->refresh();
-
-                    $total    = round((float) ($this->factura->total ?? 0), 2);
-                    $pagado   = round((float) ($this->factura->pagos()->sum('monto') ?? 0), 2);
-                    $faltante = round($total - $pagado, 2);
-
-                    if ($faltante > 0.01) {
-                        throw new \RuntimeException('Para emitir una factura de contado, primero debes registrar el pago completo.');
-                    }
+                if ((float) ($d->cantidad ?? 0) <= 0) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
                 }
+            }
 
-                // 6) Si ya estaba emitida, no volver a emitir
-                if (($this->factura->estado ?? null) === 'emitida') {
-                    throw new \RuntimeException('La factura ya fue emitida.');
+            InventarioService::verificarDisponibilidadParaFactura($this->factura);
+
+            if ($this->tipo_pago === 'contado') {
+                $this->factura->loadMissing('pagos');
+                $this->factura->recalcularTotales()->save();
+                $this->factura->refresh();
+
+                $total    = round((float) ($this->factura->total ?? 0), 2);
+                $pagado   = round((float) ($this->factura->pagos()->sum('monto') ?? 0), 2);
+                $faltante = round($total - $pagado, 2);
+
+                if ($faltante > 0.01) {
+                    throw new \RuntimeException('Para emitir una factura de contado, primero debes registrar el pago completo.');
                 }
+            }
 
-                // 7) Tomar consecutivo y actualizar estado
-                $numero = $serie->tomarConsecutivo();
-                $uid = Auth::id();
+            if (!empty($this->factura->numero)) {
+                throw new \RuntimeException('La factura ya fue emitida y ya tiene consecutivo.');
+            }
 
-                $dataUpdate = [
-                    'serie_id' => $serie->id,
-                    'numero'   => $numero,
-                    'prefijo'  => $serie->prefijo,
-                    'estado'   => 'emitida',
-                ];
+            $numero = $serie->tomarConsecutivo();
+            $uid = Auth::id();
 
-                if (Schema::hasColumn('facturas', 'emitido_por_id')) {
-                    $dataUpdate['emitido_por_id'] = $uid;
-                }
+            $dataUpdate = [
+                'serie_id' => $serie->id,
+                'numero'   => $numero,
+                'prefijo'  => $serie->prefijo,
+                'estado'   => 'emitida',
+            ];
 
-                if (Schema::hasColumn('facturas', 'emitido_en')) {
-                    $dataUpdate['emitido_en'] = now();
-                }
+            if (Schema::hasColumn('facturas', 'emitido_por_id')) {
+                $dataUpdate['emitido_por_id'] = $uid;
+            }
 
-                if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
-                    $dataUpdate['actualizado_por_id'] = $uid;
-                }
+            if (Schema::hasColumn('facturas', 'emitido_en')) {
+                $dataUpdate['emitido_en'] = now();
+            }
 
-                $this->factura->update($dataUpdate);
+            if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
+                $dataUpdate['actualizado_por_id'] = $uid;
+            }
 
-                // 8) Contabilizar
-                ContabilidadService::asientoDesdeFactura($this->factura);
+            $this->factura->update($dataUpdate);
 
-                // 9) Descontar inventario
-                InventarioService::descontarPorFactura($this->factura);
+            $this->factura->refresh();
 
-                $this->estado = 'emitida';
-            }, 3);
+            ContabilidadService::asientoDesdeFactura($this->factura);
+            InventarioService::descontarPorFactura($this->factura);
 
-            PendingToast::create()
-                ->success()
-                ->message(
-                    'Factura emitida (ID: ' . $this->factura->id .
-                        ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
-                )
-                ->duration(6000);
+            $this->estado = 'emitida';
+        }, 3);
 
-            $this->cerrarSiAplicada();
-            $this->resetFormulario();
-            $this->dispatch('refrescar-lista-facturas');
-        } catch (\Throwable $e) {
-            Log::error('EMITIR ERROR', [
-                'msg' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
+        $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($this->factura->id);
+        $this->factura->recalcularTotales()->save();
+        $this->factura = $this->factura->fresh(['detalles', 'pagos']);
 
-            PendingToast::create()
-                ->error()
-                ->message(
-                    config('app.debug')
-                        ? ($e->getMessage() ?: 'No se pudo emitir la factura.')
-                        : 'No se pudo emitir la factura.'
-                )
-                ->duration(12000);
-        }
+        $this->estado = (string) ($this->factura->estado ?? 'emitida');
+
+        PendingToast::create()
+            ->success()
+            ->message(
+                'Factura emitida correctamente. No: ' .
+                $this->factura->prefijo . '-' . $this->factura->numero
+            )
+            ->duration(6000);
+
+        $this->dispatch('refrescar-lista-facturas');
+        $this->dispatch('$refresh');
+    } catch (\Throwable $e) {
+        Log::error('EMITIR ERROR', [
+            'msg' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        PendingToast::create()
+            ->error()
+            ->message(
+                config('app.debug')
+                    ? ($e->getMessage() ?: 'No se pudo emitir la factura.')
+                    : 'No se pudo emitir la factura.'
+            )
+            ->duration(12000);
     }
+}
 
 
     public function anular(): void
@@ -1621,68 +1618,72 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
-    private function cerrarSiAplicada(): void
-    {
-        if (!$this->factura?->id) return;
-
-        $this->factura->refresh()->recalcularTotales()->save();
-
-        $total  = round((float)($this->factura->total  ?? 0), 2);
-        $pagado = round((float)($this->factura->pagado ?? 0), 2);
-        $falt   = round($total - $pagado, 2);
-
-        if ($falt <= 0.01 && $this->factura->estado === 'emitida') {
-            $this->factura->update([
-                'estado'         => 'cerrado',
-                'monto_aplicado' => $pagado,
-            ]);
-            $this->estado = 'cerrado';
-            PendingToast::create()->success()
-                ->message('Factura cerrada (pagada en su totalidad).')->duration(5000);
-        }
+  private function cerrarSiAplicada(): void
+{
+    if (!$this->factura?->id) {
+        return;
     }
 
-    #[On('pago-registrado')]
-    public function onPagoRegistrado(int $facturaId): void
-    {
-        try {
-            // 1) Cargar/refrescar factura
-            if (!$this->factura?->id || $this->factura->id !== $facturaId) {
-                $this->cargarFactura($facturaId);
-            }
+    $this->factura->refresh()->loadMissing('pagos');
+    $this->factura->recalcularTotales()->save();
+    $this->factura->refresh();
 
-            $this->factura->refresh()->recalcularTotales()->save();
+    $this->estado = (string) ($this->factura->estado ?? 'borrador');
+}
 
-            // sincroniza estado y tipo pago desde DB (clave)
-            $this->estado    = (string)($this->factura->estado ?? 'borrador');
-            $this->tipo_pago = (string)($this->factura->tipo_pago ?? $this->tipo_pago);
+  #[On('pago-registrado')]
+public function onPagoRegistrado(int $facturaId): void
+{
+    try {
 
-            // 2) Calcular faltante real
-            $total   = round((float)($this->factura->total  ?? 0), 2);
-            $pagado  = round((float)($this->factura->pagado ?? 0), 2);
-            $faltante = round($total - $pagado, 2);
+        $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($facturaId);
+        $this->factura->recalcularTotales()->save();
+        $this->factura = $this->factura->fresh(['detalles', 'pagos']);
 
-            // 3) Auto emitir SOLO si: venta + contado + pagada + no emitida
-            $esContado  = ($this->factura->tipo_pago ?? '') === 'contado';
-            $noEmitida  = ($this->factura->estado ?? '') !== 'emitida';
-            $pagoTotal  = ($faltante <= 0.01);
+        $this->estado    = (string) ($this->factura->estado ?? 'borrador');
+        $this->tipo_pago = (string) ($this->factura->tipo_pago ?? $this->tipo_pago);
 
-            if ($esContado && $pagoTotal && $noEmitida && $this->autoEmitirContado) {
-                $this->emitir();           // toma consecutivo + asiento + inventario
-                $this->cerrarSiAplicada(); // opcional: cierra si aplica
-                return;
-            }
+        $total = round((float) ($this->factura->total ?? 0), 2);
 
-            // 4) Si no auto-emite, igual intenta cerrar si aplica (crédito, etc.)
-            $this->cerrarSiAplicada();
-            $this->dispatch('$refresh');
-        } catch (\Throwable $e) {
-            Log::error('onPagoRegistrado error', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()
-                ->message('El pago se registró, pero no se pudo emitir/actualizar automáticamente.')
-                ->duration(9000);
+        // 🔴 IMPORTANTE: calcular desde pagos
+        $pagado = round((float) ($this->factura->pagos->sum('monto') ?? 0), 2);
+
+        $faltante = round($total - $pagado, 2);
+
+        $esContado = ($this->factura->tipo_pago ?? '') === 'contado';
+
+        // 🔴 no debe estar emitida
+        $noEmitida = empty($this->factura->numero)
+            && !in_array(($this->factura->estado ?? ''), ['emitida', 'cerrado', 'anulada'], true);
+
+        $pagoTotal = ($faltante <= 0.01);
+
+        // ✅ AUTO EMITIR
+        if ($esContado && $pagoTotal && $noEmitida) {
+
+            PendingToast::create()
+                ->info()
+                ->message('Pago completo recibido. Emitiendo factura automáticamente...')
+                ->duration(3000);
+
+            $this->emitir();
+            return;
         }
+
+        $this->dispatch('$refresh');
+
+    } catch (\Throwable $e) {
+
+        Log::error('onPagoRegistrado error', [
+            'msg' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+
+        PendingToast::create()->error()
+            ->message('El pago se registró, pero no se pudo procesar la factura.')
+            ->duration(9000);
     }
+}
 
     private function verificarStockDisponibleAntesDeEmitir(): void
     {

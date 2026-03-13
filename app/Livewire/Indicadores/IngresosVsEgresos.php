@@ -6,21 +6,16 @@ use Livewire\Component;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
-use App\Models\Factura\Factura;
-use App\Models\NotaCredito;
-
 class IngresosVsEgresos extends Component
 {
     public int $year;
     public ?int $empresa_id = null;
 
-    // Data para el chart
     public array $labels = [];
     public array $ingresos = [];
     public array $egresos  = [];
     public array $neto     = [];
 
-    // KPIs
     public float $totalIngresos = 0;
     public float $totalEgresos  = 0;
     public float $totalNeto     = 0;
@@ -72,59 +67,61 @@ class IngresosVsEgresos extends Component
 
         $months = $this->months();
 
-        // ==========================
-        // 1) INGRESOS: misma lógica de VentasPorMes
-        //    FRM suma / NCV resta
-        // ==========================
+        /*
+        |--------------------------------------------------------------------------
+        | 1) INGRESOS
+        |    Misma lógica de VentasPorMes:
+        |    - FRM suma
+        |    - NCV resta
+        |    - con número
+        |    - no anuladas
+        |--------------------------------------------------------------------------
+        */
         $qIngresos = DB::table('facturas as f')
             ->join('series as s', 's.id', '=', 'f.serie_id')
             ->selectRaw('MONTH(f.fecha) as mes')
-
             ->selectRaw("
-            SUM(
-                CASE
-                    WHEN s.prefijo = 'FRM'
-                     AND f.total > 0
-                     AND f.numero IS NOT NULL
-                     AND f.numero <> ''
-                     AND f.estado <> 'anulada'
-                    THEN f.total
-                    ELSE 0
-                END
-            ) as facturas
-        ")
-
+                SUM(
+                    CASE
+                        WHEN s.prefijo = 'FRM'
+                         AND f.total > 0
+                         AND f.numero IS NOT NULL
+                         AND f.numero <> ''
+                         AND f.estado <> 'anulada'
+                        THEN f.total
+                        ELSE 0
+                    END
+                ) as facturas
+            ")
             ->selectRaw("
-            SUM(
-                CASE
-                    WHEN s.prefijo = 'NCV'
-                     AND f.numero IS NOT NULL
-                     AND f.numero <> ''
-                     AND f.estado <> 'anulada'
-                    THEN ABS(f.total)
-                    ELSE 0
-                END
-            ) as notas_credito
-        ")
-
+                SUM(
+                    CASE
+                        WHEN s.prefijo = 'NCV'
+                         AND f.numero IS NOT NULL
+                         AND f.numero <> ''
+                         AND f.estado <> 'anulada'
+                        THEN ABS(f.total)
+                        ELSE 0
+                    END
+                ) as notas_credito
+            ")
             ->selectRaw("
-            SUM(
-                CASE
-                    WHEN s.prefijo = 'FRM'
-                     AND f.numero IS NOT NULL
-                     AND f.numero <> ''
-                     AND f.estado <> 'anulada'
-                    THEN f.total
-                    WHEN s.prefijo = 'NCV'
-                     AND f.numero IS NOT NULL
-                     AND f.numero <> ''
-                     AND f.estado <> 'anulada'
-                    THEN -ABS(f.total)
-                    ELSE 0
-                END
-            ) as neto
-        ")
-
+                SUM(
+                    CASE
+                        WHEN s.prefijo = 'FRM'
+                         AND f.numero IS NOT NULL
+                         AND f.numero <> ''
+                         AND f.estado <> 'anulada'
+                        THEN f.total
+                        WHEN s.prefijo = 'NCV'
+                         AND f.numero IS NOT NULL
+                         AND f.numero <> ''
+                         AND f.estado <> 'anulada'
+                        THEN -ABS(f.total)
+                        ELSE 0
+                    END
+                ) as neto
+            ")
             ->whereBetween('f.fecha', [$start, $end])
             ->whereIn('s.prefijo', ['FRM', 'NCV']);
 
@@ -138,9 +135,11 @@ class IngresosVsEgresos extends Component
             ->get()
             ->keyBy('mes');
 
-        // ==========================
-        // 2) GASTOS / EGRESOS
-        // ==========================
+        /*
+        |--------------------------------------------------------------------------
+        | 2) GASTOS / EGRESOS
+        |--------------------------------------------------------------------------
+        */
         $gastosPorMes = $this->sumByMonth(
             table: 'gastos_ruta',
             dateColumn: 'created_at',
@@ -150,9 +149,11 @@ class IngresosVsEgresos extends Component
             empresaColumn: null
         );
 
-        // ==========================
-        // 3) COMPRAS (si aplica)
-        // ==========================
+        /*
+        |--------------------------------------------------------------------------
+        | 3) COMPRAS (si aplica)
+        |--------------------------------------------------------------------------
+        */
         $comprasPorMes = $this->sumByMonth(
             table: 'compras',
             dateColumn: 'fecha',
@@ -163,9 +164,11 @@ class IngresosVsEgresos extends Component
             extraWhere: ['serie_id' => 13]
         );
 
-        // ==========================
-        // 4) NC COMPRA (si aplica)
-        // ==========================
+        /*
+        |--------------------------------------------------------------------------
+        | 4) NOTAS CRÉDITO DE COMPRA (si aplica)
+        |--------------------------------------------------------------------------
+        */
         $ncCompraPorMes = $this->sumByMonth(
             table: 'notas_credito_compra',
             dateColumn: 'fecha',
@@ -176,9 +179,12 @@ class IngresosVsEgresos extends Component
             extraWhere: ['serie_id' => 13]
         );
 
-        // ==========================
-        // 5) Construcción final
-        // ==========================
+        /*
+        |--------------------------------------------------------------------------
+        | 5) Construcción final
+        |    Solo mostramos meses con movimiento
+        |--------------------------------------------------------------------------
+        */
         $labels = [];
         $ingArr = [];
         $egrArr = [];
@@ -188,8 +194,6 @@ class IngresosVsEgresos extends Component
         $tEgr = 0.0;
 
         foreach ($months as $m => $label) {
-            $labels[] = $label;
-
             $rowIngresos = $ingresosPorMes->get($m);
 
             $ing = (float) ($rowIngresos->neto ?? 0);
@@ -201,9 +205,13 @@ class IngresosVsEgresos extends Component
             $egr = max(($gas + $com) - $ncC, 0);
             $net = $ing - $egr;
 
-            $ingArr[] = round($ing, 2);
-            $egrArr[] = round($egr, 2);
-            $netArr[] = round($net, 2);
+            // Solo meses con movimiento
+            if ($ing > 0 || $egr > 0) {
+                $labels[] = $label;
+                $ingArr[] = round($ing, 2);
+                $egrArr[] = round($egr, 2);
+                $netArr[] = round($net, 2);
+            }
 
             $tIng += $ing;
             $tEgr += $egr;
@@ -262,13 +270,16 @@ class IngresosVsEgresos extends Component
             'totalIngresos' => $this->totalIngresos,
             'totalEgresos'  => $this->totalEgresos,
             'totalNeto'     => $this->totalNeto,
+            'year'          => $this->year,
         ]);
     }
 }
 
-/**
- * Helpers para evitar reventar si no tienes tablas/columnas aún.
- */
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
 function SchemaHasTable(string $table): bool
 {
     try {

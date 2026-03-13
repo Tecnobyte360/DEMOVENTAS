@@ -1540,7 +1540,7 @@ class FacturaForm extends Component
     }
     public function abrirPagos(): void
     {
-        if ($this->abortIfLocked('registrar pagos')) return;
+        // if ($this->abortIfLocked('registrar pagos')) return;
 
         try {
             if (!$this->verificarStockParaLineas()) {

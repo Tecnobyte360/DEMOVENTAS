@@ -1662,11 +1662,12 @@ private function cerrarSiAplicada(): void
 }
 
 
-
-  #[On('pago-registrado')]
+#[On('pago-registrado')]
 public function onPagoRegistrado(int $facturaId): void
 {
     try {
+        $this->cargarFactura($facturaId);
+
         $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($facturaId);
         $this->factura->recalcularTotales()->save();
         $this->factura = $this->factura->fresh(['detalles', 'pagos']);
@@ -1683,14 +1684,22 @@ public function onPagoRegistrado(int $facturaId): void
             && !in_array(($this->factura->estado ?? ''), ['emitida', 'cerrado', 'anulada'], true);
         $pagoTotal = ($faltante <= 0.01);
 
+        // Si es contado y quedó pago total, emitir
         if ($esContado && $pagoTotal && $noEmitida) {
             $this->emitir();
-            return;
+
+            // recargar después de emitir
+            $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($facturaId);
+            $this->factura->recalcularTotales()->save();
+            $this->factura = $this->factura->fresh(['detalles', 'pagos']);
+
+            $this->estado = (string) ($this->factura->estado ?? 'emitida');
         }
 
-        // Si ya estaba emitida pero ahora quedó totalmente pagada, cerrar
+        // luego cerrar si ya quedó totalmente pagada
         $this->cerrarSiAplicada();
 
+        $this->dispatch('refrescar-lista-facturas');
         $this->dispatch('$refresh');
     } catch (\Throwable $e) {
         Log::error('onPagoRegistrado error', [

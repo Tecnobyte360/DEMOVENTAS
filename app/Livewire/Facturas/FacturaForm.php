@@ -313,22 +313,23 @@ class FacturaForm extends Component
      *  BLOQUEO / SOLO LECTURA
      * ========================= */
 
-    public function getBloqueadaProperty(): bool
-    {
-        $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
-        return in_array($estado, ['cerrado', 'anulada'], true);
-    }
+   public function getBloqueadaProperty(): bool
+{
+    $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
+    return in_array($estado, ['cerrado', 'anulada', 'pagada'], true);
+}
 
-    private function abortIfLocked(string $accion = 'editar'): bool
-    {
-        if ($this->bloqueada) {
-            PendingToast::create()
-                ->error()->message("La factura está {$this->estado}; no se puede {$accion}.")
-                ->duration(7000);
-            return true;
-        }
-        return false;
+  private function abortIfLocked(string $accion = 'editar'): bool
+{
+    if ($this->bloqueada) {
+        PendingToast::create()
+            ->error()
+            ->message("La factura está {$this->estado}; no se puede {$accion}.")
+            ->duration(7000);
+        return true;
     }
+    return false;
+}
 
     /* =========================
      *  HELPERS / UTILIDADES
@@ -1350,7 +1351,7 @@ class FacturaForm extends Component
         }
     }
 
-    public function emitir(): void
+  public function emitir(): void
 {
     if ($this->abortIfLocked('emitir')) return;
 
@@ -1363,10 +1364,11 @@ class FacturaForm extends Component
         DB::transaction(function () {
             $this->persistirBorrador();
 
-            $this->factura->refresh()
-                ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo', 'pagos'])
-                ->recalcularTotales()
-                ->save();
+            $this->factura = Factura::with(['detalles', 'pagos', 'serie.tipo'])
+                ->findOrFail($this->factura->id);
+
+            $this->factura->recalcularTotales()->save();
+            $this->factura->refresh();
 
             $serie = $this->serie_id
                 ? Serie::find((int) $this->serie_id)
@@ -1393,12 +1395,11 @@ class FacturaForm extends Component
             InventarioService::verificarDisponibilidadParaFactura($this->factura);
 
             if ($this->tipo_pago === 'contado') {
-                $this->factura->loadMissing('pagos');
                 $this->factura->recalcularTotales()->save();
                 $this->factura->refresh();
 
                 $total    = round((float) ($this->factura->total ?? 0), 2);
-                $pagado   = round((float) ($this->factura->pagos()->sum('monto') ?? 0), 2);
+                $pagado   = round((float) $this->factura->pagos()->sum('monto'), 2);
                 $faltante = round($total - $pagado, 2);
 
                 if ($faltante > 0.01) {
@@ -1407,7 +1408,7 @@ class FacturaForm extends Component
             }
 
             if (!empty($this->factura->numero)) {
-                throw new \RuntimeException('La factura ya fue emitida y ya tiene consecutivo.');
+                return;
             }
 
             $numero = $serie->tomarConsecutivo();
@@ -1415,8 +1416,8 @@ class FacturaForm extends Component
 
             $dataUpdate = [
                 'serie_id' => $serie->id,
+                'prefijo'  => (string) ($serie->prefijo ?? ''),
                 'numero'   => $numero,
-                'prefijo'  => $serie->prefijo,
                 'estado'   => 'emitida',
             ];
 
@@ -1432,19 +1433,30 @@ class FacturaForm extends Component
                 $dataUpdate['actualizado_por_id'] = $uid;
             }
 
-            $this->factura->update($dataUpdate);
+            $ok = $this->factura->update($dataUpdate);
+
+            if (!$ok) {
+                throw new \RuntimeException('No se pudo actualizar la factura con el consecutivo.');
+            }
 
             $this->factura->refresh();
+
+            if (empty($this->factura->numero)) {
+                throw new \RuntimeException('La factura se intentó emitir, pero el consecutivo no quedó guardado.');
+            }
 
             ContabilidadService::asientoDesdeFactura($this->factura);
             InventarioService::descontarPorFactura($this->factura);
 
+            $this->factura->recalcularTotales()->save();
+            $this->factura->refresh();
+
             $this->estado = 'emitida';
         }, 3);
 
-        $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($this->factura->id);
+        $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($this->factura->id);
         $this->factura->recalcularTotales()->save();
-        $this->factura = $this->factura->fresh(['detalles', 'pagos']);
+        $this->factura->refresh();
 
         $this->estado = (string) ($this->factura->estado ?? 'emitida');
 
@@ -1452,7 +1464,8 @@ class FacturaForm extends Component
             ->success()
             ->message(
                 'Factura emitida correctamente. No: ' .
-                $this->factura->prefijo . '-' . $this->factura->numero
+                (($this->factura->prefijo ?? '') !== '' ? $this->factura->prefijo . '-' : '') .
+                $this->factura->numero
             )
             ->duration(6000);
 
@@ -1474,7 +1487,6 @@ class FacturaForm extends Component
             ->duration(12000);
     }
 }
-
 
     public function anular(): void
     {
@@ -1618,7 +1630,7 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
-private function cerrarSiAplicada(): void
+private function marcarPagadaSiAplica(): void
 {
     if (!$this->factura?->id) {
         return;
@@ -1629,13 +1641,12 @@ private function cerrarSiAplicada(): void
     $this->factura->refresh();
 
     $total  = round((float) ($this->factura->total ?? 0), 2);
-    $pagado = round((float) $this->factura->pagos->sum('monto'), 2);
+    $pagado = round((float) $this->factura->pagos()->sum('monto'), 2);
     $falt   = round($total - $pagado, 2);
 
-    // Solo cerrar si ya fue emitida y quedó totalmente pagada
-    if ($falt <= 0.01 && $this->factura->estado === 'emitida') {
+    if ($falt <= 0.01 && in_array($this->factura->estado, ['emitida', 'pagada'], true)) {
         $data = [
-            'estado' => 'cerrado',
+            'estado' => 'pagada',
         ];
 
         if (Schema::hasColumn('facturas', 'monto_aplicado')) {
@@ -1651,8 +1662,9 @@ private function cerrarSiAplicada(): void
         }
 
         $this->factura->update($data);
+        $this->factura->refresh();
 
-        $this->estado = 'cerrado';
+        $this->estado = 'pagada';
 
         PendingToast::create()
             ->success()
@@ -1661,43 +1673,44 @@ private function cerrarSiAplicada(): void
     }
 }
 
-
 #[On('pago-registrado')]
 public function onPagoRegistrado(int $facturaId): void
 {
     try {
-        $this->cargarFactura($facturaId);
-
-        $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($facturaId);
+        $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
         $this->factura->recalcularTotales()->save();
-        $this->factura = $this->factura->fresh(['detalles', 'pagos']);
+        $this->factura->refresh();
+
+        $this->cargarFactura($facturaId);
 
         $this->estado    = (string) ($this->factura->estado ?? 'borrador');
         $this->tipo_pago = (string) ($this->factura->tipo_pago ?? $this->tipo_pago);
 
         $total    = round((float) ($this->factura->total ?? 0), 2);
-        $pagado   = round((float) $this->factura->pagos->sum('monto'), 2);
+        $pagado   = round((float) $this->factura->pagos()->sum('monto'), 2);
         $faltante = round($total - $pagado, 2);
 
         $esContado = ($this->factura->tipo_pago ?? '') === 'contado';
-        $noEmitida = empty($this->factura->numero)
-            && !in_array(($this->factura->estado ?? ''), ['emitida', 'cerrado', 'anulada'], true);
         $pagoTotal = ($faltante <= 0.01);
 
-        // Si es contado y quedó pago total, emitir
+        $noEmitida = empty($this->factura->numero)
+            && !in_array(($this->factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
+
         if ($esContado && $pagoTotal && $noEmitida) {
             $this->emitir();
 
-            // recargar después de emitir
-            $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($facturaId);
+            $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
             $this->factura->recalcularTotales()->save();
-            $this->factura = $this->factura->fresh(['detalles', 'pagos']);
-
-            $this->estado = (string) ($this->factura->estado ?? 'emitida');
+            $this->factura->refresh();
         }
 
-        // luego cerrar si ya quedó totalmente pagada
-        $this->cerrarSiAplicada();
+        $this->marcarPagadaSiAplica();
+
+        $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($facturaId);
+        $this->factura->recalcularTotales()->save();
+        $this->factura->refresh();
+
+        $this->estado = (string) ($this->factura->estado ?? 'borrador');
 
         $this->dispatch('refrescar-lista-facturas');
         $this->dispatch('$refresh');
@@ -1712,7 +1725,6 @@ public function onPagoRegistrado(int $facturaId): void
             ->duration(9000);
     }
 }
-
     private function verificarStockDisponibleAntesDeEmitir(): void
     {
         $factura = $this->factura?->loadMissing('detalles');

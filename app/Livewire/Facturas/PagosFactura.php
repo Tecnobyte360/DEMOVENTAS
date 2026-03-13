@@ -193,6 +193,8 @@ class PagosFactura extends Component
             ->get(['id', 'numero', 'prefijo', 'serie_id', 'socio_negocio_id', 'fecha', 'total', 'saldo']);
     }
 
+
+
     private function cargarFacturaSeleccionada(int $facturaId, bool $rewriteItems = true): void
 {
     $factura = Factura::with('pagos')->find($facturaId);
@@ -202,20 +204,12 @@ class PagosFactura extends Component
         return;
     }
 
+    $factura->recalcularTotales()->save();
+    $factura->refresh();
+
     $total  = round((float)($factura->total ?? 0), 2);
-
-    // ✅ pagado real: primero usar columna, si no sirve, sumar pagos
-    $pagado = round(
-        (float)(
-            $factura->pagado
-            ?? $factura->pagos->sum('monto')
-            ?? 0
-        ),
-        2
-    );
-
-    // ✅ saldo real calculado, no confiar ciegamente en la columna saldo
-    $saldo = round(max($total - $pagado, 0), 2);
+    $pagado = round((float)$factura->pagos()->sum('monto'), 2);
+    $saldo  = round(max($total - $pagado, 0), 2);
 
     $this->fac_total  = $total;
     $this->fac_pagado = $pagado;
@@ -311,7 +305,7 @@ class PagosFactura extends Component
         return $txt !== '' ? $txt : null;
     }
 
-   public function guardarPago(): void
+public function guardarPago(): void
 {
     try {
         $this->validate();
@@ -333,8 +327,11 @@ class PagosFactura extends Component
     $factura = Factura::with('pagos')->findOrFail($this->facturaId);
 
     // ✅ recalcular valores reales por seguridad
-    $total  = round((float)($factura->total ?? 0), 2);
-    $pagado = round((float)($factura->pagado ?? $factura->pagos->sum('monto') ?? 0), 2);
+    $factura->recalcularTotales()->save();
+    $factura->refresh();
+
+    $total  = round((float) ($factura->total ?? 0), 2);
+    $pagado = round((float) $factura->pagos()->sum('monto'), 2);
     $saldo  = round(max($total - $pagado, 0), 2);
 
     $this->fac_total  = $total;
@@ -393,15 +390,15 @@ class PagosFactura extends Component
             $pagos = [];
 
             foreach ($this->items as $row) {
-                $monto = (float)($row['monto'] ?? 0);
+                $monto = (float) ($row['monto'] ?? 0);
                 if ($monto <= 0) {
                     continue;
                 }
 
                 /** @var MedioPagos|null $medio */
-                $medio = $mediosUsados->firstWhere('id', (int)($row['medio_pago_id'] ?? 0))
+                $medio = $mediosUsados->firstWhere('id', (int) ($row['medio_pago_id'] ?? 0))
                     ?: (($row['medio_pago_id'] ?? null)
-                        ? MedioPagos::find((int)$row['medio_pago_id'])
+                        ? MedioPagos::find((int) $row['medio_pago_id'])
                         : null);
 
                 if (!$medio) {
@@ -413,7 +410,7 @@ class PagosFactura extends Component
                 /** @var FacturaPago $pago */
                 $pago = $factura->registrarPago([
                     'fecha'         => $this->fecha,
-                    'medio_pago_id' => (int)($row['medio_pago_id'] ?? 0),
+                    'medio_pago_id' => (int) ($row['medio_pago_id'] ?? 0),
                     'metodo'        => $this->metodoDesdeMedio($medio),
                     'referencia'    => $row['referencia'] ?? null,
                     'monto'         => $monto,
@@ -425,7 +422,7 @@ class PagosFactura extends Component
                 $pagos[] = $pago;
 
                 if ($asociaTurno) {
-                    $this->acumularEnTurnoDinamico($turno, $medio, $monto, (int)$factura->id);
+                    $this->acumularEnTurnoDinamico($turno, $medio, $monto, (int) $factura->id);
                 }
             }
 
@@ -433,11 +430,20 @@ class PagosFactura extends Component
                 throw new \RuntimeException('No se generó ningún pago válido.');
             }
 
-            $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
+            $factura->refresh();
+            $factura->load('pagos');
+
+            $asiento = ContabilidadService::asientoDesdePagos(
+                $factura,
+                $pagos,
+                'Pago aplicado a factura'
+            );
 
             foreach ($pagos as $p) {
                 if ($p->isFillable('asiento_id') || Schema::hasColumn($p->getTable(), 'asiento_id')) {
-                    $p->update(['asiento_id' => $asiento->id]);
+                    $p->update([
+                        'asiento_id' => $asiento->id,
+                    ]);
                 }
             }
 

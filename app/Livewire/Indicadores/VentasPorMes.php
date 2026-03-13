@@ -23,7 +23,9 @@ class VentasPorMes extends Component
     {
         $this->cargar();
     }
-   protected function cargar(): void
+ 	
+
+protected function cargar(): void
 {
     $year = now()->year;
 
@@ -35,9 +37,9 @@ class VentasPorMes extends Component
         ->selectRaw("
             SUM(
                 CASE 
-                    WHEN f.total > 0 AND f.tipo_pago = 'contado' 
-                    THEN f.total 
-                    ELSE 0 
+                    WHEN f.total > 0 AND f.tipo_pago = 'contado'
+                    THEN f.total
+                    ELSE 0
                 END
             ) as contado
         ")
@@ -45,9 +47,9 @@ class VentasPorMes extends Component
         ->selectRaw("
             SUM(
                 CASE 
-                    WHEN f.total > 0 AND f.tipo_pago = 'credito' 
-                    THEN f.total 
-                    ELSE 0 
+                    WHEN f.total > 0 AND f.tipo_pago = 'credito'
+                    THEN f.total
+                    ELSE 0
                 END
             ) as credito
         ")
@@ -55,9 +57,9 @@ class VentasPorMes extends Component
         ->selectRaw("
             SUM(
                 CASE 
-                    WHEN f.total < 0 
-                    THEN f.total 
-                    ELSE 0 
+                    WHEN f.total < 0
+                    THEN f.total
+                    ELSE 0
                 END
             ) as notas_credito
         ")
@@ -69,12 +71,11 @@ class VentasPorMes extends Component
         // SOLO FACTURAS DE VENTA
         ->where('s.prefijo', 'FRM')
 
-        // ❗ NO CONTAR ANULADAS
-        ->where('f.estado', '!=', 'anulada')
+        // SOLO FACTURAS EMITIDAS
+        ->where('f.estado', 'emitida')
 
         ->groupByRaw('MONTH(f.fecha)')
         ->orderByRaw('MONTH(f.fecha)')
-
         ->get()
         ->keyBy('mes');
 
@@ -112,8 +113,6 @@ class VentasPorMes extends Component
         $this->totalAnioNeto += $neto;
     }
 }
-
-
 
     public function render()
     {

@@ -56,7 +56,7 @@ class FacturaForm extends Component
     public ?int $cotizacion_id = null;
     /** Condición de pago seleccionada (contado / crédito del cliente) */
     public ?int $condicion_pago_id = null;
-public array $productosSeleccionados = [];
+    public array $productosSeleccionados = [];
     /** NUEVO: controlas si quieres auto-emitir al pagar 100% contado */
     public bool $autoEmitirContado = false;
 
@@ -180,134 +180,134 @@ public array $productosSeleccionados = [];
 
 
 
-   public function render()
-{
-    try {
-        $clientes = SocioNegocio::clientes()
-            ->orderBy('razon_serial')
-            ->orderBy('razon_social')
-            ->take(200)
-            ->get();
-    } catch (\Throwable $e) {
-        $clientes = SocioNegocio::clientes()
-            ->orderBy('razon_social')
-            ->take(200)
-            ->get();
+    public function render()
+    {
+        try {
+            $clientes = SocioNegocio::clientes()
+                ->orderBy('razon_serial')
+                ->orderBy('razon_social')
+                ->take(200)
+                ->get();
+        } catch (\Throwable $e) {
+            $clientes = SocioNegocio::clientes()
+                ->orderBy('razon_social')
+                ->take(200)
+                ->get();
+        }
+
+        try {
+            $this->syncProductosSeleccionados();
+
+            $bodegas = Bodega::query()
+                ->orderBy('nombre')
+                ->get();
+
+            $cuentasIngresos = PlanCuentas::query()
+                ->where(function ($q) {
+                    $q->where('titulo', 0)->orWhereNull('titulo');
+                })
+                ->where('cuenta_activa', 1)
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre']);
+
+            $cuentasCXC = PlanCuentas::query()
+                ->where('cuenta_activa', 1)
+                ->where('titulo', 0)
+                ->where('clase_cuenta', 'CXC_CLIENTES')
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre']);
+
+            $cuentasCaja = PlanCuentas::query()
+                ->where('cuenta_activa', 1)
+                ->where('titulo', 0)
+                ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
+                ->orderBy('codigo')
+                ->get(['id', 'codigo', 'nombre']);
+
+            $impuestosVentas = Impuesto::activos()
+                ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
+                ->orderBy('prioridad')
+                ->orderBy('nombre')
+                ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
+
+            $condicionesPagoQuery = CondicionPago::query()
+                ->orderBy('tipo')
+                ->orderBy('nombre')
+                ->select(['id', 'nombre', 'tipo', 'plazo_dias']);
+
+            if (Schema::hasColumn('condicion_pagos', 'activo')) {
+                $condicionesPagoQuery->where('activo', 1);
+            }
+
+            $condicionesPago = $condicionesPagoQuery->get();
+
+            $cotizacionesQuery = CotizacionModel::query()
+                ->with([
+                    'socioNegocio:id,razon_social,nit',
+                    'detalles:id,cotizacion_id,producto_id,bodega_id,cantidad,precio_unitario,descuento_pct,impuesto_pct,importe',
+                ])
+                ->orderByDesc('id')
+                ->take(100);
+
+            if (Schema::hasColumn('cotizaciones', 'estado')) {
+                $cotizacionesQuery->whereIn('estado', ['borrador', 'enviada', 'aprobada']);
+            }
+
+            if (!empty($this->socio_negocio_id)) {
+                $cotizacionesQuery->where('socio_negocio_id', (int) $this->socio_negocio_id);
+            }
+
+            $cotizaciones = $cotizacionesQuery->get([
+                'id',
+                'socio_negocio_id',
+                'fecha',
+                'vencimiento',
+                'terminos_pago',
+                'notas',
+                'total',
+                'estado',
+            ]);
+
+            return view('livewire.facturas.factura-form', [
+                'clientes'               => $clientes,
+                'productos'              => collect(), // catálogo ya no se carga completo
+                'productosSeleccionados' => $this->productosSeleccionados,
+                'bodegas'                => $bodegas,
+                'series'                 => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
+                'serieDefault'           => $this->serieDefault,
+                'cuentasIngresos'        => $cuentasIngresos,
+                'cuentasCXC'             => $cuentasCXC,
+                'cuentasCaja'            => $cuentasCaja,
+                'impuestosVentas'        => $impuestosVentas,
+                'bloqueada'              => $this->bloqueada,
+                'condicionesPago'        => $condicionesPago,
+                'cotizaciones'           => $cotizaciones,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            PendingToast::create()
+                ->error()
+                ->message('No se pudo cargar datos auxiliares.')
+                ->duration(6000);
+
+            return view('livewire.facturas.factura-form', [
+                'clientes'               => collect(),
+                'productos'              => collect(),
+                'productosSeleccionados' => [],
+                'bodegas'                => collect(),
+                'series'                 => collect(),
+                'serieDefault'           => $this->serieDefault,
+                'cuentasIngresos'        => collect(),
+                'cuentasCXC'             => collect(),
+                'cuentasCaja'            => collect(),
+                'impuestosVentas'        => collect(),
+                'bloqueada'              => $this->bloqueada,
+                'condicionesPago'        => collect(),
+                'cotizaciones'           => collect(),
+            ]);
+        }
     }
-
-    try {
-        $this->syncProductosSeleccionados();
-
-        $bodegas = Bodega::query()
-            ->orderBy('nombre')
-            ->get();
-
-        $cuentasIngresos = PlanCuentas::query()
-            ->where(function ($q) {
-                $q->where('titulo', 0)->orWhereNull('titulo');
-            })
-            ->where('cuenta_activa', 1)
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
-
-        $cuentasCXC = PlanCuentas::query()
-            ->where('cuenta_activa', 1)
-            ->where('titulo', 0)
-            ->where('clase_cuenta', 'CXC_CLIENTES')
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
-
-        $cuentasCaja = PlanCuentas::query()
-            ->where('cuenta_activa', 1)
-            ->where('titulo', 0)
-            ->whereIn('clase_cuenta', ['CAJA_GENERAL', 'BANCOS', 'CAJA'])
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
-
-        $impuestosVentas = Impuesto::activos()
-            ->whereIn('aplica_sobre', ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'])
-            ->orderBy('prioridad')
-            ->orderBy('nombre')
-            ->get(['id', 'codigo', 'nombre', 'porcentaje', 'monto_fijo', 'incluido_en_precio']);
-
-        $condicionesPagoQuery = CondicionPago::query()
-            ->orderBy('tipo')
-            ->orderBy('nombre')
-            ->select(['id', 'nombre', 'tipo', 'plazo_dias']);
-
-        if (Schema::hasColumn('condicion_pagos', 'activo')) {
-            $condicionesPagoQuery->where('activo', 1);
-        }
-
-        $condicionesPago = $condicionesPagoQuery->get();
-
-        $cotizacionesQuery = CotizacionModel::query()
-            ->with([
-                'socioNegocio:id,razon_social,nit',
-                'detalles:id,cotizacion_id,producto_id,bodega_id,cantidad,precio_unitario,descuento_pct,impuesto_pct,importe',
-            ])
-            ->orderByDesc('id')
-            ->take(100);
-
-        if (Schema::hasColumn('cotizaciones', 'estado')) {
-            $cotizacionesQuery->whereIn('estado', ['borrador', 'enviada', 'aprobada']);
-        }
-
-        if (!empty($this->socio_negocio_id)) {
-            $cotizacionesQuery->where('socio_negocio_id', (int) $this->socio_negocio_id);
-        }
-
-        $cotizaciones = $cotizacionesQuery->get([
-            'id',
-            'socio_negocio_id',
-            'fecha',
-            'vencimiento',
-            'terminos_pago',
-            'notas',
-            'total',
-            'estado',
-        ]);
-
-        return view('livewire.facturas.factura-form', [
-            'clientes'               => $clientes,
-            'productos'              => collect(), // catálogo ya no se carga completo
-            'productosSeleccionados' => $this->productosSeleccionados,
-            'bodegas'                => $bodegas,
-            'series'                 => $this->serieDefault ? collect([$this->serieDefault]) : collect(),
-            'serieDefault'           => $this->serieDefault,
-            'cuentasIngresos'        => $cuentasIngresos,
-            'cuentasCXC'             => $cuentasCXC,
-            'cuentasCaja'            => $cuentasCaja,
-            'impuestosVentas'        => $impuestosVentas,
-            'bloqueada'              => $this->bloqueada,
-            'condicionesPago'        => $condicionesPago,
-            'cotizaciones'           => $cotizaciones,
-        ]);
-    } catch (Throwable $e) {
-        report($e);
-
-        PendingToast::create()
-            ->error()
-            ->message('No se pudo cargar datos auxiliares.')
-            ->duration(6000);
-
-        return view('livewire.facturas.factura-form', [
-            'clientes'               => collect(),
-            'productos'              => collect(),
-            'productosSeleccionados' => [],
-            'bodegas'                => collect(),
-            'series'                 => collect(),
-            'serieDefault'           => $this->serieDefault,
-            'cuentasIngresos'        => collect(),
-            'cuentasCXC'             => collect(),
-            'cuentasCaja'            => collect(),
-            'impuestosVentas'        => collect(),
-            'bloqueada'              => $this->bloqueada,
-            'condicionesPago'        => collect(),
-            'cotizaciones'           => collect(),
-        ]);
-    }
-}
 
     /* =========================
      *  BLOQUEO / SOLO LECTURA
@@ -500,125 +500,118 @@ public array $productosSeleccionados = [];
     {
         $this->dispatch('sync-cotizacion-tomselect', cotizacionId: $this->cotizacion_id);
     }
-    private function cargarFactura(int $id): void
-    {
-        try {
-            $f = Factura::with(['detalles'])->findOrFail($id);
-            $this->factura = $f;
 
-            // =========================
-            // Cabecera
-            // =========================
-            $this->fill($f->only([
-                'cotizacion_id',
-                'serie_id',
-                'socio_negocio_id',
-                'fecha',
-                'vencimiento',
-                'tipo_pago',
-                'plazo_dias',
-                'terminos_pago',
-                'notas',
-                'moneda',
-                'estado',
-                'cuenta_cobro_id',
-                'condicion_pago_id',
-            ]));
-            // =========================
-            // Líneas (desde DB)
-            // =========================
-            $this->lineas = $f->detalles->map(function ($d) {
-                $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
 
-                if (!$cuentaId && $d->producto_id) {
-                    $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
-                        ->find($d->producto_id);
+   private function cargarFactura(int $id): void
+{
+    try {
+        $f = Factura::with(['detalles', 'pagos'])->findOrFail($id);
+        $f->recalcularTotales()->save();
+        $f = $f->fresh(['detalles', 'pagos']);
 
-                    if ($p) {
-                        $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
-                    }
+        $this->factura = $f;
+
+        // =========================
+        // Cabecera
+        // =========================
+        $this->fill($f->only([
+            'cotizacion_id',
+            'serie_id',
+            'socio_negocio_id',
+            'fecha',
+            'vencimiento',
+            'tipo_pago',
+            'plazo_dias',
+            'terminos_pago',
+            'notas',
+            'moneda',
+            'estado',
+            'cuenta_cobro_id',
+            'condicion_pago_id',
+        ]));
+
+        // =========================
+        // Líneas (desde DB)
+        // =========================
+        $this->lineas = $f->detalles->map(function ($d) {
+            $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
+
+            if (!$cuentaId && $d->producto_id) {
+                $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
+                    ->find($d->producto_id);
+
+                if ($p) {
+                    $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
                 }
-
-                $l = [
-                    'id'                => $d->id,
-                    'producto_id'       => $d->producto_id ? (int)$d->producto_id : null,
-                    'cuenta_ingreso_id' => $cuentaId,
-                    'bodega_id'         => $d->bodega_id ? (int)$d->bodega_id : null,
-                    'descripcion'       => $d->descripcion,
-                    'cantidad'          => is_null($d->cantidad) ? null : (float)$d->cantidad,
-                    'precio_unitario'   => (float)$d->precio_unitario,
-                    'descuento_pct'     => (float)$d->descuento_pct,
-                    'impuesto_id'       => $d->impuesto_id ? (int)$d->impuesto_id : null,
-                    'impuesto_pct'      => (float)$d->impuesto_pct,
-                ];
-
-                $this->normalizeLinea($l);
-                return $l;
-            })->toArray();
-
-            // =========================================================
-            // ✅ (RECOMENDADO) Rehidratar líneas con lógica actual
-            // - Esto vuelve a ejecutar tu setProducto() por cada línea
-            // - Actualiza cuenta_ingreso_id, impuesto, precio, etc.
-            //
-            // ⚠️ Si NO quieres recalcular nada al editar (mantener DB tal cual),
-            //    comenta este bloque.
-            // =========================================================
-            foreach ($this->lineas as $i => $l) {
-                $pid = (int)($l['producto_id'] ?? 0);
-                if ($pid > 0) {
-                    // setProducto respeta descripción si ya existe (tu código lo hace)
-                    $this->setProducto($i, $pid);
-                }
-
-                // Stock (si hay bodega + producto)
-                $this->refreshStockLinea($i);
             }
 
-            // Limpieza
-            $this->resetErrorBag();
-            $this->resetValidation();
+            $l = [
+                'id'                => $d->id,
+                'producto_id'       => $d->producto_id ? (int) $d->producto_id : null,
+                'cuenta_ingreso_id' => $cuentaId,
+                'bodega_id'         => $d->bodega_id ? (int) $d->bodega_id : null,
+                'descripcion'       => $d->descripcion,
+                'cantidad'          => is_null($d->cantidad) ? null : (float) $d->cantidad,
+                'precio_unitario'   => (float) $d->precio_unitario,
+                'descuento_pct'     => (float) $d->descuento_pct,
+                'impuesto_id'       => $d->impuesto_id ? (int) $d->impuesto_id : null,
+                'impuesto_pct'      => (float) $d->impuesto_pct,
+            ];
 
-            // ✅ IMPORTANTÍSIMO para TomSelect (wire:ignore)
-            // Esto hace que el select visual se “setee” al editar
-            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->normalizeLinea($l);
+            return $l;
+        })->toArray();
 
-            // (opcional) refrescar UI
-            $this->dispatch('$refresh');
-        } catch (Throwable $e) {
-            report($e);
-            PendingToast::create()
-                ->error()
-                ->message('No se pudo cargar la factura.')
-                ->duration(7000);
+        foreach ($this->lineas as $i => $l) {
+            $pid = (int) ($l['producto_id'] ?? 0);
+
+            if ($pid > 0) {
+                $this->setProducto($i, $pid);
+            }
+
+            $this->refreshStockLinea($i);
         }
+
+        $this->resetErrorBag();
+        $this->resetValidation();
+
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+        $this->dispatch('$refresh');
+    } catch (Throwable $e) {
+        report($e);
+
+        PendingToast::create()
+            ->error()
+            ->message('No se pudo cargar la factura.')
+            ->duration(7000);
     }
-
-
-
-   public function addLinea(): void
-{
-    if ($this->bloqueada) return;
-
-    $l = [
-        'producto_id'       => null,
-        'cuenta_ingreso_id' => null,
-        'bodega_id'         => $this->bodega_predeterminada_empresa_id,
-        'descripcion'       => null,
-        'cantidad'          => null,
-        'precio_unitario'   => 0,
-        'descuento_pct'     => 0,
-        'impuesto_id'       => null,
-        'impuesto_pct'      => 0,
-    ];
-
-    $this->normalizeLinea($l);
-    $this->lineas[] = $l;
-
-    $this->syncProductosSeleccionados();
-    $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-    $this->dispatch('$refresh');
 }
+
+
+
+    public function addLinea(): void
+    {
+        if ($this->bloqueada) return;
+
+        $l = [
+            'producto_id'       => null,
+            'cuenta_ingreso_id' => null,
+            'bodega_id'         => $this->bodega_predeterminada_empresa_id,
+            'descripcion'       => null,
+            'cantidad'          => null,
+            'precio_unitario'   => 0,
+            'descuento_pct'     => 0,
+            'impuesto_id'       => null,
+            'impuesto_pct'      => 0,
+        ];
+
+        $this->normalizeLinea($l);
+        $this->lineas[] = $l;
+
+        $this->syncProductosSeleccionados();
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+        $this->dispatch('$refresh');
+    }
 
     private function aplicarBodegaPredeterminadaALineasVacias(): void
     {
@@ -632,164 +625,164 @@ public array $productosSeleccionados = [];
             }
         }
     }
-   public function removeLinea(int $i): void
-{
-    if ($this->bloqueada) return;
-    if (!isset($this->lineas[$i])) return;
+    public function removeLinea(int $i): void
+    {
+        if ($this->bloqueada) return;
+        if (!isset($this->lineas[$i])) return;
 
-    array_splice($this->lineas, $i, 1);
+        array_splice($this->lineas, $i, 1);
 
-    $this->syncProductosSeleccionados();
-    $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-    $this->dispatch('$refresh');
-}
-
-
-  public function setProducto(int $i, $id): void
-{
-    if ($this->bloqueada) {
-        return;
-    }
-
-    try {
-        if (!isset($this->lineas[$i])) {
-            return;
-        }
-
-        $prodId = $id ? (int) $id : null;
-        $this->lineas[$i]['producto_id'] = $prodId;
-
-        if (!$prodId) {
-            $this->lineas[$i]['cuenta_ingreso_id'] = null;
-            $this->lineas[$i]['precio_unitario']   = 0.0;
-            $this->lineas[$i]['impuesto_id']       = null;
-            $this->lineas[$i]['impuesto_pct']      = 0.0;
-
-            if (empty($this->lineas[$i]['descripcion'])) {
-                $this->lineas[$i]['descripcion'] = null;
-            }
-
-            $this->normalizeLinea($this->lineas[$i]);
-            $this->syncProductosSeleccionados();
-            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-            $this->dispatch('$refresh');
-            return;
-        }
-
-        $selects = ['id', 'nombre'];
-
-        if (Schema::hasColumn('productos', 'precio')) {
-            $selects[] = 'precio';
-        }
-
-        if (Schema::hasColumn('productos', 'precio_venta')) {
-            $selects[] = 'precio_venta';
-        }
-
-        if (Schema::hasColumn('productos', 'mov_contable_segun')) {
-            $selects[] = 'mov_contable_segun';
-        }
-
-        if (Schema::hasColumn('productos', 'cuenta_ingreso_id')) {
-            $selects[] = 'cuenta_ingreso_id';
-        }
-
-        if (Schema::hasColumn('productos', 'codigo')) {
-            $selects[] = 'codigo';
-        }
-
-        if (Schema::hasColumn('productos', 'ItemCode')) {
-            $selects[] = 'ItemCode';
-        }
-
-        if (Schema::hasColumn('productos', 'es_inventariable')) {
-            $selects[] = 'es_inventariable';
-        }
-
-        $p = Producto::with([
-            'impuesto:id,nombre,codigo,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-            'cuentaIngreso:id,codigo,nombre',
-            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-        ])
-            ->select($selects)
-            ->find($prodId);
-
-        if (!$p) {
-            $this->lineas[$i]['cuenta_ingreso_id'] = null;
-            $this->lineas[$i]['precio_unitario']   = 0.0;
-            $this->lineas[$i]['impuesto_id']       = null;
-            $this->lineas[$i]['impuesto_pct']      = 0.0;
-
-            $this->normalizeLinea($this->lineas[$i]);
-            $this->syncProductosSeleccionados();
-            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-            $this->dispatch('$refresh');
-            return;
-        }
-
-        $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
-
-        $precioBase = 0.0;
-
-        if (isset($p->precio) && !is_null($p->precio)) {
-            $precioBase = (float) $p->precio;
-        } elseif (isset($p->precio_venta) && !is_null($p->precio_venta)) {
-            $precioBase = (float) $p->precio_venta;
-        }
-
-        $ivaPct = 0.0;
-        $impId  = null;
-
-        $imp = $p->impuesto;
-
-        if ($imp && (int) ($imp->activo ?? 0) === 1) {
-            $aplica = strtoupper((string) ($imp->aplica_sobre ?? ''));
-            $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
-
-            $hoy   = now()->startOfDay();
-            $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
-            $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
-            $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
-
-            if ($aplicaVentas && $vigente) {
-                $impId = (int) $imp->id;
-
-                if (!is_null($imp->porcentaje)) {
-                    $ivaPct = (float) $imp->porcentaje;
-
-                    if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
-                        $precioBase = $precioBase > 0
-                            ? round($precioBase / (1 + $ivaPct / 100), 2)
-                            : 0.0;
-                    }
-                } else {
-                    $ivaPct = 0.0;
-                }
-            }
-        }
-
-        if (empty($this->lineas[$i]['descripcion'])) {
-            $this->lineas[$i]['descripcion'] = (string) ($p->nombre ?? '');
-        }
-
-        $this->lineas[$i]['precio_unitario'] = round($precioBase, 2);
-        $this->lineas[$i]['impuesto_id']     = $impId;
-        $this->lineas[$i]['impuesto_pct']    = $ivaPct;
-
-        $this->normalizeLinea($this->lineas[$i]);
         $this->syncProductosSeleccionados();
-
         $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
         $this->dispatch('$refresh');
-    } catch (\Throwable $e) {
-        report($e);
-
-        PendingToast::create()
-            ->error()
-            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo establecer el producto.')
-            ->duration(7000);
     }
-}
+
+
+    public function setProducto(int $i, $id): void
+    {
+        if ($this->bloqueada) {
+            return;
+        }
+
+        try {
+            if (!isset($this->lineas[$i])) {
+                return;
+            }
+
+            $prodId = $id ? (int) $id : null;
+            $this->lineas[$i]['producto_id'] = $prodId;
+
+            if (!$prodId) {
+                $this->lineas[$i]['cuenta_ingreso_id'] = null;
+                $this->lineas[$i]['precio_unitario']   = 0.0;
+                $this->lineas[$i]['impuesto_id']       = null;
+                $this->lineas[$i]['impuesto_pct']      = 0.0;
+
+                if (empty($this->lineas[$i]['descripcion'])) {
+                    $this->lineas[$i]['descripcion'] = null;
+                }
+
+                $this->normalizeLinea($this->lineas[$i]);
+                $this->syncProductosSeleccionados();
+                $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+                $this->dispatch('$refresh');
+                return;
+            }
+
+            $selects = ['id', 'nombre'];
+
+            if (Schema::hasColumn('productos', 'precio')) {
+                $selects[] = 'precio';
+            }
+
+            if (Schema::hasColumn('productos', 'precio_venta')) {
+                $selects[] = 'precio_venta';
+            }
+
+            if (Schema::hasColumn('productos', 'mov_contable_segun')) {
+                $selects[] = 'mov_contable_segun';
+            }
+
+            if (Schema::hasColumn('productos', 'cuenta_ingreso_id')) {
+                $selects[] = 'cuenta_ingreso_id';
+            }
+
+            if (Schema::hasColumn('productos', 'codigo')) {
+                $selects[] = 'codigo';
+            }
+
+            if (Schema::hasColumn('productos', 'ItemCode')) {
+                $selects[] = 'ItemCode';
+            }
+
+            if (Schema::hasColumn('productos', 'es_inventariable')) {
+                $selects[] = 'es_inventariable';
+            }
+
+            $p = Producto::with([
+                'impuesto:id,nombre,codigo,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+                'cuentaIngreso:id,codigo,nombre',
+                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+            ])
+                ->select($selects)
+                ->find($prodId);
+
+            if (!$p) {
+                $this->lineas[$i]['cuenta_ingreso_id'] = null;
+                $this->lineas[$i]['precio_unitario']   = 0.0;
+                $this->lineas[$i]['impuesto_id']       = null;
+                $this->lineas[$i]['impuesto_pct']      = 0.0;
+
+                $this->normalizeLinea($this->lineas[$i]);
+                $this->syncProductosSeleccionados();
+                $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+                $this->dispatch('$refresh');
+                return;
+            }
+
+            $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+
+            $precioBase = 0.0;
+
+            if (isset($p->precio) && !is_null($p->precio)) {
+                $precioBase = (float) $p->precio;
+            } elseif (isset($p->precio_venta) && !is_null($p->precio_venta)) {
+                $precioBase = (float) $p->precio_venta;
+            }
+
+            $ivaPct = 0.0;
+            $impId  = null;
+
+            $imp = $p->impuesto;
+
+            if ($imp && (int) ($imp->activo ?? 0) === 1) {
+                $aplica = strtoupper((string) ($imp->aplica_sobre ?? ''));
+                $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
+
+                $hoy   = now()->startOfDay();
+                $desde = $imp->vigente_desde ? \Carbon\Carbon::parse($imp->vigente_desde) : null;
+                $hasta = $imp->vigente_hasta ? \Carbon\Carbon::parse($imp->vigente_hasta) : null;
+                $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
+
+                if ($aplicaVentas && $vigente) {
+                    $impId = (int) $imp->id;
+
+                    if (!is_null($imp->porcentaje)) {
+                        $ivaPct = (float) $imp->porcentaje;
+
+                        if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
+                            $precioBase = $precioBase > 0
+                                ? round($precioBase / (1 + $ivaPct / 100), 2)
+                                : 0.0;
+                        }
+                    } else {
+                        $ivaPct = 0.0;
+                    }
+                }
+            }
+
+            if (empty($this->lineas[$i]['descripcion'])) {
+                $this->lineas[$i]['descripcion'] = (string) ($p->nombre ?? '');
+            }
+
+            $this->lineas[$i]['precio_unitario'] = round($precioBase, 2);
+            $this->lineas[$i]['impuesto_id']     = $impId;
+            $this->lineas[$i]['impuesto_pct']    = $ivaPct;
+
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->syncProductosSeleccionados();
+
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('$refresh');
+        } catch (\Throwable $e) {
+            report($e);
+
+            PendingToast::create()
+                ->error()
+                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo establecer el producto.')
+                ->duration(7000);
+        }
+    }
 
     public function setImpuesto(int $i, $impuestoId): void
     {
@@ -1080,87 +1073,41 @@ public array $productosSeleccionados = [];
         }, 3);
     }
 
-  public function buscarProductos(string $search = ''): array
-{
-    $search = trim($search);
+    public function buscarProductos(string $search = ''): array
+    {
+        $search = trim($search);
 
-    $query = Producto::query()
-        ->where('activo', 1)
-        ->select(['id', 'nombre']);
+        $query = Producto::query()
+            ->where('activo', 1)
+            ->select(['id', 'nombre']);
 
-    if (Schema::hasColumn('productos', 'codigo')) {
-        $query->addSelect('codigo');
-    }
-
-    if (Schema::hasColumn('productos', 'ItemCode')) {
-        $query->addSelect('ItemCode');
-    }
-
-    if ($search !== '') {
-        $query->where(function ($q) use ($search) {
-            $q->where('nombre', 'like', '%' . $search . '%');
-
-            if (Schema::hasColumn('productos', 'codigo')) {
-                $q->orWhere('codigo', 'like', '%' . $search . '%');
-            }
-
-            if (Schema::hasColumn('productos', 'ItemCode')) {
-                $q->orWhere('ItemCode', 'like', '%' . $search . '%');
-            }
-        });
-    }
-
-    $productos = $query
-        ->orderBy('nombre')
-        ->get();
-
-    return $productos->map(function ($p) {
-        $codigo = null;
-
-        if (isset($p->ItemCode) && !empty($p->ItemCode)) {
-            $codigo = $p->ItemCode;
-        } elseif (isset($p->codigo) && !empty($p->codigo)) {
-            $codigo = $p->codigo;
+        if (Schema::hasColumn('productos', 'codigo')) {
+            $query->addSelect('codigo');
         }
 
-        return [
-            'id'   => (string) $p->id,
-            'text' => $codigo ? ($codigo . ' - ' . $p->nombre) : $p->nombre,
-        ];
-    })->values()->toArray();
-}
+        if (Schema::hasColumn('productos', 'ItemCode')) {
+            $query->addSelect('ItemCode');
+        }
 
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre', 'like', '%' . $search . '%');
 
+                if (Schema::hasColumn('productos', 'codigo')) {
+                    $q->orWhere('codigo', 'like', '%' . $search . '%');
+                }
 
- private function syncProductosSeleccionados(): void
-{
-    $ids = collect($this->lineas)
-        ->pluck('producto_id')
-        ->filter()
-        ->map(fn($id) => (int) $id)
-        ->unique()
-        ->values();
+                if (Schema::hasColumn('productos', 'ItemCode')) {
+                    $q->orWhere('ItemCode', 'like', '%' . $search . '%');
+                }
+            });
+        }
 
-    if ($ids->isEmpty()) {
-        $this->productosSeleccionados = [];
-        return;
-    }
+        $productos = $query
+            ->orderBy('nombre')
+            ->get();
 
-    $query = Producto::query()
-        ->whereIn('id', $ids)
-        ->select(['id', 'nombre']);
-
-    if (Schema::hasColumn('productos', 'codigo')) {
-        $query->addSelect('codigo');
-    }
-
-    if (Schema::hasColumn('productos', 'ItemCode')) {
-        $query->addSelect('ItemCode');
-    }
-
-    $this->productosSeleccionados = $query
-        ->get()
-        ->mapWithKeys(function ($p) {
+        return $productos->map(function ($p) {
             $codigo = null;
 
             if (isset($p->ItemCode) && !empty($p->ItemCode)) {
@@ -1170,11 +1117,57 @@ public array $productosSeleccionados = [];
             }
 
             return [
-                (int) $p->id => $codigo ? ($codigo . ' - ' . $p->nombre) : $p->nombre,
+                'id'   => (string) $p->id,
+                'text' => $codigo ? ($codigo . ' - ' . $p->nombre) : $p->nombre,
             ];
-        })
-        ->toArray();
-}
+        })->values()->toArray();
+    }
+
+
+
+    private function syncProductosSeleccionados(): void
+    {
+        $ids = collect($this->lineas)
+            ->pluck('producto_id')
+            ->filter()
+            ->map(fn($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            $this->productosSeleccionados = [];
+            return;
+        }
+
+        $query = Producto::query()
+            ->whereIn('id', $ids)
+            ->select(['id', 'nombre']);
+
+        if (Schema::hasColumn('productos', 'codigo')) {
+            $query->addSelect('codigo');
+        }
+
+        if (Schema::hasColumn('productos', 'ItemCode')) {
+            $query->addSelect('ItemCode');
+        }
+
+        $this->productosSeleccionados = $query
+            ->get()
+            ->mapWithKeys(function ($p) {
+                $codigo = null;
+
+                if (isset($p->ItemCode) && !empty($p->ItemCode)) {
+                    $codigo = $p->ItemCode;
+                } elseif (isset($p->codigo) && !empty($p->codigo)) {
+                    $codigo = $p->codigo;
+                }
+
+                return [
+                    (int) $p->id => $codigo ? ($codigo . ' - ' . $p->nombre) : $p->nombre,
+                ];
+            })
+            ->toArray();
+    }
 
     private function ensureCuentasEnLineas(): void
     {
@@ -1208,36 +1201,36 @@ public array $productosSeleccionados = [];
         return (float)($stock ?? 0);
     }
 
-   private function nombreProducto(int $productoId): string
-{
-    $query = Producto::query()->select(['id', 'nombre']);
+    private function nombreProducto(int $productoId): string
+    {
+        $query = Producto::query()->select(['id', 'nombre']);
 
-    if (Schema::hasColumn('productos', 'codigo')) {
-        $query->addSelect('codigo');
+        if (Schema::hasColumn('productos', 'codigo')) {
+            $query->addSelect('codigo');
+        }
+
+        if (Schema::hasColumn('productos', 'ItemCode')) {
+            $query->addSelect('ItemCode');
+        }
+
+        $p = $query->find($productoId);
+
+        if (!$p) {
+            return 'Producto #' . $productoId;
+        }
+
+        $codigo = null;
+
+        if (isset($p->ItemCode) && !empty($p->ItemCode)) {
+            $codigo = $p->ItemCode;
+        } elseif (isset($p->codigo) && !empty($p->codigo)) {
+            $codigo = $p->codigo;
+        }
+
+        return $codigo
+            ? ($codigo . ' - ' . ($p->nombre ?? ''))
+            : ($p->nombre ?? ('Producto #' . $productoId));
     }
-
-    if (Schema::hasColumn('productos', 'ItemCode')) {
-        $query->addSelect('ItemCode');
-    }
-
-    $p = $query->find($productoId);
-
-    if (!$p) {
-        return 'Producto #' . $productoId;
-    }
-
-    $codigo = null;
-
-    if (isset($p->ItemCode) && !empty($p->ItemCode)) {
-        $codigo = $p->ItemCode;
-    } elseif (isset($p->codigo) && !empty($p->codigo)) {
-        $codigo = $p->codigo;
-    }
-
-    return $codigo
-        ? ($codigo . ' - ' . ($p->nombre ?? ''))
-        : ($p->nombre ?? ('Producto #' . $productoId));
-}
 
     private function faltantesDeStock(): array
     {
@@ -1299,53 +1292,53 @@ public array $productosSeleccionados = [];
         return ($b->codigo ? $b->codigo . ' - ' : '') . ($b->nombre ?? 'Bodega');
     }
 
-   public function guardar(): void
-{
-    if ($this->abortIfLocked('guardar')) return;
+    public function guardar(): void
+    {
+        if ($this->abortIfLocked('guardar')) return;
 
-    try {
-        $this->ensureCuentasEnLineas();
-        $this->normalizarPagoAntesDeValidar();
-
-        if (!$this->validarConToast()) return;
-
-        // ✅ Solo advertencia de stock al guardar, no bloqueo
         try {
-            InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
-        } catch (\Throwable $ex) {
+            $this->ensureCuentasEnLineas();
+            $this->normalizarPagoAntesDeValidar();
+
+            if (!$this->validarConToast()) return;
+
+            // ✅ Solo advertencia de stock al guardar, no bloqueo
+            try {
+                InventarioService::verificarDisponibilidadParaFactura($this->buildFakeFacturaFromLines());
+            } catch (\Throwable $ex) {
+                PendingToast::create()
+                    ->warning()
+                    ->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
+                    ->duration(9000);
+            }
+
+            // ✅ Siempre guardar como borrador, incluso si es contado
+            $this->persistirBorrador();
+
+            $this->factura->refresh()->recalcularTotales()->save();
+
             PendingToast::create()
-                ->warning()
-                ->message('Advertencia de stock: ' . ($ex->getMessage() ?: 'verifica disponibilidad.'))
+                ->success()
+                ->message(
+                    $this->tipo_pago === 'contado'
+                        ? 'Factura de contado guardada como borrador. Ahora puedes registrar el pago cuando desees.'
+                        : 'Factura guardada como borrador.'
+                )
+                ->duration(5000);
+
+            $this->dispatch('refrescar-lista-facturas');
+        } catch (\Throwable $e) {
+            Log::error('GUARDAR ERROR', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            PendingToast::create()
+                ->error()
+                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
                 ->duration(9000);
         }
-
-        // ✅ Siempre guardar como borrador, incluso si es contado
-        $this->persistirBorrador();
-
-        $this->factura->refresh()->recalcularTotales()->save();
-
-        PendingToast::create()
-            ->success()
-            ->message(
-                $this->tipo_pago === 'contado'
-                    ? 'Factura de contado guardada como borrador. Ahora puedes registrar el pago cuando desees.'
-                    : 'Factura guardada como borrador.'
-            )
-            ->duration(5000);
-
-        $this->dispatch('refrescar-lista-facturas');
-    } catch (\Throwable $e) {
-        Log::error('GUARDAR ERROR', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        PendingToast::create()
-            ->error()
-            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')
-            ->duration(9000);
     }
-}
     private function verificarStockParaLineas(): bool
     {
         try {
@@ -1357,131 +1350,133 @@ public array $productosSeleccionados = [];
         }
     }
 
-   public function emitir(): void
-{
-    if ($this->abortIfLocked('emitir')) return;
+    public function emitir(): void
+    {
+        if ($this->abortIfLocked('emitir')) return;
 
-    try {
-        $this->ensureCuentasEnLineas();
-        $this->normalizarPagoAntesDeValidar();
+        try {
+            $this->ensureCuentasEnLineas();
+            $this->normalizarPagoAntesDeValidar();
 
-        if (!$this->validarConToast()) return;
+            if (!$this->validarConToast()) return;
 
-        DB::transaction(function () {
-            // 1) Guardar primero como borrador
-            $this->persistirBorrador();
+            DB::transaction(function () {
+                // 1) Guardar primero como borrador
+                $this->persistirBorrador();
 
-            $this->factura->refresh()
-                ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo'])
-                ->recalcularTotales()
-                ->save();
+                $this->factura->refresh()
+                    ->loadMissing(['detalles', 'cliente', 'socioNegocio', 'serie.tipo'])
+                    ->recalcularTotales()
+                    ->save();
 
-            // 2) Validar serie
-            $serie = $this->serie_id
-                ? Serie::find((int) $this->serie_id)
-                : $this->serieDefault;
+                // 2) Validar serie
+                $serie = $this->serie_id
+                    ? Serie::find((int) $this->serie_id)
+                    : $this->serieDefault;
 
-            if (!$serie) {
-                throw new \RuntimeException('No hay una serie válida para emitir este documento.');
-            }
-
-            // 3) Validaciones de líneas
-            foreach ($this->factura->detalles as $idx => $d) {
-                if (empty($d->cuenta_ingreso_id)) {
-                    throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
+                if (!$serie) {
+                    throw new \RuntimeException('No hay una serie válida para emitir este documento.');
                 }
 
-                if (!$d->producto_id || !$d->bodega_id) {
-                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
+                // 3) Validaciones de líneas
+                foreach ($this->factura->detalles as $idx => $d) {
+                    if (empty($d->cuenta_ingreso_id)) {
+                        throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
+                    }
+
+                    if (!$d->producto_id || !$d->bodega_id) {
+                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
+                    }
+
+                    if ((float) ($d->cantidad ?? 0) <= 0) {
+                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
+                    }
                 }
 
-                if ((float) ($d->cantidad ?? 0) <= 0) {
-                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
+                // 4) Verificar stock antes de emitir
+                InventarioService::verificarDisponibilidadParaFactura($this->factura);
+
+                // 5) Si es contado, exigir pago total antes de emitir
+                if ($this->tipo_pago === 'contado') {
+                    $this->factura->loadMissing('pagos');
+                    $this->factura->recalcularTotales()->save();
+                    $this->factura->refresh();
+
+                    $total    = round((float) ($this->factura->total ?? 0), 2);
+                    $pagado   = round((float) ($this->factura->pagos()->sum('monto') ?? 0), 2);
+                    $faltante = round($total - $pagado, 2);
+
+                    if ($faltante > 0.01) {
+                        throw new \RuntimeException('Para emitir una factura de contado, primero debes registrar el pago completo.');
+                    }
                 }
-            }
 
-            // 4) Verificar stock antes de emitir
-            InventarioService::verificarDisponibilidadParaFactura($this->factura);
-
-            // 5) Si es contado, exigir pago total antes de emitir
-            if ($this->tipo_pago === 'contado') {
-                $this->factura->refresh()->recalcularTotales()->save();
-
-                $total    = round((float) ($this->factura->total ?? 0), 2);
-                $pagado   = round((float) ($this->factura->pagado ?? 0), 2);
-                $faltante = round($total - $pagado, 2);
-
-                if ($faltante > 0.01) {
-                    throw new \RuntimeException('Para emitir una factura de contado, primero debes registrar el pago completo.');
+                // 6) Si ya estaba emitida, no volver a emitir
+                if (($this->factura->estado ?? null) === 'emitida') {
+                    throw new \RuntimeException('La factura ya fue emitida.');
                 }
-            }
 
-            // 6) Si ya estaba emitida, no volver a emitir
-            if (($this->factura->estado ?? null) === 'emitida') {
-                throw new \RuntimeException('La factura ya fue emitida.');
-            }
+                // 7) Tomar consecutivo y actualizar estado
+                $numero = $serie->tomarConsecutivo();
+                $uid = Auth::id();
 
-            // 7) Tomar consecutivo y actualizar estado
-            $numero = $serie->tomarConsecutivo();
-            $uid = Auth::id();
+                $dataUpdate = [
+                    'serie_id' => $serie->id,
+                    'numero'   => $numero,
+                    'prefijo'  => $serie->prefijo,
+                    'estado'   => 'emitida',
+                ];
 
-            $dataUpdate = [
-                'serie_id' => $serie->id,
-                'numero'   => $numero,
-                'prefijo'  => $serie->prefijo,
-                'estado'   => 'emitida',
-            ];
+                if (Schema::hasColumn('facturas', 'emitido_por_id')) {
+                    $dataUpdate['emitido_por_id'] = $uid;
+                }
 
-            if (Schema::hasColumn('facturas', 'emitido_por_id')) {
-                $dataUpdate['emitido_por_id'] = $uid;
-            }
+                if (Schema::hasColumn('facturas', 'emitido_en')) {
+                    $dataUpdate['emitido_en'] = now();
+                }
 
-            if (Schema::hasColumn('facturas', 'emitido_en')) {
-                $dataUpdate['emitido_en'] = now();
-            }
+                if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
+                    $dataUpdate['actualizado_por_id'] = $uid;
+                }
 
-            if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
-                $dataUpdate['actualizado_por_id'] = $uid;
-            }
+                $this->factura->update($dataUpdate);
 
-            $this->factura->update($dataUpdate);
+                // 8) Contabilizar
+                ContabilidadService::asientoDesdeFactura($this->factura);
 
-            // 8) Contabilizar
-            ContabilidadService::asientoDesdeFactura($this->factura);
+                // 9) Descontar inventario
+                InventarioService::descontarPorFactura($this->factura);
 
-            // 9) Descontar inventario
-            InventarioService::descontarPorFactura($this->factura);
+                $this->estado = 'emitida';
+            }, 3);
 
-            $this->estado = 'emitida';
-        }, 3);
+            PendingToast::create()
+                ->success()
+                ->message(
+                    'Factura emitida (ID: ' . $this->factura->id .
+                        ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
+                )
+                ->duration(6000);
 
-        PendingToast::create()
-            ->success()
-            ->message(
-                'Factura emitida (ID: ' . $this->factura->id .
-                ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
-            )
-            ->duration(6000);
+            $this->cerrarSiAplicada();
+            $this->resetFormulario();
+            $this->dispatch('refrescar-lista-facturas');
+        } catch (\Throwable $e) {
+            Log::error('EMITIR ERROR', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
 
-        $this->cerrarSiAplicada();
-        $this->resetFormulario();
-        $this->dispatch('refrescar-lista-facturas');
-    } catch (\Throwable $e) {
-        Log::error('EMITIR ERROR', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        PendingToast::create()
-            ->error()
-            ->message(
-                config('app.debug')
-                    ? ($e->getMessage() ?: 'No se pudo emitir la factura.')
-                    : 'No se pudo emitir la factura.'
-            )
-            ->duration(12000);
+            PendingToast::create()
+                ->error()
+                ->message(
+                    config('app.debug')
+                        ? ($e->getMessage() ?: 'No se pudo emitir la factura.')
+                        : 'No se pudo emitir la factura.'
+                )
+                ->duration(12000);
+        }
     }
-}
 
 
     public function anular(): void
@@ -1519,32 +1514,32 @@ public array $productosSeleccionados = [];
         }
     }
 
-  public function abrirPagos(): void
-{
-    if ($this->abortIfLocked('registrar pagos')) return;
+    public function abrirPagos(): void
+    {
+        if ($this->abortIfLocked('registrar pagos')) return;
 
-    try {
-        if (!$this->verificarStockParaLineas()) {
-            PendingToast::create()
-                ->error()
-                ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
-                ->duration(8000);
-            return;
+        try {
+            if (!$this->verificarStockParaLineas()) {
+                PendingToast::create()
+                    ->error()
+                    ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                    ->duration(8000);
+                return;
+            }
+
+            if (!$this->factura?->id) {
+                $this->guardar();
+                if (!$this->factura?->id) return;
+            }
+
+            $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
+                ->to(\App\Livewire\Facturas\PagosFactura::class);
+        } catch (\Throwable $e) {
+            $msg = trim((string) $e->getMessage());
+            if ($msg === '') $msg = 'Ocurrió un error inesperado.';
+            PendingToast::create()->error()->message('Error al abrir pagos: ' . $msg)->duration(9000);
         }
-
-        if (!$this->factura?->id) {
-            $this->guardar();
-            if (!$this->factura?->id) return;
-        }
-
-        $this->dispatch('abrir-modal-pago', facturaId: $this->factura->id)
-            ->to(\App\Livewire\Facturas\PagosFactura::class);
-    } catch (\Throwable $e) {
-        $msg = trim((string) $e->getMessage());
-        if ($msg === '') $msg = 'Ocurrió un error inesperado.';
-        PendingToast::create()->error()->message('Error al abrir pagos: ' . $msg)->duration(9000);
     }
-}
 
 
     public function getProximoPreviewProperty(): ?string

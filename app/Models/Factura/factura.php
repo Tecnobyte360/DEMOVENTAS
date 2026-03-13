@@ -101,37 +101,43 @@ class Factura extends Model
     }
 
     public function recalcularTotales(): self
-    {
-        $detalles = $this->relationLoaded('detalles')
-            ? $this->detalles
-            : $this->detalles()->get();
+{
+    $this->loadMissing(['detalles', 'pagos']);
 
-        $subtotal = 0.0;
-        $impuestos = 0.0;
+    $subtotal = 0;
+    $impuestos = 0;
 
-        foreach ($detalles as $d) {
-            $cantidad = (float) ($d->cantidad ?? 0);
-            $precio = (float) ($d->precio_unitario ?? 0);
-            $descuentoPct = (float) ($d->descuento_pct ?? 0);
-            $impuestoPct = (float) ($d->impuesto_pct ?? 0);
+    foreach ($this->detalles as $d) {
+        $cantidad     = (float) ($d->cantidad ?? 0);
+        $precio       = (float) ($d->precio_unitario ?? 0);
+        $descuentoPct = (float) ($d->descuento_pct ?? 0);
+        $impuestoPct  = (float) ($d->impuesto_pct ?? 0);
 
-            if ($cantidad <= 0) {
-                continue;
-            }
-
-            $base = $cantidad * $precio * (1 - ($descuentoPct / 100));
-            $iva = $base * ($impuestoPct / 100);
-
-            $subtotal += $base;
-            $impuestos += $iva;
+        if ($cantidad <= 0) {
+            continue;
         }
 
-        $this->subtotal = round($subtotal, 2);
-        $this->impuestos = round($impuestos, 2);
-        $this->total = round($subtotal + $impuestos, 2);
+        $base = $cantidad * $precio * (1 - ($descuentoPct / 100));
+        $iva  = $base * ($impuestoPct / 100);
 
-        return $this;
+        $subtotal += $base;
+        $impuestos += $iva;
     }
+
+    $total = round($subtotal + $impuestos, 2);
+
+    // ✅ sumar pagos reales
+    $pagado = round((float) $this->pagos()->sum('monto'), 2);
+    $saldo  = round(max($total - $pagado, 0), 2);
+
+    $this->subtotal  = round($subtotal, 2);
+    $this->impuestos = round($impuestos, 2);
+    $this->total     = $total;
+    $this->pagado    = $pagado;
+    $this->saldo     = $saldo;
+
+    return $this;
+}
     public function registrarPago(array $data): FacturaPago
 {
     $pago = $this->pagos()->create([

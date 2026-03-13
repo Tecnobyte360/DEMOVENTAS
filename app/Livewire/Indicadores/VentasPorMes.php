@@ -24,48 +24,51 @@ class VentasPorMes extends Component
         $this->cargar();
     }
 
-
     protected function cargar(): void
     {
         $year = now()->year;
 
         $rows = DB::table('facturas as f')
             ->join('series as s', 's.id', '=', 'f.serie_id')
-
             ->selectRaw('MONTH(f.fecha) as mes')
-
             ->selectRaw("
-        SUM(CASE 
-            WHEN f.total > 0 AND f.tipo_pago = 'contado' 
-            THEN f.total ELSE 0 END
-        ) as contado
-    ")
-
+            SUM(
+                CASE
+                    WHEN f.total > 0 AND f.tipo_pago = 'contado'
+                    THEN f.total
+                    ELSE 0
+                END
+            ) as contado
+        ")
             ->selectRaw("
-        SUM(CASE 
-            WHEN f.total > 0 AND f.tipo_pago = 'credito' 
-            THEN f.total ELSE 0 END
-        ) as credito
-    ")
-
+            SUM(
+                CASE
+                    WHEN f.total > 0 AND f.tipo_pago = 'credito'
+                    THEN f.total
+                    ELSE 0
+                END
+            ) as credito
+        ")
             ->selectRaw("
-        SUM(CASE 
-            WHEN f.total < 0 
-            THEN f.total ELSE 0 END
-        ) as notas_credito
-    ")
-
+            SUM(
+                CASE
+                    WHEN f.total < 0
+                    THEN f.total
+                    ELSE 0
+                END
+            ) as notas_credito
+        ")
             ->selectRaw("SUM(f.total) as neto")
+            ->whereYear('f.fecha', $year)
 
-            ->whereYear('f.fecha', now()->year)
-
-            // SOLO FACTURAS DE VENTA
+            // Solo facturas de venta FRM
             ->where('s.prefijo', 'FRM')
 
-            // SOLO FACTURAS REALES
+            // Solo facturas realmente emitidas (ya tienen número)
             ->whereNotNull('f.numero')
+            ->where('f.numero', '!=', '')
 
-            // NO ANULADAS
+            // Excluir anuladas
             ->where('f.estado', '!=', 'anulada')
 
             ->groupByRaw('MONTH(f.fecha)')
@@ -88,7 +91,6 @@ class VentasPorMes extends Component
         $this->totalAnioNeto = 0;
 
         for ($m = 1; $m <= 12; $m++) {
-
             $r = $rows->get($m);
 
             $contado = (float) ($r->contado ?? 0);
@@ -107,6 +109,7 @@ class VentasPorMes extends Component
             $this->totalAnioNeto += $neto;
         }
     }
+
 
     public function render()
     {

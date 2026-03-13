@@ -79,7 +79,7 @@ class Create extends Component
             ? $modelClass::query()->orderBy('nombre')->get(['id', 'nombre'])
             : collect();
 
-        $this->municipios = $q->map(fn ($m) => ['id' => $m->id, 'nombre' => $m->nombre])->toArray();
+        $this->municipios = $q->map(fn($m) => ['id' => $m->id, 'nombre' => $m->nombre])->toArray();
 
         if (empty($this->municipios)) {
             $this->municipios = [
@@ -195,128 +195,173 @@ class Create extends Component
     /* ============================================================
      |  GUARDAR
      ============================================================ */
-    public function save(): void
+
+    private function toastSuccess(?string $message, int $duration = 5000): void
     {
-        // Si la columna FK NO existe, mejor fallar elegante (para que "obligatorio" tenga sentido)
-        if (!Schema::hasColumn('socio_negocios', 'condicion_pago_id')) {
-            PendingToast::create()
-                ->danger()
-                ->title('Configuración faltante')
-                ->message('La tabla socio_negocios no tiene la columna condicion_pago_id. Agrégala para guardar la condición de pago.');
-            return;
+        $msg = trim((string) $message);
+
+        if ($msg === '') {
+            $msg = 'Operación realizada correctamente.';
         }
 
-        $this->validate();
-
-        try {
-            DB::transaction(function () {
-
-                $cp = CondicionPago::findOrFail($this->condicion_pago_id);
-
-                // Base del socio
-                $data = [
-                    'razon_social'     => trim($this->razon_social),
-                    'nit'              => trim((string) $this->nit),
-                    'Tipo'             => strtoupper($this->Tipo ?? 'C'),
-
-                    'telefono_fijo'    => trim((string) $this->telefono_fijo),
-                    'telefono_movil'   => trim((string) $this->telefono_movil),
-                    'correo'           => trim((string) $this->correo),
-                    'direccion'        => trim((string) $this->direccion),
-
-                    'municipio_barrio' => $this->municipio_barrio ? trim((string) $this->municipio_barrio) : null,
-                    'saldo_pendiente'  => (float) ($this->saldo_pendiente ?: 0),
-
-                    // fiscales
-                    'tipo_persona'                => $this->tipo_persona,
-                    'regimen_iva'                 => $this->regimen_iva,
-                    'regimen_simple'              => (bool) $this->regimen_simple,
-                    'municipio_id'                => $this->municipio_id,
-                    'actividad_economica'         => $this->actividad_economica ? trim((string) $this->actividad_economica) : null,
-                    'direccion_medios_magneticos' => $this->direccion_medios_magneticos ? trim((string) $this->direccion_medios_magneticos) : null,
-
-                    // ✅ FK obligatoria
-                    'condicion_pago_id' => (int) $this->condicion_pago_id,
-                ];
-
-                // ============================
-                // LEGACY (si existe columna)
-                // ============================
-                if (Schema::hasColumn('socio_negocios', 'condicion_pago')) {
-                    $data = array_merge($data, [
-                        'condicion_pago'       => $cp->tipo, // contado|credito
-                        'plazo_dias'           => $cp->tipo === 'credito' ? $cp->plazo_dias : null,
-                        'interes_mora_pct'     => $cp->tipo === 'credito' ? $cp->interes_mora_pct : null,
-                        'limite_credito'       => $cp->tipo === 'credito' ? $cp->limite_credito : null,
-                        'tolerancia_mora_dias' => $cp->tipo === 'credito' ? $cp->tolerancia_mora_dias : null,
-                        'dia_corte'            => $cp->tipo === 'credito' ? $cp->dia_corte : null,
-                    ]);
-                }
-
-                // Crear socio
-                $socio = SocioNegocio::create($data);
-
-                // Snapshot JSON (si existe columna condiciones_pago)
-                if (Schema::hasColumn('socio_negocios', 'condiciones_pago')) {
-                    $socio->condiciones_pago = [
-                        'id'                   => $cp->id,
-                        'nombre'               => $cp->nombre,
-                        'tipo'                 => $cp->tipo,
-                        'plazo_dias'           => $cp->plazo_dias,
-                        'interes_mora_pct'     => $cp->interes_mora_pct,
-                        'limite_credito'       => $cp->limite_credito,
-                        'tolerancia_mora_dias' => $cp->tolerancia_mora_dias,
-                        'dia_corte'            => $cp->dia_corte,
-                        'activo'               => (bool) ($cp->activo ?? true),
-                    ];
-                    $socio->save();
-                }
-
-                // Direcciones (solo si hay texto en dirección)
-                $primerCreadoId   = null;
-                $marcadaPrincipal = false;
-
-                foreach ($this->direcciones as $d) {
-                    $direccionTxt = trim((string) ($d['direccion'] ?? ''));
-                    if ($direccionTxt === '') continue;
-
-                    $fila = SocioDireccion::create([
-                        'socio_negocio_id' => $socio->id,
-                        'tipo'             => 'entrega',
-                        'nombre'           => $d['nombre'] ?? null,
-                        'direccion'        => $direccionTxt,
-                        'referencia'       => $d['referencia'] ?? null,
-                        'municipio_id'     => $d['municipio_id'] ?? null,
-                        'es_principal'     => (bool) ($d['es_principal'] ?? false),
-                    ]);
-
-                    $primerCreadoId   ??= $fila->id;
-                    $marcadaPrincipal = $marcadaPrincipal || (bool) $fila->es_principal;
-                }
-
-                if (!$marcadaPrincipal && $primerCreadoId) {
-                    SocioDireccion::where('id', $primerCreadoId)->update(['es_principal' => true]);
-                }
-            });
-
-            PendingToast::create()
-                ->success()
-                ->title('Socio creado')
-                ->message('Socio creado correctamente.');
-
-            $this->resetFormulario();
-            $this->dispatch('socioCreado');
-
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('Error creando socio', ['error' => $e->getMessage()]);
-
-            PendingToast::create()
-                ->danger()
-                ->title('Error')
-                ->message('No se pudo crear el socio. Revisa los datos e intenta de nuevo.');
-        }
+        PendingToast::create()
+            ->success()
+            ->message($msg)
+            ->duration($duration)
+            ->dispatch();
     }
+
+    private function toastError(?string $message = null, int $duration = 8000): void
+    {
+        $msg = trim((string) $message);
+
+        if ($msg === '') {
+            $msg = 'Ocurrió un error inesperado.';
+        }
+
+        PendingToast::create()
+            ->error()
+            ->message($msg)
+            ->duration($duration)
+            ->dispatch();
+    }
+
+
+    private function toastWarning(?string $message, int $duration = 7000): void
+    {
+        $msg = trim((string) $message);
+
+        if ($msg === '') {
+            $msg = 'Revisa la información ingresada.';
+        }
+
+        PendingToast::create()
+            ->warning()
+            ->message($msg)
+            ->duration($duration)
+            ->dispatch();
+    }
+
+public function save(): void
+{
+    if (!Schema::hasColumn('socio_negocios', 'condicion_pago_id')) {
+        $this->toastWarning(
+            'La tabla socio_negocios no tiene la columna condicion_pago_id. Agrégala para guardar la condición de pago.',
+            8000
+        );
+        return;
+    }
+
+    $this->validate();
+
+    try {
+        DB::transaction(function () {
+            $cp = CondicionPago::findOrFail($this->condicion_pago_id);
+
+            $data = [
+                'razon_social'     => trim($this->razon_social),
+                'nit'              => trim((string) $this->nit),
+                'Tipo'             => strtoupper($this->Tipo ?? 'C'),
+
+                'telefono_fijo'    => trim((string) $this->telefono_fijo),
+                'telefono_movil'   => trim((string) $this->telefono_movil),
+                'correo'           => trim((string) $this->correo),
+                'direccion'        => trim((string) $this->direccion),
+
+                'municipio_barrio' => $this->municipio_barrio ? trim((string) $this->municipio_barrio) : null,
+                'saldo_pendiente'  => (float) ($this->saldo_pendiente ?: 0),
+
+                'tipo_persona'                => $this->tipo_persona,
+                'regimen_iva'                 => $this->regimen_iva,
+                'regimen_simple'              => (bool) $this->regimen_simple,
+                'municipio_id'                => $this->municipio_id,
+                'actividad_economica'         => $this->actividad_economica ? trim((string) $this->actividad_economica) : null,
+                'direccion_medios_magneticos' => $this->direccion_medios_magneticos ? trim((string) $this->direccion_medios_magneticos) : null,
+
+                'condicion_pago_id' => (int) $this->condicion_pago_id,
+            ];
+
+            if (Schema::hasColumn('socio_negocios', 'condicion_pago')) {
+                $data = array_merge($data, [
+                    'condicion_pago'       => $cp->tipo,
+                    'plazo_dias'           => $cp->tipo === 'credito' ? $cp->plazo_dias : null,
+                    'interes_mora_pct'     => $cp->tipo === 'credito' ? $cp->interes_mora_pct : null,
+                    'limite_credito'       => $cp->tipo === 'credito' ? $cp->limite_credito : null,
+                    'tolerancia_mora_dias' => $cp->tipo === 'credito' ? $cp->tolerancia_mora_dias : null,
+                    'dia_corte'            => $cp->tipo === 'credito' ? $cp->dia_corte : null,
+                ]);
+            }
+
+            $socio = SocioNegocio::create($data);
+
+            if (Schema::hasColumn('socio_negocios', 'condiciones_pago')) {
+                $socio->condiciones_pago = [
+                    'id'                   => $cp->id,
+                    'nombre'               => $cp->nombre,
+                    'tipo'                 => $cp->tipo,
+                    'plazo_dias'           => $cp->plazo_dias,
+                    'interes_mora_pct'     => $cp->interes_mora_pct,
+                    'limite_credito'       => $cp->limite_credito,
+                    'tolerancia_mora_dias' => $cp->tolerancia_mora_dias,
+                    'dia_corte'            => $cp->dia_corte,
+                    'activo'               => (bool) ($cp->activo ?? true),
+                ];
+                $socio->save();
+            }
+
+            $primerCreadoId   = null;
+            $marcadaPrincipal = false;
+
+            foreach ($this->direcciones as $d) {
+                $direccionTxt = trim((string) ($d['direccion'] ?? ''));
+                if ($direccionTxt === '') {
+                    continue;
+                }
+
+                $fila = SocioDireccion::create([
+                    'socio_negocio_id' => $socio->id,
+                    'tipo'             => 'entrega',
+                    'nombre'           => $d['nombre'] ?? null,
+                    'direccion'        => $direccionTxt,
+                    'referencia'       => $d['referencia'] ?? null,
+                    'municipio_id'     => $d['municipio_id'] ?? null,
+                    'es_principal'     => (bool) ($d['es_principal'] ?? false),
+                ]);
+
+                $primerCreadoId   ??= $fila->id;
+                $marcadaPrincipal = $marcadaPrincipal || (bool) $fila->es_principal;
+            }
+
+            if (!$marcadaPrincipal && $primerCreadoId) {
+                SocioDireccion::where('id', $primerCreadoId)->update([
+                    'es_principal' => true,
+                ]);
+            }
+        });
+
+        $this->toastSuccess('Socio creado correctamente.');
+        $this->resetFormulario();
+        $this->dispatch('socioCreado');
+
+    } catch (\Illuminate\Validation\ValidationException $ve) {
+        $primerError = $ve->validator->errors()->first() ?? 'Revisa los campos obligatorios.';
+        $this->toastWarning($primerError, 7000);
+        return;
+
+    } catch (\Throwable $e) {
+        report($e);
+
+        Log::error('Error creando socio', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+
+        $this->toastError($e->getMessage(), 8000);
+    }
+}
+
+
+
 
     private function resetFormulario(): void
     {
@@ -359,7 +404,7 @@ class Create extends Component
         $condicionesPago = CondicionPago::query()
             ->when(
                 Schema::hasColumn('condicion_pagos', 'activo'),
-                fn ($q) => $q->where('activo', true)
+                fn($q) => $q->where('activo', true)
             )
             ->orderBy('tipo')
             ->orderByRaw('COALESCE(plazo_dias,0)')

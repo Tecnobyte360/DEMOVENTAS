@@ -106,10 +106,10 @@ class ListaFacturas extends Component
         $this->resetPage();
     }
 
-  public function render()
+public function render()
 {
     $query = Factura::query()
-        ->with(['cliente', 'serie', 'creadoPor'])
+        ->with(['cliente', 'serie'])
         ->whereHas('serie.tipo', fn($t) => $t->where('codigo', 'factura'))
         ->latest('id');
 

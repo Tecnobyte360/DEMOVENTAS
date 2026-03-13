@@ -1618,24 +1618,55 @@ class FacturaForm extends Component
         $this->dispatch('$refresh');
     }
 
-  private function cerrarSiAplicada(): void
+private function cerrarSiAplicada(): void
 {
     if (!$this->factura?->id) {
         return;
     }
 
-    $this->factura->refresh()->loadMissing('pagos');
+    $this->factura = Factura::with(['pagos'])->findOrFail($this->factura->id);
     $this->factura->recalcularTotales()->save();
     $this->factura->refresh();
 
-    $this->estado = (string) ($this->factura->estado ?? 'borrador');
+    $total  = round((float) ($this->factura->total ?? 0), 2);
+    $pagado = round((float) $this->factura->pagos->sum('monto'), 2);
+    $falt   = round($total - $pagado, 2);
+
+    // Solo cerrar si ya fue emitida y quedó totalmente pagada
+    if ($falt <= 0.01 && $this->factura->estado === 'emitida') {
+        $data = [
+            'estado' => 'cerrado',
+        ];
+
+        if (Schema::hasColumn('facturas', 'monto_aplicado')) {
+            $data['monto_aplicado'] = $pagado;
+        }
+
+        if (Schema::hasColumn('facturas', 'pagado')) {
+            $data['pagado'] = $pagado;
+        }
+
+        if (Schema::hasColumn('facturas', 'saldo')) {
+            $data['saldo'] = 0;
+        }
+
+        $this->factura->update($data);
+
+        $this->estado = 'cerrado';
+
+        PendingToast::create()
+            ->success()
+            ->message('Factura emitida y pagada completamente.')
+            ->duration(5000);
+    }
 }
+
+
 
   #[On('pago-registrado')]
 public function onPagoRegistrado(int $facturaId): void
 {
     try {
-
         $this->factura = Factura::with(['detalles', 'pagos'])->findOrFail($facturaId);
         $this->factura->recalcularTotales()->save();
         $this->factura = $this->factura->fresh(['detalles', 'pagos']);
@@ -1643,44 +1674,32 @@ public function onPagoRegistrado(int $facturaId): void
         $this->estado    = (string) ($this->factura->estado ?? 'borrador');
         $this->tipo_pago = (string) ($this->factura->tipo_pago ?? $this->tipo_pago);
 
-        $total = round((float) ($this->factura->total ?? 0), 2);
-
-        // 🔴 IMPORTANTE: calcular desde pagos
-        $pagado = round((float) ($this->factura->pagos->sum('monto') ?? 0), 2);
-
+        $total    = round((float) ($this->factura->total ?? 0), 2);
+        $pagado   = round((float) $this->factura->pagos->sum('monto'), 2);
         $faltante = round($total - $pagado, 2);
 
         $esContado = ($this->factura->tipo_pago ?? '') === 'contado';
-
-        // 🔴 no debe estar emitida
         $noEmitida = empty($this->factura->numero)
             && !in_array(($this->factura->estado ?? ''), ['emitida', 'cerrado', 'anulada'], true);
-
         $pagoTotal = ($faltante <= 0.01);
 
-        // ✅ AUTO EMITIR
         if ($esContado && $pagoTotal && $noEmitida) {
-
-            PendingToast::create()
-                ->info()
-                ->message('Pago completo recibido. Emitiendo factura automáticamente...')
-                ->duration(3000);
-
             $this->emitir();
             return;
         }
 
+        // Si ya estaba emitida pero ahora quedó totalmente pagada, cerrar
+        $this->cerrarSiAplicada();
+
         $this->dispatch('$refresh');
-
     } catch (\Throwable $e) {
-
         Log::error('onPagoRegistrado error', [
             'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString()
+            'trace' => $e->getTraceAsString(),
         ]);
 
         PendingToast::create()->error()
-            ->message('El pago se registró, pero no se pudo procesar la factura.')
+            ->message('El pago se registró, pero no se pudo refrescar la factura.')
             ->duration(9000);
     }
 }

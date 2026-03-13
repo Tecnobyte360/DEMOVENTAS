@@ -888,9 +888,12 @@
             </div>
         </footer>
     </section>
-    @if ($showPagos)
-      <livewire:facturas.pagos-factura :facturaId="$factura?->id" :key="'pagos-factura-fixed'" />
-    @endif
+   @if ($showPagos && $factura?->id)
+    <livewire:facturas.pagos-factura
+        :facturaId="$factura->id"
+        :key="'pagos-factura-'.$factura->id"
+    />
+@endif
 </div>
 
 <script>

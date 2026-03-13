@@ -4,6 +4,7 @@ namespace App\Models\Factura;
 
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Factura extends Model
 {
@@ -94,10 +95,11 @@ class Factura extends Model
         return $this->belongsTo(User::class, 'anulado_por_id');
     }
 
-    public function pagos()
+  public function pagos(): HasMany
 {
-    return $this->hasMany(\App\Models\Factura\FacturaPago::class, 'factura_id');
+    return $this->hasMany(FacturaPago::class, 'factura_id');
 }
+
     public function recalcularTotales(): self
     {
         $detalles = $this->relationLoaded('detalles')

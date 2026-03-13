@@ -95,7 +95,7 @@ class Factura extends Model
         return $this->belongsTo(User::class, 'anulado_por_id');
     }
 
-  public function pagos(): HasMany
+public function pagos(): HasMany
 {
     return $this->hasMany(FacturaPago::class, 'factura_id');
 }

@@ -137,7 +137,23 @@ class TurnoCaja extends Component
         ]);
     }
 }
+public function abiertoPor()
+{
+    return $this->belongsTo(\App\Models\User::class, 'abierto_por_id');
+}
 
+public function cerradoPor()
+{
+    return $this->belongsTo(\App\Models\User::class, 'cerrado_por_id');
+}
+public static function turnoPendienteDeCerrar(): ?self
+{
+    return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
+        ->where('estado', 'abierto')
+        ->whereDate('fecha_inicio', '<', now()->toDateString())
+        ->orderBy('fecha_inicio')
+        ->first();
+}
     private function calcularSaldoMedioPago($medio)
     {
         try {

@@ -102,27 +102,20 @@ class ListaFacturasCompra extends Component
     // EDITAR (método que te está faltando)
     // =========================
     public function abrir(int $id): void
-    {
-        $factura = Factura::find($id);
+{
+    $factura = Factura::find($id);
 
-        if (!$factura) {
-            $this->dispatch('notificacion', [
-                'tipo' => 'error',
-                'mensaje' => 'Factura no encontrada'
-            ]);
-            return;
-        }
+    if (!$factura) {
+        PendingToast::create()
+            ->error()
+            ->message('Factura no encontrada')
+            ->duration(5000);
 
-        $this->editId = $id;
-
-        // Cargar campos en el formulario de edición
-        $this->edit_fecha        = $factura->fecha ? \Illuminate\Support\Carbon::parse($factura->fecha)->format('Y-m-d') : null;
-        $this->edit_estado       = $factura->estado;
-        $this->edit_serie_id     = $factura->serie_id;
-        $this->edit_proveedor_id = $factura->socio_negocio_id; // <- ajusta si tu FK se llama distinto
-
-        $this->showEdit = true;
+        return;
     }
+
+    $this->dispatch('abrir-factura', id: $id);
+}
 
     public function cerrarEditar(): void
     {

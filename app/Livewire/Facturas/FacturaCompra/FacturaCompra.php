@@ -1022,6 +1022,17 @@ class FacturaCompra extends Component
         $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
     }
 
+    private function getSerieActual(): ?SerieModel
+    {
+        $serieId = $this->serie_id ?: $this->factura?->serie_id ?: $this->serieDefault?->id;
+
+        if (!$serieId) {
+            return null;
+        }
+
+        return SerieModel::find($serieId);
+    }
+
 
     protected function persistirBorrador(): void
     {
@@ -1038,11 +1049,15 @@ class FacturaCompra extends Component
 
             $esNueva = empty($this->factura->id);
 
-            $serieId = $this->factura->serie_id ?? ($this->serieDefault?->id ?? $this->serie_id);
+            $serieActual = $this->getSerieActual();
+
+            if (!$serieActual) {
+                throw new \RuntimeException('No hay una serie válida seleccionada.');
+            }
 
             $dataCab = [
-                'serie_id'            => $serieId,
-                'prefijo'             => $this->serieDefault?->prefijo ?? $this->factura?->prefijo,
+                'serie_id'            => $serieActual->id,
+                'prefijo'             => $serieActual->prefijo,
                 'socio_negocio_id'    => $this->socio_negocio_id,
                 'fecha'               => $this->fecha,
                 'vencimiento'         => $this->vencimiento ?? $this->fecha,
@@ -1187,22 +1202,22 @@ class FacturaCompra extends Component
                     ->loadMissing(['detalles', 'socioNegocio'])
                     ->recalcularTotales()
                     ->save();
+                $serieActual = $this->getSerieActual();
 
-                if (!$this->serieDefault) {
-                    throw new \RuntimeException('No hay serie default activa para este documento.');
+                if (!$serieActual) {
+                    throw new \RuntimeException('No hay una serie válida seleccionada para emitir.');
                 }
 
-                $numero = $this->serieDefault->tomarConsecutivo();
+                $numero = $serieActual->tomarConsecutivo();
 
                 $this->factura->update([
-                    'serie_id'       => $this->serieDefault->id,
+                    'serie_id'       => $serieActual->id,
                     'numero'         => $numero,
-                    'prefijo'        => $this->serieDefault->prefijo,
+                    'prefijo'        => $serieActual->prefijo,
                     'estado'         => 'emitida',
                     'emitido_por_id' => Auth::id(),
                     'emitido_en'     => now(),
                 ]);
-
                 \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
                 InventarioService::aumentarPorFacturaCompra($this->factura);
 
@@ -1261,22 +1276,25 @@ class FacturaCompra extends Component
         $this->dispatch('$refresh');
     }
 
-    public function getProximoPreviewProperty(): ?string
-    {
-        try {
-            $s = $this->factura?->serie_id ? SerieModel::find($this->factura->serie_id) : $this->serieDefault;
-            if (!$s) return null;
+   public function getProximoPreviewProperty(): ?string
+{
+    try {
+        $s = $this->getSerieActual();
 
-            $n   = max((int)$s->proximo, (int)$s->desde);
-            $len = $s->longitud ?? 6;
-            $num = str_pad((string)$n, $len, '0', STR_PAD_LEFT);
-
-            return ($s->prefijo ? "{$s->prefijo}-" : '') . $num;
-        } catch (Throwable $e) {
-            report($e);
+        if (!$s) {
             return null;
         }
+
+        $n   = max((int) $s->proximo, (int) $s->desde);
+        $len = $s->longitud ?? 6;
+        $num = str_pad((string) $n, $len, '0', STR_PAD_LEFT);
+
+        return ($s->prefijo ? "{$s->prefijo}-" : '') . $num;
+    } catch (Throwable $e) {
+        report($e);
+        return null;
     }
+}
 
     public function getStockDeLinea(int $i): float
     {

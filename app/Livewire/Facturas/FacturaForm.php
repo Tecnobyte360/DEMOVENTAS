@@ -1076,7 +1076,9 @@ class FacturaForm extends Component
                 'plazo_dias'        => $this->plazo_dias,
                 'terminos_pago'     => $this->terminos_pago,
                 'notas'             => $this->notas,
-                'estado'            => 'borrador',
+                'estado'            => in_array(($this->factura->estado ?? ''), ['pagada', 'emitida'], true)
+                    ? $this->factura->estado
+                    : 'borrador',
                 'cuenta_cobro_id'   => $this->cuenta_cobro_id,
                 'condicion_pago_id' => $this->condicion_pago_id,
             ];
@@ -1488,11 +1490,17 @@ class FacturaForm extends Component
                 $numero = $serie->tomarConsecutivo();
                 $uid = Auth::id();
 
+                $total    = round((float) ($this->factura->total ?? 0), 2);
+                $pagado   = round((float) $this->factura->pagos()->sum('monto'), 2);
+                $faltante = round($total - $pagado, 2);
+
+                $estadoFinal = $faltante <= 0.01 ? 'pagada' : 'emitida';
+
                 $dataUpdate = [
                     'serie_id' => $serie->id,
                     'prefijo'  => (string) ($serie->prefijo ?? ''),
                     'numero'   => $numero,
-                    'estado'   => 'emitida',
+                    'estado'   => $estadoFinal,
                 ];
 
                 if (Schema::hasColumn('facturas', 'emitido_por_id')) {
@@ -1537,7 +1545,7 @@ class FacturaForm extends Component
                 $this->factura->recalcularTotales()->save();
                 $this->factura->refresh();
 
-                $this->estado = 'emitida';
+               $this->estado = $estadoFinal;
             }, 3);
 
             $this->factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($this->factura->id);
@@ -1796,8 +1804,7 @@ class FacturaForm extends Component
             $pagoTotal = ($faltante <= 0.01);
 
             $noEmitida = empty($this->factura->numero)
-                && !in_array(($this->factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
-
+                && !in_array(($this->factura->estado ?? ''), ['emitida', 'anulada'], true);
             if ($esContado && $pagoTotal && $noEmitida) {
                 $this->emitir();
 
@@ -2132,7 +2139,7 @@ class FacturaForm extends Component
     }
     public function actualizar(): void
     {
-        if ($this->estado === 'emitida' || $this->bloqueada) {
+      if (in_array($this->estado, ['emitida', 'pagada', 'anulada', 'cerrado'], true) || $this->bloqueada) {
             PendingToast::create()->error()->message('No es posible actualizar: la factura está bloqueada o emitida.')->duration(6000);
             return;
         }

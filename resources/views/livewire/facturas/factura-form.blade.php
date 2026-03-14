@@ -536,9 +536,9 @@
 
                                 {{-- Cantidad --}}
                                 <td class="px-4 py-3 text-right">
-                                   <input type="number" step="0.001" min="0.001"
-    wire:model.live.debounce.200ms="lineas.{{ $i }}.cantidad"
-    class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                    <input type="number" step="0.001" min="0.001"
+                                        wire:model.live.debounce.200ms="lineas.{{ $i }}.cantidad"
+                                        class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
                                 </td>
 
                                 {{-- Precio --}}
@@ -674,10 +674,16 @@
             $pagadoVista = round((float) ($factura?->pagos?->sum('monto') ?? ($factura?->pagado ?? 0)), 2);
             $saldoVista = max(round($totalVista - $pagadoVista, 2), 0);
             $tieneFactura = (bool) $factura?->id;
-            $yaEmitida = !empty($factura?->numero) || in_array($factura?->estado ?? '', ['emitida', 'cerrado'], true);
-            $bloqueaEmitir = !$tieneFactura || $yaEmitida || ($esContado && $saldoVista > 0.01);
-        @endphp
 
+            $tieneNumero = !empty($factura?->numero);
+            $estadoFactura = (string) ($factura?->estado ?? ($estado ?? 'borrador'));
+
+            $yaEmitida = $tieneNumero || in_array($estadoFactura, ['emitida', 'cerrado'], true);
+
+            $pagadaSinNumero = $estadoFactura === 'pagada' && !$tieneNumero;
+
+            $bloqueaEmitir = !$tieneFactura || $yaEmitida || ($esContado && $saldoVista > 0.01 && !$pagadaSinNumero);
+        @endphp
         <footer
             class="sticky bottom-0 inset-x-0 bg-white/85 dark:bg-gray-900/85 backdrop-blur border-t border-gray-200 dark:border-gray-800"
             aria-label="Acciones de factura">
@@ -864,22 +870,32 @@
                                     e: @entangle('estado'),
                                     tipo: @entangle('tipo_pago'),
                                     bloquea: @js((bool) ($bloqueaEmitir ?? false)),
-                                    get contado() { return this.tipo === 'contado' }
+                                    numero: @js((string) ($factura?->numero ?? '')),
+                                    get contado() { return this.tipo === 'contado' },
+                                    get pagadaSinNumero() { return this.e === 'pagada' && !this.numero }
                                 }" wire:click="emitir"
                                     wire:loading.attr="disabled" wire:target="emitir,guardar"
-                                    :disabled="['anulada', 'cerrado', 'emitida'].includes(e) || (contado && bloquea)"
+                                    :disabled="['anulada', 'cerrado', 'emitida'].includes(e) || (contado && bloquea && !
+                                        pagadaSinNumero)"
                                     :class="[
                                         'h-11 px-4 rounded-2xl transition ring-offset-2 shadow disabled:opacity-50 disabled:cursor-not-allowed',
-                                        (contado && bloquea) ?
+                                        (contado && bloquea && !pagadaSinNumero) ?
                                         'bg-gray-400 text-gray-100 cursor-not-allowed' :
                                         'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white'
                                     ]"
-                                    :title="(contado && bloquea) ?
+                                    :title="(contado && bloquea && !pagadaSinNumero) ?
                                     'Factura de contado: requiere pago total antes de emitir' :
                                     'Emitir documento'">
+
                                     <i class="fa-solid fa-stamp mr-2"></i>
-                                    <span wire:loading.remove wire:target="emitir">Emitir</span>
-                                    <span wire:loading wire:target="emitir">Emitiendo…</span>
+
+                                    <span wire:loading.remove wire:target="emitir">
+                                        Emitir
+                                    </span>
+
+                                    <span wire:loading wire:target="emitir">
+                                        Emitiendo…
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -888,12 +904,9 @@
             </div>
         </footer>
     </section>
-   @if ($showPagos && $factura?->id)
-    <livewire:facturas.pagos-factura
-        :facturaId="$factura->id"
-        :key="'pagos-factura-'.$factura->id"
-    />
-@endif
+    @if ($showPagos && $factura?->id)
+        <livewire:facturas.pagos-factura :facturaId="$factura->id" :key="'pagos-factura-' . $factura->id" />
+    @endif
 </div>
 
 <script>
@@ -1013,7 +1026,9 @@
 
         initAll();
 
-        Livewire.hook('morph.removing', ({ el }) => {
+        Livewire.hook('morph.removing', ({
+            el
+        }) => {
             if (el.matches && el.matches('select[data-producto-select]')) {
                 destroyProductoTomSelect(el);
             }
@@ -1031,7 +1046,8 @@
             const lineas = buildLineasPayload(payload?.lineas || []);
 
             lineas.forEach((l, i) => {
-                const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
+                const el = document.querySelector(
+                    `select[data-producto-select][data-linea="${i}"]`);
                 if (!el) return;
 
                 const ts = ensureProductoTomSelect(el);

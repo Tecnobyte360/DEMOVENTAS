@@ -6,7 +6,6 @@
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
     @endpush
 @endonce
-
 @once
     @push('scripts')
         <script>
@@ -37,8 +36,9 @@
                         maxOptions: 500,
                         closeAfterSelect: true,
                         plugins: ['dropdown_input'],
+                        searchField: ['text'],
                         onChange(value) {
-                            @this.set('facturaId', value || null);
+                            @this.call('setFacturaId', value ? parseInt(value) : null);
                         },
                     });
 
@@ -48,15 +48,10 @@
                     }
                 };
 
-                initFacturaSelect();
+                setTimeout(() => initFacturaSelect(), 80);
 
-                Livewire.hook('morph.updated', ({
-                    el,
-                    component
-                }) => {
-                    if (document.getElementById('factura-select')) {
-                        initFacturaSelect();
-                    }
+                Livewire.hook('morph.updated', () => {
+                    setTimeout(() => initFacturaSelect(), 50);
                 });
 
                 Livewire.on('refresh-factura-select', () => {
@@ -331,41 +326,3 @@
         </div>
     </div>
 </div>
-<script>
-    document.addEventListener('livewire:init', () => {
-
-        const initFacturaSelect = () => {
-            const el = document.getElementById('factura-select');
-            if (!el) return;
-
-            if (el.tomselect) el.tomselect.destroy();
-
-            const ts = new TomSelect(el, {
-                placeholder: '— Selecciona una factura —',
-                allowEmptyOption: true,
-                maxOptions: 500,
-                closeAfterSelect: true,
-                plugins: ['dropdown_input'],
-                onChange(value) {
-                    @this.set('facturaId', value || null);
-                },
-            });
-
-            const current = @this.get('facturaId');
-            if (current) ts.setValue(String(current), false);
-        };
-
-        // Inicial
-        initFacturaSelect();
-
-        // Cada re-render del componente
-        Livewire.hook('message.processed', (message, component) => {
-            if (component.fingerprint?.name === 'facturas.pagos-factura') {
-                initFacturaSelect();
-            }
-        });
-
-        // Evento manual cuando cambias tipo/buscar
-        Livewire.on('refresh-factura-select', () => initFacturaSelect());
-    });
-</script>

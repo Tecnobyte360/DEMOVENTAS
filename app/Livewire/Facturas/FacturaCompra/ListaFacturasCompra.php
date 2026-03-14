@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Masmerise\Toaster\PendingToast;
 
 class ListaFacturasCompra extends Component
 {

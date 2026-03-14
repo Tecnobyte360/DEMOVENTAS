@@ -26,7 +26,7 @@ class FacturaCompra extends Component
 {
     public ?Factura $factura = null;
 
-    public string $documento = '';
+  public string $documento = 'facturacompra';
     public ?SerieModel $serieDefault = null;
     public ?int $stockCheck = null;
     public string $modo = 'compra';
@@ -104,76 +104,75 @@ class FacturaCompra extends Component
     /* ======================
      *  Inicialización
      * ====================== */
-    public function mount(?int $id = null): void
-    {
-        $this->fecha = now()->toDateString();
+   public function mount(?int $id = null): void
+{
+    $this->fecha = now()->toDateString();
 
-        // Catálogo PUC (1/5/6) e índice (inventario/gasto/costo)
-        $this->cuentasInventario = PlanCuentas::query()
-            ->where('cuenta_activa', 1)
-            ->where(fn($q) => $q->whereNull('titulo')->orWhere('titulo', 0))
-            ->where(function ($q) {
-                $q->where('codigo', 'like', '1%')   // Activo (Inventarios)
-                    ->orWhere('codigo', 'like', '5%') // Gastos
-                    ->orWhere('codigo', 'like', '6%'); // Costos
-            })
-            ->orderBy('codigo')
-            ->get(['id', 'codigo', 'nombre']);
+    // ✅ Igual que venta: documento fijo para compras
+    $this->documento = 'facturacompra';
+    $this->serieDefault = SerieModel::defaultParaCodigo($this->documento);
 
-        $this->pucIndex = $this->cuentasInventario
-            ->keyBy('id')
-            ->map(fn($c) => ['codigo' => $c->codigo, 'nombre' => $c->nombre])
-            ->toArray();
+    // Catálogo PUC (1/5/6) e índice (inventario/gasto/costo)
+    $this->cuentasInventario = PlanCuentas::query()
+        ->where('cuenta_activa', 1)
+        ->where(fn($q) => $q->whereNull('titulo')->orWhere('titulo', 0))
+        ->where(function ($q) {
+            $q->where('codigo', 'like', '1%')
+                ->orWhere('codigo', 'like', '5%')
+                ->orWhere('codigo', 'like', '6%');
+        })
+        ->orderBy('codigo')
+        ->get(['id', 'codigo', 'nombre']);
 
-        // Si viene a editar: carga + retrocompatibilidad de campo
-        if ($id) {
-            $this->cargarFactura($id);
-            foreach ($this->lineas as &$l) {
-                if (empty($l['cuenta_inventario_id']) && !empty($l['cuenta_ingreso_id'])) {
-                    $l['cuenta_inventario_id'] = (int) $l['cuenta_ingreso_id'];
-                }
+    $this->pucIndex = $this->cuentasInventario
+        ->keyBy('id')
+        ->map(fn($c) => ['codigo' => $c->codigo, 'nombre' => $c->nombre])
+        ->toArray();
+
+    if ($id) {
+        $this->cargarFactura($id);
+
+        foreach ($this->lineas as &$l) {
+            if (empty($l['cuenta_inventario_id']) && !empty($l['cuenta_ingreso_id'])) {
+                $l['cuenta_inventario_id'] = (int) $l['cuenta_ingreso_id'];
             }
-            unset($l);
         }
+        unset($l);
 
-        $this->documento    = $this->detectarCodigoDocumento() ?? '';
-        $this->serieDefault = $this->documento ? SerieModel::defaultParaCodigo($this->documento) : null;
-
-        // Monitoreo de stock
-        $this->stockCheck = 0;
-
-        // CxP por defecto
-        $this->setCuentaCobroPorDefecto();
-
-        // Condición por defecto + vencimiento
-        if (!$this->condicion_pago_id) {
-            $contado = CondicionPago::where('plazo_dias', 0)->value('id');
-            $this->condicion_pago_id = $contado ?: optional(
-                CondicionPago::orderBy('plazo_dias')->first()
-            )->id;
-        }
-        $this->syncCondicionAndDueDate();
-
-        if ($id) {
-            if (!$this->factura->serie_id && $this->serieDefault) {
-                $this->serie_id = $this->serieDefault->id;
-            }
+        if (!$this->factura?->serie_id && $this->serieDefault) {
+            $this->serie_id = $this->serieDefault->id;
         } else {
-            // Nueva factura
-            $this->addLinea();
-            $last = array_key_last($this->lineas);
-            if ($last !== null && !array_key_exists('cuenta_inventario_id', $this->lineas[$last])) {
-                $this->lineas[$last]['cuenta_inventario_id'] = null;
-            }
-            $this->serie_id = $this->serieDefault?->id;
-
-            if ($this->socio_negocio_id) {
-                $this->setCuentaDesdeProveedor((int)$this->socio_negocio_id);
-                $this->setCondicionDesdeProveedor((int)$this->socio_negocio_id);
-            }
+            $this->serie_id = $this->factura?->serie_id ?: $this->serieDefault?->id;
         }
+    } else {
+        $this->addLinea();
+        $last = array_key_last($this->lineas);
+
+        if ($last !== null && !array_key_exists('cuenta_inventario_id', $this->lineas[$last])) {
+            $this->lineas[$last]['cuenta_inventario_id'] = null;
+        }
+
+        $this->serie_id = $this->serieDefault?->id;
     }
 
+    $this->stockCheck = 0;
+
+    $this->setCuentaCobroPorDefecto();
+
+    if (!$this->condicion_pago_id) {
+        $contado = CondicionPago::where('plazo_dias', 0)->value('id');
+        $this->condicion_pago_id = $contado ?: optional(
+            CondicionPago::orderBy('plazo_dias')->first()
+        )->id;
+    }
+
+    $this->syncCondicionAndDueDate();
+
+    if ($this->socio_negocio_id) {
+        $this->setCuentaDesdeProveedor((int) $this->socio_negocio_id);
+        $this->setCondicionDesdeProveedor((int) $this->socio_negocio_id);
+    }
+}
     private function detectarCodigoDocumento(): ?string
     {
         if ($this->factura?->relationLoaded('serie') && $this->factura->serie?->relationLoaded('tipo') && $this->factura->serie->tipo?->codigo) {
@@ -1047,7 +1046,7 @@ class FacturaCompra extends Component
                 $this->factura = new Factura();
             }
 
-            $esNueva = empty($this->factura->id);
+         $esNueva = !$this->factura->exists;
 
             $serieActual = $this->getSerieActual();
 
@@ -1057,7 +1056,7 @@ class FacturaCompra extends Component
 
             $dataCab = [
                 'serie_id'            => $serieActual->id,
-                'prefijo'             => $serieActual->prefijo,
+                'prefijo'             => $serieActual->prefijo ?: '',
                 'socio_negocio_id'    => $this->socio_negocio_id,
                 'fecha'               => $this->fecha,
                 'vencimiento'         => $this->vencimiento ?? $this->fecha,
@@ -1186,55 +1185,98 @@ class FacturaCompra extends Component
         }
     }
 
+public function emitir(): void
+{
+    if ($this->abortIfLocked('emitir')) return;
 
-    public function emitir(): void
-    {
-        if ($this->abortIfLocked('emitir')) return;
+    try {
+        $this->ensureCuentasEnLineas();
 
-        try {
-            $this->ensureCuentasEnLineas();
-            if (!$this->validarConToast()) return;
+        if (!$this->validarConToast()) return;
 
-            DB::transaction(function () {
-                $this->persistirBorrador();
+        DB::transaction(function () {
+            $this->persistirBorrador();
 
-                $this->factura->refresh()
-                    ->loadMissing(['detalles', 'socioNegocio'])
-                    ->recalcularTotales()
-                    ->save();
-                $serieActual = $this->getSerieActual();
+            $this->factura = Factura::with(['detalles', 'serie.tipo'])
+                ->findOrFail($this->factura->id);
 
-                if (!$serieActual) {
-                    throw new \RuntimeException('No hay una serie válida seleccionada para emitir.');
-                }
+            $this->factura->recalcularTotales()->save();
+            $this->factura->refresh();
 
-                $numero = $serieActual->tomarConsecutivo();
+            $serieActual = $this->serie_id
+                ? SerieModel::find((int) $this->serie_id)
+                : $this->serieDefault;
 
-                $this->factura->update([
-                    'serie_id'       => $serieActual->id,
-                    'numero'         => $numero,
-                    'prefijo'        => $serieActual->prefijo,
-                    'estado'         => 'emitida',
-                    'emitido_por_id' => Auth::id(),
-                    'emitido_en'     => now(),
+            if (!$serieActual) {
+                throw new \RuntimeException('No hay una serie válida para emitir la factura de compra.');
+            }
+
+            // Si ya tiene número, no volver a emitir
+            if (!empty($this->factura->numero)) {
+                $this->estado = (string) ($this->factura->estado ?? 'emitida');
+                return;
+            }
+
+            $numero = $serieActual->tomarConsecutivo();
+
+            $updated = Factura::query()
+                ->whereKey($this->factura->id)
+                ->update([
+                    'serie_id'           => $serieActual->id,
+                    'prefijo'            => (string) ($serieActual->prefijo ?? ''),
+                    'numero'             => $numero,
+                    'estado'             => 'emitida',
+                    'emitido_por_id'     => Auth::id(),
+                    'emitido_en'         => now(),
+                    'actualizado_por_id' => Auth::id(),
                 ]);
-                \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura->fresh());
-                InventarioService::aumentarPorFacturaCompra($this->factura);
 
-                $this->estado = $this->factura->estado;
-            }, 3);
+            if (!$updated) {
+                throw new \RuntimeException('No se pudo actualizar la factura con el consecutivo.');
+            }
 
-            PendingToast::create()->success()->message(
-                'Factura emitida (ID: ' . $this->factura->id . ', No: ' . $this->factura->prefijo . '-' . $this->factura->numero . ').'
-            )->duration(6000);
+            $this->factura = Factura::with(['detalles', 'serie'])
+                ->findOrFail($this->factura->id);
 
-            $this->resetFormulario();
-            $this->dispatch('refrescar-lista-facturas');
-        } catch (\Throwable $e) {
-            Log::error('EMITIR ERROR', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()->message($e->getMessage())->duration(12000);
-        }
+            if (is_null($this->factura->numero) || $this->factura->numero === '') {
+                throw new \RuntimeException('La factura se intentó emitir, pero el número no quedó guardado.');
+            }
+
+            \App\Services\FacturaCompraService::asientoDesdeFacturaCompra($this->factura);
+            InventarioService::aumentarPorFacturaCompra($this->factura);
+
+            $this->factura->recalcularTotales()->save();
+            $this->factura->refresh();
+
+            $this->estado = 'emitida';
+            $this->serie_id = $this->factura->serie_id;
+        }, 3);
+
+        PendingToast::create()->success()->message(
+            'Factura emitida correctamente. No: ' .
+                (($this->factura->prefijo ?? '') !== '' ? $this->factura->prefijo . '-' : '') .
+                $this->factura->numero
+        )->duration(6000);
+
+        $this->dispatch('refrescar-lista-facturas');
+        $this->dispatch('$refresh');
+
+        // ⚠️ temporalmente NO resetees el formulario hasta verificar
+        // $this->resetFormulario();
+
+    } catch (\Throwable $e) {
+        Log::error('EMITIR ERROR FACTURA COMPRA', [
+            'msg' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'factura_id' => $this->factura->id ?? null,
+            'serie_id'   => $this->serie_id ?? null,
+        ]);
+
+        PendingToast::create()->error()->message(
+            config('app.debug') ? $e->getMessage() : 'No se pudo emitir la factura de compra.'
+        )->duration(12000);
     }
+}
 
     public function validarAntesDeEmitir(): void
     {
@@ -1324,32 +1366,35 @@ class FacturaCompra extends Component
     }
 
     private function resetFormulario(): void
-    {
-        $this->factura = null;
+{
+    $this->factura = null;
 
-        $this->documento = $this->detectarCodigoDocumento() ?? $this->documento;
-        $this->serieDefault = $this->documento ? SerieModel::defaultParaCodigo($this->documento) : null;
+    $this->documento = 'facturacompra';
+    $this->serieDefault = SerieModel::defaultParaCodigo($this->documento);
+    $this->serie_id = $this->serieDefault?->id;
 
-        $this->serie_id = $this->serieDefault?->id;
+    $this->socio_negocio_id = null;
+    $this->fecha = now()->toDateString();
+    $this->vencimiento = null;
+    $this->notas = null;
+    $this->moneda = 'COP';
+    $this->estado = 'borrador';
+    $this->lineas = [];
+    $this->stockVista = [];
+    $this->cuenta_cobro_id = null;
+    $this->plazo_dias = null;
 
-        $this->socio_negocio_id = null;
-        $this->fecha = now()->toDateString();
-        $this->moneda = 'COP';
-        $this->estado = 'borrador';
-        $this->lineas = [];
-        $this->stockVista = [];
-        $this->cuenta_cobro_id = null;
+    $contado = CondicionPago::where('plazo_dias', 0)->value('id');
+    $this->condicion_pago_id = $contado ?: optional(
+        CondicionPago::orderBy('plazo_dias')->first()
+    )->id;
 
-        $contado = CondicionPago::where('plazo_dias', 0)->value('id');
-        $this->condicion_pago_id = $contado ?: optional(
-            CondicionPago::orderBy('plazo_dias')->first()
-        )->id;
-        $this->syncCondicionAndDueDate();
+    $this->syncCondicionAndDueDate();
 
-        $this->addLinea();
+    $this->addLinea();
 
-        $this->dispatch('$refresh');
+    $this->dispatch('$refresh');
 
-        PendingToast::create()->info()->message('Formulario reiniciado, listo para nueva factura.')->duration(4000);
-    }
+    PendingToast::create()->info()->message('Formulario reiniciado, listo para nueva factura.')->duration(4000);
+}
 }

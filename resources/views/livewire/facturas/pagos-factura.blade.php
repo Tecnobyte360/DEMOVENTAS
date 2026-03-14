@@ -14,21 +14,24 @@
                 document.addEventListener('livewire:init', alpineInit)
             }
         </script>
-        <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 
-        {{-- TomSelect --}}
+        <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
         <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
 
         <script>
-            document.addEventListener('livewire:load', () => {
+            document.addEventListener('livewire:init', () => {
+                let facturaTom = null;
+
                 const initFacturaSelect = () => {
                     const el = document.getElementById('factura-select');
                     if (!el) return;
 
-                    // destruir instancia previa
-                    if (el.tomselect) el.tomselect.destroy();
+                    if (facturaTom) {
+                        facturaTom.destroy();
+                        facturaTom = null;
+                    }
 
-                    const ts = new TomSelect(el, {
+                    facturaTom = new TomSelect(el, {
                         placeholder: '— Selecciona una factura —',
                         allowEmptyOption: true,
                         maxOptions: 500,
@@ -39,17 +42,22 @@
                         },
                     });
 
-                    // reflejar valor actual
                     const current = @this.get('facturaId');
-                    if (current) ts.setValue(String(current), false);
+                    if (current) {
+                        facturaTom.setValue(String(current), true);
+                    }
                 };
 
                 initFacturaSelect();
 
-                Livewire.hook('message.processed', (message, component) => {
-                    if (component.fingerprint && component.fingerprint.name === 'facturas.pagos-factura') {
+                Livewire.hook('morph.updated', ({ el, component }) => {
+                    if (document.getElementById('factura-select')) {
                         initFacturaSelect();
                     }
+                });
+
+                Livewire.on('refresh-factura-select', () => {
+                    setTimeout(() => initFacturaSelect(), 50);
                 });
             });
         </script>
@@ -116,15 +124,14 @@
                     </div>
 
                     {{-- Select TomSelect --}}
-                    <div wire:ignore>
+                    <div wire:key="contenedor-factura-select-{{ $tipoDocumento }}-{{ md5($buscarFactura) }}">
                         <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
                             Seleccionar factura pendiente ({{ $tipoDocumento === 'compra' ? 'COMPRA' : 'VENTA' }})
                         </label>
 
                         <select id="factura-select"
-                            wire:key="factura-select-{{ $tipoDocumento }}-{{ md5($buscarFactura) }}"
                             class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
-         dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
+        dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
                             <option value="">— Selecciona una factura —</option>
 
                             @foreach ($facturasPendientes as $f)
@@ -141,11 +148,6 @@
                                 </option>
                             @endforeach
                         </select>
-
-                        @error('facturaId')
-                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
-                        @enderror
-
 
                         @error('facturaId')
                             <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>

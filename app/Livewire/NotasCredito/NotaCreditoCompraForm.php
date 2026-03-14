@@ -111,35 +111,42 @@ class NotaCreditoCompraForm extends Component
         $this->cargarNota($id);
     }
 
-    public function mount(?int $id = null, ?int $factura_compra_id = null): void
-    {
-        try {
-            $this->fecha = now()->toDateString();
+   public function mount(?int $id = null, ?int $factura_compra_id = null): void
+{
+    try {
+        $this->fecha = now()->toDateString();
 
-            // Ahora sí va a encontrar la serie default
-            $this->serieDefault = Serie::defaultParaCodigo($this->documento);
-            $this->serie_id     = $this->serieDefault?->id;
+        $tipoId = TipoDocumento::whereRaw('LOWER(codigo)=?', [strtolower($this->documento)])
+            ->value('id');
 
-            if ($id) {
-                $this->cargarNota($id);
-            } else {
-                $this->addLinea();
-                $this->terminos_pago = 'Nota crédito de compra';
+        $this->serieDefault = Serie::query()
+            ->when($tipoId, fn($q) => $q->where('tipo_documento_id', $tipoId))
+            ->activa()
+            ->orderByDesc('es_default')
+            ->orderBy('nombre')
+            ->first();
 
-                if ($factura_compra_id) {
-                    $this->factura_compra_id = $factura_compra_id;
-                    $this->precargarDesdeFacturaCompra($factura_compra_id);
-                }
+        $this->serie_id = $this->serieDefault?->id;
+
+        if ($id) {
+            $this->cargarNota($id);
+        } else {
+            $this->addLinea();
+            $this->terminos_pago = 'Nota crédito de compra';
+
+            if ($factura_compra_id) {
+                $this->factura_compra_id = $factura_compra_id;
+                $this->precargarDesdeFacturaCompra($factura_compra_id);
             }
-
-            $this->setCuentaCxPPorDefecto();
-            $this->refrescarFacturasProveedor();
-        } catch (\Throwable $e) {
-            report($e);
-            PendingToast::create()->error()->message('No se pudo inicializar la NC de compra.')->duration(7000);
         }
-    }
 
+        $this->setCuentaCxPPorDefecto();
+        $this->refrescarFacturasProveedor();
+    } catch (\Throwable $e) {
+        report($e);
+        PendingToast::create()->error()->message('No se pudo inicializar la NC de compra.')->duration(7000);
+    }
+}
     public function render()
     {
         try {

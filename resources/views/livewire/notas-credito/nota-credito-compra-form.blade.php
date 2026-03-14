@@ -42,6 +42,9 @@
                 <div class="flex items-center gap-3">
                     <select wire:model.number="serie_id"
                         class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+
+                        <option value="">— Seleccione una serie —</option>
+
                         @foreach ($series as $s)
                             <option value="{{ $s->id }}">
                                 {{ $s->nombre }} ({{ $s->prefijo }}: {{ $s->proximo }} → {{ $s->hasta }})

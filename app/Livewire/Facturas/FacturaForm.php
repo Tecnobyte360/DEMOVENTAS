@@ -313,42 +313,42 @@ class FacturaForm extends Component
      *  BLOQUEO / SOLO LECTURA
      * ========================= */
 
- public function getBloqueadaProperty(): bool
-{
-    $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
+    public function getBloqueadaProperty(): bool
+    {
+        $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
 
-    if (in_array($estado, ['cerrado', 'anulada', 'pagada'], true)) {
-        return true;
-    }
-
-    if ($this->factura?->id) {
-        $total  = round((float) ($this->factura->total ?? 0), 2);
-        $pagado = round((float) ($this->factura->pagos()->sum('monto')), 2);
-        $saldo  = round($total - $pagado, 2);
-
-        if ($saldo <= 0.01 && $total > 0) {
+        if (in_array($estado, ['cerrado', 'anulada', 'pagada'], true)) {
             return true;
         }
+
+        if ($this->factura?->id) {
+            $total  = round((float) ($this->factura->total ?? 0), 2);
+            $pagado = round((float) ($this->factura->pagos()->sum('monto')), 2);
+            $saldo  = round($total - $pagado, 2);
+
+            if ($saldo <= 0.01 && $total > 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    return false;
-}
+    private function abortIfLocked(string $accion = 'editar'): bool
+    {
+        if ($this->bloqueada) {
+            $estado = $this->factura->estado ?? $this->estado ?? 'bloqueada';
 
- private function abortIfLocked(string $accion = 'editar'): bool
-{
-    if ($this->bloqueada) {
-        $estado = $this->factura->estado ?? $this->estado ?? 'bloqueada';
+            PendingToast::create()
+                ->error()
+                ->message("La factura está {$estado}; no se puede {$accion}.")
+                ->duration(7000);
 
-        PendingToast::create()
-            ->error()
-            ->message("La factura está {$estado}; no se puede {$accion}.")
-            ->duration(7000);
+            return true;
+        }
 
-        return true;
+        return false;
     }
-
-    return false;
-}
 
     /* =========================
      *  HELPERS / UTILIDADES
@@ -522,109 +522,109 @@ class FacturaForm extends Component
     }
 
 
-  private function cargarFactura(int $id): void
-{
-    try {
-        $f = Factura::with(['detalles', 'pagos'])->findOrFail($id);
-        $f->recalcularTotales()->save();
-        $f = $f->fresh(['detalles', 'pagos']);
-
-        // ✅ Si ya quedó totalmente pagada, marcar estado pagada
-        $total  = round((float) ($f->total ?? 0), 2);
-        $pagado = round((float) $f->pagos()->sum('monto'), 2);
-        $saldo  = round($total - $pagado, 2);
-
-        if ($saldo <= 0.01 && $total > 0 && !in_array($f->estado, ['pagada', 'anulada'], true)) {
-            $data = ['estado' => 'pagada'];
-
-            if (Schema::hasColumn('facturas', 'pagado')) {
-                $data['pagado'] = $pagado;
-            }
-
-            if (Schema::hasColumn('facturas', 'saldo')) {
-                $data['saldo'] = 0;
-            }
-
-            $f->update($data);
+    private function cargarFactura(int $id): void
+    {
+        try {
+            $f = Factura::with(['detalles', 'pagos'])->findOrFail($id);
+            $f->recalcularTotales()->save();
             $f = $f->fresh(['detalles', 'pagos']);
-        }
 
-        $this->factura = $f;
+            // ✅ Si ya quedó totalmente pagada, marcar estado pagada
+            $total  = round((float) ($f->total ?? 0), 2);
+            $pagado = round((float) $f->pagos()->sum('monto'), 2);
+            $saldo  = round($total - $pagado, 2);
 
-        // =========================
-        // Cabecera
-        // =========================
-        $this->fill($f->only([
-            'cotizacion_id',
-            'serie_id',
-            'socio_negocio_id',
-            'fecha',
-            'vencimiento',
-            'tipo_pago',
-            'plazo_dias',
-            'terminos_pago',
-            'notas',
-            'moneda',
-            'estado',
-            'cuenta_cobro_id',
-            'condicion_pago_id',
-        ]));
+            if ($saldo <= 0.01 && $total > 0 && !in_array($f->estado, ['pagada', 'anulada'], true)) {
+                $data = ['estado' => 'pagada'];
 
-        // =========================
-        // Líneas (desde DB)
-        // =========================
-        $this->lineas = $f->detalles->map(function ($d) {
-            $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
-
-            if (!$cuentaId && $d->producto_id) {
-                $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
-                    ->find($d->producto_id);
-
-                if ($p) {
-                    $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                if (Schema::hasColumn('facturas', 'pagado')) {
+                    $data['pagado'] = $pagado;
                 }
+
+                if (Schema::hasColumn('facturas', 'saldo')) {
+                    $data['saldo'] = 0;
+                }
+
+                $f->update($data);
+                $f = $f->fresh(['detalles', 'pagos']);
             }
 
-            $l = [
-                'id'                => $d->id,
-                'producto_id'       => $d->producto_id ? (int) $d->producto_id : null,
-                'cuenta_ingreso_id' => $cuentaId,
-                'bodega_id'         => $d->bodega_id ? (int) $d->bodega_id : null,
-                'descripcion'       => $d->descripcion,
-                'cantidad'          => is_null($d->cantidad) ? null : (float) $d->cantidad,
-                'precio_unitario'   => (float) $d->precio_unitario,
-                'descuento_pct'     => (float) $d->descuento_pct,
-                'impuesto_id'       => $d->impuesto_id ? (int) $d->impuesto_id : null,
-                'impuesto_pct'      => (float) $d->impuesto_pct,
-            ];
+            $this->factura = $f;
 
-            $this->normalizeLinea($l);
-            return $l;
-        })->toArray();
+            // =========================
+            // Cabecera
+            // =========================
+            $this->fill($f->only([
+                'cotizacion_id',
+                'serie_id',
+                'socio_negocio_id',
+                'fecha',
+                'vencimiento',
+                'tipo_pago',
+                'plazo_dias',
+                'terminos_pago',
+                'notas',
+                'moneda',
+                'estado',
+                'cuenta_cobro_id',
+                'condicion_pago_id',
+            ]));
 
-        // ✅ IMPORTANTE:
-        // NO llamar setProducto() aquí, porque eso vuelve a poner
-        // el precio original del producto y pisa el precio guardado.
-        foreach ($this->lineas as $i => $l) {
-            $this->refreshStockLinea($i);
+            // =========================
+            // Líneas (desde DB)
+            // =========================
+            $this->lineas = $f->detalles->map(function ($d) {
+                $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
+
+                if (!$cuentaId && $d->producto_id) {
+                    $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
+                        ->find($d->producto_id);
+
+                    if ($p) {
+                        $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                    }
+                }
+
+                $l = [
+                    'id'                => $d->id,
+                    'producto_id'       => $d->producto_id ? (int) $d->producto_id : null,
+                    'cuenta_ingreso_id' => $cuentaId,
+                    'bodega_id'         => $d->bodega_id ? (int) $d->bodega_id : null,
+                    'descripcion'       => $d->descripcion,
+                    'cantidad'          => is_null($d->cantidad) ? null : (float) $d->cantidad,
+                    'precio_unitario'   => (float) $d->precio_unitario,
+                    'descuento_pct'     => (float) $d->descuento_pct,
+                    'impuesto_id'       => $d->impuesto_id ? (int) $d->impuesto_id : null,
+                    'impuesto_pct'      => (float) $d->impuesto_pct,
+                ];
+
+                $this->normalizeLinea($l);
+                return $l;
+            })->toArray();
+
+            // ✅ IMPORTANTE:
+            // NO llamar setProducto() aquí, porque eso vuelve a poner
+            // el precio original del producto y pisa el precio guardado.
+            foreach ($this->lineas as $i => $l) {
+                $this->refreshStockLinea($i);
+            }
+
+            $this->syncProductosSeleccionados();
+
+            $this->resetErrorBag();
+            $this->resetValidation();
+
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('$refresh');
+        } catch (Throwable $e) {
+            report($e);
+
+            PendingToast::create()
+                ->error()
+                ->message('No se pudo cargar la factura.')
+                ->duration(7000);
         }
-
-        $this->syncProductosSeleccionados();
-
-        $this->resetErrorBag();
-        $this->resetValidation();
-
-        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-        $this->dispatch('$refresh');
-    } catch (Throwable $e) {
-        report($e);
-
-        PendingToast::create()
-            ->error()
-            ->message('No se pudo cargar la factura.')
-            ->duration(7000);
     }
-}
 
 
     public function addLinea(): void
@@ -698,6 +698,10 @@ class FacturaForm extends Component
                 $this->lineas[$i]['descripcion']       = null;
 
                 $this->normalizeLinea($this->lineas[$i]);
+
+                // ✅ refrescar stock también cuando limpias producto
+                $this->refreshStockLinea($i);
+
                 $this->syncProductosSeleccionados();
                 $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
                 $this->dispatch('$refresh');
@@ -749,6 +753,10 @@ class FacturaForm extends Component
                 $this->lineas[$i]['impuesto_pct']      = 0.0;
 
                 $this->normalizeLinea($this->lineas[$i]);
+
+                // ✅ refrescar stock también aquí
+                $this->refreshStockLinea($i);
+
                 $this->syncProductosSeleccionados();
                 $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
                 $this->dispatch('$refresh');
@@ -797,13 +805,17 @@ class FacturaForm extends Component
                 }
             }
 
-            // ✅ Como el usuario cambió de producto, aquí sí aplicamos valores sugeridos
+            // ✅ aplicar valores sugeridos
             $this->lineas[$i]['descripcion']     = (string) ($p->nombre ?? '');
             $this->lineas[$i]['precio_unitario'] = round($precioBase, 2);
             $this->lineas[$i]['impuesto_id']     = $impId;
             $this->lineas[$i]['impuesto_pct']    = $ivaPct;
 
             $this->normalizeLinea($this->lineas[$i]);
+
+            // ✅ ESTA ES LA LÍNEA CLAVE
+            $this->refreshStockLinea($i);
+
             $this->syncProductosSeleccionados();
 
             $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
@@ -817,7 +829,6 @@ class FacturaForm extends Component
                 ->duration(7000);
         }
     }
-
     public function setImpuesto(int $i, $impuestoId): void
     {
         if ($this->bloqueada) return;
@@ -1573,41 +1584,41 @@ class FacturaForm extends Component
     }
 
 
-   public function abrirPagos(): void
-{
-    if ($this->abortIfLocked('registrar pagos')) return;
+    public function abrirPagos(): void
+    {
+        if ($this->abortIfLocked('registrar pagos')) return;
 
-    try {
-        if (!$this->verificarStockParaLineas()) {
-            PendingToast::create()
-                ->error()
-                ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
-                ->duration(8000);
-            return;
-        }
-
-        if (!$this->factura?->id) {
-            $this->guardar();
-
-            if (!$this->factura?->id) {
+        try {
+            if (!$this->verificarStockParaLineas()) {
+                PendingToast::create()
+                    ->error()
+                    ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                    ->duration(8000);
                 return;
             }
-        }
 
-        $this->showPagos = true;
-        $this->dispatch('preparar-modal-pago', facturaId: $this->factura->id);
-    } catch (\Throwable $e) {
-        $msg = trim((string) $e->getMessage());
-        if ($msg === '') {
-            $msg = 'Ocurrió un error inesperado.';
-        }
+            if (!$this->factura?->id) {
+                $this->guardar();
 
-        PendingToast::create()
-            ->error()
-            ->message('Error al abrir pagos: ' . $msg)
-            ->duration(9000);
+                if (!$this->factura?->id) {
+                    return;
+                }
+            }
+
+            $this->showPagos = true;
+            $this->dispatch('preparar-modal-pago', facturaId: $this->factura->id);
+        } catch (\Throwable $e) {
+            $msg = trim((string) $e->getMessage());
+            if ($msg === '') {
+                $msg = 'Ocurrió un error inesperado.';
+            }
+
+            PendingToast::create()
+                ->error()
+                ->message('Error al abrir pagos: ' . $msg)
+                ->duration(9000);
+        }
     }
-}
 
     public function getProximoPreviewProperty(): ?string
     {

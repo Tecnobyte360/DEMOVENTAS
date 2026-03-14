@@ -370,8 +370,8 @@
 
         .payment-box {
             margin-top: 8px;
-            border: 1px solid #c7d2fe;
-            background: #eef2ff;
+            border: 1px solid #dbe3f1;
+            background: #f8fbff;
             border-radius: 6px;
             padding: 6px 8px;
         }
@@ -380,25 +380,21 @@
             font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
-            color: #1e3a8a;
-            margin-bottom: 2px;
+            color: #223361;
+            margin-bottom: 3px;
         }
 
         .payment-text {
             font-size: 10px;
-            line-height: 1.2;
+            line-height: 1.35;
             color: #1f2937;
         }
 
         .payment-account {
-            display: inline-block;
-            margin-top: 2px;
-            padding: 2px 6px;
-            background: #dbeafe;
-            color: #1e40af;
-            border-radius: 6px;
+            color: #223361;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 800;
+            letter-spacing: .4px;
         }
 
         .drawing-space {
@@ -406,7 +402,7 @@
             height: 110px;
             border: 1px dashed {{ $border }};
             border-radius: 8px;
-            background: #fff;
+            background: #ffffff;
         }
 
         .terms {
@@ -621,13 +617,25 @@
             </tr>
         </table>
 
-        {{-- Información de pago compacta --}}
+        {{-- Información de pago --}}
         <div class="payment-box">
-            <div class="payment-title">Pago</div>
+            <div class="payment-title">Información de pago</div>
+
             <div class="payment-text">
-                Bancolombia Ahorros
+                <strong>Banco:</strong> Bancolombia
+            </div>
+
+            <div class="payment-text">
+                <strong>Tipo:</strong> Cuenta de ahorros
+            </div>
+
+            <div class="payment-text">
+                <strong>Número:</strong>
                 <span class="payment-account">00168305311</span>
-                · Jhon Arles Palacio Arias
+            </div>
+
+            <div class="payment-text">
+                <strong>Titular:</strong> Jhon Arles Palacio Arias
             </div>
         </div>
 

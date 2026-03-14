@@ -49,7 +49,7 @@ class Cotizacion extends Component
         'lineas' => 'required|array|min:1',
         'lineas.*.producto_id' => 'required|integer|exists:productos,id',
         'lineas.*.bodega_id' => 'nullable|integer|exists:bodegas,id',
-        'lineas.*.cantidad' => 'required|numeric|min:1',
+   'lineas.*.cantidad' => 'required|numeric|min:0.01',
         'lineas.*.precio_unitario' => 'required|numeric|min:0',
         'lineas.*.descuento_pct' => 'required|numeric|min:0|max:100',
         'lineas.*.impuesto_pct' => 'required|numeric|min:0|max:100',

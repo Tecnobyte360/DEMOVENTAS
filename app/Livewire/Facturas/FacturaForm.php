@@ -313,42 +313,42 @@ class FacturaForm extends Component
      *  BLOQUEO / SOLO LECTURA
      * ========================= */
 
-    public function getBloqueadaProperty(): bool
-    {
-        $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
+ public function getBloqueadaProperty(): bool
+{
+    $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
 
-        if (in_array($estado, ['cerrado', 'anulada', 'pagada'], true)) {
-            return true;
-        }
-
-        if ($this->factura?->id) {
-            $total  = round((float) ($this->factura->total ?? 0), 2);
-            $pagado = round((float) ($this->factura->pagos()->sum('monto')), 2);
-            $saldo  = round($total - $pagado, 2);
-
-            if ($saldo <= 0.01 && $total > 0) {
-                return true;
-            }
-        }
-
-        return false;
+    if (in_array($estado, ['cerrado', 'anulada', 'pagada'], true)) {
+        return true;
     }
 
-    private function abortIfLocked(string $accion = 'editar'): bool
-    {
-        if ($this->bloqueada) {
-            $estado = $this->factura->estado ?? $this->estado ?? 'bloqueada';
+    if ($this->factura?->id) {
+        $total  = round((float) ($this->factura->total ?? 0), 2);
+        $pagado = round((float) ($this->factura->pagos()->sum('monto')), 2);
+        $saldo  = round($total - $pagado, 2);
 
-            PendingToast::create()
-                ->error()
-                ->message("La factura está {$estado}; no se puede {$accion}.")
-                ->duration(7000);
-
+        if ($saldo <= 0.01 && $total > 0) {
             return true;
         }
-
-        return false;
     }
+
+    return false;
+}
+
+ private function abortIfLocked(string $accion = 'editar'): bool
+{
+    if ($this->bloqueada) {
+        $estado = $this->factura->estado ?? $this->estado ?? 'bloqueada';
+
+        PendingToast::create()
+            ->error()
+            ->message("La factura está {$estado}; no se puede {$accion}.")
+            ->duration(7000);
+
+        return true;
+    }
+
+    return false;
+}
 
     /* =========================
      *  HELPERS / UTILIDADES
@@ -522,135 +522,137 @@ class FacturaForm extends Component
     }
 
 
-    private function cargarFactura(int $id): void
-    {
-        try {
-            $f = Factura::with(['detalles', 'pagos'])->findOrFail($id);
-            $f->recalcularTotales()->save();
+  private function cargarFactura(int $id): void
+{
+    try {
+        $f = Factura::with(['detalles', 'pagos'])->findOrFail($id);
+        $f->recalcularTotales()->save();
+        $f = $f->fresh(['detalles', 'pagos']);
+
+        // ✅ Si ya quedó totalmente pagada, marcar estado pagada
+        $total  = round((float) ($f->total ?? 0), 2);
+        $pagado = round((float) $f->pagos()->sum('monto'), 2);
+        $saldo  = round($total - $pagado, 2);
+
+        if ($saldo <= 0.01 && $total > 0 && !in_array($f->estado, ['pagada', 'anulada'], true)) {
+            $data = ['estado' => 'pagada'];
+
+            if (Schema::hasColumn('facturas', 'pagado')) {
+                $data['pagado'] = $pagado;
+            }
+
+            if (Schema::hasColumn('facturas', 'saldo')) {
+                $data['saldo'] = 0;
+            }
+
+            $f->update($data);
             $f = $f->fresh(['detalles', 'pagos']);
-
-            // ✅ Si ya quedó totalmente pagada, marcar estado pagada
-            $total  = round((float) ($f->total ?? 0), 2);
-            $pagado = round((float) $f->pagos()->sum('monto'), 2);
-            $saldo  = round($total - $pagado, 2);
-
-            if ($saldo <= 0.01 && $total > 0 && !in_array($f->estado, ['pagada', 'anulada'], true)) {
-                $data = ['estado' => 'pagada'];
-
-                if (Schema::hasColumn('facturas', 'pagado')) {
-                    $data['pagado'] = $pagado;
-                }
-
-                if (Schema::hasColumn('facturas', 'saldo')) {
-                    $data['saldo'] = 0;
-                }
-
-                $f->update($data);
-                $f = $f->fresh(['detalles', 'pagos']);
-            }
-
-            $this->factura = $f;
-
-            // =========================
-            // Cabecera
-            // =========================
-            $this->fill($f->only([
-                'cotizacion_id',
-                'serie_id',
-                'socio_negocio_id',
-                'fecha',
-                'vencimiento',
-                'tipo_pago',
-                'plazo_dias',
-                'terminos_pago',
-                'notas',
-                'moneda',
-                'estado',
-                'cuenta_cobro_id',
-                'condicion_pago_id',
-            ]));
-
-            // =========================
-            // Líneas (desde DB)
-            // =========================
-            $this->lineas = $f->detalles->map(function ($d) {
-                $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
-
-                if (!$cuentaId && $d->producto_id) {
-                    $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
-                        ->find($d->producto_id);
-
-                    if ($p) {
-                        $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
-                    }
-                }
-
-                $l = [
-                    'id'                => $d->id,
-                    'producto_id'       => $d->producto_id ? (int) $d->producto_id : null,
-                    'cuenta_ingreso_id' => $cuentaId,
-                    'bodega_id'         => $d->bodega_id ? (int) $d->bodega_id : null,
-                    'descripcion'       => $d->descripcion,
-                    'cantidad'          => is_null($d->cantidad) ? null : (float) $d->cantidad,
-                    'precio_unitario'   => (float) $d->precio_unitario,
-                    'descuento_pct'     => (float) $d->descuento_pct,
-                    'impuesto_id'       => $d->impuesto_id ? (int) $d->impuesto_id : null,
-                    'impuesto_pct'      => (float) $d->impuesto_pct,
-                ];
-
-                $this->normalizeLinea($l);
-                return $l;
-            })->toArray();
-
-            // ✅ IMPORTANTE:
-            // NO llamar setProducto() aquí, porque eso vuelve a poner
-            // el precio original del producto y pisa el precio guardado.
-            foreach ($this->lineas as $i => $l) {
-                $this->refreshStockLinea($i);
-            }
-
-            $this->syncProductosSeleccionados();
-
-            $this->resetErrorBag();
-            $this->resetValidation();
-
-            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-            $this->dispatch('$refresh');
-        } catch (Throwable $e) {
-            report($e);
-
-            PendingToast::create()
-                ->error()
-                ->message('No se pudo cargar la factura.')
-                ->duration(7000);
         }
-    }
 
+        $this->factura = $f;
 
-    public function addLinea(): void
-    {
-        if ($this->bloqueada) return;
+        // =========================
+        // Cabecera
+        // =========================
+        $this->fill($f->only([
+            'cotizacion_id',
+            'serie_id',
+            'socio_negocio_id',
+            'fecha',
+            'vencimiento',
+            'tipo_pago',
+            'plazo_dias',
+            'terminos_pago',
+            'notas',
+            'moneda',
+            'estado',
+            'cuenta_cobro_id',
+            'condicion_pago_id',
+        ]));
 
-        $l = [
-            'producto_id'       => null,
-            'cuenta_ingreso_id' => null,
-            'bodega_id'         => $this->bodega_predeterminada_empresa_id,
-            'descripcion'       => null,
-            'cantidad'          => null,
-            'precio_unitario'   => 0,
-            'descuento_pct'     => 0,
-            'impuesto_id'       => null,
-            'impuesto_pct'      => 0,
-        ];
+        // =========================
+        // Líneas (desde DB)
+        // =========================
+        $this->lineas = $f->detalles->map(function ($d) {
+            $cuentaId = $d->cuenta_ingreso_id ? (int) $d->cuenta_ingreso_id : null;
 
-        $this->normalizeLinea($l);
-        $this->lineas[] = $l;
+            if (!$cuentaId && $d->producto_id) {
+                $p = Producto::with(['cuentas:id,producto_id,plan_cuentas_id,tipo_id'])
+                    ->find($d->producto_id);
+
+                if ($p) {
+                    $cuentaId = $this->resolveCuentaIngresoParaProducto($p);
+                }
+            }
+
+            $l = [
+                'id'                => $d->id,
+                'producto_id'       => $d->producto_id ? (int) $d->producto_id : null,
+                'cuenta_ingreso_id' => $cuentaId,
+                'bodega_id'         => $d->bodega_id ? (int) $d->bodega_id : null,
+                'descripcion'       => $d->descripcion,
+                'cantidad'          => is_null($d->cantidad) ? null : (float) $d->cantidad,
+                'precio_unitario'   => (float) $d->precio_unitario,
+                'descuento_pct'     => (float) $d->descuento_pct,
+                'impuesto_id'       => $d->impuesto_id ? (int) $d->impuesto_id : null,
+                'impuesto_pct'      => (float) $d->impuesto_pct,
+            ];
+
+            $this->normalizeLinea($l);
+            return $l;
+        })->toArray();
+
+        // ✅ IMPORTANTE:
+        // NO llamar setProducto() aquí, porque eso vuelve a poner
+        // el precio original del producto y pisa el precio guardado.
+        foreach ($this->lineas as $i => $l) {
+            $this->refreshStockLinea($i);
+        }
 
         $this->syncProductosSeleccionados();
+
+        $this->resetErrorBag();
+        $this->resetValidation();
+
         $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
         $this->dispatch('$refresh');
-    }
+    } catch (Throwable $e) {
+        report($e);
 
+        PendingToast::create()
+            ->error()
+            ->message('No se pudo cargar la factura.')
+            ->duration(7000);
+    }
+}
+
+
+   public function addLinea(): void
+{
+    if ($this->bloqueada) return;
+
+    $l = [
+        'producto_id'       => null,
+        'cuenta_ingreso_id' => null,
+        'bodega_id'         => $this->bodega_predeterminada_empresa_id,
+        'descripcion'       => null,
+        'cantidad'          => null,
+        'precio_unitario'   => 0,
+        'descuento_pct'     => 0,
+        'impuesto_id'       => null,
+        'impuesto_pct'      => 0,
+    ];
+
+    $this->normalizeLinea($l);
+    $this->lineas[] = $l;
+
+    $ultimoIndex = array_key_last($this->lineas);
+    $this->refreshStockLinea($ultimoIndex);
+
+    $this->syncProductosSeleccionados();
+    $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+    $this->dispatch('$refresh');
+}
     private function aplicarBodegaPredeterminadaALineasVacias(): void
     {
         if (!$this->bodega_predeterminada_empresa_id) {
@@ -676,159 +678,157 @@ class FacturaForm extends Component
     }
 
 
-    public function setProducto(int $i, $id): void
-    {
-        if ($this->bloqueada) {
+ public function setProducto(int $i, $id): void
+{
+    if ($this->bloqueada) {
+        return;
+    }
+
+    try {
+        if (!isset($this->lineas[$i])) {
             return;
         }
 
-        try {
-            if (!isset($this->lineas[$i])) {
-                return;
-            }
+        $prodId = $id ? (int) $id : null;
+        $this->lineas[$i]['producto_id'] = $prodId;
 
-            $prodId = $id ? (int) $id : null;
-            $this->lineas[$i]['producto_id'] = $prodId;
+        if (!$prodId) {
+            $this->lineas[$i]['cuenta_ingreso_id'] = null;
+            $this->lineas[$i]['precio_unitario']   = 0.0;
+            $this->lineas[$i]['impuesto_id']       = null;
+            $this->lineas[$i]['impuesto_pct']      = 0.0;
+            $this->lineas[$i]['descripcion']       = null;
 
-            if (!$prodId) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
-                $this->lineas[$i]['descripcion']       = null;
+            // ✅ refrescar stock aunque limpie producto
+            $this->refreshStockLinea($i);
 
-                $this->normalizeLinea($this->lineas[$i]);
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->syncProductosSeleccionados();
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('$refresh');
+            return;
+        }
 
-                // ✅ refrescar stock también cuando limpias producto
-                $this->refreshStockLinea($i);
+        $selects = ['id', 'nombre'];
 
-                $this->syncProductosSeleccionados();
-                $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-                $this->dispatch('$refresh');
-                return;
-            }
+        if (Schema::hasColumn('productos', 'precio')) {
+            $selects[] = 'precio';
+        }
 
-            $selects = ['id', 'nombre'];
+        if (Schema::hasColumn('productos', 'precio_venta')) {
+            $selects[] = 'precio_venta';
+        }
 
-            if (Schema::hasColumn('productos', 'precio')) {
-                $selects[] = 'precio';
-            }
+        if (Schema::hasColumn('productos', 'mov_contable_segun')) {
+            $selects[] = 'mov_contable_segun';
+        }
 
-            if (Schema::hasColumn('productos', 'precio_venta')) {
-                $selects[] = 'precio_venta';
-            }
+        if (Schema::hasColumn('productos', 'cuenta_ingreso_id')) {
+            $selects[] = 'cuenta_ingreso_id';
+        }
 
-            if (Schema::hasColumn('productos', 'mov_contable_segun')) {
-                $selects[] = 'mov_contable_segun';
-            }
+        if (Schema::hasColumn('productos', 'codigo')) {
+            $selects[] = 'codigo';
+        }
 
-            if (Schema::hasColumn('productos', 'cuenta_ingreso_id')) {
-                $selects[] = 'cuenta_ingreso_id';
-            }
+        if (Schema::hasColumn('productos', 'ItemCode')) {
+            $selects[] = 'ItemCode';
+        }
 
-            if (Schema::hasColumn('productos', 'codigo')) {
-                $selects[] = 'codigo';
-            }
+        if (Schema::hasColumn('productos', 'es_inventariable')) {
+            $selects[] = 'es_inventariable';
+        }
 
-            if (Schema::hasColumn('productos', 'ItemCode')) {
-                $selects[] = 'ItemCode';
-            }
+        $p = Producto::with([
+            'impuesto:id,nombre,codigo,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
+            'cuentaIngreso:id,codigo,nombre',
+            'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
+        ])
+            ->select($selects)
+            ->find($prodId);
 
-            if (Schema::hasColumn('productos', 'es_inventariable')) {
-                $selects[] = 'es_inventariable';
-            }
+        if (!$p) {
+            $this->lineas[$i]['cuenta_ingreso_id'] = null;
+            $this->lineas[$i]['precio_unitario']   = 0.0;
+            $this->lineas[$i]['impuesto_id']       = null;
+            $this->lineas[$i]['impuesto_pct']      = 0.0;
+            $this->lineas[$i]['descripcion']       = null;
 
-            $p = Producto::with([
-                'impuesto:id,nombre,codigo,porcentaje,monto_fijo,incluido_en_precio,aplica_sobre,activo,vigente_desde,vigente_hasta',
-                'cuentaIngreso:id,codigo,nombre',
-                'cuentas:id,producto_id,plan_cuentas_id,tipo_id',
-            ])
-                ->select($selects)
-                ->find($prodId);
+            // ✅ refrescar stock si no encontró producto
+            $this->refreshStockLinea($i);
 
-            if (!$p) {
-                $this->lineas[$i]['cuenta_ingreso_id'] = null;
-                $this->lineas[$i]['precio_unitario']   = 0.0;
-                $this->lineas[$i]['impuesto_id']       = null;
-                $this->lineas[$i]['impuesto_pct']      = 0.0;
+            $this->normalizeLinea($this->lineas[$i]);
+            $this->syncProductosSeleccionados();
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+            $this->dispatch('$refresh');
+            return;
+        }
 
-                $this->normalizeLinea($this->lineas[$i]);
+        // Cuenta ingreso sugerida por el producto/configuración
+        $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
 
-                // ✅ refrescar stock también aquí
-                $this->refreshStockLinea($i);
+        // Precio base
+        $precioBase = 0.0;
 
-                $this->syncProductosSeleccionados();
-                $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-                $this->dispatch('$refresh');
-                return;
-            }
+        if (isset($p->precio) && !is_null($p->precio)) {
+            $precioBase = (float) $p->precio;
+        } elseif (isset($p->precio_venta) && !is_null($p->precio_venta)) {
+            $precioBase = (float) $p->precio_venta;
+        }
 
-            // Cuenta ingreso sugerida por el producto/configuración
-            $this->lineas[$i]['cuenta_ingreso_id'] = $this->resolveCuentaIngresoParaProducto($p);
+        // Impuesto sugerido
+        $ivaPct = 0.0;
+        $impId  = null;
 
-            // Precio base
-            $precioBase = 0.0;
+        $imp = $p->impuesto;
 
-            if (isset($p->precio) && !is_null($p->precio)) {
-                $precioBase = (float) $p->precio;
-            } elseif (isset($p->precio_venta) && !is_null($p->precio_venta)) {
-                $precioBase = (float) $p->precio_venta;
-            }
+        if ($imp && (int) ($imp->activo ?? 0) === 1) {
+            $aplica = strtoupper((string) ($imp->aplica_sobre ?? ''));
+            $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
 
-            // Impuesto sugerido
-            $ivaPct = 0.0;
-            $impId  = null;
+            $hoy   = now()->startOfDay();
+            $desde = $imp->vigente_desde ? Carbon::parse($imp->vigente_desde) : null;
+            $hasta = $imp->vigente_hasta ? Carbon::parse($imp->vigente_hasta) : null;
+            $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
 
-            $imp = $p->impuesto;
+            if ($aplicaVentas && $vigente) {
+                $impId = (int) $imp->id;
 
-            if ($imp && (int) ($imp->activo ?? 0) === 1) {
-                $aplica = strtoupper((string) ($imp->aplica_sobre ?? ''));
-                $aplicaVentas = in_array($aplica, ['VENTAS', 'VENTA', 'AMBOS', 'TODOS'], true);
+                if (!is_null($imp->porcentaje)) {
+                    $ivaPct = (float) $imp->porcentaje;
 
-                $hoy   = now()->startOfDay();
-                $desde = $imp->vigente_desde ? Carbon::parse($imp->vigente_desde) : null;
-                $hasta = $imp->vigente_hasta ? Carbon::parse($imp->vigente_hasta) : null;
-                $vigente = (!$desde || $hoy->gte($desde)) && (!$hasta || $hoy->lte($hasta));
-
-                if ($aplicaVentas && $vigente) {
-                    $impId = (int) $imp->id;
-
-                    if (!is_null($imp->porcentaje)) {
-                        $ivaPct = (float) $imp->porcentaje;
-
-                        if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
-                            $precioBase = $precioBase > 0
-                                ? round($precioBase / (1 + $ivaPct / 100), 2)
-                                : 0.0;
-                        }
+                    if (!empty($imp->incluido_en_precio) && $ivaPct > 0) {
+                        $precioBase = $precioBase > 0
+                            ? round($precioBase / (1 + $ivaPct / 100), 2)
+                            : 0.0;
                     }
                 }
             }
-
-            // ✅ aplicar valores sugeridos
-            $this->lineas[$i]['descripcion']     = (string) ($p->nombre ?? '');
-            $this->lineas[$i]['precio_unitario'] = round($precioBase, 2);
-            $this->lineas[$i]['impuesto_id']     = $impId;
-            $this->lineas[$i]['impuesto_pct']    = $ivaPct;
-
-            $this->normalizeLinea($this->lineas[$i]);
-
-            // ✅ ESTA ES LA LÍNEA CLAVE
-            $this->refreshStockLinea($i);
-
-            $this->syncProductosSeleccionados();
-
-            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
-            $this->dispatch('$refresh');
-        } catch (\Throwable $e) {
-            report($e);
-
-            PendingToast::create()
-                ->error()
-                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo establecer el producto.')
-                ->duration(7000);
         }
+
+        $this->lineas[$i]['descripcion']     = (string) ($p->nombre ?? '');
+        $this->lineas[$i]['precio_unitario'] = round($precioBase, 2);
+        $this->lineas[$i]['impuesto_id']     = $impId;
+        $this->lineas[$i]['impuesto_pct']    = $ivaPct;
+
+        // ✅ ESTA ES LA PARTE CLAVE
+        // si ya existe bodega predeterminada, aquí debe recalcularse el stock
+        $this->refreshStockLinea($i);
+
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->syncProductosSeleccionados();
+
+        $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
+        $this->dispatch('$refresh');
+    } catch (\Throwable $e) {
+        report($e);
+
+        PendingToast::create()
+            ->error()
+            ->message(config('app.debug') ? $e->getMessage() : 'No se pudo establecer el producto.')
+            ->duration(7000);
     }
+}
     public function setImpuesto(int $i, $impuestoId): void
     {
         if ($this->bloqueada) return;
@@ -1584,41 +1584,41 @@ class FacturaForm extends Component
     }
 
 
-    public function abrirPagos(): void
-    {
-        if ($this->abortIfLocked('registrar pagos')) return;
+   public function abrirPagos(): void
+{
+    if ($this->abortIfLocked('registrar pagos')) return;
 
-        try {
-            if (!$this->verificarStockParaLineas()) {
-                PendingToast::create()
-                    ->error()
-                    ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
-                    ->duration(8000);
-                return;
-            }
-
-            if (!$this->factura?->id) {
-                $this->guardar();
-
-                if (!$this->factura?->id) {
-                    return;
-                }
-            }
-
-            $this->showPagos = true;
-            $this->dispatch('preparar-modal-pago', facturaId: $this->factura->id);
-        } catch (\Throwable $e) {
-            $msg = trim((string) $e->getMessage());
-            if ($msg === '') {
-                $msg = 'Ocurrió un error inesperado.';
-            }
-
+    try {
+        if (!$this->verificarStockParaLineas()) {
             PendingToast::create()
                 ->error()
-                ->message('Error al abrir pagos: ' . $msg)
-                ->duration(9000);
+                ->message('Hay faltante de stock en alguna línea. Ajusta cantidades o bodegas antes de registrar pagos.')
+                ->duration(8000);
+            return;
         }
+
+        if (!$this->factura?->id) {
+            $this->guardar();
+
+            if (!$this->factura?->id) {
+                return;
+            }
+        }
+
+        $this->showPagos = true;
+        $this->dispatch('preparar-modal-pago', facturaId: $this->factura->id);
+    } catch (\Throwable $e) {
+        $msg = trim((string) $e->getMessage());
+        if ($msg === '') {
+            $msg = 'Ocurrió un error inesperado.';
+        }
+
+        PendingToast::create()
+            ->error()
+            ->message('Error al abrir pagos: ' . $msg)
+            ->duration(9000);
     }
+}
 
     public function getProximoPreviewProperty(): ?string
     {

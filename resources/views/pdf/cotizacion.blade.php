@@ -119,30 +119,30 @@
 
     <style>
         @page {
-            margin: 118px 36px 95px 36px;
+            margin: 110px 34px 85px 34px;
         }
 
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: 12px;
+            font-size: 11px;
             color: {{ $ink }};
             background: {{ $base }};
         }
 
         header {
             position: fixed;
-            top: -95px;
+            top: -90px;
             left: 0;
             right: 0;
-            height: 105px;
+            height: 98px;
         }
 
         footer {
             position: fixed;
-            bottom: -70px;
+            bottom: -62px;
             left: 0;
             right: 0;
-            height: 70px;
+            height: 62px;
         }
 
         .brand-band {
@@ -154,7 +154,7 @@
         .brand {
             display: table;
             width: 100%;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .brand .col {
@@ -170,25 +170,25 @@
         }
 
         .brand-name {
-            font-size: 15px;
+            font-size: 14px;
             font-weight: 800;
             color: {{ $ink }};
         }
 
         .doc-title {
             margin: 0;
-            font-size: 24px;
+            font-size: 22px;
             line-height: 1.1;
-            letter-spacing: .5px;
+            letter-spacing: .4px;
             font-weight: 800;
             color: {{ $primary }};
         }
 
         .badge {
             display: inline-block;
-            padding: 4px 10px;
+            padding: 3px 9px;
             border-radius: 999px;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             vertical-align: middle;
         }
@@ -198,7 +198,7 @@
             top: 43%;
             left: 12%;
             z-index: 0;
-            font-size: 82px;
+            font-size: 80px;
             font-weight: 800;
             color: {{ $wmColor }};
             transform: rotate(-20deg);
@@ -207,29 +207,29 @@
         .pane {
             border: 1px solid {{ $border }};
             border-radius: 8px;
-            padding: 10px 12px;
+            padding: 8px 10px;
         }
 
         .pane h4 {
-            margin: 0 0 6px;
-            font-size: 12px;
+            margin: 0 0 5px;
+            font-size: 11px;
             color: {{ $muted }};
             text-transform: uppercase;
             letter-spacing: .4px;
         }
 
         .header-meta {
-            margin-top: 6px;
+            margin-top: 5px;
         }
 
         .header-meta-row {
             margin-top: 2px;
-            font-size: 11px;
+            font-size: 10px;
             color: {{ $muted }};
         }
 
         .header-contact {
-            margin-top: 8px;
+            margin-top: 6px;
             margin-left: auto;
             display: inline-table;
             border-collapse: collapse;
@@ -242,7 +242,7 @@
         .header-contact .contact-label,
         .header-contact .contact-value {
             display: table-cell;
-            font-size: 11px;
+            font-size: 10px;
             color: {{ $muted }};
             padding: 1px 0;
             vertical-align: top;
@@ -261,12 +261,12 @@
         }
 
         .header-status {
-            margin-top: 8px;
+            margin-top: 7px;
         }
 
         table.info-grid {
             width: 100%;
-            border-spacing: 12px 0;
+            border-spacing: 10px 0;
         }
 
         table.info-grid td {
@@ -279,47 +279,48 @@
         }
 
         table.condiciones-table td {
-            padding: 3px 0;
+            padding: 2px 0;
             vertical-align: top;
         }
 
         .cond-label {
             width: 34%;
             color: {{ $muted }};
-            font-size: 10px;
-            padding-right: 10px;
+            font-size: 9.5px;
+            padding-right: 8px;
         }
 
         .cond-value {
             width: 66%;
-            font-size: 10px;
+            font-size: 9.5px;
             text-align: right;
             word-wrap: break-word;
             word-break: break-word;
             white-space: normal;
-            line-height: 1.35;
+            line-height: 1.25;
         }
 
         table.items {
             width: 100%;
-            margin-top: 12px;
+            margin-top: 10px;
             border-collapse: collapse;
         }
 
         table.items thead th {
-            padding: 8px;
-            font-size: 11px;
+            padding: 6px;
+            font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: .3px;
+            letter-spacing: .2px;
             background: {{ $theadBg }};
             color: {{ $theadText }};
             border-bottom: 1px solid {{ $border }};
         }
 
         table.items tbody td {
-            padding: 7px 8px;
+            padding: 5px 6px;
             border-bottom: 1px solid #f1f5f9;
+            font-size: 10px;
         }
 
         table.items tbody tr:nth-child(even) {
@@ -339,7 +340,7 @@
         }
 
         .small {
-            font-size: 10px;
+            font-size: 9.5px;
         }
 
         .muted {
@@ -348,11 +349,12 @@
 
         .totals {
             width: 100%;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .totals td {
-            padding: 5px 8px;
+            padding: 4px 6px;
+            font-size: 10px;
         }
 
         .totals .label {
@@ -363,46 +365,52 @@
             font-weight: 700;
             background: {{ $grandBg }};
             color: {{ $grandTx }};
-            border-radius: 8px;
+            border-radius: 6px;
         }
 
         .payment-box {
-            margin-top: 14px;
+            margin-top: 8px;
             border: 1px solid #c7d2fe;
             background: #eef2ff;
-            border-radius: 10px;
-            padding: 12px 14px;
+            border-radius: 6px;
+            padding: 6px 8px;
         }
 
         .payment-title {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: .5px;
             color: #1e3a8a;
-            margin-bottom: 6px;
+            margin-bottom: 2px;
         }
 
         .payment-text {
-            font-size: 11px;
+            font-size: 10px;
+            line-height: 1.2;
             color: #1f2937;
-            line-height: 1.5;
         }
 
         .payment-account {
             display: inline-block;
-            margin-top: 6px;
-            padding: 5px 10px;
+            margin-top: 2px;
+            padding: 2px 6px;
             background: #dbeafe;
             color: #1e40af;
-            border-radius: 999px;
-            font-size: 13px;
-            font-weight: 800;
-            letter-spacing: .4px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .drawing-space {
+            margin-top: 10px;
+            height: 110px;
+            border: 1px dashed {{ $border }};
+            border-radius: 8px;
+            background: #fff;
         }
 
         .terms {
-            margin-top: 12px;
+            margin-top: 10px;
         }
 
         .page-number:after {
@@ -421,11 +429,11 @@
                     <tr>
                         <td style="text-align:left; vertical-align:middle; padding:0;">
                             @if (!empty($E['logo_src']))
-                                <div style="max-width:320px; max-height:65px; display:flex; align-items:center;">
+                                <div style="max-width:300px; max-height:58px;">
                                     <img
                                         src="{{ $E['logo_src'] }}"
                                         alt="Logo {{ $E['nombre'] }}"
-                                        style="max-width:320px; max-height:65px; width:auto; height:auto; object-fit:contain; object-position:left center;"
+                                        style="max-width:300px; max-height:58px; width:auto; height:auto; object-fit:contain; object-position:left center;"
                                     >
                                 </div>
                             @else
@@ -445,7 +453,7 @@
                 <div class="header-meta">
                     <div class="header-meta-row">
                         <span class="small muted">Número:</span>
-                        <strong style="font-size:14px; color: {{ $ink }};">{{ $folio }}</strong>
+                        <strong style="font-size:13px; color: {{ $ink }};">{{ $folio }}</strong>
                     </div>
 
                     <div class="header-meta-row">
@@ -507,11 +515,11 @@
                     <div class="pane">
                         <h4>Cliente</h4>
 
-                        <div style="font-size:13px; font-weight:700;">
+                        <div style="font-size:12px; font-weight:700;">
                             {{ $cotizacion->cliente->razon_social ?? 'Cliente' }}
                         </div>
 
-                        <div class="small muted" style="line-height:1.45;">
+                        <div class="small muted" style="line-height:1.35;">
                             NIT: {{ $cotizacion->cliente->nit ?? '—' }}<br>
                             Email: {{ $cotizacion->cliente->correo ?? '—' }}<br>
                             Tel: {{ $cotizacion->cliente->telefono ?? '—' }}
@@ -613,22 +621,18 @@
             </tr>
         </table>
 
-        {{-- Información de pago quemada --}}
+        {{-- Información de pago compacta --}}
         <div class="payment-box">
-            <div class="payment-title">Información de pago</div>
-
+            <div class="payment-title">Pago</div>
             <div class="payment-text">
-                PAGAR A LA CUENTA BANCOLOMBIA AHORROS
-            </div>
-
-            <div class="payment-account">
-                00168305311
-            </div>
-
-            <div class="payment-text" style="margin-top: 6px;">
-                A NOMBRE DE <strong>JHON ARLES PALACIO ARIAS</strong>
+                Bancolombia Ahorros
+                <span class="payment-account">00168305311</span>
+                · Jhon Arles Palacio Arias
             </div>
         </div>
+
+        {{-- Espacio para dibujo / anotaciones manuales --}}
+        <div class="drawing-space"></div>
 
         {{-- Notas --}}
         <div class="terms pane">
@@ -637,7 +641,7 @@
             @if (!empty($cotizacion->notas))
                 <div style="white-space: pre-line;">{{ $cotizacion->notas }}</div>
             @else
-                <div class="muted small" style="line-height:1.5;">
+                <div class="muted small" style="line-height:1.45;">
                     • Precios en moneda local.<br>
                     • Validez: 15 días.<br>
                     • Entrega sujeta a disponibilidad.<br>
@@ -647,15 +651,15 @@
         </div>
 
         {{-- Aceptación --}}
-        <table style="width:100%; margin-top:16px;">
+        <table style="width:100%; margin-top:14px;">
             <tr>
                 <td class="w-50">
                     <div class="small muted">Aprobado por (cliente):</div>
-                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%;"></div>
+                    <div style="margin-top:42px; border-top:1px solid {{ $border }}; width:80%;"></div>
                 </td>
                 <td class="w-50">
                     <div class="small muted">Firma y sello:</div>
-                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%;"></div>
+                    <div style="margin-top:42px; border-top:1px solid {{ $border }}; width:80%;"></div>
                 </td>
             </tr>
         </table>

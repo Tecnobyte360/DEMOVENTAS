@@ -451,14 +451,16 @@ class FacturaForm extends Component
             return;
         }
 
-        if (preg_match('/^lineas\.(\d+)\.(cantidad|precio_unitario|descuento_pct|impuesto_pct)$/', $name, $m)) {
-            $i = (int) $m[1];
-            if (isset($this->lineas[$i])) {
-                $this->normalizeLinea($this->lineas[$i]);
-                $this->dispatch('$refresh');
-            }
-            return;
-        }
+       if (preg_match('/^lineas\.(\d+)\.(cantidad|precio_unitario|descuento_pct|impuesto_pct)$/', $name, $m)) {
+    $i = (int) $m[1];
+
+    if (isset($this->lineas[$i])) {
+        $this->normalizeLinea($this->lineas[$i]);
+        $this->markDirtyIfNeeded();
+    }
+
+    return;
+}
 
         if ($name === 'fecha') $this->aplicarFormaPago($this->tipo_pago);
         if ($name === 'plazo_dias' && $this->tipo_pago === 'credito') {

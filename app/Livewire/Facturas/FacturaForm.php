@@ -383,29 +383,29 @@ class FacturaForm extends Component
         return \App\Services\ContabilidadService::cuentaSegunConfiguracion($p, 'INGRESO');
     }
 
-    private function normalizeLinea(array &$l): void
-    {
-        // cantidad: si viene null o '', la dejamos null (para que se vea vacío)
-        $rawCant = $l['cantidad'] ?? null;
+   private function normalizeLinea(array &$l): void
+{
+    $rawCant = $l['cantidad'] ?? null;
 
-        if ($rawCant === '' || $rawCant === null) {
-            $l['cantidad'] = null;
-        } else {
-            $cant = (float)$rawCant;
-            $l['cantidad'] = round(is_finite($cant) ? $cant : 0, 3);
-            // si quieres seguir bloqueando negativos:
-            if ($l['cantidad'] < 0) $l['cantidad'] = 0;
+    if ($rawCant === '' || $rawCant === null) {
+        $l['cantidad'] = null;
+    } else {
+        $cant = (float) $rawCant;
+        $l['cantidad'] = round(is_finite($cant) ? $cant : 0, 3);
+
+        if ($l['cantidad'] < 0) {
+            $l['cantidad'] = 0;
         }
-
-        // resto igual
-        $precio = (float)($l['precio_unitario'] ?? 0);
-        $desc   = (float)($l['descuento_pct'] ?? 0);
-        $iva    = (float)($l['impuesto_pct'] ?? 0);
-
-        $l['precio_unitario'] = max(0.0, round(is_finite($precio) ? $precio : 0, 2));
-        $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
-        $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva) ? $iva : 0, 3)));
     }
+
+    $precio = (float)($l['precio_unitario'] ?? 0);
+    $desc   = (float)($l['descuento_pct'] ?? 0);
+    $iva    = (float)($l['impuesto_pct'] ?? 0);
+
+    $l['precio_unitario'] = max(0.0, round(is_finite($precio) ? $precio : 0, 2));
+    $l['descuento_pct']   = min(100.0, max(0.0, round(is_finite($desc) ? $desc : 0, 3)));
+    $l['impuesto_pct']    = min(100.0, max(0.0, round(is_finite($iva) ? $iva : 0, 3)));
+}
 
     public function updated($name, $value): void
     {

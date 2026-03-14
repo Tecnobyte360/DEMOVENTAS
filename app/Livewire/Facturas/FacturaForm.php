@@ -1817,7 +1817,7 @@ public function onPagoRegistrado(int $facturaId): void
             if ($facturaExistente && (!$this->factura || $this->factura->id !== $facturaExistente->id)) {
                 PendingToast::create()
                     ->error()
-                    ->message('Esta cotización ya fue asociada a la factura #' . $facturaExistente->id . '.')
+                    ->message('Esta cotización ya fue asociada a la factura #' . $facturaExistente->prefijo . '.')
                     ->duration(8000);
                 return;
             }

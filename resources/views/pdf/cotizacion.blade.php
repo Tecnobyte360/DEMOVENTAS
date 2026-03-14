@@ -366,6 +366,41 @@
             border-radius: 8px;
         }
 
+        .payment-box {
+            margin-top: 14px;
+            border: 1px solid #c7d2fe;
+            background: #eef2ff;
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        .payment-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            color: #1e3a8a;
+            margin-bottom: 6px;
+        }
+
+        .payment-text {
+            font-size: 11px;
+            color: #1f2937;
+            line-height: 1.5;
+        }
+
+        .payment-account {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 5px 10px;
+            background: #dbeafe;
+            color: #1e40af;
+            border-radius: 999px;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: .4px;
+        }
+
         .terms {
             margin-top: 12px;
         }
@@ -578,6 +613,23 @@
             </tr>
         </table>
 
+        {{-- Información de pago quemada --}}
+        <div class="payment-box">
+            <div class="payment-title">Información de pago</div>
+
+            <div class="payment-text">
+                PAGAR A LA CUENTA BANCOLOMBIA AHORROS
+            </div>
+
+            <div class="payment-account">
+                00168305311
+            </div>
+
+            <div class="payment-text" style="margin-top: 6px;">
+                A NOMBRE DE <strong>JHON ARLES PALACIO ARIAS</strong>
+            </div>
+        </div>
+
         {{-- Notas --}}
         <div class="terms pane">
             <h4>Notas y condiciones</h4>
@@ -586,9 +638,9 @@
                 <div style="white-space: pre-line;">{{ $cotizacion->notas }}</div>
             @else
                 <div class="muted small" style="line-height:1.5;">
-                    • Precios en moneda local.
-                    • Validez: 15 días.
-                    • Entrega sujeta a disponibilidad.
+                    • Precios en moneda local.<br>
+                    • Validez: 15 días.<br>
+                    • Entrega sujeta a disponibilidad.<br>
                     • Garantía según fabricante.
                 </div>
             @endif

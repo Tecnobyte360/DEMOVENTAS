@@ -1812,17 +1812,20 @@ class FacturaForm extends Component
         try {
             $cotizacion = CotizacionModel::with('detalles')->findOrFail($cotizacionId);
 
+            $cotizacion = CotizacionModel::with('detalles')->findOrFail($cotizacionId);
+
+            // Solo aviso informativo, pero NO bloquea
             $facturaExistente = Factura::query()
                 ->where('cotizacion_id', $cotizacion->id)
                 ->whereNotIn('estado', ['anulada'])
+                ->orderByDesc('id')
                 ->first();
 
             if ($facturaExistente && (!$this->factura || $this->factura->id !== $facturaExistente->id)) {
                 PendingToast::create()
-                    ->error()
-                    ->message("Esta cotización ya fue asociada a la factura {$facturaExistente->prefijo} {$facturaExistente->numero}.")
+                    ->warning()
+                    ->message("Esta cotización ya ha sido usada antes en la factura {$facturaExistente->prefijo} {$facturaExistente->numero}, pero puedes volver a relacionarla.")
                     ->duration(8000);
-                return;
             }
 
             $this->cotizacion_id = (int) $cotizacion->id;

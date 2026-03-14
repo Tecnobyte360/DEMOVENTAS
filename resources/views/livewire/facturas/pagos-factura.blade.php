@@ -50,7 +50,10 @@
 
                 initFacturaSelect();
 
-                Livewire.hook('morph.updated', ({ el, component }) => {
+                Livewire.hook('morph.updated', ({
+                    el,
+                    component
+                }) => {
                     if (document.getElementById('factura-select')) {
                         initFacturaSelect();
                     }

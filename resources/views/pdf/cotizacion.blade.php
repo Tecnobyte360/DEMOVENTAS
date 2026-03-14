@@ -1,8 +1,5 @@
 {{-- resources/views/pdf/cotizacion.blade.php --}}
 @php
-    // ============================================
-    // Normalización de empresa
-    // ============================================
     if (isset($empresa) && is_array($empresa)) {
         $empresa = (object) $empresa;
     }
@@ -11,16 +8,10 @@
         $empresa = (object) [];
     }
 
-    // ============================================
-    // Theme PDF (igual lógica de factura)
-    // ============================================
     $theme = is_object($empresa) && method_exists($empresa, 'pdfTheme')
         ? $empresa->pdfTheme()
         : (is_array($theme ?? null) ? $theme : []);
 
-    // ============================================
-    // Colores base
-    // ============================================
     $primary   = $theme['primary']   ?? '#223361';
     $base      = $theme['base']      ?? '#ffffff';
     $ink       = $theme['ink']       ?? '#1f2937';
@@ -33,9 +24,6 @@
     $grandTx   = $theme['grandTx']   ?? '#ffffff';
     $wmColor   = $theme['wmColor']   ?? 'rgba(34, 51, 97, .06)';
 
-    // ============================================
-    // Resolución del logo
-    // ============================================
     $logoSrc = null;
 
     if (!empty($empresa->logo_path)) {
@@ -62,9 +50,6 @@
         }
     }
 
-    // ============================================
-    // Datos empresa
-    // ============================================
     $E = [
         'nombre'    => $empresa->nombre ?? 'Empresa',
         'nit'       => !empty($empresa->nit) ? 'NIT ' . $empresa->nit : null,
@@ -76,20 +61,11 @@
         'logo_src'  => $logoPdfSrc,
     ];
 
-    // ============================================
-    // Helpers
-    // ============================================
     $money = fn($v) => '$' . number_format((float) $v, 2, '.', ',');
     $fmtPct = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.') . '%';
 
-    // ============================================
-    // Folio / referencia
-    // ============================================
     $folio = $ref ?? 'S' . str_pad($cotizacion->id, 5, '0', STR_PAD_LEFT);
 
-    // ============================================
-    // Estado
-    // ============================================
     $estado = $cotizacion->estado ?? 'borrador';
 
     $colors = [
@@ -102,9 +78,6 @@
 
     $estadoLabel = $estado === 'convertida' ? 'Orden de venta' : ucfirst($estado);
 
-    // ============================================
-    // Fechas
-    // ============================================
     $fechaDocumento = \Illuminate\Support\Carbon::parse($cotizacion->fecha ?? $cotizacion->created_at)->format('d/m/Y');
     $fechaVencimiento = !empty($cotizacion->vencimiento)
         ? \Illuminate\Support\Carbon::parse($cotizacion->vencimiento)->format('d/m/Y')
@@ -369,11 +342,11 @@
         }
 
         .payment-box {
-            margin-top: 8px;
+            margin-top: 10px;
             border: 1px solid #dbe3f1;
             background: #f8fbff;
-            border-radius: 6px;
-            padding: 6px 8px;
+            border-radius: 8px;
+            padding: 8px 10px;
         }
 
         .payment-title {
@@ -381,20 +354,38 @@
             font-weight: 800;
             text-transform: uppercase;
             color: #223361;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
+            letter-spacing: .4px;
         }
 
-        .payment-text {
+        .payment-row {
             font-size: 10px;
+            color: #374151;
             line-height: 1.35;
-            color: #1f2937;
+        }
+
+        .payment-bank {
+            font-weight: 700;
+            color: #223361;
         }
 
         .payment-account {
-            color: #223361;
-            font-size: 11px;
+            display: inline-block;
+            margin-left: 6px;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: #e8f0ff;
+            border: 1px solid #c9d8ff;
             font-weight: 800;
-            letter-spacing: .4px;
+            letter-spacing: 1px;
+            font-size: 11px;
+            color: #1e3a8a;
+        }
+
+        .payment-owner {
+            font-size: 9.5px;
+            color: #6b7280;
+            margin-top: 4px;
         }
 
         .drawing-space {
@@ -504,7 +495,6 @@
 
     <main style="position: relative; z-index:1;">
 
-        {{-- Cliente / Condiciones --}}
         <table class="info-grid">
             <tr>
                 <td class="w-50">
@@ -557,7 +547,6 @@
             </tr>
         </table>
 
-        {{-- Ítems --}}
         <table class="items">
             <thead>
                 <tr>
@@ -598,7 +587,6 @@
             </tbody>
         </table>
 
-        {{-- Totales --}}
         <table class="totals">
             <tr>
                 <td class="w-50"></td>
@@ -617,32 +605,21 @@
             </tr>
         </table>
 
-        {{-- Información de pago --}}
         <div class="payment-box">
             <div class="payment-title">Información de pago</div>
 
-            <div class="payment-text">
-                <strong>Banco:</strong> Bancolombia
-            </div>
-
-            <div class="payment-text">
-                <strong>Tipo:</strong> Cuenta de ahorros
-            </div>
-
-            <div class="payment-text">
-                <strong>Número:</strong>
+            <div class="payment-row">
+                <span class="payment-bank">Bancolombia · Cuenta de ahorros</span>
                 <span class="payment-account">00168305311</span>
             </div>
 
-            <div class="payment-text">
-                <strong>Titular:</strong> Jhon Arles Palacio Arias
+            <div class="payment-owner">
+                Titular: Jhon Arles Palacio Arias
             </div>
         </div>
 
-        {{-- Espacio para dibujo / anotaciones manuales --}}
         <div class="drawing-space"></div>
 
-        {{-- Notas --}}
         <div class="terms pane">
             <h4>Notas y condiciones</h4>
 
@@ -658,7 +635,6 @@
             @endif
         </div>
 
-        {{-- Aceptación --}}
         <table style="width:100%; margin-top:14px;">
             <tr>
                 <td class="w-50">

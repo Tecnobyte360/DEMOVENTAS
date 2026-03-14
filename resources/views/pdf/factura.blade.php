@@ -24,9 +24,9 @@
         </ol>
     </nav>
 
-   <section class="grid grid-cols-1 2xl:grid-cols-12 gap-6 md:gap-8">
+    <section class="grid grid-cols-1 2xl:grid-cols-12 gap-6 md:gap-8">
         {{-- COLUMNA IZQUIERDA --}}
-       <div class="2xl:col-span-8 space-y-6 md:space-y-8 min-w-0">
+        <div class="2xl:col-span-8 space-y-6 md:space-y-8 min-w-0">
             <section
                 class="relative rounded-2xl md:rounded-3xl border border-gray-200 dark:border-gray-800 overflow-hidden">
                 <div
@@ -85,24 +85,34 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
 
                         {{-- Fecha --}}
+                        {{-- Fecha --}}
                         <div wire:ignore x-data="{ fp: null }" x-init="fp = flatpickr($refs.fechaContabilizacion, {
                             dateFormat: 'Y-m-d',
                             altInput: true,
                             altFormat: 'd-m-Y',
-                            defaultDate: @js($fecha_contabilizacion),
+                            defaultDate: @js($fecha_contabilizacion ?? null),
                             onChange: (_s, iso) => $wire.set('fecha_contabilizacion', iso)
                         });
+                        
                         Livewire.hook('message.processed', () => {
-                            const val = @js($fecha_contabilizacion);
-                            if (val) { fp.setDate(val, true) } else { fp.clear() }
+                            const val = @js($fecha_contabilizacion ?? null);
+                            if (fp) {
+                                if (val) {
+                                    fp.setDate(val, true);
+                                } else {
+                                    fp.clear();
+                                }
+                            }
                         });">
-                            <label
-                                class="block text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha
-                                *</label>
+                            <label class="block text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Fecha *
+                            </label>
+
                             <input x-ref="fechaContabilizacion" type="text" placeholder="dd-mm-aaaa"
                                 class="w-full px-3 py-2 md:px-4 md:py-2.5 rounded-xl border
-                            @error('fecha_contabilizacion') border-red-500 @else border-gray-300 dark:border-gray-700 @enderror
-                            dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-500">
+        @error('fecha_contabilizacion') border-red-500 @else border-gray-300 dark:border-gray-700 @enderror
+        dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-500">
+
                             @error('fecha_contabilizacion')
                                 <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                             @enderror
@@ -273,174 +283,177 @@
                     {{-- =========================
            | DETALLE: DESKTOP (TABLA ERP COMO PANTALLAZO)
            ========================= --}}
-                <div class="hidden md:block">
-    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-            <span
-                class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold">2</span>
-            <span class="font-semibold">Agrega productos</span>
-        </div>
+                    <div class="hidden md:block">
+                        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                                <span
+                                    class="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600/10 text-violet-700 dark:text-violet-300 font-bold">2</span>
+                                <span class="font-semibold">Agrega productos</span>
+                            </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-            <div
-                class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/60 text-xs text-gray-600 dark:text-gray-300">
-                <i class="fas fa-info-circle text-gray-400"></i>
-                Selecciona <b>producto</b> y <b>bodega</b> en la línea 1 para consultar stock.
-            </div>
+                            <div class="flex flex-wrap items-center gap-2">
+                                <div
+                                    class="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/70 dark:bg-gray-900/60 text-xs text-gray-600 dark:text-gray-300">
+                                    <i class="fas fa-info-circle text-gray-400"></i>
+                                    Selecciona <b>producto</b> y <b>bodega</b> en la línea 1 para consultar stock.
+                                </div>
 
-            <button type="button" wire:click="agregarFila"
-                class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow transition">
-                <i class="fas fa-plus mr-2"></i> Línea
-            </button>
-        </div>
-    </div>
+                                <button type="button" wire:click="agregarFila"
+                                    class="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow transition">
+                                    <i class="fas fa-plus mr-2"></i> Línea
+                                </button>
+                            </div>
+                        </div>
 
-    <div
-        class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white/70 dark:bg-gray-900/50">
-        <div class="overflow-hidden">
-            <table class="w-full table-fixed text-sm">
-                <thead
-                    class="bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-200">
-                    <tr>
-                        <th class="p-3 text-left font-semibold w-[36%]">Producto</th>
-                        <th class="p-3 text-left font-semibold w-[24%]">Descripción</th>
-                        <th class="p-3 text-left font-semibold w-[20%]">Bodega</th>
-                        <th class="p-3 text-center font-semibold w-[8%]">Cant.</th>
-                        <th class="p-3 text-center font-semibold w-[8%]">Costo</th>
-                        <th class="p-3 text-center font-semibold w-[4%]"></th>
-                    </tr>
-                </thead>
+                        <div
+                            class="rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white/70 dark:bg-gray-900/50">
+                            <div class="overflow-hidden">
+                                <table class="w-full table-fixed text-sm">
+                                    <thead
+                                        class="bg-gray-100/90 dark:bg-gray-800/90 backdrop-blur border-b border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-200">
+                                        <tr>
+                                            <th class="p-3 text-left font-semibold w-[36%]">Producto</th>
+                                            <th class="p-3 text-left font-semibold w-[24%]">Descripción</th>
+                                            <th class="p-3 text-left font-semibold w-[20%]">Bodega</th>
+                                            <th class="p-3 text-center font-semibold w-[8%]">Cant.</th>
+                                            <th class="p-3 text-center font-semibold w-[8%]">Costo</th>
+                                            <th class="p-3 text-center font-semibold w-[4%]"></th>
+                                        </tr>
+                                    </thead>
 
-                <tbody class="text-gray-800 dark:text-gray-200">
-                    @forelse ($entradas as $index => $entrada)
-                        <tr
-                            class="border-t dark:border-gray-700 hover:bg-violet-50/60 dark:hover:bg-gray-800/60 transition">
+                                    <tbody class="text-gray-800 dark:text-gray-200">
+                                        @forelse ($entradas as $index => $entrada)
+                                            <tr
+                                                class="border-t dark:border-gray-700 hover:bg-violet-50/60 dark:hover:bg-gray-800/60 transition">
 
-                            {{-- Producto --}}
-                            <td class="p-2 align-top">
-                                <input id="fila-{{ $index }}-producto"
-                                    list="productos_list_{{ $index }}"
-                                    wire:model.lazy="entradas.{{ $index }}.producto_nombre"
-                                    wire:change="actualizarProductoDesdeNombre({{ $index }})"
-                                    placeholder="— Seleccione —"
-                                    class="w-full min-w-0 h-10 px-3 rounded-xl border
+                                                {{-- Producto --}}
+                                                <td class="p-2 align-top">
+                                                    <input id="fila-{{ $index }}-producto"
+                                                        list="productos_list_{{ $index }}"
+                                                        wire:model.lazy="entradas.{{ $index }}.producto_nombre"
+                                                        wire:change="actualizarProductoDesdeNombre({{ $index }})"
+                                                        placeholder="— Seleccione —"
+                                                        class="w-full min-w-0 h-10 px-3 rounded-xl border
                                     @error('entradas.' . $index . '.producto_id') border-red-500
                                     @elseif(!empty($entrada['producto_id'])) border-green-500
                                     @else border-gray-300 @enderror
                                     dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600" />
-                                <datalist id="productos_list_{{ $index }}">
-                                    @foreach ($productos as $p)
-                                        <option value="{{ $p->nombre }}">{{ $p->nombre }}</option>
-                                    @endforeach
-                                </datalist>
-                                @error("entradas.$index.producto_id")
-                                    <span class="text-red-600 text-xs block mt-1">{{ $message }}</span>
-                                @enderror
-                            </td>
+                                                    <datalist id="productos_list_{{ $index }}">
+                                                        @foreach ($productos as $p)
+                                                            <option value="{{ $p->nombre }}">{{ $p->nombre }}
+                                                            </option>
+                                                        @endforeach
+                                                    </datalist>
+                                                    @error("entradas.$index.producto_id")
+                                                        <span
+                                                            class="text-red-600 text-xs block mt-1">{{ $message }}</span>
+                                                    @enderror
+                                                </td>
 
-                            {{-- Descripción --}}
-                            <td class="p-2 align-top">
-                                <input type="text"
-                                    wire:model.lazy="entradas.{{ $index }}.descripcion"
-                                    placeholder="Descripción (opcional)"
-                                    class="w-full min-w-0 h-10 px-3 rounded-xl border border-gray-300 dark:border-gray-700
+                                                {{-- Descripción --}}
+                                                <td class="p-2 align-top">
+                                                    <input type="text"
+                                                        wire:model.lazy="entradas.{{ $index }}.descripcion"
+                                                        placeholder="Descripción (opcional)"
+                                                        class="w-full min-w-0 h-10 px-3 rounded-xl border border-gray-300 dark:border-gray-700
                                     dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600" />
-                            </td>
+                                                </td>
 
-                            {{-- Bodega --}}
-                            <td class="p-2 align-top">
-                                <select id="fila-{{ $index }}-bodega"
-                                    wire:model="entradas.{{ $index }}.bodega_id"
-                                    @change="$wire.recordarUltimos({{ $index }})"
-                                    class="w-full min-w-0 h-10 px-3 rounded-xl border
+                                                {{-- Bodega --}}
+                                                <td class="p-2 align-top">
+                                                    <select id="fila-{{ $index }}-bodega"
+                                                        wire:model="entradas.{{ $index }}.bodega_id"
+                                                        @change="$wire.recordarUltimos({{ $index }})"
+                                                        class="w-full min-w-0 h-10 px-3 rounded-xl border
                                     @error('entradas.' . $index . '.bodega_id') border-red-500
                                     @elseif(!empty($entrada['bodega_id'])) border-green-500
                                     @else border-gray-300 @enderror
                                     dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600">
-                                    <option value="">— Seleccione —</option>
-                                    @foreach ($bodegas as $b)
-                                        <option value="{{ $b->id }}">{{ $b->nombre }}</option>
-                                    @endforeach
-                                </select>
-                                @error("entradas.$index.bodega_id")
-                                    <span class="text-red-600 text-xs block mt-1">{{ $message }}</span>
-                                @enderror
-                            </td>
+                                                        <option value="">— Seleccione —</option>
+                                                        @foreach ($bodegas as $b)
+                                                            <option value="{{ $b->id }}">{{ $b->nombre }}
+                                                            </option>
+                                                        @endforeach
+                                                    </select>
+                                                    @error("entradas.$index.bodega_id")
+                                                        <span
+                                                            class="text-red-600 text-xs block mt-1">{{ $message }}</span>
+                                                    @enderror
+                                                </td>
 
-                            {{-- Cantidad --}}
-                            <td class="p-2 align-top text-center">
-                                <input id="fila-{{ $index }}-cantidad"
-                                    type="number"
-                                    min="1"
-                                    wire:model="entradas.{{ $index }}.cantidad"
-                                    class="w-full min-w-0 h-10 text-center px-2 rounded-xl border border-gray-300 dark:border-gray-700
+                                                {{-- Cantidad --}}
+                                                <td class="p-2 align-top text-center">
+                                                    <input id="fila-{{ $index }}-cantidad" type="number"
+                                                        min="1"
+                                                        wire:model="entradas.{{ $index }}.cantidad"
+                                                        class="w-full min-w-0 h-10 text-center px-2 rounded-xl border border-gray-300 dark:border-gray-700
                                     dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600" />
-                                @error("entradas.$index.cantidad")
-                                    <span class="text-red-600 text-xs block mt-1">{{ $message }}</span>
-                                @enderror
-                            </td>
+                                                    @error("entradas.$index.cantidad")
+                                                        <span
+                                                            class="text-red-600 text-xs block mt-1">{{ $message }}</span>
+                                                    @enderror
+                                                </td>
 
-                            {{-- Costo --}}
-                            <td class="p-2 align-top text-center">
-                                <input id="fila-{{ $index }}-precio"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    wire:model="entradas.{{ $index }}.precio_unitario"
-                                    @change="$wire.recordarUltimos({{ $index }})"
-                                    class="w-full min-w-0 h-10 text-center px-2 rounded-xl border border-gray-300 dark:border-gray-700
+                                                {{-- Costo --}}
+                                                <td class="p-2 align-top text-center">
+                                                    <input id="fila-{{ $index }}-precio" type="number"
+                                                        step="0.01" min="0"
+                                                        wire:model="entradas.{{ $index }}.precio_unitario"
+                                                        @change="$wire.recordarUltimos({{ $index }})"
+                                                        class="w-full min-w-0 h-10 text-center px-2 rounded-xl border border-gray-300 dark:border-gray-700
                                     dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-violet-600" />
-                                @error("entradas.$index.precio_unitario")
-                                    <span class="text-red-600 text-xs block mt-1">{{ $message }}</span>
-                                @enderror
-                            </td>
+                                                    @error("entradas.$index.precio_unitario")
+                                                        <span
+                                                            class="text-red-600 text-xs block mt-1">{{ $message }}</span>
+                                                    @enderror
+                                                </td>
 
-                            {{-- Acción --}}
-                            <td class="p-2 align-top text-center">
-                                <button type="button"
-                                    wire:click="eliminarFila({{ $index }})"
-                                    class="h-10 w-10 inline-flex items-center justify-center rounded-xl
+                                                {{-- Acción --}}
+                                                <td class="p-2 align-top text-center">
+                                                    <button type="button"
+                                                        wire:click="eliminarFila({{ $index }})"
+                                                        class="h-10 w-10 inline-flex items-center justify-center rounded-xl
                                     border border-red-200 bg-red-50 text-red-600 hover:scale-105 transition
                                     dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300"
-                                    title="Eliminar">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="6" class="p-10 text-center text-gray-500">
-                                Sin ítems. Presiona <b>Línea</b> para agregar.
-                            </td>
-                        </tr>
-                    @endforelse
+                                                        title="Eliminar">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="6" class="p-10 text-center text-gray-500">
+                                                    Sin ítems. Presiona <b>Línea</b> para agregar.
+                                                </td>
+                                            </tr>
+                                        @endforelse
 
-                    <tr class="border-t border-gray-200 dark:border-gray-800">
-                        <td colspan="6" class="h-28 bg-gray-50/60 dark:bg-gray-950/20"></td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+                                        <tr class="border-t border-gray-200 dark:border-gray-800">
+                                            <td colspan="6" class="h-28 bg-gray-50/60 dark:bg-gray-950/20"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
 
-        @php
-            $totalDocumento = collect($entradas)->sum(
-                fn($e) => (float) ($e['cantidad'] ?? 0) * (float) ($e['precio_unitario'] ?? 0),
-            );
-        @endphp
+                            @php
+                                $totalDocumento = collect($entradas)->sum(
+                                    fn($e) => (float) ($e['cantidad'] ?? 0) * (float) ($e['precio_unitario'] ?? 0),
+                                );
+                            @endphp
 
-        <div
-            class="border-t border-gray-200 dark:border-gray-800 bg-white/85 dark:bg-gray-900/80 backdrop-blur px-4 py-3 md:px-6 md:py-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-baseline gap-2">
-                    <span class="text-sm text-gray-500 dark:text-gray-300">Total:</span>
-                    <span class="text-xl font-extrabold text-gray-900 dark:text-white">
-                        $ {{ number_format($totalDocumento ?? 0, 2, ',', '.') }}
-                    </span>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+                            <div
+                                class="border-t border-gray-200 dark:border-gray-800 bg-white/85 dark:bg-gray-900/80 backdrop-blur px-4 py-3 md:px-6 md:py-4">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-baseline gap-2">
+                                        <span class="text-sm text-gray-500 dark:text-gray-300">Total:</span>
+                                        <span class="text-xl font-extrabold text-gray-900 dark:text-white">
+                                            $ {{ number_format($totalDocumento ?? 0, 2, ',', '.') }}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     {{-- BARRA ACCIONES MÓVIL --}}
                     <div
                         class="md:hidden sticky bottom-0 z-10 border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900/90 backdrop-blur px-4 py-3 flex items-center gap-2">
@@ -693,7 +706,7 @@
             $total = $subtotal + $iva;
         @endphp
 
-      <aside class="2xl:col-span-4 space-y-6 min-w-0">
+        <aside class="2xl:col-span-4 space-y-6 min-w-0">
             <div class="xl:sticky xl:top-6 space-y-6">
                 <div
                     class="rounded-2xl md:rounded-3xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur p-4 md:p-6 shadow-2xl">
@@ -707,7 +720,7 @@
                     <dl class="space-y-2 md:space-y-3 text-sm">
                         <div class="flex justify-between">
                             <dt class="text-gray-600 dark:text-gray-300">Fecha</dt>
-                            <dd class="font-semibold">{{ $fecha_contabilizacion ?: '—' }}</dd>
+                            <dd class="font-semibold">{{ $fecha ?: '—' }}</dd>
                         </div>
                         <div class="flex justify-between">
                             <dt class="text-gray-600 dark:text-gray-300">Socio</dt>
@@ -749,7 +762,9 @@
                         </button>
                         <button type="submit" wire:loading.attr="disabled"
                             class="px-3 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-md transition">
-                            <i class="fas fa-save mr-1"></i> <div class="hidden md:block">                  </button>
+                            <i class="fas fa-save mr-1"></i>
+                            <div class="hidden md:block">
+                        </button>
                     </div>
                 </div>
             </div>

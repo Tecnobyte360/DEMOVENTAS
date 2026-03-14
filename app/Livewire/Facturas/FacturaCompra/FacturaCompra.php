@@ -220,8 +220,10 @@ class FacturaCompra extends Component
                 'cuentas.tipo:id,codigo,nombre',
                 'subcategoria:id,nombre',
                 'subcategoria.cuentas:id,subcategoria_id,tipo_id,plan_cuentas_id',
-            ])->where('activo', 1)->orderBy('nombre')->take(300)->get();
-
+            ])
+                ->where('activo', 1)
+                ->orderBy('nombre')
+                ->get();
             $bodegas = Bodega::orderBy('nombre')->get();
 
             // Listado de cuentas imputables (si necesitas mostrar más de inventario)

@@ -300,21 +300,27 @@ class FacturaCompra extends Component
     /* =========================
      *  BLOQUEO / SOLO LECTURA
      * ========================= */
-    public function getBloqueadaProperty(): bool
-    {
-        $estado = $this->factura->estado ?? $this->estado ?? 'borrador';
-        return in_array($estado, ['cerrado', 'anulada'], true);
+ public function getBloqueadaProperty(): bool
+{
+    $estado = strtolower((string) ($this->factura->estado ?? $this->estado ?? 'borrador'));
+
+    return in_array($estado, ['emitida', 'cerrado', 'anulada'], true);
+}
+
+ private function abortIfLocked(string $accion = 'editar'): bool
+{
+    if ($this->bloqueada) {
+        $estado = strtolower((string) ($this->factura->estado ?? $this->estado ?? 'bloqueada'));
+        PendingToast::create()
+            ->error()
+            ->message("La factura está {$estado}; no se puede {$accion}.")
+            ->duration(7000);
+
+        return true;
     }
 
-    private function abortIfLocked(string $accion = 'editar'): bool
-    {
-        if ($this->bloqueada) {
-            PendingToast::create()->error()->message("La factura está {$this->estado}; no se puede {$accion}.")->duration(7000);
-            return true;
-        }
-        return false;
-    }
-
+    return false;
+}
     /* =========================
      *  HELPERS / UTILIDADES
      * ========================= */

@@ -683,14 +683,17 @@
                                             }"
                                             :title="estado === 'anulada' ? 'Anulada' : (estado === 'cerrado' ? 'Cerrada' :
                                                 'Fin')">
-                                            <i :class="estado === 'anulada' ? 'fa-solid fa-ban' : (estado === 'cerrado' ?
-                                                'fa-solid fa-check' : 'fa-regular fa-circle')"
+                                            <i :class="estado === 'anulada'
+                                                ?
+                                                'fa-solid fa-ban' :
+                                                (estado === 'cerrado' ?
+                                                    'fa-solid fa-check' :
+                                                    'fa-regular fa-circle')"
                                                 class="text-sm md:text-base"></i>
                                         </div>
                                         <div class="mt-1 md:mt-2 text-xs md:text-sm font-medium"
                                             x-text="estado === 'anulada' ? 'Anulada' : (estado === 'cerrado' ? 'Cerrada' : 'Fin')">
                                         </div>
-
                                     </li>
                                 </ol>
                             </div>
@@ -704,7 +707,7 @@
                             <button type="button"
                                 class="h-11 px-4 rounded-2xl bg-slate-800 hover:bg-slate-900 text-white shadow disabled:opacity-50 disabled:cursor-not-allowed transition ring-offset-2"
                                 wire:click="guardar" wire:loading.attr="disabled" wire:target="guardar,emitir"
-                                :disabled="['anulada', 'cerrado'].includes(estado)">
+                                :disabled="['emitida', 'anulada', 'cerrado'].includes(estado)">
                                 <i class="fa-solid fa-floppy-disk mr-2"></i>
                                 <span wire:loading.remove wire:target="guardar">Factura Borrador</span>
                                 <span wire:loading wire:target="guardar">Guardando…</span>
@@ -712,7 +715,8 @@
 
                             {{-- Emitir --}}
                             <button type="button" wire:click="emitir" wire:loading.attr="disabled"
-                                wire:target="emitir,guardar" :disabled="['anulada', 'cerrado'].includes(estado)"
+                                wire:target="emitir,guardar"
+                                :disabled="['emitida', 'anulada', 'cerrado'].includes(estado)"
                                 class="h-11 px-4 rounded-2xl transition ring-offset-2 shadow bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white disabled:opacity-50 disabled:cursor-not-allowed">
                                 <i class="fa-solid fa-stamp mr-2"></i>
                                 <span wire:loading.remove wire:target="emitir">Emitir</span>
@@ -767,71 +771,72 @@
 </script>
 
 <script>
-document.addEventListener('livewire:init', () => {
+    document.addEventListener('livewire:init', () => {
 
-    const ensureProductoTomSelect = (el) => {
-        if (!el) return null;
+        const ensureProductoTomSelect = (el) => {
+            if (!el) return null;
 
-        if (el.tomselect) {
-            return el.tomselect;
-        }
-
-        const index = parseInt(el.dataset.linea || '0', 10);
-
-        const ts = new TomSelect(el, {
-            placeholder: '— Seleccione —',
-            allowEmptyOption: true,
-            create: false,
-            closeAfterSelect: true,
-            maxOptions: 1000,
-            hideSelected: false,
-            searchField: ['text'],
-
-            onChange(value) {
-                const pid = value ? parseInt(value, 10) : null;
-
-                Livewire.dispatch('set-producto-linea', {
-                    index,
-                    productoId: pid
-                });
+            if (el.tomselect) {
+                return el.tomselect;
             }
-        });
 
-        return ts;
-    };
+            const index = parseInt(el.dataset.linea || '0', 10);
 
-    const initProductoSelects = () => {
-        requestAnimationFrame(() => {
-            document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-                ensureProductoTomSelect(el);
+            const ts = new TomSelect(el, {
+                placeholder: '— Seleccione —',
+                allowEmptyOption: true,
+                create: false,
+                closeAfterSelect: true,
+                maxOptions: 1000,
+                hideSelected: false,
+                searchField: ['text'],
+
+                onChange(value) {
+                    const pid = value ? parseInt(value, 10) : null;
+
+                    Livewire.dispatch('set-producto-linea', {
+                        index,
+                        productoId: pid
+                    });
+                }
             });
-        });
-    };
 
-    initProductoSelects();
+            return ts;
+        };
 
-    Livewire.hook('message.processed', () => {
+        const initProductoSelects = () => {
+            requestAnimationFrame(() => {
+                document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                    ensureProductoTomSelect(el);
+                });
+            });
+        };
+
         initProductoSelects();
-    });
 
-    Livewire.on('sync-productos-tomselect', (payload) => {
-        requestAnimationFrame(() => {
-            const lineas = payload?.lineas || [];
-
-            lineas.forEach((l, i) => {
-                const el = document.querySelector(`select[data-producto-select][data-linea="${i}"]`);
-                if (!el) return;
-
-                const ts = ensureProductoTomSelect(el);
-                if (!ts) return;
-
-                const pid = l?.producto_id ? String(l.producto_id) : '';
-                ts.setValue(pid, true);
-            });
-
+        Livewire.hook('message.processed', () => {
             initProductoSelects();
         });
-    });
 
-});
+        Livewire.on('sync-productos-tomselect', (payload) => {
+            requestAnimationFrame(() => {
+                const lineas = payload?.lineas || [];
+
+                lineas.forEach((l, i) => {
+                    const el = document.querySelector(
+                        `select[data-producto-select][data-linea="${i}"]`);
+                    if (!el) return;
+
+                    const ts = ensureProductoTomSelect(el);
+                    if (!ts) return;
+
+                    const pid = l?.producto_id ? String(l.producto_id) : '';
+                    ts.setValue(pid, true);
+                });
+
+                initProductoSelects();
+            });
+        });
+
+    });
 </script>

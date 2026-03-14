@@ -77,7 +77,7 @@ class FacturaForm extends Component
         'lineas.*.cuenta_ingreso_id'   => 'required|integer|exists:plan_cuentas,id',
         'lineas.*.bodega_id'           => 'required|integer|exists:bodegas,id',
         'lineas.*.descripcion'         => 'required|string|max:255',
-        'lineas.*.cantidad'            => 'required|numeric|min:1',
+        'lineas.*.cantidad'            => 'required|numeric|min:0.01',
         'lineas.*.precio_unitario'     => 'required|numeric|min:0',
         'lineas.*.descuento_pct'       => 'required|numeric|min:0|max:100',
         'lineas.*.impuesto_id'         => 'nullable|integer|exists:impuestos,id',

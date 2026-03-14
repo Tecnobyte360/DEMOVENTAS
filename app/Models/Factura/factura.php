@@ -2,100 +2,89 @@
 
 namespace App\Models\Factura;
 
-use App\Models\User;
+use App\Models\ConfiguracionEmpresas\Empresa;
+use App\Models\MediosPago\MedioPagos;
+use App\Models\Serie\Serie;
+use App\Models\SocioNegocio\SocioNegocio;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Factura extends Model
 {
     protected $table = 'facturas';
 
-   protected $fillable = [
-    'empresa_id',
-    'cotizacion_id',
-    'serie_id',
-    'prefijo',
-    'numero',
-    'socio_negocio_id',
-    'cliente_id',
-    'fecha',
-    'vencimiento',
-    'tipo_pago',
-    'plazo_dias',
-    'terminos_pago',
-    'notas',
-    'moneda',
-    'estado',
-    'subtotal',
-    'impuestos',
-    'total',
-    'pagado',
-    'saldo',
-    'cuenta_cobro_id',
-    'condicion_pago_id',
-    'creado_por_id',
-    'actualizado_por_id',
-    'anulado_por_id',
-    'emitido_por_id',
-    'anulado_en',
-    'emitido_en',
-];
-
-    protected $casts = [
-        'fecha' => 'date',
-        'vencimiento' => 'date',
-        'subtotal' => 'float',
-        'impuestos' => 'float',
-        'total' => 'float',
-        'pagado' => 'float',
-        'saldo' => 'float',
-        'anulado_en' => 'datetime',
-        'emitido_en' => 'datetime',
+    protected $fillable = [
+        'serie_id',
+        'numero',
+        'prefijo',
+        'socio_negocio_id',
+        'cotizacion_id',
+        'pedido_id',
+        'fecha',
+        'vencimiento',
+        'moneda',
+        'tipo_pago',
+        'plazo_dias',
+        'subtotal',
+        'impuestos',
+        'total',
+        'pagado',
+        'saldo',
+        'estado',
+        'terminos_pago',
+        'notas',
+        'pdf_path',
+        'cuenta_cobro_id',
+        'condicion_pago_id',
+         'empresa_id',
     ];
 
-    public function empresa()
+    protected $casts = [
+        'fecha'       => 'date',
+        'vencimiento' => 'date',
+        'subtotal'    => 'decimal:2',
+        'impuestos'   => 'decimal:2',
+        'total'       => 'decimal:2',
+        'pagado'      => 'decimal:2',
+        'saldo'       => 'decimal:2',
+    ];
+
+    /* ----------------- Hooks: asegura prefijo ----------------- */
+    protected static function booted(): void
     {
-        return $this->belongsTo(\App\Models\ConfiguracionEmpresas\Empresa::class, 'empresa_id');
+        // Al crear: si hay serie y prefijo nulo, tómalo de la serie
+        static::creating(function (self $f) {
+            if (empty($f->prefijo) && !empty($f->serie_id)) {
+                $f->prefijo = Serie::whereKey($f->serie_id)->value('prefijo');
+            }
+        });
+
+        // Al actualizar serie en un registro existente sin prefijo, repónlo
+        static::updating(function (self $f) {
+            if ($f->isDirty('serie_id') && empty($f->prefijo) && !empty($f->serie_id)) {
+                $f->prefijo = Serie::whereKey($f->serie_id)->value('prefijo');
+            }
+        });
     }
 
-    public function serie()
+    /* ----------------- Relaciones ----------------- */
+
+    public function serie(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\Serie\Serie::class, 'serie_id');
+        return $this->belongsTo(Serie::class, 'serie_id');
     }
 
-    public function cliente()
+    public function cliente(): BelongsTo
     {
-        return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
+        return $this->belongsTo(SocioNegocio::class, 'socio_negocio_id');
     }
 
-    public function socioNegocio()
+    public function detalles(): HasMany
     {
-        return $this->belongsTo(\App\Models\SocioNegocio\SocioNegocio::class, 'socio_negocio_id');
-    }
-
-    public function detalles()
-    {
-        return $this->hasMany(\App\Models\Factura\FacturaDetalle::class, 'factura_id');
-    }
-
-    public function creadoPor()
-    {
-        return $this->belongsTo(User::class, 'creado_por_id');
-    }
-
-    public function actualizadoPor()
-    {
-        return $this->belongsTo(User::class, 'actualizado_por_id');
-    }
-
-    public function emitidoPor()
-    {
-        return $this->belongsTo(User::class, 'emitido_por_id');
-    }
-
-    public function anuladoPor()
-    {
-        return $this->belongsTo(User::class, 'anulado_por_id');
+        return $this->hasMany(FacturaDetalle::class, 'factura_id');
     }
 
     public function pagos(): HasMany
@@ -103,70 +92,114 @@ class Factura extends Model
         return $this->hasMany(FacturaPago::class, 'factura_id');
     }
 
+    /* --------------- Helpers de pago/fechas --------------- */
+
+    public function setContado(): self
+    {
+        $this->tipo_pago   = 'contado';
+        $this->plazo_dias  = null;
+        $this->vencimiento = $this->fecha ?: now()->toDateString();
+        return $this;
+    }
+
+    public function setCredito(int $dias = 30): self
+    {
+        $this->tipo_pago   = 'credito';
+        $this->plazo_dias  = $dias;
+        $base              = $this->fecha ?: now();
+        $this->vencimiento = Carbon::parse($base)->addDays($dias)->toDateString();
+        return $this;
+    }
+
+    public function getVencidaAttribute(): bool
+    {
+        return $this->saldo > 0
+            && $this->vencimiento
+            && now()->toDateString() > $this->vencimiento->toDateString();
+    }
+
+    /** Número formateado con prefijo y longitud de la serie. */
+    public function getNumeroFormateadoAttribute(): ?string
+    {
+        if (!$this->numero) return null;
+        $len = $this->serie?->longitud ?? 6;
+        $num = str_pad((string)$this->numero, $len, '0', STR_PAD_LEFT);
+        return $this->prefijo ? "{$this->prefijo}-{$num}" : $num;
+    }
+
+    /* --------------- Operaciones de negocio --------------- */
+
+    /** Agrega una línea y recalcula totales. */
+    public function agregarLinea(array $data): FacturaDetalle
+    {
+        $detalle = $this->detalles()->create($data);
+        $this->recalcularTotales()->save();
+        return $detalle;
+    }
+
+    /** Recalcula subtotal/impuestos/total/pagado/saldo y ajusta estado. */
     public function recalcularTotales(): self
-{
-    $this->loadMissing(['detalles', 'pagos']);
+    {
+        $sub = (float) $this->detalles()->sum('importe_base');
+        $imp = (float) $this->detalles()->sum('importe_impuesto');
+        $tot = (float) $this->detalles()->sum('importe_total');
 
-    $subtotal = 0;
-    $impuestos = 0;
+        $pag = (float) $this->pagos()->sum('monto');
+        $sal = max($tot - $pag, 0);
 
-    foreach ($this->detalles as $d) {
-        $cantidad     = (float) ($d->cantidad ?? 0);
-        $precio       = (float) ($d->precio_unitario ?? 0);
-        $descuentoPct = (float) ($d->descuento_pct ?? 0);
-        $impuestoPct  = (float) ($d->impuesto_pct ?? 0);
+        $this->subtotal  = $sub;
+        $this->impuestos = $imp;
+        $this->total     = $tot;
+        $this->pagado    = $pag;
+        $this->saldo     = $sal;
 
-        if ($cantidad <= 0) {
-            continue;
+        if ($this->estado !== 'anulada') {
+            if ($tot <= 0)       $this->estado = 'borrador';
+            elseif ($sal <= 0)  $this->estado = 'pagada';
+            elseif ($pag > 0)   $this->estado = 'parcialmente_pagada';
+            else                $this->estado = 'emitida';
         }
 
-        $base = $cantidad * $precio * (1 - ($descuentoPct / 100));
-        $iva  = $base * ($impuestoPct / 100);
-
-        $subtotal += $base;
-        $impuestos += $iva;
+        return $this;
     }
 
-    $total = round($subtotal + $impuestos, 2);
+    public function registrarPago(array $data): FacturaPago
+    {
+        $pago = $this->pagos()->create($data);
+        $this->recalcularTotales()->save();
+        return $pago;
+    }
+    public function cuentaCobro()
+    {
+        return $this->belongsTo(\App\Models\CuentasContables\PlanCuentas::class, 'cuenta_cobro_id');
+    }
+    public function socioNegocio(): BelongsTo
+    {
+        return $this->belongsTo(SocioNegocio::class, 'socio_negocio_id');
+    }
+    public function registrarPagosDistribuidos(array $items, string $fecha, ?string $notas = null): void
+    {
+        DB::transaction(function () use ($items, $fecha, $notas) {
+            foreach ($items as $i) {
+                $medioId = $i['medio_pago_id'] ?? null;
+                $medio   = $medioId ? MedioPagos::find($medioId) : null;
 
-    // ✅ sumar pagos reales
-    $pagado = round((float) $this->pagos()->sum('monto'), 2);
-    $saldo  = round(max($total - $pagado, 0), 2);
+                $this->pagos()->create([
+                    'fecha'         => $fecha,
+                    'medio_pago_id' => $medioId,
+                    'metodo'        => $medio?->codigo,               
+                    'monto'         => (float) ($i['monto'] ?? 0),
+                    'referencia'    => $i['referencia'] ?? null,
+                    'notas'         => $notas,
+                ]);
+            }
 
-    $this->subtotal  = round($subtotal, 2);
-    $this->impuestos = round($impuestos, 2);
-    $this->total     = $total;
-    $this->pagado    = $pagado;
-    $this->saldo     = $saldo;
-
-    return $this;
-}
-
-
-   public function registrarPago(array $data): FacturaPago
+            $this->recalcularTotales()->save();
+        });
+    }
+    public function empresa(): BelongsTo
 {
-    $payload = [
-        'fecha'         => $data['fecha'] ?? now()->toDateString(),
-        'medio_pago_id' => $data['medio_pago_id'] ?? null,
-        'metodo'        => $data['metodo'] ?? null,
-        'referencia'    => $data['referencia'] ?? null,
-        'monto'         => (float) ($data['monto'] ?? 0),
-        'notas'         => $data['notas'] ?? null,
-        'turno_id'      => $data['turno_id'] ?? null,
-    ];
-
-    if (\Illuminate\Support\Facades\Schema::hasColumn('factura_pagos', 'creado_por_id')) {
-        $payload['creado_por_id'] = auth()->id();
-    }
-
-    if (\Illuminate\Support\Facades\Schema::hasColumn('factura_pagos', 'actualizado_por_id')) {
-        $payload['actualizado_por_id'] = auth()->id();
-    }
-
-    $pago = $this->pagos()->create($payload);
-
-    $this->refresh()->recalcularTotales()->save();
-
-    return $pago;
+    return $this->belongsTo(Empresa::class, 'empresa_id');
 }
+
 }

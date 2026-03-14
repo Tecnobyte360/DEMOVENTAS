@@ -479,18 +479,7 @@
                 <td class="text-right grand">{{ $money($factura->total ?? 0) }}</td>
             </tr>
         </table>
-         <table style="width:100%; margin-top:16px;">
-            <tr>
-                <td class="w-50">
-                    <div class="small muted">Aprobado por (cliente):</div>
-                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%;"></div>
-                </td>
-                <td class="w-50">
-                    <div class="small muted">Firma y sello:</div>
-                    <div style="margin-top:50px; border-top:1px solid {{ $border }}; width:80%;"></div>
-                </td>
-            </tr>
-        </table>
+        
 
         @if (!empty($factura->notas))
             <div class="terms pane">

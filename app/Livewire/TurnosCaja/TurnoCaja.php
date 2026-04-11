@@ -33,7 +33,8 @@ class TurnoCaja extends Component
     public array $resumen  = [];
     public array $porTipo  = [];
     public array $porMedio = [];
-
+    public bool $mostrarTablaRetiros = false;
+    public array $retirosDetalle = [];
     // Filtros e informe histórico
     public ?string $filtro_desde = null;
     public ?string $filtro_hasta = null;
@@ -84,76 +85,121 @@ class TurnoCaja extends Component
             $this->toast('error', 'Ocurrió un error cargando el turno de caja.', 8000);
         }
     }
+    public function toggleRetiros(): void
+    {
+        try {
+            $this->mostrarTablaRetiros = !$this->mostrarTablaRetiros;
 
-  public function render()
-{
-    try {
-        $this->turno = turnos_caja::turnoAbiertoGlobal();
+            if (!$this->mostrarTablaRetiros) {
+                $this->retirosDetalle = [];
+                return;
+            }
 
-        if ($this->turno) {
-            $this->refrescarResumenes();
+            if (!$this->turno) {
+                $this->toast('error', 'No hay turno abierto.', 6000);
+                $this->mostrarTablaRetiros = false;
+                return;
+            }
 
-            $mediosDePago = MedioPagos::where('activo', true)->get();
+            $this->retirosDetalle = CajaMovimiento::query()
+                ->with('user:id,name')
+                ->where('turno_id', $this->turno->id)
+                ->where('tipo', 'RETIRO')
+                ->latest('id')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'id' => $item->id,
+                        'fecha' => optional($item->created_at)?->format('Y-m-d H:i:s'),
+                        'usuario' => $item->user?->name ?? '—',
+                        'monto' => (float) $item->monto,
+                        'motivo' => $item->motivo ?? '—',
+                    ];
+                })
+                ->toArray();
+        } catch (\Throwable $e) {
+            Log::error('Error al cargar retiros del turno', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'turno_id' => $this->turno?->id,
+                'user_id' => Auth::id(),
+            ]);
 
-            foreach ($mediosDePago as $medio) {
-                $medio->saldo = $this->calcularSaldoMedioPago($medio);
+            $this->mostrarTablaRetiros = false;
+            $this->retirosDetalle = [];
+
+            $this->toast('error', 'No se pudieron cargar los retiros.', 8000);
+        }
+    }
+    public function render()
+    {
+        try {
+            $this->turno = turnos_caja::turnoAbiertoGlobal();
+
+            if ($this->turno) {
+                $this->refrescarResumenes();
+
+                $mediosDePago = MedioPagos::where('activo', true)->get();
+
+                foreach ($mediosDePago as $medio) {
+                    $medio->saldo = $this->calcularSaldoMedioPago($medio);
+                }
+
+                return view('livewire.turnos-caja.turno-caja', [
+                    'turno'             => $this->turno,
+                    'mediosDePago'      => $mediosDePago,
+                    'resumen'           => $this->resumen,
+                    'porTipo'           => $this->porTipo,
+                    'porMedio'          => $this->porMedio,
+                    'turnosInforme'     => $this->turnosInforme,
+                    'totalesInforme'    => $this->totalesInforme,
+                    'mediosActivos'     => $this->mediosActivos,
+                    'mapMediosPorTurno' => $this->mapMediosPorTurno,
+                ]);
             }
 
             return view('livewire.turnos-caja.turno-caja', [
-                'turno'             => $this->turno,
-                'mediosDePago'      => $mediosDePago,
-                'resumen'           => $this->resumen,
-                'porTipo'           => $this->porTipo,
-                'porMedio'          => $this->porMedio,
+                'turno'             => null,
                 'turnosInforme'     => $this->turnosInforme,
                 'totalesInforme'    => $this->totalesInforme,
                 'mediosActivos'     => $this->mediosActivos,
                 'mapMediosPorTurno' => $this->mapMediosPorTurno,
             ]);
+        } catch (\Throwable $e) {
+            Log::error('Error en render TurnoCaja', [
+                'msg' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id(),
+            ]);
+
+            $this->toast('error', 'Error renderizando Turno de Caja.', 8000);
+
+            return view('livewire.turnos-caja.turno-caja', [
+                'turno' => null,
+                'turnosInforme' => [],
+                'totalesInforme' => [],
+                'mediosActivos' => [],
+                'mapMediosPorTurno' => [],
+            ]);
         }
-
-        return view('livewire.turnos-caja.turno-caja', [
-            'turno'             => null,
-            'turnosInforme'     => $this->turnosInforme,
-            'totalesInforme'    => $this->totalesInforme,
-            'mediosActivos'     => $this->mediosActivos,
-            'mapMediosPorTurno' => $this->mapMediosPorTurno,
-        ]);
-    } catch (\Throwable $e) {
-        Log::error('Error en render TurnoCaja', [
-            'msg' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-            'user_id' => Auth::id(),
-        ]);
-
-        $this->toast('error', 'Error renderizando Turno de Caja.', 8000);
-
-        return view('livewire.turnos-caja.turno-caja', [
-            'turno' => null,
-            'turnosInforme' => [],
-            'totalesInforme' => [],
-            'mediosActivos' => [],
-            'mapMediosPorTurno' => [],
-        ]);
     }
-}
-public function abiertoPor()
-{
-    return $this->belongsTo(\App\Models\User::class, 'abierto_por_id');
-}
+    public function abiertoPor()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'abierto_por_id');
+    }
 
-public function cerradoPor()
-{
-    return $this->belongsTo(\App\Models\User::class, 'cerrado_por_id');
-}
-public static function turnoPendienteDeCerrar(): ?self
-{
-    return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
-        ->where('estado', 'abierto')
-        ->whereDate('fecha_inicio', '<', now()->toDateString())
-        ->orderBy('fecha_inicio')
-        ->first();
-}
+    public function cerradoPor()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'cerrado_por_id');
+    }
+    public static function turnoPendienteDeCerrar(): ?self
+    {
+        return self::with(['abiertoPor:id,name', 'cerradoPor:id,name'])
+            ->where('estado', 'abierto')
+            ->whereDate('fecha_inicio', '<', now()->toDateString())
+            ->orderBy('fecha_inicio')
+            ->first();
+    }
     private function calcularSaldoMedioPago($medio)
     {
         try {
@@ -227,6 +273,52 @@ public static function turnoPendienteDeCerrar(): ?self
         }
     }
 
+    public ?int $turnoDetalleRetirosId = null;
+
+public function verRetirosTurno(int $turnoId): void
+{
+    try {
+        if ($this->turnoDetalleRetirosId === $turnoId && $this->mostrarTablaRetiros) {
+            $this->turnoDetalleRetirosId = null;
+            $this->mostrarTablaRetiros = false;
+            $this->retirosDetalle = [];
+            return;
+        }
+
+        $this->turnoDetalleRetirosId = $turnoId;
+        $this->mostrarTablaRetiros = true;
+
+        $this->retirosDetalle = CajaMovimiento::query()
+            ->with('user:id,name')
+            ->where('turno_id', $turnoId)
+            ->where('tipo', 'RETIRO')
+            ->latest('id')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'fecha' => optional($item->created_at)?->format('Y-m-d H:i:s'),
+                    'usuario' => $item->user?->name ?? '—',
+                    'monto' => (float) $item->monto,
+                    'motivo' => $item->motivo ?? '—',
+                ];
+            })
+            ->toArray();
+    } catch (\Throwable $e) {
+        Log::error('Error al cargar retiros del turno del histórico', [
+            'msg' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+            'turno_id' => $turnoId,
+            'user_id' => Auth::id(),
+        ]);
+
+        $this->turnoDetalleRetirosId = null;
+        $this->mostrarTablaRetiros = false;
+        $this->retirosDetalle = [];
+
+        $this->toast('error', 'No se pudo cargar el detalle de retiros.', 8000);
+    }
+}
     /* =========================================================
      * MOVIMIENTOS MANUALES
      * =======================================================*/
@@ -264,17 +356,25 @@ public static function turnoPendienteDeCerrar(): ?self
                 $this->turno->refresh();
             });
 
-            $this->monto  = null;
+            $this->monto = null;
             $this->motivo = null;
 
             $this->toast('success', 'Movimiento registrado.', 6000);
 
             $this->refrescarResumenes();
             $this->actualizarInforme();
+
+            if ($this->mostrarTablaRetiros) {
+                $this->cargarRetirosDetalle();
+            }
         } catch (\Illuminate\Validation\ValidationException $ve) {
             $primer = $ve->validator->errors()->first() ?? 'Revisa los campos marcados.';
             $this->toast('error', $primer, 9000);
-            Log::warning('TurnoCaja validation agregarMovimiento', ['errors' => $ve->validator->errors()->toArray()]);
+
+            Log::warning('TurnoCaja validation agregarMovimiento', [
+                'errors' => $ve->validator->errors()->toArray()
+            ]);
+
             return;
         } catch (\Throwable $e) {
             Log::error('Error al registrar movimiento de caja', [
@@ -287,7 +387,30 @@ public static function turnoPendienteDeCerrar(): ?self
             $this->toast('error', 'Ocurrió un error al registrar el movimiento.', 8000);
         }
     }
+    private function cargarRetirosDetalle(): void
+    {
+        if (!$this->turno) {
+            $this->retirosDetalle = [];
+            return;
+        }
 
+        $this->retirosDetalle = CajaMovimiento::query()
+            ->with('user:id,name')
+            ->where('turno_id', $this->turno->id)
+            ->where('tipo', 'RETIRO')
+            ->latest('id')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'id' => $item->id,
+                    'fecha' => optional($item->created_at)?->format('Y-m-d H:i:s'),
+                    'usuario' => $item->user?->name ?? '—',
+                    'monto' => (float) $item->monto,
+                    'motivo' => $item->motivo ?? '—',
+                ];
+            })
+            ->toArray();
+    }
     /* =========================================================
      * CERRAR TURNO
      * =======================================================*/

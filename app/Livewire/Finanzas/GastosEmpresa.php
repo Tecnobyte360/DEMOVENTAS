@@ -35,6 +35,9 @@ class GastosEmpresa extends Component
     public array $series = [];
     public string $filtroTipo = 'todos';
 
+    /** NUEVO: buscador general */
+    public string $search = '';
+
     public $rutas = [];
     public $tiposGasto = [];
     public $conceptosContables = [];
@@ -42,7 +45,7 @@ class GastosEmpresa extends Component
 
     protected $rules = [
         'ruta_id'               => 'nullable|exists:rutas,id',
-        // 'tipo_gasto_id'         => 'required|exists:tipos_gasto,id',
+        // 'tipo_gasto_id'      => 'required|exists:tipos_gasto,id',
         'concepto_documento_id' => 'required|exists:conceptos_documentos,id',
         'serie_id'              => 'required|exists:series,id',
         'monto'                 => 'required|numeric|min:0.01',
@@ -50,7 +53,7 @@ class GastosEmpresa extends Component
     ];
 
     protected $messages = [
-        // 'tipo_gasto_id.required'         => 'Debe seleccionar el tipo de gasto.',
+        // 'tipo_gasto_id.required' => 'Debe seleccionar el tipo de gasto.',
         'concepto_documento_id.required' => 'Debe seleccionar el concepto contable.',
         'serie_id.required'              => 'Debe seleccionar la serie.',
         'monto.required'                 => 'Debe ingresar el monto.',
@@ -58,9 +61,6 @@ class GastosEmpresa extends Component
         'monto.min'                      => 'El monto debe ser mayor que cero.',
     ];
 
-    /**
-     * ✅ Manejo centralizado de errores (captura TODO).
-     */
     private function handleException(
         string $context,
         \Throwable $e,
@@ -83,15 +83,21 @@ class GastosEmpresa extends Component
                     'serie_id' => $this->serie_id,
                     'monto' => $this->monto,
                     'observacion' => $this->observacion,
+                    'search' => $this->search,
+                    'filtroTipo' => $this->filtroTipo,
                 ],
             ]);
 
             $message = $toastMsg ?: ('Error: ' . $e->getMessage());
 
             $toast = PendingToast::create();
-            if ($toastType === 'warning') $toast->warning();
-            elseif ($toastType === 'success') $toast->success();
-            else $toast->error();
+            if ($toastType === 'warning') {
+                $toast->warning();
+            } elseif ($toastType === 'success') {
+                $toast->success();
+            } else {
+                $toast->error();
+            }
 
             $toast->message($message)->duration($duration);
         } catch (\Throwable $inner) {
@@ -130,25 +136,30 @@ class GastosEmpresa extends Component
 
             $query = SerieModel::query();
 
-            if (method_exists(SerieModel::class, 'scopeActiva')) $query->activa();
-            else $query->where('activa', true);
+            if (method_exists(SerieModel::class, 'scopeActiva')) {
+                $query->activa();
+            } else {
+                $query->where('activa', true);
+            }
 
-            if ($tipoId > 0) $query->where('tipo_documento_id', $tipoId);
+            if ($tipoId > 0) {
+                $query->where('tipo_documento_id', $tipoId);
+            }
 
             $rows = $query
                 ->orderByDesc('es_default')
                 ->orderBy('nombre')
-                ->get(['id','nombre','prefijo','proximo','desde','hasta','longitud','es_default']);
+                ->get(['id', 'nombre', 'prefijo', 'proximo', 'desde', 'hasta', 'longitud', 'es_default']);
 
-            $this->series = $rows->map(fn($s) => [
-                'id'        => (int)$s->id,
-                'nombre'    => (string)$s->nombre,
-                'prefijo'   => (string)($s->prefijo ?? ''),
-                'proximo'   => (int)($s->proximo ?? 0),
-                'desde'     => (int)($s->desde ?? 0),
-                'hasta'     => (int)($s->hasta ?? 0),
-                'longitud'  => (int)($s->longitud ?? 6),
-                'default'   => (bool)$s->es_default,
+            $this->series = $rows->map(fn ($s) => [
+                'id'       => (int) $s->id,
+                'nombre'   => (string) $s->nombre,
+                'prefijo'  => (string) ($s->prefijo ?? ''),
+                'proximo'  => (int) ($s->proximo ?? 0),
+                'desde'    => (int) ($s->desde ?? 0),
+                'hasta'    => (int) ($s->hasta ?? 0),
+                'longitud' => (int) ($s->longitud ?? 6),
+                'default'  => (bool) $s->es_default,
             ])->toArray();
 
             if (!$this->serie_id) {
@@ -166,16 +177,20 @@ class GastosEmpresa extends Component
     {
         try {
             $serieId = $id ?: $this->serie_id;
-            if (!$serieId) return '';
+            if (!$serieId) {
+                return '';
+            }
 
             $s = SerieModel::find($serieId);
-            if (!$s) return '';
+            if (!$s) {
+                return '';
+            }
 
             $long = (int) ($s->longitud ?: 6);
-            $n    = max((int)$s->proximo, (int)$s->desde);
-            $n    = min($n, (int)$s->hasta);
+            $n    = max((int) $s->proximo, (int) $s->desde);
+            $n    = min($n, (int) $s->hasta);
 
-            $num = str_pad((string)$n, $long, '0', STR_PAD_LEFT);
+            $num = str_pad((string) $n, $long, '0', STR_PAD_LEFT);
             return ($s->prefijo ? "{$s->prefijo}-" : '') . $num;
         } catch (\Throwable $e) {
             $this->handleException('previewSiguiente error', $e, null, 'warning', 8000);
@@ -186,29 +201,46 @@ class GastosEmpresa extends Component
     private function repartirPorcentaje(float $total, array $rows): array
     {
         try {
-            if ($total <= 0) throw new \RuntimeException('Total inválido para repartir.');
-            if (count($rows) < 1) throw new \RuntimeException('No hay cuentas para repartir porcentaje.');
-
-            if (count($rows) === 1 && (!isset($rows[0]['pct']) || (float)$rows[0]['pct'] <= 0)) {
-                return [[ 'cuenta_id' => (int)$rows[0]['cuenta_id'], 'valor' => round($total, 2) ]];
+            if ($total <= 0) {
+                throw new \RuntimeException('Total inválido para repartir.');
             }
 
-            $sum = array_sum(array_map(fn($r) => (float)($r['pct'] ?? 0), $rows));
+            if (count($rows) < 1) {
+                throw new \RuntimeException('No hay cuentas para repartir porcentaje.');
+            }
+
+            if (count($rows) === 1 && (!isset($rows[0]['pct']) || (float) $rows[0]['pct'] <= 0)) {
+                return [[
+                    'cuenta_id' => (int) $rows[0]['cuenta_id'],
+                    'valor' => round($total, 2),
+                ]];
+            }
+
+            $sum = array_sum(array_map(fn ($r) => (float) ($r['pct'] ?? 0), $rows));
+
             if ($sum <= 0) {
-                return [[ 'cuenta_id' => (int)$rows[0]['cuenta_id'], 'valor' => round($total, 2) ]];
+                return [[
+                    'cuenta_id' => (int) $rows[0]['cuenta_id'],
+                    'valor' => round($total, 2),
+                ]];
             }
 
             $asignado = 0.0;
             $out = [];
 
             foreach ($rows as $r) {
-                $pct = (float)($r['pct'] ?? 0);
+                $pct = (float) ($r['pct'] ?? 0);
                 $valor = round(($total * $pct) / $sum, 2);
                 $asignado += $valor;
-                $out[] = ['cuenta_id' => (int)$r['cuenta_id'], 'valor' => $valor];
+
+                $out[] = [
+                    'cuenta_id' => (int) $r['cuenta_id'],
+                    'valor' => $valor,
+                ];
             }
 
             $diff = round($total - $asignado, 2);
+
             if (abs($diff) >= 0.01 && count($out) > 0) {
                 $out[count($out) - 1]['valor'] = round($out[count($out) - 1]['valor'] + $diff, 2);
             }
@@ -228,7 +260,7 @@ class GastosEmpresa extends Component
                 ->whereRaw('LOWER(codigo) = ?', ['efectivo'])
                 ->first();
 
-            return $mp?->cuenta?->plan_cuentas_id ? (int)$mp->cuenta->plan_cuentas_id : null;
+            return $mp?->cuenta?->plan_cuentas_id ? (int) $mp->cuenta->plan_cuentas_id : null;
         } catch (\Throwable $e) {
             $this->handleException('cuentaEfectivoId error', $e);
             return null;
@@ -238,24 +270,32 @@ class GastosEmpresa extends Component
     private function resolverCuentasDebitoYCreditoEfectivo(int $conceptoId, int $cuentaEfectivoId): array
     {
         try {
-            if ($cuentaEfectivoId <= 0) throw new \RuntimeException('Cuenta EFECTIVO inválida.');
+            if ($cuentaEfectivoId <= 0) {
+                throw new \RuntimeException('Cuenta EFECTIVO inválida.');
+            }
 
             $concepto = ConceptoDocumento::findOrFail($conceptoId);
 
             $rows = ConceptoDocumentoCuenta::query()
                 ->where('concepto_documento_id', $concepto->id)
                 ->orderByDesc('prioridad')
-                ->get(['plan_cuenta_id','naturaleza','porcentaje','prioridad']);
+                ->get(['plan_cuenta_id', 'naturaleza', 'porcentaje', 'prioridad']);
 
             $deb = $rows->where('naturaleza', 'debito')->values();
-            if ($deb->isEmpty()) throw new \RuntimeException('El concepto no tiene cuentas en DÉBITO configuradas.');
 
-            $debRows = $deb->map(fn($r) => [
-                'cuenta_id' => (int)$r->plan_cuenta_id,
-                'pct'       => $r->porcentaje !== null ? (float)$r->porcentaje : null,
+            if ($deb->isEmpty()) {
+                throw new \RuntimeException('El concepto no tiene cuentas en DÉBITO configuradas.');
+            }
+
+            $debRows = $deb->map(fn ($r) => [
+                'cuenta_id' => (int) $r->plan_cuenta_id,
+                'pct'       => $r->porcentaje !== null ? (float) $r->porcentaje : null,
             ])->toArray();
 
-            $creRows = [[ 'cuenta_id' => (int)$cuentaEfectivoId, 'pct' => 100 ]];
+            $creRows = [[
+                'cuenta_id' => (int) $cuentaEfectivoId,
+                'pct' => 100,
+            ]];
 
             return [$concepto, $debRows, $creRows];
         } catch (\Throwable $e) {
@@ -274,13 +314,14 @@ class GastosEmpresa extends Component
                     $serie  = SerieModel::findOrFail($this->serie_id);
                     $numero = $serie->tomarConsecutivo();
 
-                    $total = round((float)$this->monto, 2);
-                    if ($total <= 0) throw new \RuntimeException('Monto inválido.');
+                    $total = round((float) $this->monto, 2);
+                    if ($total <= 0) {
+                        throw new \RuntimeException('Monto inválido.');
+                    }
 
-                    // 1) Crear gasto
                     $gasto = GastoRuta::create([
-                        'serie_id'              => (int)$serie->id,
-                        'numero'                => (int)$numero,
+                        'serie_id'              => (int) $serie->id,
+                        'numero'                => (int) $numero,
                         'prefijo'               => $serie->prefijo,
                         'ruta_id'               => $this->ruta_id,
                         'user_id'               => Auth::id(),
@@ -290,12 +331,12 @@ class GastosEmpresa extends Component
                         'observacion'           => $this->observacion,
                     ]);
 
-                    // 2) Caja retiro
                     $turno = turnos_caja::turnoAbiertoDe(Auth::id());
+
                     if ($turno) {
-                        $long   = (int)($serie->longitud ?? 6);
-                        $consec = str_pad((string)$gasto->numero, $long, '0', STR_PAD_LEFT);
-                        $doc    = ($gasto->prefijo ? $gasto->prefijo.'-' : '') . $consec;
+                        $long   = (int) ($serie->longitud ?? 6);
+                        $consec = str_pad((string) $gasto->numero, $long, '0', STR_PAD_LEFT);
+                        $doc    = ($gasto->prefijo ? $gasto->prefijo . '-' : '') . $consec;
 
                         $movCaja = CajaMovimiento::create([
                             'turno_id' => $turno->id,
@@ -314,14 +355,14 @@ class GastosEmpresa extends Component
                         $turno->increment('retiros_efectivo', $total);
                     }
 
-                    // 3) EFECTIVO
                     $cuentaEfectivoId = $this->cuentaEfectivoId();
-                    if (!$cuentaEfectivoId) throw new \RuntimeException('No hay cuenta EFECTIVO configurada en Medios de Pago.');
+                    if (!$cuentaEfectivoId) {
+                        throw new \RuntimeException('No hay cuenta EFECTIVO configurada en Medios de Pago.');
+                    }
 
-                    // 4) Asiento + movimientos
                     [$concepto, $debRows, $creRows] = $this->resolverCuentasDebitoYCreditoEfectivo(
-                        (int)$this->concepto_documento_id,
-                        (int)$cuentaEfectivoId
+                        (int) $this->concepto_documento_id,
+                        (int) $cuentaEfectivoId
                     );
 
                     $debSplit = $this->repartirPorcentaje($total, $debRows);
@@ -329,7 +370,7 @@ class GastosEmpresa extends Component
 
                     $asiento = Asiento::create([
                         'fecha'       => now()->toDateString(),
-                        'glosa'       => 'Gasto: '.($concepto->nombre ?? 'N/A').' | '.($gasto->observacion ?? ''),
+                        'glosa'       => 'Gasto: ' . ($concepto->nombre ?? 'N/A') . ' | ' . ($gasto->observacion ?? ''),
                         'origen'      => 'gasto',
                         'origen_id'   => $gasto->id,
                         'moneda'      => 'COP',
@@ -339,53 +380,61 @@ class GastosEmpresa extends Component
                     ]);
 
                     foreach ($debSplit as $l) {
-                        if (empty($l['cuenta_id'])) throw new \RuntimeException('Cuenta débito inválida (NULL). Revisa ConceptoDocumentoCuenta.');
+                        if (empty($l['cuenta_id'])) {
+                            throw new \RuntimeException('Cuenta débito inválida (NULL). Revisa ConceptoDocumentoCuenta.');
+                        }
 
                         Movimiento::create([
                             'asiento_id'  => $asiento->id,
-                            'cuenta_id'   => (int)$l['cuenta_id'],
-                            'debito'      => (float)$l['valor'],
+                            'cuenta_id'   => (int) $l['cuenta_id'],
+                            'debito'      => (float) $l['valor'],
                             'credito'     => 0,
                             'descripcion' => $gasto->observacion ?: 'Gasto (débito)',
                         ]);
                     }
 
                     foreach ($creSplit as $l) {
-                        if (empty($l['cuenta_id'])) throw new \RuntimeException('Cuenta crédito inválida (NULL). Revisa MedioPago EFECTIVO.');
+                        if (empty($l['cuenta_id'])) {
+                            throw new \RuntimeException('Cuenta crédito inválida (NULL). Revisa MedioPago EFECTIVO.');
+                        }
 
                         Movimiento::create([
                             'asiento_id'  => $asiento->id,
-                            'cuenta_id'   => (int)$l['cuenta_id'],
+                            'cuenta_id'   => (int) $l['cuenta_id'],
                             'debito'      => 0,
-                            'credito'     => (float)$l['valor'],
+                            'credito'     => (float) $l['valor'],
                             'descripcion' => 'Salida por gasto (EFECTIVO)',
                         ]);
                     }
 
-                    // 5) Descontar saldo EFECTIVO (SQL Server / MySQL OK con COALESCE)
-                    PlanCuentas::where('id', (int)$cuentaEfectivoId)
+                    PlanCuentas::where('id', (int) $cuentaEfectivoId)
                         ->update([
-                            'saldo' => DB::raw('COALESCE(saldo,0) - '.$total)
+                            'saldo' => DB::raw('COALESCE(saldo,0) - ' . $total),
                         ]);
 
                     $gasto->update(['asiento_id' => $asiento->id]);
-
                 } catch (\Throwable $e) {
                     $this->handleException('guardarGasto TX error', $e);
-                    throw $e; // rollback
+                    throw $e;
                 }
             }, 3);
 
-            $this->reset(['ruta_id','tipo_gasto_id','concepto_documento_id','monto','observacion']);
+            $this->reset([
+                'ruta_id',
+                'tipo_gasto_id',
+                'concepto_documento_id',
+                'monto',
+                'observacion',
+            ]);
+
+            // conservar filtros de búsqueda/vista
             $this->loadGastos();
 
             PendingToast::create()
                 ->success()
                 ->message('Gasto registrado. Se generó asiento y se descontó del EFECTIVO.')
                 ->duration(6000);
-
         } catch (\Illuminate\Validation\ValidationException $ve) {
-            // ✅ AQUÍ ESTÁ LA CLAVE: mostrar el error real
             $primer = $ve->validator->errors()->first() ?? 'Revisa los campos marcados.';
 
             PendingToast::create()
@@ -402,12 +451,12 @@ class GastosEmpresa extends Component
                     'serie_id' => $this->serie_id,
                     'monto' => $this->monto,
                     'observacion' => $this->observacion,
+                    'search' => $this->search,
+                    'filtroTipo' => $this->filtroTipo,
                 ],
             ]);
 
-            // ❌ NO relanzamos, para que no quede genérico
             return;
-
         } catch (\Throwable $e) {
             $this->handleException('guardarGasto error', $e);
         }
@@ -426,14 +475,67 @@ class GastosEmpresa extends Component
         }
     }
 
+    public function updatedSearch(): void
+    {
+        // Hook útil por si luego quieres paginación o métricas reactivas
+    }
+
+    public function updatedFiltroTipo(): void
+    {
+        // Hook útil por si luego quieres paginación o métricas reactivas
+    }
+
     public function getGastosFiltradosProperty()
     {
         try {
-            return collect($this->gastos)->filter(function ($gasto) {
-                if ($this->filtroTipo === 'ruta')  return $gasto->ruta_id !== null;
-                if ($this->filtroTipo === 'admin') return $gasto->ruta_id === null;
-                return true;
-            });
+            $search = mb_strtolower(trim($this->search));
+
+            return collect($this->gastos)
+                ->filter(function ($gasto) {
+                    if ($this->filtroTipo === 'ruta') {
+                        return $gasto->ruta_id !== null;
+                    }
+
+                    if ($this->filtroTipo === 'admin') {
+                        return $gasto->ruta_id === null;
+                    }
+
+                    return true;
+                })
+                ->filter(function ($gasto) use ($search) {
+                    if ($search === '') {
+                        return true;
+                    }
+
+                    $prefijo = (string) ($gasto->prefijo ?? '');
+                    $numero  = (string) ($gasto->numero ?? '');
+                    $documento = trim($prefijo . '-' . str_pad($numero !== '' ? $numero : '0', 6, '0', STR_PAD_LEFT), '-');
+
+                    $campos = [
+                        mb_strtolower((string) ($gasto->observacion ?? '')),
+                        mb_strtolower((string) ($gasto->monto ?? '')),
+                        mb_strtolower((string) ($gasto->prefijo ?? '')),
+                        mb_strtolower((string) ($gasto->numero ?? '')),
+                        mb_strtolower($documento),
+
+                        mb_strtolower((string) ($gasto->ruta->ruta ?? '')),
+                        mb_strtolower((string) ($gasto->tipoGasto->nombre ?? '')),
+                        mb_strtolower((string) ($gasto->conceptoDocumento->codigo ?? '')),
+                        mb_strtolower((string) ($gasto->conceptoDocumento->nombre ?? '')),
+
+                        mb_strtolower((string) optional($gasto->created_at)->format('Y-m-d')),
+                        mb_strtolower((string) optional($gasto->created_at)->format('d/m/Y')),
+                    ];
+
+                    foreach ($campos as $campo) {
+                        if ($campo !== '' && str_contains($campo, $search)) {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                })
+                ->values();
         } catch (\Throwable $e) {
             $this->handleException('getGastosFiltradosProperty error', $e, 'Error filtrando gastos.', 'warning', 8000);
             return collect([]);

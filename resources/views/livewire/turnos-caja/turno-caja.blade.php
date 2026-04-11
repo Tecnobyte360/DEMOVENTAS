@@ -195,17 +195,73 @@
                             <span class="muted">Base inicial</span>
                             <span class="font-semibold">${{ $fmt($resumen['base_inicial'] ?? 0) }}</span>
                         </div>
+
                         <div class="flex justify-between">
                             <span class="muted">Cobrado (todos los medios)</span>
                             <span class="font-semibold">${{ $fmt($resumen['total_ventas'] ?? 0) }}</span>
                         </div>
-                        <div class="flex justify-between">
+
+                        <div class="flex items-center justify-between gap-3 sm:col-span-2">
                             <span class="muted">Retiros</span>
-                            <span class="font-semibold text-rose-600">-${{ $fmt($resumen['retiros'] ?? 0) }}</span>
+
+                            @if (($resumen['retiros'] ?? 0) > 0)
+                                <button type="button" wire:click="toggleRetiros"
+                                    class="font-semibold text-rose-600 hover:text-rose-700 hover:underline transition"
+                                    title="Ver detalle de retiros">
+                                    -${{ $fmt($resumen['retiros'] ?? 0) }}
+                                </button>
+                            @else
+                                <span class="font-semibold text-rose-600">
+                                    -${{ $fmt($resumen['retiros'] ?? 0) }}
+                                </span>
+                            @endif
                         </div>
                     </div>
 
                     <div class="border-t border-gray-200 dark:border-gray-700 my-3"></div>
+
+                    @if ($mostrarTablaRetiros)
+                        <div class="mt-4">
+                            <h4
+                                class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-money-bill-transfer text-rose-500"></i>
+                                Detalle de retiros del turno
+                            </h4>
+
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="thead">
+                                        <tr>
+                                            <th class="th">#</th>
+                                            <th class="th">Fecha</th>
+                                            <th class="th">Usuario</th>
+                                            <th class="th">Motivo</th>
+                                            <th class="th text-right">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                        @forelse($retirosDetalle as $retiro)
+                                            <tr>
+                                                <td class="td">{{ $retiro['id'] }}</td>
+                                                <td class="td muted">{{ $retiro['fecha'] }}</td>
+                                                <td class="td">{{ $retiro['usuario'] }}</td>
+                                                <td class="td">{{ $retiro['motivo'] }}</td>
+                                                <td class="td text-right font-semibold text-rose-600">
+                                                    -${{ $fmt($retiro['monto']) }}
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="5" class="td muted text-center">
+                                                    No hay retiros registrados en este turno.
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
 
                     <div class="mt-4">
                         <button wire:click="cerrar"
@@ -300,6 +356,7 @@
                             $abiertoPor = $t->abiertoPor?->name ?? ($t->user?->name ?? '—');
                             $cerradoPor = $t->cerradoPor?->name ?? '—';
                         @endphp
+
                         <tr>
                             <td class="td">{{ $t->id }}</td>
                             <td class="td muted">{{ $t->fecha_inicio }}</td>
@@ -308,7 +365,18 @@
                             <td class="td">{{ $cerradoPor }}</td>
                             <td class="td text-right font-semibold">${{ $fmt($t->base_inicial) }}</td>
                             <td class="td text-right font-semibold">${{ $fmt($t->total_ventas) }}</td>
-                            <td class="td text-right text-rose-600">-${{ $fmt($t->retiros_efectivo) }}</td>
+
+                            <td class="td text-right">
+                                @if ((float) $t->retiros_efectivo > 0)
+                                    <button type="button" wire:click="verRetirosTurno({{ $t->id }})"
+                                        class="text-rose-600 font-semibold hover:text-rose-700 hover:underline transition"
+                                        title="Ver detalle de retiros">
+                                        -${{ $fmt($t->retiros_efectivo) }}
+                                    </button>
+                                @else
+                                    <span class="text-rose-600">-${{ $fmt($t->retiros_efectivo) }}</span>
+                                @endif
+                            </td>
 
                             <td
                                 class="td text-right font-bold {{ $neto < 0 ? 'text-rose-600' : 'text-emerald-600' }}">
@@ -323,10 +391,9 @@
                                         @endphp
 
                                         <span
-                                            class="chip
-                      {{ $total > 0
-                          ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200'
-                          : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' }}">
+                                            class="chip {{ $total > 0
+                                                ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-200'
+                                                : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' }}">
                                             {{ strtoupper($medio['nombre']) }}:
                                             ${{ $fmt($total) }}
                                         </span>
@@ -343,6 +410,55 @@
                                 </span>
                             </td>
                         </tr>
+
+                        @if ($mostrarTablaRetiros && $turnoDetalleRetirosId === $t->id)
+                            <tr>
+                                <td colspan="11" class="py-3">
+                                    <div
+                                        class="rounded-2xl border border-rose-200 bg-rose-50/60 dark:bg-rose-900/10 dark:border-rose-800 p-4">
+                                        <h4
+                                            class="text-sm font-semibold text-rose-700 dark:text-rose-300 mb-3 flex items-center gap-2">
+                                            <i class="fa-solid fa-money-bill-transfer"></i>
+                                            Detalle de retiros del turno #{{ $t->id }}
+                                        </h4>
+
+                                        <div class="overflow-x-auto">
+                                            <table class="w-full text-sm">
+                                                <thead class="thead">
+                                                    <tr>
+                                                        <th class="th">#</th>
+                                                        <th class="th">Fecha</th>
+                                                        <th class="th">Usuario</th>
+                                                        <th class="th">Motivo</th>
+                                                        <th class="th text-right">Monto</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                                                    @forelse($retirosDetalle as $retiro)
+                                                        <tr>
+                                                            <td class="td">{{ $retiro['id'] }}</td>
+                                                            <td class="td muted">{{ $retiro['fecha'] }}</td>
+                                                            <td class="td">{{ $retiro['usuario'] }}</td>
+                                                            <td class="td">{{ $retiro['motivo'] }}</td>
+                                                            <td class="td text-right font-semibold text-rose-600">
+                                                                -${{ $fmt($retiro['monto']) }}
+                                                            </td>
+                                                        </tr>
+                                                    @empty
+                                                        <tr>
+                                                            <td colspan="5" class="td muted text-center">
+                                                                No hay retiros registrados en este turno.
+                                                            </td>
+                                                        </tr>
+                                                    @endforelse
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endif
+
                     @empty
                         <tr>
                             <td class="td muted" colspan="11">

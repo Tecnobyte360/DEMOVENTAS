@@ -108,11 +108,10 @@ class ListaFacturas extends Component
 
 public function render()
 {
-    $query = Factura::query()
-        ->with(['cliente', 'serie'])
-        ->whereHas('serie.tipo', fn($t) => $t->where('codigo', 'factura'))
-        ->latest('id');
-
+  $query = Factura::query()
+    ->with(['cliente', 'serie', 'creadoPor'])
+    ->whereHas('serie.tipo', fn($t) => $t->where('codigo', 'factura'))
+    ->latest('id');
     if (trim($this->q) !== '') {
         $searchTerm = '%' . trim($this->q) . '%';
         $query->where(function ($q) use ($searchTerm) {

@@ -1,9 +1,6 @@
 @once
     @push('styles')
-        {{-- FontAwesome --}}
         <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
-        {{-- TomSelect --}}
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/css/tom-select.css">
     @endpush
 @endonce
 
@@ -15,65 +12,27 @@
             }
         </script>
         <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-
-        {{-- TomSelect --}}
-        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.1/dist/js/tom-select.complete.min.js"></script>
-
-        <script>
-            document.addEventListener('livewire:load', () => {
-                const initFacturaSelect = () => {
-                    const el = document.getElementById('factura-select');
-                    if (!el) return;
-
-                    // destruir instancia previa
-                    if (el.tomselect) el.tomselect.destroy();
-
-                    const ts = new TomSelect(el, {
-                        placeholder: '— Selecciona una factura —',
-                        allowEmptyOption: true,
-                        maxOptions: 500,
-                        closeAfterSelect: true,
-                        plugins: ['dropdown_input'],
-                        onChange(value) {
-                            @this.set('facturaId', value || null);
-                        },
-                    });
-
-                    // reflejar valor actual
-                    const current = @this.get('facturaId');
-                    if (current) ts.setValue(String(current), false);
-                };
-
-                initFacturaSelect();
-
-                Livewire.hook('message.processed', (message, component) => {
-                    if (component.fingerprint && component.fingerprint.name === 'facturas.pagos-factura') {
-                        initFacturaSelect();
-                    }
-                });
-            });
-        </script>
     @endpush
 @endonce
 
 <div x-data="{ open: @entangle('show') }" x-cloak>
-    {{-- Overlay --}}
     <div x-show="open" class="fixed inset-0 z-40 bg-black/40"></div>
 
-    {{-- Modal --}}
     <div x-show="open" class="fixed inset-0 z-50 grid place-items-center p-4">
-        <div
-            class="w-full max-w-3xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
+        <div class="w-full max-w-4xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
 
-            {{-- Header --}}
-            <div
-                class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between
-                  bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300
-                  dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-gray-800 dark:text-white rounded-t-2xl">
-                <h3 class="text-lg font-semibold flex items-center gap-2">
-                    <i class="fa-solid fa-cash-register"></i>
-                    Registrar pago de factura
-                </h3>
+            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between
+                        bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300
+                        dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-gray-800 dark:text-white rounded-t-2xl">
+                <div>
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <i class="fa-solid fa-cash-register"></i>
+                        Registrar pago de factura
+                    </h3>
+                    <p class="text-xs mt-1 text-gray-600 dark:text-gray-300">
+                        {{ $modoDocumento === 'compra' ? 'Pago aplicado a factura de compra' : 'Pago aplicado a factura de venta' }}
+                    </p>
+                </div>
 
                 <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
                     @click="open=false" wire:click="cerrar" title="Cerrar">
@@ -81,58 +40,86 @@
                 </button>
             </div>
 
-            {{-- Cuerpo --}}
             <div class="p-5 space-y-5">
 
-                {{-- ✅ Selector de tipo + búsqueda + factura (solo si no viene facturaId) --}}
                 @if (!$facturaId)
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-
-                        {{-- Tipo (Venta/Compra) --}}
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
                         <div>
                             <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-                                Tipo
+                                Tipo de documento
                             </label>
-
-                            <select wire:model.live="tipoDocumento"
+                            <select wire:model.live="modoDocumento"
                                 class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
-                             dark:bg-gray-800 dark:text-white px-3 text-sm">
-                                <option value="venta">Factura de Venta</option>
-                                <option value="compra">Factura de Compra</option>
+                                       dark:bg-gray-800 dark:text-white px-3 text-sm">
+                                <option value="venta">Factura de venta</option>
+                                <option value="compra">Factura de compra</option>
                             </select>
+                            @error('modoDocumento')
+                                <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                            @enderror
                         </div>
 
-                        {{-- Buscar --}}
+                        <div>
+                            <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                                Serie
+                            </label>
+                            <select wire:model.live="serieId"
+                                class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
+                                       dark:bg-gray-800 dark:text-white px-3 text-sm">
+                                <option value="">— Todas —</option>
+                                @foreach ($seriesDisponibles as $tipoNombre => $series)
+                                    <optgroup label="{{ $tipoNombre }}">
+                                        @foreach ($series as $s)
+                                            <option value="{{ $s['id'] }}">
+                                                {{ $s['prefijo'] }} — {{ $s['nombre'] }}
+                                            </option>
+                                        @endforeach
+                                    </optgroup>
+                                @endforeach
+                            </select>
+                            @error('serieId')
+                                <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                            @enderror
+                        </div>
+
                         <div class="md:col-span-2">
                             <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-                                Buscar
+                                Buscar factura
                             </label>
-
-                            <input type="text" wire:model.debounce.400ms="buscarFactura"
+                            <input type="text" wire:model.live.debounce.400ms="buscarFactura"
                                 placeholder="Cliente/Proveedor · documento · número · prefijo"
                                 class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
-                            dark:bg-gray-800 dark:text-white px-3 text-sm">
+                                       dark:bg-gray-800 dark:text-white px-3 text-sm">
                         </div>
                     </div>
 
-                    {{-- Select TomSelect --}}
-                    <div wire:ignore>
+                    <div>
                         <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
-                            Seleccionar factura pendiente ({{ $tipoDocumento === 'compra' ? 'COMPRA' : 'VENTA' }})
+                            Seleccionar factura pendiente
+
+                            <span class="ml-2 px-2 py-0.5 rounded-full text-[11px] font-medium
+                                {{ $modoDocumento === 'compra' ? 'bg-amber-100 text-amber-700' : 'bg-indigo-100 text-indigo-700' }}">
+                                {{ $modoDocumento === 'compra' ? 'COMPRA' : 'VENTA' }}
+                            </span>
+
+                            @if ($serieNombre !== '—')
+                                <span class="ml-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 normal-case font-medium">
+                                    {{ $serieNombre }}
+                                </span>
+                            @endif
                         </label>
 
-                        <select id="factura-select"
-                            wire:key="factura-select-{{ $tipoDocumento }}-{{ md5($buscarFactura) }}"
-                            class="w-full h-11 rounded-xl border-2 border-indigo-400 focus:ring-2 focus:ring-indigo-500
-         dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
+                        <select wire:model.live="facturaId"
+                            class="w-full h-11 rounded-xl border-2 border-indigo-400
+                                   dark:border-gray-700 dark:bg-gray-800 dark:text-white px-3 text-sm">
                             <option value="">— Selecciona una factura —</option>
 
                             @foreach ($facturasPendientes as $f)
                                 @php
-                                    $numero = str_pad($f->numero, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
-                                    $codigo = trim(($f->prefijo ? $f->prefijo . '-' : '') . $numero);
+                                    $numero  = str_pad($f->numero ?? 0, $f->serie?->longitud ?? 6, '0', STR_PAD_LEFT);
+                                    $codigo  = trim(($f->prefijo ? $f->prefijo . '-' : '') . $numero);
                                     $tercero = $f->socioNegocio?->razon_social ?? 'Sin tercero';
-                                    $fecha = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
+                                    $fecha   = \Carbon\Carbon::parse($f->fecha)->format('Y-m-d');
                                 @endphp
                                 <option value="{{ $f->id }}">
                                     {{ $codigo }} — {{ $tercero }} — {{ $fecha }}
@@ -145,51 +132,59 @@
                         @error('facturaId')
                             <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
                         @enderror
-
-
-                        @error('facturaId')
-                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
-                        @enderror
                     </div>
                 @endif
 
-                {{-- 🧮 Resumen de montos --}}
-                <div
-                    class="rounded-xl border border-gray-200 dark:border-gray-700 p-3 bg-gray-50/50 dark:bg-gray-800/40">
-                    <div class="flex flex-wrap gap-3 text-sm">
-                        @if ($facturaId)
-                            <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                                Factura #{{ $facturaId }}
-                            </span>
-                        @else
-                            <span class="text-sm text-gray-500 dark:text-gray-400">
-                                Selecciona una factura para ver su saldo
-                            </span>
-                        @endif
+                @if ($facturaId)
+                    <div class="flex items-center gap-2 text-sm">
+                        <i class="fa-solid fa-file-invoice text-indigo-400"></i>
+                        <span class="font-medium text-gray-700 dark:text-gray-200">Factura seleccionada</span>
+                        <button
+                            wire:click="cambiarFactura"
+                            class="ml-auto text-xs px-3 py-1 rounded-lg border border-gray-300 dark:border-gray-600
+                                   text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                            <i class="fa-solid fa-rotate-left mr-1"></i> Cambiar factura
+                        </button>
                     </div>
 
-                    <div class="mt-2 grid grid-cols-3 gap-3 text-sm">
-                        <div class="flex justify-between">
-                            <span>Total</span><strong>${{ number_format($fac_total, 2, ',', '.') }}</strong>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
+                            <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                                Total factura
+                            </div>
+                            <div class="mt-1 text-2xl font-bold text-slate-800 dark:text-white">
+                                ${{ number_format($fac_total, 2, ',', '.') }}
+                            </div>
                         </div>
-                        <div class="flex justify-between">
-                            <span>Pagado</span><strong>${{ number_format($fac_pagado, 2, ',', '.') }}</strong>
+
+                        <div class="rounded-2xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4">
+                            <div class="text-xs uppercase tracking-wide text-amber-600 dark:text-amber-300">
+                                Total pagado
+                            </div>
+                            <div class="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-200">
+                                ${{ number_format($fac_pagado, 2, ',', '.') }}
+                            </div>
                         </div>
-                        <div class="flex justify-between">
-                            <span>Saldo</span><strong
-                                class="text-emerald-600">${{ number_format($fac_saldo, 2, ',', '.') }}</strong>
+
+                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+                            <div class="text-xs uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+                                Saldo pendiente
+                            </div>
+                            <div class="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-200">
+                                ${{ number_format($fac_saldo, 2, ',', '.') }}
+                            </div>
                         </div>
                     </div>
-                </div>
+                @endif
 
-                {{-- 📅 Fecha / Notas --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label
-                            class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Fecha</label>
+                        <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                            Fecha del pago
+                        </label>
                         <input type="date"
                             class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
-                          dark:bg-gray-800 dark:text-white px-3"
+                                   dark:bg-gray-800 dark:text-white px-3"
                             wire:model.live="fecha">
                         @error('fecha')
                             <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
@@ -197,31 +192,29 @@
                     </div>
 
                     <div class="md:col-span-2">
-                        <label
-                            class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">Notas</label>
+                        <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
+                            Notas
+                        </label>
                         <input type="text"
                             class="w-full h-11 rounded-xl border-2 border-gray-200 dark:border-gray-700
-                          dark:bg-gray-800 dark:text-white px-3"
-                            wire:model.defer="notas" placeholder="Observaciones del pago (opcional)">
+                                   dark:bg-gray-800 dark:text-white px-3"
+                            wire:model.defer="notas"
+                            placeholder="Observaciones del pago (opcional)">
                     </div>
                 </div>
 
-                {{-- 💳 Distribución por medio de pago --}}
                 <div class="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div
-                        class="bg-gray-100 dark:bg-gray-800 px-3 py-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider">
-                        Distribución por medio de pago
+                    <div class="bg-gray-100 dark:bg-gray-800 px-3 py-2 text-[12px] font-semibold text-gray-700 dark:text-gray-200 uppercase tracking-wider">
+                        Pago de la factura
                     </div>
 
                     <div class="overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead>
                                 <tr class="text-left bg-gray-50 dark:bg-gray-800/50">
-                                    <th class="p-3">Medio</th>
-                                    <th class="p-3 w-32 text-center">% </th>
-                                    <th class="p-3 w-40 text-right">Monto</th>
-                                    <th class="p-3 w-48">Referencia</th>
-                                    <th class="p-3 w-12 text-center">—</th>
+                                    <th class="p-3">Medio de pago</th>
+                                    <th class="p-3 w-44 text-right">Monto a pagar</th>
+                                    <th class="p-3 w-56">Referencia</th>
                                 </tr>
                             </thead>
 
@@ -231,7 +224,7 @@
                                         <td class="p-3">
                                             <select wire:model.live="items.{{ $idx }}.medio_pago_id"
                                                 class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
-                                     dark:bg-gray-800 dark:text-white px-2">
+                                                       dark:bg-gray-800 dark:text-white px-2">
                                                 <option value="">— Selecciona —</option>
                                                 @foreach ($medios as $m)
                                                     <option value="{{ $m->id }}">
@@ -239,32 +232,31 @@
                                                     </option>
                                                 @endforeach
                                             </select>
-                                        </td>
-
-                                        <td class="p-3">
-                                            <input type="number" step="0.01" min="0" max="100"
-                                                wire:model.live="items.{{ $idx }}.porcentaje"
-                                                class="w-full h-10 text-center rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
+                                            @error("items.$idx.medio_pago_id")
+                                                <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                                            @enderror
                                         </td>
 
                                         <td class="p-3">
                                             <input type="number" step="0.01" min="0.01"
                                                 wire:model.live="items.{{ $idx }}.monto"
-                                                class="w-full h-10 text-right rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2">
+                                                class="w-full h-10 text-right rounded-lg border-2 border-gray-200
+                                                       dark:border-gray-700 dark:bg-gray-800
+                                                       dark:text-white px-2 font-semibold">
+                                            @error("items.$idx.monto")
+                                                <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                                            @enderror
                                         </td>
 
                                         <td class="p-3">
                                             <input type="text" maxlength="120"
                                                 wire:model.defer="items.{{ $idx }}.referencia"
-                                                class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-white px-2"
-                                                placeholder="Comprobante o #autorización">
-                                        </td>
-
-                                        <td class="p-3 text-center">
-                                            <button type="button" wire:click="removeItem({{ $idx }})"
-                                                class="px-2 py-1 rounded-lg bg-rose-100 text-rose-700 hover:bg-rose-200">
-                                                <i class="fa-solid fa-xmark"></i>
-                                            </button>
+                                                class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
+                                                       dark:bg-gray-800 dark:text-white px-2"
+                                                placeholder="Comprobante o # autorización">
+                                            @error("items.$idx.referencia")
+                                                <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                                            @enderror
                                         </td>
                                     </tr>
                                 @endforeach
@@ -272,20 +264,13 @@
 
                             <tfoot class="bg-gray-50 dark:bg-gray-800/30">
                                 <tr>
-                                    <td class="p-3">
-                                        <button type="button" wire:click="addItem"
-                                            class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs">
-                                            <i class="fa-solid fa-plus mr-1"></i> Añadir medio
-                                        </button>
-                                    </td>
-                                    <td class="p-3 text-center font-semibold">
-                                        {{ number_format($sumPct, 2, ',', '.') }}%</td>
+                                    <td class="p-3 text-right font-semibold">Total del pago:</td>
                                     <td class="p-3 text-right font-semibold">
-                                        ${{ number_format($sumMonto, 2, ',', '.') }}</td>
-                                    <td class="p-3 text-right font-semibold" colspan="2">
-                                        <span
-                                            class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
-                                            Diff: ${{ number_format($diff, 2, ',', '.') }}
+                                        ${{ number_format($sumMonto, 2, ',', '.') }}
+                                    </td>
+                                    <td class="p-3 text-right font-semibold">
+                                        <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
+                                            Diferencia: ${{ number_format($diff, 2, ',', '.') }}
                                         </span>
                                     </td>
                                 </tr>
@@ -293,17 +278,13 @@
                         </table>
                     </div>
                 </div>
-
             </div>
 
-            {{-- Footer --}}
-            <div
-                class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2
-                  bg-gray-50/60 dark:bg-gray-800/40">
+            <div class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2
+                        bg-gray-50/60 dark:bg-gray-800/40">
                 <div class="text-sm">
                     <span class="font-medium">Diferencia:</span>
-                    <span
-                        class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
+                    <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
                         ${{ number_format($diff, 2, ',', '.') }}
                     </span>
                 </div>
@@ -316,51 +297,13 @@
 
                     <button
                         class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                        wire:click="guardarPago" wire:loading.attr="disabled"
+                        wire:click="guardarPago"
+                        wire:loading.attr="disabled"
                         title="Guardar el pago y actualizar factura">
                         <i class="fa-solid fa-check mr-2"></i> Guardar pago
                     </button>
                 </div>
             </div>
-
         </div>
     </div>
 </div>
-<script>
-    document.addEventListener('livewire:init', () => {
-
-        const initFacturaSelect = () => {
-            const el = document.getElementById('factura-select');
-            if (!el) return;
-
-            if (el.tomselect) el.tomselect.destroy();
-
-            const ts = new TomSelect(el, {
-                placeholder: '— Selecciona una factura —',
-                allowEmptyOption: true,
-                maxOptions: 500,
-                closeAfterSelect: true,
-                plugins: ['dropdown_input'],
-                onChange(value) {
-                    @this.set('facturaId', value || null);
-                },
-            });
-
-            const current = @this.get('facturaId');
-            if (current) ts.setValue(String(current), false);
-        };
-
-        // Inicial
-        initFacturaSelect();
-
-        // Cada re-render del componente
-        Livewire.hook('message.processed', (message, component) => {
-            if (component.fingerprint?.name === 'facturas.pagos-factura') {
-                initFacturaSelect();
-            }
-        });
-
-        // Evento manual cuando cambias tipo/buscar
-        Livewire.on('refresh-factura-select', () => initFacturaSelect());
-    });
-</script>

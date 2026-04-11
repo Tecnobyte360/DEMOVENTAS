@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Schema;
 use Masmerise\Toaster\PendingToast;
 
 use App\Models\Factura\Factura;
-use App\Models\Factura\FacturaPago;
 use App\Models\MediosPago\MedioPagos;
 use App\Services\ContabilidadService;
 use App\Models\TurnosCaja\turnos_caja;
@@ -20,11 +19,18 @@ use App\Models\Serie\Serie;
 
 class PagosFactura extends Component
 {
+    private const TIPO_FACTURA_VENTA  = 1;
+    private const TIPO_FACTURA_COMPRA = 5;
+
     public ?int $facturaId = null;
 
     public bool $show = false;
     public string $fecha = '';
     public ?string $notas = null;
+
+    /** venta | compra */
+    public string $modoDocumento = 'venta';
+    public int $facturaSelectRefresh = 0;
 
     /** @var Collection<int, MedioPagos> */
     public Collection $medios;
@@ -40,30 +46,35 @@ class PagosFactura extends Component
     public float $diff     = 0.0;
 
     public string $buscarFactura = '';
-    public string $tipoDocumento = 'venta'; // venta | compra
+    public ?int $serieId = null;
+    public array $seriesDisponibles = [];
 
     protected $rules = [
         'fecha'                 => 'required|date',
-        'items'                 => 'required|array|min:1',
+        'items'                 => 'required|array|min:1|max:1',
         'items.*.medio_pago_id' => 'required|integer',
-        'items.*.porcentaje'    => 'nullable|numeric|min:0|max:100',
         'items.*.monto'         => 'required|numeric|min:0.01',
         'items.*.referencia'    => 'nullable|string|max:120',
         'notas'                 => 'nullable|string',
         'facturaId'             => 'nullable|integer',
+        'modoDocumento'         => 'required|in:venta,compra',
+        'serieId'               => 'nullable|integer',
     ];
 
     public function mount(): void
     {
-        $this->fecha  = now()->toDateString();
+        $this->fecha = now()->toDateString();
         $this->medios = collect();
 
         $this->items = [[
             'medio_pago_id' => null,
-            'porcentaje'    => 0,
             'monto'         => 0,
             'referencia'    => null,
         ]];
+
+        $this->modoDocumento = 'venta';
+        $this->cargarSeriesDisponibles();
+        $this->serieId = $this->resolverSerieInicial();
 
         $this->recalc();
     }
@@ -71,36 +82,71 @@ class PagosFactura extends Component
     public function render()
     {
         $this->cargarMedios();
-        $facturasPendientes = $this->queryFacturasPendientes();
+        $this->cargarSeriesDisponibles();
 
-        // Mantener cabecera al refrescar, sin reescribir items mientras edita
-        if ($this->facturaId) {
-            $this->cargarFacturaSeleccionada($this->facturaId, false);
+        if ($this->serieId && !in_array($this->serieId, $this->idsSeriesPermitidas(), true)) {
+            $this->serieId = $this->resolverSerieInicial();
         }
 
+        $facturasPendientes = $this->queryFacturasPendientes();
+
         $this->recalc();
+
+        $serieNombre = '—';
+        foreach ($this->seriesDisponibles as $tipoNombre => $series) {
+            foreach ($series as $s) {
+                if ((int) $s['id'] === (int) $this->serieId) {
+                    $serieNombre = trim(($s['prefijo'] ?? '') . ' — ' . ($s['nombre'] ?? ''));
+                    break 2;
+                }
+            }
+        }
 
         return view('livewire.facturas.pagos-factura', [
             'medios'             => $this->medios,
             'facturasPendientes' => $facturasPendientes,
+            'serieNombre'        => $serieNombre,
+            'modoDocumento'      => $this->modoDocumento,
         ]);
     }
 
     #[On('abrir-modal-pago')]
-    public function abrir(?int $facturaId = null): void
+    public function abrir(?int $facturaId = null, string $modoDocumento = 'venta'): void
     {
-        $this->show          = true;
-        $this->fecha         = now()->toDateString();
-        $this->notas         = null;
+        $this->show = true;
+        $this->fecha = now()->toDateString();
+        $this->notas = null;
         $this->buscarFactura = '';
-        $this->tipoDocumento = 'venta';
+        $this->facturaId = null;
+
+        $this->modoDocumento = in_array($modoDocumento, ['venta', 'compra'], true)
+            ? $modoDocumento
+            : 'venta';
+
+        $this->cargarSeriesDisponibles();
+        $this->serieId = $this->resolverSerieInicial();
 
         $this->cargarMedios();
 
-        $this->facturaId = $facturaId;
-
         if ($facturaId) {
-            $this->cargarFacturaSeleccionada($facturaId, true);
+            $factura = Factura::with('serie.tipo')->find($facturaId);
+
+            if ($factura) {
+                $tipoSerieId = (int) ($factura->serie?->tipo_documento_id ?? 0);
+
+                if (
+                    ($this->modoDocumento === 'venta' && $tipoSerieId === self::TIPO_FACTURA_VENTA) ||
+                    ($this->modoDocumento === 'compra' && $tipoSerieId === self::TIPO_FACTURA_COMPRA)
+                ) {
+                    $this->facturaId = $facturaId;
+                    $this->serieId = (int) $factura->serie_id;
+                    $this->cargarFacturaSeleccionada($facturaId, true);
+                } else {
+                    $this->resetFacturaYItems();
+                }
+            } else {
+                $this->resetFacturaYItems();
+            }
         } else {
             $this->resetFacturaYItems();
         }
@@ -117,11 +163,31 @@ class PagosFactura extends Component
         $this->show = false;
     }
 
-    public function updatedTipoDocumento(): void
+    public function updatedModoDocumento(): void
     {
         $this->facturaId = null;
         $this->buscarFactura = '';
+
+        $this->cargarSeriesDisponibles();
+        $this->serieId = $this->resolverSerieInicial();
+
         $this->resetFacturaYItems();
+
+        $this->facturaSelectRefresh++;
+        $this->dispatch('refresh-factura-select');
+    }
+
+    public function updatedSerieId(): void
+    {
+        if ($this->serieId && !in_array((int) $this->serieId, $this->idsSeriesPermitidas(), true)) {
+            $this->serieId = $this->resolverSerieInicial();
+        }
+
+        $this->facturaId = null;
+        $this->buscarFactura = '';
+        $this->resetFacturaYItems();
+
+        $this->facturaSelectRefresh++;
         $this->dispatch('refresh-factura-select');
     }
 
@@ -129,22 +195,163 @@ class PagosFactura extends Component
     {
         $this->facturaId = null;
         $this->resetFacturaYItems();
+
+        $this->facturaSelectRefresh++;
         $this->dispatch('refresh-factura-select');
     }
 
-    // ✅ Este lo llama el JS: Livewire.dispatch('set-factura-id', { facturaId: ... })
-    #[On('set-factura-id')]
-    public function setFacturaId(?int $facturaId = null): void
+   
+
+    
+  public function setFacturaId(?int $facturaId = null): void
+{
+    logger()->info('PagosFactura@setFacturaId - inicio', [
+        'facturaId_recibido' => $facturaId,
+        'modoDocumento'      => $this->modoDocumento,
+        'serieId_actual'     => $this->serieId,
+    ]);
+
+    $this->facturaId = $facturaId ? (int) $facturaId : null;
+
+    if (!$this->facturaId) {
+        logger()->warning('PagosFactura@setFacturaId - facturaId vacío o nulo');
+        $this->resetFacturaYItems();
+        return;
+    }
+
+    $factura = Factura::with('serie.tipo')->find($this->facturaId);
+
+    if (!$factura) {
+        logger()->warning('PagosFactura@setFacturaId - factura no encontrada', [
+            'facturaId' => $this->facturaId,
+        ]);
+
+        $this->facturaId = null;
+        $this->resetFacturaYItems();
+        return;
+    }
+
+    $tipoSerieId = (int) ($factura->serie?->tipo_documento_id ?? 0);
+    $prefijo     = (string) ($factura->prefijo ?? '');
+    $tipoPago    = mb_strtolower(trim((string) ($factura->tipo_pago ?? '')));
+
+    $esCompraValida = $this->modoDocumento === 'compra'
+        && (
+            $tipoSerieId === self::TIPO_FACTURA_COMPRA
+            || $prefijo === 'FAC-C'
+        );
+
+    $esVentaValida = $this->modoDocumento === 'venta'
+        && (
+            $tipoSerieId === self::TIPO_FACTURA_VENTA
+            || $prefijo === 'FAC-V'
+        )
+        && in_array($tipoPago, ['credito', 'crédito'], true);
+
+    logger()->info('PagosFactura@setFacturaId - validación factura', [
+        'facturaId'       => $this->facturaId,
+        'tipoSerieId'     => $tipoSerieId,
+        'prefijo'         => $prefijo,
+        'tipoPago'        => $tipoPago,
+        'esCompraValida'  => $esCompraValida,
+        'esVentaValida'   => $esVentaValida,
+    ]);
+
+    if (!$esCompraValida && !$esVentaValida) {
+        PendingToast::create()->warning()
+            ->message('La factura seleccionada no corresponde al tipo de documento actual.')
+            ->duration(6000);
+
+        logger()->warning('PagosFactura@setFacturaId - factura inválida para el modo actual', [
+            'facturaId'   => $this->facturaId,
+            'modoDocumento' => $this->modoDocumento,
+            'tipoSerieId' => $tipoSerieId,
+            'prefijo'     => $prefijo,
+            'tipoPago'    => $tipoPago,
+        ]);
+
+        $this->facturaId = null;
+        $this->resetFacturaYItems();
+        return;
+    }
+
+    $this->serieId = (int) $factura->serie_id;
+
+    $this->cargarMedios();
+    $this->cargarFacturaSeleccionada($this->facturaId, true);
+
+    $this->facturaSelectRefresh++;
+
+    logger()->info('PagosFactura@setFacturaId - factura cargada correctamente', [
+        'facturaId'            => $this->facturaId,
+        'serieId'              => $this->serieId,
+        'fac_total'            => $this->fac_total,
+        'fac_pagado'           => $this->fac_pagado,
+        'fac_saldo'            => $this->fac_saldo,
+        'facturaSelectRefresh' => $this->facturaSelectRefresh,
+    ]);
+}
+public function cambiarFactura(): void
+{
+    $this->facturaId = null;
+    $this->buscarFactura = '';
+    $this->resetFacturaYItems();
+    $this->facturaSelectRefresh++;
+    $this->dispatch('refresh-factura-select');
+}
+
+
+    private function cargarSeriesDisponibles(): void
     {
-        $this->facturaId = $facturaId;
+        $tipoDocumentoId = $this->tipoDocumentoIdActual();
 
-        if (!$this->facturaId) {
-            $this->resetFacturaYItems();
-            return;
-        }
+        $this->seriesDisponibles = Serie::query()
+            ->activa()
+            ->with('tipo')
+            ->where('documento', 'factura')
+            ->where('tipo_documento_id', $tipoDocumentoId)
+            ->orderBy('nombre')
+            ->get()
+            ->groupBy(fn($s) => $s->tipo?->nombre ?? 'Sin tipo')
+            ->map(fn($grupo) => $grupo->map(fn($s) => [
+                'id'      => (int) $s->id,
+                'nombre'  => $s->nombre,
+                'prefijo' => $s->prefijo,
+            ])->values()->toArray())
+            ->toArray();
+    }
 
-        $this->cargarMedios();
-        $this->cargarFacturaSeleccionada($this->facturaId, true); // ✅ llena totales y primer monto
+    private function resolverSerieInicial(): ?int
+    {
+        $tipoDocumentoId = $this->tipoDocumentoIdActual();
+
+        $serie = Serie::query()
+            ->activa()
+            ->where('documento', 'factura')
+            ->where('tipo_documento_id', $tipoDocumentoId)
+            ->orderByDesc('es_default')
+            ->orderBy('id')
+            ->first();
+
+        return $serie?->id;
+    }
+
+    private function tipoDocumentoIdActual(): int
+    {
+        return $this->modoDocumento === 'compra'
+            ? self::TIPO_FACTURA_COMPRA
+            : self::TIPO_FACTURA_VENTA;
+    }
+
+    private function idsSeriesPermitidas(): array
+    {
+        return Serie::query()
+            ->activa()
+            ->where('documento', 'factura')
+            ->where('tipo_documento_id', $this->tipoDocumentoIdActual())
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->all();
     }
 
     private function cargarMedios(): void
@@ -152,148 +359,62 @@ class PagosFactura extends Component
         $this->medios = MedioPagos::query()
             ->when(method_exists(MedioPagos::class, 'activos'), fn($q) => $q->activos())
             ->orderBy('nombre')
-            ->get(['id', 'codigo', 'nombre', 'requiere_turno', 'contar_en_total', 'crear_movimiento', 'tipo_movimiento', 'clave_turno']);
+            ->get([
+                'id',
+                'codigo',
+                'nombre',
+                'requiere_turno',
+                'contar_en_total',
+                'crear_movimiento',
+                'tipo_movimiento',
+                'clave_turno'
+            ]);
     }
-    private function emitirFacturaSiAplica(Factura $factura): Factura
-    {
-        $factura->refresh();
-        $factura->loadMissing(['detalles', 'pagos', 'serie.tipo']);
-        $factura->recalcularTotales()->save();
-        $factura->refresh();
 
-        $total    = round((float) ($factura->total ?? 0), 2);
-        $pagado   = round((float) $factura->pagos()->sum('monto'), 2);
-        $faltante = round($total - $pagado, 2);
-
-        $esContado = ($factura->tipo_pago ?? '') === 'contado';
-        $yaEmitida = !empty($factura->numero)
-            || in_array(($factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
-
-        // Solo emitir automáticamente si es contado, quedó pagada y aún no tiene consecutivo
-        if (!$esContado || $faltante > 0.01 || $yaEmitida) {
-            return $factura;
-        }
-
-        foreach ($factura->detalles as $idx => $d) {
-            if (empty($d->cuenta_ingreso_id)) {
-                throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
-            }
-
-            if (!$d->producto_id || !$d->bodega_id) {
-                throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
-            }
-
-            if ((float) ($d->cantidad ?? 0) <= 0) {
-                throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
-            }
-        }
-
-        // Validar stock antes de emitir
-        \App\Services\InventarioService::verificarDisponibilidadParaFactura($factura);
-
-        $serie = $factura->serie_id
-            ? Serie::find((int) $factura->serie_id)
-            : null;
-
-        if (!$serie) {
-            throw new \RuntimeException('No hay una serie válida para emitir este documento.');
-        }
-
-        $numero = $serie->tomarConsecutivo();
-        $uid = Auth::id();
-
-        $dataUpdate = [
-            'serie_id' => $serie->id,
-            'prefijo'  => (string) ($serie->prefijo ?? ''),
-            'numero'   => $numero,
-            'estado'   => 'emitida',
-        ];
-
-        if (Schema::hasColumn('facturas', 'emitido_por_id')) {
-            $dataUpdate['emitido_por_id'] = $uid;
-        }
-
-        if (Schema::hasColumn('facturas', 'emitido_en')) {
-            $dataUpdate['emitido_en'] = now();
-        }
-
-        if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
-            $dataUpdate['actualizado_por_id'] = $uid;
-        }
-
-        $updated = Factura::query()
-            ->whereKey($factura->id)
-            ->update($dataUpdate);
-
-        if (!$updated) {
-            throw new \RuntimeException('No se pudo actualizar la factura con el consecutivo.');
-        }
-
-        $factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($factura->id);
-
-        if (is_null($factura->numero) || $factura->numero === '') {
-            throw new \RuntimeException('La factura se intentó emitir, pero el consecutivo no quedó guardado.');
-        }
-
-        // Contabilidad de la factura e inventario
-        ContabilidadService::asientoDesdeFactura($factura);
-        \App\Services\InventarioService::descontarPorFactura($factura);
-
-        $factura->recalcularTotales()->save();
-        $factura->refresh();
-
-        // Si quedó 100% pagada, pasar de una vez a pagada
-        $pagadoFinal = round((float) $factura->pagos()->sum('monto'), 2);
-        $faltanteFinal = round((float) $factura->total - $pagadoFinal, 2);
-
-        if ($faltanteFinal <= 0.01) {
-            $dataPagada = ['estado' => 'pagada'];
-
-            if (Schema::hasColumn('facturas', 'pagado')) {
-                $dataPagada['pagado'] = $pagadoFinal;
-            }
-
-            if (Schema::hasColumn('facturas', 'saldo')) {
-                $dataPagada['saldo'] = 0;
-            }
-
-            if (Schema::hasColumn('facturas', 'monto_aplicado')) {
-                $dataPagada['monto_aplicado'] = $pagadoFinal;
-            }
-
-            $factura->update($dataPagada);
-            $factura->refresh();
-        }
-
-        return $factura;
-    }
     private function queryFacturasPendientes()
     {
-        $codigoTipo = $this->tipoDocumento === 'compra' ? 'FACTURACOMPRA' : 'FACTURA';
-
-        $seriesIds = Serie::query()
-            ->whereHas('tipo', function ($t) use ($codigoTipo) {
-                $t->whereRaw('LOWER(codigo) = ?', [strtolower($codigoTipo)]);
-            })
-            ->pluck('id')
-            ->map(fn($v) => (int)$v)
-            ->all();
+        $seriesPermitidas = $this->idsSeriesPermitidas();
 
         $q = Factura::query()
             ->with(['socioNegocio', 'serie'])
             ->where('saldo', '>', 0)
-            ->when(!empty($seriesIds), fn($qq) => $qq->whereIn('serie_id', $seriesIds))
-            ->when(empty($seriesIds), fn($qq) => $qq->whereRaw('1=0'));
+            ->whereIn('serie_id', $seriesPermitidas);
+
+        if ($this->modoDocumento === 'compra') {
+            $q->where(function ($qq) {
+                $qq->where('prefijo', 'FAC-C')
+                    ->orWhereHas('serie', function ($s) {
+                        $s->where('prefijo', 'FAC-C')
+                            ->orWhere('tipo_documento_id', self::TIPO_FACTURA_COMPRA);
+                    });
+            });
+        } else {
+            $q->where(function ($qq) {
+                $qq->where('prefijo', 'FAC-V')
+                    ->orWhereHas('serie', function ($s) {
+                        $s->where('prefijo', 'FAC-V')
+                            ->orWhere('tipo_documento_id', self::TIPO_FACTURA_VENTA);
+                    });
+            });
+
+            $q->where(function ($qq) {
+                $qq->where('tipo_pago', 'credito')
+                    ->orWhere('tipo_pago', 'crédito');
+            });
+        }
+
+        if ($this->serieId) {
+            $q->where('serie_id', $this->serieId);
+        }
 
         if (trim($this->buscarFactura) !== '') {
             $b = '%' . trim($this->buscarFactura) . '%';
+
             $q->where(function ($w) use ($b) {
-                $w->whereHas(
-                    'socioNegocio',
-                    fn($qq) =>
+                $w->whereHas('socioNegocio', function ($qq) use ($b) {
                     $qq->where('razon_social', 'like', $b)
-                        ->orWhere('numero_documento', 'like', $b)
-                )
+                        ->orWhere('numero_documento', 'like', $b);
+                })
                     ->orWhere('numero', 'like', $b)
                     ->orWhere('prefijo', 'like', $b);
             });
@@ -301,16 +422,45 @@ class PagosFactura extends Component
 
         return $q->orderByDesc('fecha')
             ->limit(200)
-            ->get(['id', 'numero', 'prefijo', 'serie_id', 'socio_negocio_id', 'fecha', 'total', 'saldo']);
+            ->get([
+                'id',
+                'numero',
+                'prefijo',
+                'serie_id',
+                'socio_negocio_id',
+                'fecha',
+                'tipo_pago',
+                'total',
+                'saldo'
+            ]);
     }
-
-
 
     private function cargarFacturaSeleccionada(int $facturaId, bool $rewriteItems = true): void
     {
-        $factura = Factura::with('pagos')->find($facturaId);
+        $factura = Factura::with(['pagos', 'serie.tipo'])->find($facturaId);
 
         if (!$factura) {
+            $this->resetFacturaYItems();
+            return;
+        }
+
+        $tipoSerieId = (int) ($factura->serie?->tipo_documento_id ?? 0);
+
+        $esCompraValida = $this->modoDocumento === 'compra'
+            && (
+                $tipoSerieId === self::TIPO_FACTURA_COMPRA
+                || ($factura->prefijo ?? '') === 'FAC-C'
+            );
+
+        $esVentaValida = $this->modoDocumento === 'venta'
+            && (
+                $tipoSerieId === self::TIPO_FACTURA_VENTA
+                || ($factura->prefijo ?? '') === 'FAC-V'
+            )
+            && in_array(mb_strtolower((string) $factura->tipo_pago), ['credito', 'crédito'], true);
+
+        if (!$esCompraValida && !$esVentaValida) {
+            $this->facturaId = null;
             $this->resetFacturaYItems();
             return;
         }
@@ -318,20 +468,21 @@ class PagosFactura extends Component
         $factura->recalcularTotales()->save();
         $factura->refresh();
 
-        $total  = round((float)($factura->total ?? 0), 2);
-        $pagado = round((float)$factura->pagos()->sum('monto'), 2);
+        $total  = round((float) ($factura->total ?? 0), 2);
+        $pagado = round((float) $factura->pagos()->sum('monto'), 2);
         $saldo  = round(max($total - $pagado, 0), 2);
 
         $this->fac_total  = $total;
         $this->fac_pagado = $pagado;
         $this->fac_saldo  = $saldo;
+        $this->serieId    = (int) $factura->serie_id;
 
+        // Solo reescribe items cuando se selecciona una factura nueva
         if ($rewriteItems) {
             $medioDefault = $this->medios->first()?->id ?? null;
 
             $this->items = [[
                 'medio_pago_id' => $medioDefault,
-                'porcentaje'    => $this->fac_saldo > 0 ? 100.00 : 0.00,
                 'monto'         => round($this->fac_saldo, 2),
                 'referencia'    => null,
             ]];
@@ -342,9 +493,9 @@ class PagosFactura extends Component
 
     private function resetFacturaYItems(): void
     {
-        $this->fac_total = 0;
+        $this->fac_total  = 0;
         $this->fac_pagado = 0;
-        $this->fac_saldo = 0;
+        $this->fac_saldo  = 0;
 
         $this->items = [[
             'medio_pago_id' => null,
@@ -358,48 +509,48 @@ class PagosFactura extends Component
 
     public function addItem(): void
     {
-        $this->items[] = ['medio_pago_id' => null, 'porcentaje' => 0, 'monto' => 0, 'referencia' => null];
+        $this->items[] = [
+            'medio_pago_id' => null,
+            'porcentaje'    => 0,
+            'monto'         => 0,
+            'referencia'    => null
+        ];
+
         $this->recalc();
     }
 
     public function removeItem(int $idx): void
     {
-        if (!isset($this->items[$idx])) return;
+        if (!isset($this->items[$idx])) {
+            return;
+        }
+
         array_splice($this->items, $idx, 1);
-        if (empty($this->items)) $this->addItem();
+
+        if (empty($this->items)) {
+            $this->addItem();
+        }
+
         $this->recalc();
     }
 
-    // ✅ Recalcular en caliente
     public function updated($name, $value): void
     {
-        if (preg_match('/^items\.(\d+)\.porcentaje$/', $name, $m)) {
-            $i = (int)$m[1];
-            $pct = max(0, min(100, (float)$value));
-            $this->items[$i]['porcentaje'] = $pct;
-            $this->items[$i]['monto']      = round($this->fac_saldo * $pct / 100, 2);
-        }
-
-        if (preg_match('/^items\.(\d+)\.monto$/', $name, $m)) {
-            $i = (int)$m[1];
-            $monto = max(0, round((float)$value, 2));
-            $this->items[$i]['monto']      = $monto;
-            $this->items[$i]['porcentaje'] = $this->fac_saldo > 0
-                ? round(($monto / $this->fac_saldo) * 100, 2)
-                : 0.0;
+        // Solo recarga si explícitamente cambia facturaId desde el wire:model
+        // No recarga cuando cambia items.*.monto para no pisar lo que escribe el usuario
+        if ($name === 'facturaId' && $this->facturaId) {
+            $this->cargarFacturaSeleccionada((int) $this->facturaId, true);
         }
 
         $this->recalc();
     }
-
     private function recalc(): void
     {
-        $this->sumPct   = round(collect($this->items)->sum(fn($r) => (float)($r['porcentaje'] ?? 0)), 2);
-        $this->sumMonto = round(collect($this->items)->sum(fn($r) => (float)($r['monto'] ?? 0)), 2);
-        $this->diff     = round($this->fac_saldo - $this->sumMonto, 2);
+        $this->sumPct = 100.00;
+        $this->sumMonto = round(collect($this->items)->sum(fn($r) => (float) ($r['monto'] ?? 0)), 2);
+        $this->diff = round($this->fac_saldo - $this->sumMonto, 2);
     }
 
-    /** Turno abierto */
     private function turnoPendienteAnterior(): ?turnos_caja
     {
         return turnos_caja::turnoPendienteDeCerrar();
@@ -409,297 +560,286 @@ class PagosFactura extends Component
     {
         return turnos_caja::turnoAbiertoDelDia();
     }
+
     private function metodoDesdeMedio(?MedioPagos $medio): ?string
     {
-        if (!$medio) return null;
+        if (!$medio) {
+            return null;
+        }
+
         $txt = trim(($medio->codigo ? "{$medio->codigo} - " : '') . ($medio->nombre ?? ''));
         return $txt !== '' ? $txt : null;
     }
 
-  public function guardarPago(): void
-{
-    try {
-        $this->validate();
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        $primerError = collect($e->validator->errors()->all())->first() ?: 'Revisa los datos del pago.';
-        PendingToast::create()->error()
-            ->message($primerError)
-            ->duration(8000);
-        throw $e;
-    }
+    public function guardarPago(): void
+    {
+        try {
+            $this->validate();
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $primerError = collect($e->validator->errors()->all())->first() ?: 'Revisa los datos del pago.';
+            PendingToast::create()->error()->message($primerError)->duration(8000);
+            throw $e;
+        }
 
-    if (!$this->facturaId) {
-        PendingToast::create()->warning()
-            ->message('Debe seleccionar una factura antes de registrar el pago.')
-            ->duration(6000);
-        return;
-    }
+        if (!$this->facturaId) {
+            PendingToast::create()->warning()
+                ->message('Debe seleccionar una factura antes de registrar el pago.')
+                ->duration(6000);
+            return;
+        }
 
-    $factura = Factura::with(['pagos', 'detalles', 'serie'])->findOrFail($this->facturaId);
+        $factura = Factura::with(['pagos', 'detalles', 'serie.tipo'])->findOrFail($this->facturaId);
 
-    // ✅ recalcular valores reales por seguridad
-    $factura->recalcularTotales()->save();
-    $factura->refresh();
+        $tipoSerieId = (int) ($factura->serie?->tipo_documento_id ?? 0);
 
-    $total  = round((float) ($factura->total ?? 0), 2);
-    $pagado = round((float) $factura->pagos()->sum('monto'), 2);
-    $saldo  = round(max($total - $pagado, 0), 2);
+        $esValidaParaModo =
+            ($this->modoDocumento === 'venta'  && $tipoSerieId === self::TIPO_FACTURA_VENTA) ||
+            ($this->modoDocumento === 'compra' && $tipoSerieId === self::TIPO_FACTURA_COMPRA);
 
-    $this->fac_total  = $total;
-    $this->fac_pagado = $pagado;
-    $this->fac_saldo  = $saldo;
-    $this->recalc();
+        if (!$esValidaParaModo) {
+            PendingToast::create()->warning()
+                ->message('La factura seleccionada no corresponde al tipo de documento actual.')
+                ->duration(7000);
+            return;
+        }
 
-    if ($this->fac_saldo <= 0) {
-        PendingToast::create()->warning()
-            ->message('La factura no tiene saldo pendiente.')
-            ->duration(7000);
-        return;
-    }
+        $factura->recalcularTotales()->save();
+        $factura->refresh();
 
-    if (round($this->sumMonto, 2) !== round($this->fac_saldo, 2)) {
-        PendingToast::create()->warning()
-            ->message('El total distribuido debe ser igual al saldo de la factura.')
-            ->duration(7000);
-        return;
-    }
+        $total  = round((float) ($factura->total ?? 0), 2);
+        $pagado = round((float) $factura->pagos()->sum('monto'), 2);
+        $saldo  = round(max($total - $pagado, 0), 2);
 
-    $idsMedios = collect($this->items)
-        ->pluck('medio_pago_id')
-        ->filter()
-        ->values()
-        ->all();
+        $this->fac_total  = $total;
+        $this->fac_pagado = $pagado;
+        $this->fac_saldo  = $saldo;
+        $this->recalc();
 
-    $mediosUsados = empty($idsMedios)
-        ? collect()
-        : MedioPagos::whereIn('id', $idsMedios)->get();
+        if ($this->fac_saldo <= 0) {
+            PendingToast::create()->warning()
+                ->message('La factura no tiene saldo pendiente.')
+                ->duration(7000);
+            return;
+        }
 
-    $requiereTurno = $mediosUsados->contains(fn($m) => $this->medioRequiereTurno($m));
+        if (round($this->sumMonto, 2) <= 0) {
+            PendingToast::create()->warning()
+                ->message('El monto a pagar debe ser mayor a cero.')
+                ->duration(7000);
+            return;
+        }
 
-    $turnoPendiente = $this->turnoPendienteAnterior();
-    if ($requiereTurno && $turnoPendiente) {
-        $fecha = optional($turnoPendiente->fecha_inicio)?->format('d/m/Y');
-        $abiertoPor = $turnoPendiente->abiertoPor?->name ?? 'otro usuario';
+        if (round($this->sumMonto, 2) > round($this->fac_saldo, 2)) {
+            PendingToast::create()->warning()
+                ->message('El monto a pagar ($' . number_format($this->sumMonto, 2, ',', '.') . ') no puede superar el saldo de la factura ($' . number_format($this->fac_saldo, 2, ',', '.') . ').')
+                ->duration(7000);
+            return;
+        }
 
-        PendingToast::create()->warning()
-            ->message("Existe una caja abierta del día {$fecha}, abierta por {$abiertoPor}. Debes cerrarla antes de registrar pagos.")
-            ->duration(9000);
-        return;
-    }
+        $idsMedios = collect($this->items)->pluck('medio_pago_id')->filter()->values()->all();
 
-    $turno = $this->turnoAbiertoActual();
+        $mediosUsados = empty($idsMedios)
+            ? collect()
+            : MedioPagos::whereIn('id', $idsMedios)->get();
 
-    if ($requiereTurno && !$turno) {
-        PendingToast::create()->warning()
-            ->message('No hay una caja abierta para hoy.')
-            ->duration(6500);
-        return;
-    }
+        $requiereTurno  = $mediosUsados->contains(fn($m) => $this->medioRequiereTurno($m));
+        $turnoPendiente = $this->turnoPendienteAnterior();
 
-    try {
-        DB::transaction(function () use (&$factura, $turno, $mediosUsados) {
-            $pagos = [];
+        if ($requiereTurno && $turnoPendiente) {
+            $fecha      = optional($turnoPendiente->fecha_inicio)?->format('d/m/Y');
+            $abiertoPor = $turnoPendiente->abiertoPor?->name ?? 'otro usuario';
 
-            foreach ($this->items as $row) {
-                $monto = (float) ($row['monto'] ?? 0);
-                if ($monto <= 0) {
-                    continue;
-                }
+            PendingToast::create()->warning()
+                ->message("Existe una caja abierta del día {$fecha}, abierta por {$abiertoPor}. Debes cerrarla antes de registrar pagos.")
+                ->duration(9000);
+            return;
+        }
 
-                /** @var MedioPagos|null $medio */
-                $medio = $mediosUsados->firstWhere('id', (int) ($row['medio_pago_id'] ?? 0))
-                    ?: (($row['medio_pago_id'] ?? null)
-                        ? MedioPagos::find((int) $row['medio_pago_id'])
-                        : null);
+        $turno = $this->turnoAbiertoActual();
 
-                if (!$medio) {
-                    continue;
-                }
+        if ($requiereTurno && !$turno) {
+            PendingToast::create()->warning()
+                ->message('No hay una caja abierta para hoy.')
+                ->duration(6500);
+            return;
+        }
 
-                $asociaTurno = $this->medioRequiereTurno($medio) && $turno;
+        try {
+            DB::transaction(function () use (&$factura, $turno, $mediosUsados) {
+                $pagos = [];
 
-                /** @var FacturaPago $pago */
-                $pago = $factura->registrarPago([
-                    'fecha'         => $this->fecha,
-                    'medio_pago_id' => (int) ($row['medio_pago_id'] ?? 0),
-                    'metodo'        => $this->metodoDesdeMedio($medio),
-                    'referencia'    => $row['referencia'] ?? null,
-                    'monto'         => $monto,
-                    'notas'         => $this->notas,
-                    'turno_id'      => $asociaTurno ? $turno->id : null,
-                    // 'user_id'    => Auth::id(),
-                ]);
+                foreach ($this->items as $row) {
+                    $monto = (float) ($row['monto'] ?? 0);
+                    if ($monto <= 0) {
+                        continue;
+                    }
 
-                $pagos[] = $pago;
+                    $medio = $mediosUsados->firstWhere('id', (int) ($row['medio_pago_id'] ?? 0))
+                        ?: (($row['medio_pago_id'] ?? null)
+                            ? MedioPagos::find((int) $row['medio_pago_id'])
+                            : null);
 
-                if ($asociaTurno) {
-                    $this->acumularEnTurnoDinamico($turno, $medio, $monto, (int) $factura->id);
-                }
-            }
+                    if (!$medio) {
+                        continue;
+                    }
 
-            if (empty($pagos)) {
-                throw new \RuntimeException('No se generó ningún pago válido.');
-            }
+                    $asociaTurno = $this->medioRequiereTurno($medio) && $turno;
 
-            $factura->refresh();
-            $factura->load(['pagos', 'detalles', 'serie.tipo']);
-
-            $asiento = ContabilidadService::asientoDesdePagos(
-                $factura,
-                $pagos,
-                'Pago aplicado a factura'
-            );
-
-            foreach ($pagos as $p) {
-                if (Schema::hasColumn($p->getTable(), 'asiento_id')) {
-                    $p->update([
-                        'asiento_id' => $asiento->id,
+                    $pago = $factura->registrarPago([
+                        'fecha'         => $this->fecha,
+                        'medio_pago_id' => (int) ($row['medio_pago_id'] ?? 0),
+                        'metodo'        => $this->metodoDesdeMedio($medio),
+                        'referencia'    => $row['referencia'] ?? null,
+                        'monto'         => $monto,
+                        'notas'         => $this->notas,
+                        'turno_id'      => $asociaTurno ? $turno->id : null,
                     ]);
-                }
-            }
 
-            $factura->refresh()->recalcularTotales()->save();
-            $factura->refresh();
-            $factura->load(['pagos', 'detalles', 'serie.tipo']);
+                    $pagos[] = $pago;
 
-            // ✅ EMITIR AUTOMÁTICAMENTE SI ES CONTADO Y YA QUEDÓ PAGADA
-            $totalActual    = round((float) ($factura->total ?? 0), 2);
-            $pagadoActual   = round((float) $factura->pagos()->sum('monto'), 2);
-            $faltanteActual = round($totalActual - $pagadoActual, 2);
-
-            $esContado = ($factura->tipo_pago ?? '') === 'contado';
-            $yaEmitida = !empty($factura->numero)
-                || in_array(($factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
-
-            if ($esContado && $faltanteActual <= 0.01 && !$yaEmitida) {
-                foreach ($factura->detalles as $idx => $d) {
-                    if (empty($d->cuenta_ingreso_id)) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
-                    }
-
-                    if (!$d->producto_id || !$d->bodega_id) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
-                    }
-
-                    if ((float) ($d->cantidad ?? 0) <= 0) {
-                        throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
+                    if ($asociaTurno) {
+                        $this->acumularEnTurnoDinamico($turno, $medio, $monto, (int) $factura->id);
                     }
                 }
 
-                \App\Services\InventarioService::verificarDisponibilidadParaFactura($factura);
-
-                $serie = $factura->serie_id
-                    ? Serie::find((int) $factura->serie_id)
-                    : null;
-
-                if (!$serie) {
-                    throw new \RuntimeException('No hay una serie válida para emitir este documento.');
+                if (empty($pagos)) {
+                    throw new \RuntimeException('No se generó ningún pago válido.');
                 }
 
-                $numero = $serie->tomarConsecutivo();
-                $uid = Auth::id();
-
-                $dataUpdate = [
-                    'serie_id' => $serie->id,
-                    'prefijo'  => (string) ($serie->prefijo ?? ''),
-                    'numero'   => $numero,
-                    'estado'   => 'emitida',
-                ];
-
-                if (Schema::hasColumn('facturas', 'emitido_por_id')) {
-                    $dataUpdate['emitido_por_id'] = $uid;
-                }
-
-                if (Schema::hasColumn('facturas', 'emitido_en')) {
-                    $dataUpdate['emitido_en'] = now();
-                }
-
-                if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
-                    $dataUpdate['actualizado_por_id'] = $uid;
-                }
-
-                $updated = Factura::query()
-                    ->whereKey($factura->id)
-                    ->update($dataUpdate);
-
-                if (!$updated) {
-                    throw new \RuntimeException('No se pudo actualizar la factura con el consecutivo.');
-                }
-
-                $factura = Factura::with(['pagos', 'detalles', 'serie'])->findOrFail($factura->id);
-
-                if (is_null($factura->numero) || $factura->numero === '') {
-                    throw new \RuntimeException('La factura se intentó emitir, pero el consecutivo no quedó guardado.');
-                }
-
-                ContabilidadService::asientoDesdeFactura($factura);
-                \App\Services\InventarioService::descontarPorFactura($factura);
-
-                $factura->recalcularTotales()->save();
                 $factura->refresh();
-            }
+                $factura->load(['pagos', 'detalles', 'serie.tipo']);
 
-            // ✅ SI QUEDÓ TOTALMENTE PAGADA, MARCARLA COMO PAGADA
-            $factura->refresh();
-            $factura->load('pagos');
+                $asiento = ContabilidadService::asientoDesdePagos($factura, $pagos, 'Pago aplicado a factura');
 
-            $totalFinal  = round((float) ($factura->total ?? 0), 2);
-            $pagadoFinal = round((float) $factura->pagos()->sum('monto'), 2);
-            $saldoFinal  = round($totalFinal - $pagadoFinal, 2);
-
-            if ($saldoFinal <= 0.01 && !in_array(($factura->estado ?? ''), ['anulada'], true)) {
-                $dataPagada = [
-                    'estado' => 'pagada',
-                ];
-
-                if (Schema::hasColumn('facturas', 'pagado')) {
-                    $dataPagada['pagado'] = $pagadoFinal;
+                foreach ($pagos as $p) {
+                    if (Schema::hasColumn($p->getTable(), 'asiento_id')) {
+                        $p->update(['asiento_id' => $asiento->id]);
+                    }
                 }
 
-                if (Schema::hasColumn('facturas', 'saldo')) {
-                    $dataPagada['saldo'] = 0;
-                }
-
-                if (Schema::hasColumn('facturas', 'monto_aplicado')) {
-                    $dataPagada['monto_aplicado'] = $pagadoFinal;
-                }
-
-                $factura->update($dataPagada);
+                $factura->refresh()->recalcularTotales()->save();
                 $factura->refresh();
-            }
-        }, 3);
-    } catch (\Throwable $e) {
-        report($e);
+                $factura->load(['pagos', 'detalles', 'serie.tipo']);
 
-        PendingToast::create()->error()
-            ->message('No se pudo registrar y contabilizar el pago: ' . $e->getMessage())
-            ->duration(9000);
-        return;
+                $totalActual    = round((float) ($factura->total ?? 0), 2);
+                $pagadoActual   = round((float) $factura->pagos()->sum('monto'), 2);
+                $faltanteActual = round($totalActual - $pagadoActual, 2);
+                $esContado      = ($factura->tipo_pago ?? '') === 'contado';
+                $yaEmitida      = !empty($factura->numero)
+                    || in_array(($factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
+
+                if ($esContado && $faltanteActual <= 0.01 && !$yaEmitida) {
+                    foreach ($factura->detalles as $idx => $d) {
+                        if (empty($d->cuenta_ingreso_id)) {
+                            throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
+                        }
+                        if (!$d->producto_id || !$d->bodega_id) {
+                            throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
+                        }
+                        if ((float) ($d->cantidad ?? 0) <= 0) {
+                            throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");
+                        }
+                    }
+
+                    \App\Services\InventarioService::verificarDisponibilidadParaFactura($factura);
+
+                    $serie = $factura->serie_id ? Serie::find((int) $factura->serie_id) : null;
+                    if (!$serie) {
+                        throw new \RuntimeException('No hay una serie válida para emitir este documento.');
+                    }
+
+                    $numero = $serie->tomarConsecutivo();
+                    $uid    = Auth::id();
+
+                    $dataUpdate = [
+                        'serie_id' => $serie->id,
+                        'prefijo'  => (string) ($serie->prefijo ?? ''),
+                        'numero'   => $numero,
+                        'estado'   => 'emitida',
+                    ];
+
+                    if (Schema::hasColumn('facturas', 'emitido_por_id')) {
+                        $dataUpdate['emitido_por_id'] = $uid;
+                    }
+                    if (Schema::hasColumn('facturas', 'emitido_en')) {
+                        $dataUpdate['emitido_en'] = now();
+                    }
+                    if (Schema::hasColumn('facturas', 'actualizado_por_id')) {
+                        $dataUpdate['actualizado_por_id'] = $uid;
+                    }
+
+                    $updated = Factura::query()->whereKey($factura->id)->update($dataUpdate);
+
+                    if (!$updated) {
+                        throw new \RuntimeException('No se pudo actualizar la factura con el consecutivo.');
+                    }
+
+                    $factura = Factura::with(['pagos', 'detalles', 'serie'])->findOrFail($factura->id);
+
+                    if (is_null($factura->numero) || $factura->numero === '') {
+                        throw new \RuntimeException('La factura se intentó emitir, pero el consecutivo no quedó guardado.');
+                    }
+
+                    ContabilidadService::asientoDesdeFactura($factura);
+                    \App\Services\InventarioService::descontarPorFactura($factura);
+
+                    $factura->recalcularTotales()->save();
+                    $factura->refresh();
+                }
+
+                $factura->refresh();
+                $factura->load('pagos');
+
+                $totalFinal  = round((float) ($factura->total ?? 0), 2);
+                $pagadoFinal = round((float) $factura->pagos()->sum('monto'), 2);
+                $saldoFinal  = round($totalFinal - $pagadoFinal, 2);
+
+                if ($saldoFinal <= 0.01 && !in_array(($factura->estado ?? ''), ['anulada'], true)) {
+                    $dataPagada = ['estado' => 'pagada'];
+
+                    if (Schema::hasColumn('facturas', 'pagado')) {
+                        $dataPagada['pagado'] = $pagadoFinal;
+                    }
+                    if (Schema::hasColumn('facturas', 'saldo')) {
+                        $dataPagada['saldo'] = 0;
+                    }
+                    if (Schema::hasColumn('facturas', 'monto_aplicado')) {
+                        $dataPagada['monto_aplicado'] = $pagadoFinal;
+                    }
+
+                    $factura->update($dataPagada);
+                    $factura->refresh();
+                }
+            }, 3);
+        } catch (\Throwable $e) {
+            report($e);
+
+            PendingToast::create()->error()
+                ->message('No se pudo registrar y contabilizar el pago: ' . $e->getMessage())
+                ->duration(9000);
+            return;
+        }
+
+        $factura->refresh();
+
+        $mensaje = 'Pago registrado y contabilizado.';
+
+        if (!empty($factura->numero)) {
+            $mensaje .= ' Factura emitida automáticamente';
+            $mensaje .= (($factura->prefijo ?? '') !== ''
+                ? ' ' . $factura->prefijo . '-' . $factura->numero
+                : ' ' . $factura->numero) . '.';
+        }
+
+        if (($factura->estado ?? '') === 'pagada') {
+            $mensaje .= ' La factura quedó pagada completamente.';
+        }
+
+        PendingToast::create()->success()->message($mensaje)->duration(6000);
+
+        $this->show = false;
+        $this->dispatch('pago-registrado', facturaId: $factura->id);
     }
-
-    $factura->refresh();
-
-    $mensaje = 'Pago registrado y contabilizado.';
-
-    if (!empty($factura->numero)) {
-        $mensaje .= ' Factura emitida automáticamente';
-        $mensaje .= (($factura->prefijo ?? '') !== '' ? ' ' . $factura->prefijo . '-' . $factura->numero : ' ' . $factura->numero);
-        $mensaje .= '.';
-    }
-
-    if (($factura->estado ?? '') === 'pagada') {
-        $mensaje .= ' La factura quedó pagada completamente.';
-    }
-
-    PendingToast::create()->success()
-        ->message($mensaje)
-        ->duration(6000);
-
-    $this->show = false;
-
-    $this->dispatch('pago-registrado', facturaId: $factura->id);
-}
-    // ==== helpers de config de medios / turno ====
 
     private function col(string $table, string $column): bool
     {
@@ -712,18 +852,31 @@ class PagosFactura extends Component
 
     private function boolCfg(?MedioPagos $medio, string $attr, bool $default): bool
     {
-        if (!$medio) return $default;
-        if (!$this->col($medio->getTable(), $attr)) return $default;
+        if (!$medio) {
+            return $default;
+        }
+
+        if (!$this->col($medio->getTable(), $attr)) {
+            return $default;
+        }
+
         $v = data_get($medio, $attr);
         $res = filter_var($v, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-        return is_null($res) ? (bool)$v : $res;
+
+        return is_null($res) ? (bool) $v : $res;
     }
 
     private function strCfg(?MedioPagos $medio, string $attr, ?string $default = null): ?string
     {
-        if (!$medio) return $default;
-        if (!$this->col($medio->getTable(), $attr)) return $default;
-        $v = trim((string)data_get($medio, $attr));
+        if (!$medio) {
+            return $default;
+        }
+
+        if (!$this->col($medio->getTable(), $attr)) {
+            return $default;
+        }
+
+        $v = trim((string) data_get($medio, $attr));
         return $v !== '' ? $v : $default;
     }
 
@@ -736,6 +889,7 @@ class PagosFactura extends Component
     {
         return $this->boolCfg($medio, 'contar_en_total', true);
     }
+
 
     private function medioCrearMovimiento(?MedioPagos $medio): bool
     {
@@ -763,17 +917,17 @@ class PagosFactura extends Component
             $turno->increment($col, $monto);
         }
 
-        $resumen = (array)($turno->resumen ?? []);
+        $resumen = (array) ($turno->resumen ?? []);
         $resumen['medios'] = $resumen['medios'] ?? [];
-        $mid = (string)$medio->id;
 
-        $prevMonto = (float)($resumen['medios'][$mid]['monto'] ?? 0);
-        $prevMovs  = (int)($resumen['medios'][$mid]['movimientos'] ?? 0);
+        $mid = (string) $medio->id;
+        $prevMonto = (float) ($resumen['medios'][$mid]['monto'] ?? 0);
+        $prevMovs  = (int) ($resumen['medios'][$mid]['movimientos'] ?? 0);
 
         $resumen['medios'][$mid] = [
-            'medio_id'    => (int)$medio->id,
-            'codigo'      => (string)($medio->codigo ?? ''),
-            'nombre'      => (string)($medio->nombre ?? ''),
+            'medio_id'    => (int) $medio->id,
+            'codigo'      => (string) ($medio->codigo ?? ''),
+            'nombre'      => (string) ($medio->nombre ?? ''),
             'monto'       => round($prevMonto + $monto, 2),
             'movimientos' => $prevMovs + 1,
         ];

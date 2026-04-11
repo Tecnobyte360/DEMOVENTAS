@@ -7,7 +7,6 @@
 @once
   @push('scripts')
     <script>
-      // Evita conflicto Alpine ↔ Livewire
       window.deferLoadingAlpine = (alpineInit) => {
         document.addEventListener('livewire:init', alpineInit)
       }
@@ -28,7 +27,7 @@
           <span class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/70 dark:bg-gray-700/60 backdrop-blur">
             <i class="fa-solid fa-wallet text-2xl text-gray-700 dark:text-gray-200"></i>
           </span>
-         Recibos de caja
+          Recibos de caja
         </h1>
         <p class="text-sm text-gray-600 dark:text-gray-400">
           Consulta, filtra y analiza todos los pagos asociados a facturas emitidas.
@@ -36,7 +35,6 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-3">
-        {{-- Botón para registrar nuevo pago --}}
         <button
           wire:click="$dispatch('abrir-modal-pago', { facturaId: null })"
           class="flex items-center gap-2 px-4 py-2 rounded-2xl 
@@ -47,7 +45,6 @@
           Registrar pago
         </button>
 
-        {{-- Total general --}}
         <span
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/70 dark:bg-gray-800/60
                  font-semibold text-xs md:text-sm text-gray-700 dark:text-gray-200 shadow-sm">
@@ -65,16 +62,17 @@
     <section class="p-6 md:p-8 border-b border-gray-100 dark:border-gray-800" aria-label="Filtros de búsqueda">
       <header class="mb-4">
         <h2 class="text-lg md:text-xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-          <span
-            class="inline-grid place-items-center w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gray-200 text-gray-700
-                   dark:bg-gray-800 dark:text-gray-200">
+          <span class="inline-grid place-items-center w-8 h-8 md:w-9 md:h-9 rounded-xl bg-gray-200 text-gray-700
+                       dark:bg-gray-800 dark:text-gray-200">
             <i class="fa-solid fa-filter text-[13px]"></i>
           </span>
           Filtros
         </h2>
       </header>
 
-      <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+      {{-- Fila 1: Buscar | Desde | Hasta | Tipo de factura --}}
+      <div class="grid grid-cols-1 md:grid-cols-12 gap-4 mb-4">
+
         {{-- Buscar --}}
         <div class="md:col-span-4">
           <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
@@ -83,7 +81,8 @@
           <input type="text" wire:model.debounce.400ms="buscar"
                  placeholder="Cliente, referencia, factura..."
                  class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700
-                        bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
+                        bg-white dark:bg-gray-800 dark:text-white focus:outline-none 
+                        focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
         </div>
 
         {{-- Fecha desde --}}
@@ -93,7 +92,8 @@
           </label>
           <input type="date" wire:model.lazy="fecha_inicio"
                  class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700
-                        bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
+                        bg-white dark:bg-gray-800 dark:text-white focus:outline-none 
+                        focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
         </div>
 
         {{-- Fecha hasta --}}
@@ -103,7 +103,23 @@
           </label>
           <input type="date" wire:model.lazy="fecha_fin"
                  class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700
-                        bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
+                        bg-white dark:bg-gray-800 dark:text-white focus:outline-none 
+                        focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
+        </div>
+
+        {{-- ➕ Tipo de factura --}}
+        <div class="md:col-span-2">
+          <label class="block text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-gray-300 mb-2">
+            Tipo de factura
+          </label>
+          <select wire:model.lazy="tipo_documento_id"
+                  class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700
+                         bg-white dark:bg-gray-800 dark:text-white focus:outline-none 
+                         focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
+            <option value="">— Todos —</option>
+            <option value="1">Venta (FAC-V)</option>
+            <option value="5">Compra (FAC-C)</option>
+          </select>
         </div>
 
         {{-- Medio de pago --}}
@@ -113,36 +129,39 @@
           </label>
           <select wire:model.lazy="medio_pago_id"
                   class="w-full h-12 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700
-                         bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
+                         bg-white dark:bg-gray-800 dark:text-white focus:outline-none 
+                         focus:ring-4 focus:ring-gray-300/40 dark:focus:ring-gray-700/40">
             <option value="">— Todos —</option>
             @foreach($mediosPago as $mp)
               <option value="{{ $mp['id'] }}">{{ $mp['nombre'] }}</option>
             @endforeach
           </select>
         </div>
+      </div>
 
-        {{-- Botones --}}
-        <div class="md:col-span-2 flex items-end gap-3">
-          <button wire:click="$refresh"
-                  class="flex items-center gap-2 px-4 py-2 rounded-2xl 
-                         bg-gradient-to-r from-indigo-600 to-violet-600 
-                         hover:from-indigo-700 hover:to-violet-700 
-                         text-white font-semibold shadow transition-all duration-150">
-            <i class="fa-solid fa-magnifying-glass"></i> Buscar
-          </button>
-          <button
-            wire:click="$set('buscar','');$set('medio_pago_id',null);$set('fecha_inicio',null);$set('fecha_fin',null)"
-            class="px-4 py-2 rounded-2xl border-2 border-gray-300 text-gray-700 
-                   hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-all duration-150">
-            Limpiar
-          </button>
-        </div>
+      {{-- Fila 2: Botones alineados a la derecha --}}
+      <div class="flex justify-end gap-3">
+        <button wire:click="$refresh"
+                class="flex items-center gap-2 px-5 py-2 rounded-2xl 
+                       bg-gradient-to-r from-indigo-600 to-violet-600 
+                       hover:from-indigo-700 hover:to-violet-700 
+                       text-white font-semibold shadow transition-all duration-150">
+          <i class="fa-solid fa-magnifying-glass"></i> Buscar
+        </button>
+
+        {{-- ➕ tipo_documento_id añadido al limpiar --}}
+        <button
+          wire:click="$set('buscar','');$set('medio_pago_id',null);$set('fecha_inicio',null);$set('fecha_fin',null);$set('tipo_documento_id',null)"
+          class="px-5 py-2 rounded-2xl border-2 border-gray-300 text-gray-700 
+                 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 
+                 dark:hover:bg-gray-800 transition-all duration-150">
+          <i class="fa-solid fa-xmark mr-1"></i> Limpiar
+        </button>
       </div>
     </section>
 
     {{-- ===== LISTADO ===== --}}
     <section class="p-4 md:p-6" aria-label="Listado de pagos recibidos">
-      {{-- Desktop: Tabla --}}
       <div class="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800">
         <table class="min-w-full text-sm">
           <thead class="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 uppercase text-xs tracking-wider">
@@ -153,7 +172,7 @@
               <th class="p-3 text-left">Método</th>
               <th class="p-3 text-left">Medio</th>
               <th class="p-3 text-left">Referencia</th>
-                      <th class="p-3 text-left">Estado</th>
+              <th class="p-3 text-left">Estado</th>
               <th class="p-3 text-right">Monto</th>
             </tr>
           </thead>
@@ -166,25 +185,24 @@
                 <td class="p-3">{{ $p->metodo ?: '—' }}</td>
                 <td class="p-3">{{ $p->medioPago?->nombre ?? '—' }}</td>
                 <td class="p-3">{{ $p->referencia ?: '—' }}</td>
-               <td class="p-3">
-        @php
-          $est = strtolower((string)($p->estado ?? 'registrado'));
-          $cls = match ($est) {
-            'reversado' => 'bg-rose-100 text-rose-700',
-            'pendiente' => 'bg-amber-100 text-amber-700',
-            default     => 'bg-emerald-100 text-emerald-700', 
-          };
-        @endphp
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $cls }}">
-          {{ ucfirst($est) }}
-        </span>
-      </td>
-
+                <td class="p-3">
+                  @php
+                    $est = strtolower((string)($p->estado ?? 'registrado'));
+                    $cls = match ($est) {
+                      'reversado' => 'bg-rose-100 text-rose-700',
+                      'pendiente' => 'bg-amber-100 text-amber-700',
+                      default     => 'bg-emerald-100 text-emerald-700',
+                    };
+                  @endphp
+                  <span class="px-2 py-0.5 rounded-full text-xs font-semibold {{ $cls }}">
+                    {{ ucfirst($est) }}
+                  </span>
+                </td>
                 <td class="p-3 text-right font-semibold">$ {{ number_format($p->monto,2,',','.') }}</td>
               </tr>
             @empty
               <tr>
-                <td colspan="7" class="p-6 text-center text-gray-500 dark:text-gray-400">
+                <td colspan="8" class="p-6 text-center text-gray-500 dark:text-gray-400">
                   No hay pagos registrados.
                 </td>
               </tr>
@@ -194,8 +212,7 @@
       </div>
 
       {{-- Paginación --}}
-      <div
-        class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
+      <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-800 flex items-center justify-between text-sm text-gray-600 dark:text-gray-300">
         <div>
           Mostrando <span class="font-semibold">{{ $pagos->firstItem() }}</span> -
           <span class="font-semibold">{{ $pagos->lastItem() }}</span> de

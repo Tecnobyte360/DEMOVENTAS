@@ -12,9 +12,6 @@ class Listapagosrecibidos extends Component
 {
     use WithPagination;
 
-    /** -----------------------------
-     *  PROPIEDADES
-     * ----------------------------- */
     public string $buscar = '';
     public ?string $fecha_inicio = null;
     public ?string $fecha_fin = null;
@@ -23,66 +20,55 @@ class Listapagosrecibidos extends Component
     public ?float $monto_min = null;
     public ?float $monto_max = null;
 
-    // Orden / paginación
     public string $ordenarPor = 'fecha';
     public string $direccion = 'desc';
     public int $porPagina = 15;
+    public ?int $tipo_documento_id = null;
 
-    // Totales
     public float $totalGeneral = 0.0;
 
-    // Catálogo de medios de pago
     public array $mediosPago = [];
 
-    /** -----------------------------
-     *  QUERY STRING
-     * ----------------------------- */
     protected $queryString = [
-        'buscar'        => ['except' => ''],
-        'fecha_inicio'  => ['except' => null],
-        'fecha_fin'     => ['except' => null],
-        'medio_pago_id' => ['except' => null],
-        'metodo'        => ['except' => null],
-        'monto_min'     => ['except' => null],
-        'monto_max'     => ['except' => null],
-        'ordenarPor'    => ['except' => 'fecha'],
-        'direccion'     => ['except' => 'desc'],
-        'porPagina'     => ['except' => 15],
+        'buscar'            => ['except' => ''],
+        'fecha_inicio'      => ['except' => null],
+        'fecha_fin'         => ['except' => null],
+        'medio_pago_id'     => ['except' => null],
+        'metodo'            => ['except' => null],
+        'monto_min'         => ['except' => null],
+        'monto_max'         => ['except' => null],
+        'ordenarPor'        => ['except' => 'fecha'],
+        'direccion'         => ['except' => 'desc'],
+        'porPagina'         => ['except' => 15],
+        'tipo_documento_id' => ['except' => null],
     ];
 
-    protected $listeners = ['refrescar' => '$refresh'];
+    protected $listeners = [
+        'refrescar' => '$refresh',
+        'pago-registrado' => '$refresh',
+    ];
 
-    /** -----------------------------
-     *  CICLO DE VIDA
-     * ----------------------------- */
     public function mount(): void
     {
-        // Rango por defecto: mes actual
         $this->fecha_inicio = now()->startOfMonth()->toDateString();
         $this->fecha_fin    = now()->toDateString();
 
-        // Catálogo de medios de pago
         $this->mediosPago = MedioPagos::query()
             ->orderBy('nombre')
             ->get(['id', 'nombre', 'codigo'])
             ->toArray();
     }
 
-    /** -----------------------------
-     *  ACTUALIZADORES AUTOMÁTICOS
-     * ----------------------------- */
-    public function updatingBuscar()        { $this->resetPage(); }
-    public function updatingFechaInicio()   { $this->resetPage(); }
-    public function updatingFechaFin()      { $this->resetPage(); }
-    public function updatingMedioPagoId()   { $this->resetPage(); }
-    public function updatingMetodo()        { $this->resetPage(); }
-    public function updatingMontoMin()      { $this->resetPage(); }
-    public function updatingMontoMax()      { $this->resetPage(); }
-    public function updatingPorPagina()     { $this->resetPage(); }
+    public function updatingBuscar() { $this->resetPage(); }
+    public function updatingFechaInicio() { $this->resetPage(); }
+    public function updatingFechaFin() { $this->resetPage(); }
+    public function updatingMedioPagoId() { $this->resetPage(); }
+    public function updatingMetodo() { $this->resetPage(); }
+    public function updatingMontoMin() { $this->resetPage(); }
+    public function updatingMontoMax() { $this->resetPage(); }
+    public function updatingPorPagina() { $this->resetPage(); }
+    public function updatingTipoDocumentoId() { $this->resetPage(); }
 
-    /** -----------------------------
-     *  ORDENAR COLUMNAS
-     * ----------------------------- */
     public function ordenarPor(string $campo): void
     {
         if ($this->ordenarPor === $campo) {
@@ -91,91 +77,86 @@ class Listapagosrecibidos extends Component
             $this->ordenarPor = $campo;
             $this->direccion  = 'asc';
         }
+
         $this->resetPage();
     }
 
-    /** -----------------------------
-     *  CONSULTA BASE
-     * ----------------------------- */
-   protected function baseQuery(): Builder
-{
-    $q = FacturaPago::query()
-        ->with([
-            'factura:id,numero,prefijo,serie_id,socio_negocio_id,fecha,saldo,estado',
-            'factura.serie:id,prefijo,longitud',
-            'factura.cliente:id,razon_social,nit',
-            'medioPago:id,nombre,codigo',
-        ])
-        ->leftJoin('facturas', 'factura_pagos.factura_id', '=', 'facturas.id')
-        ->leftJoin('socio_negocios', 'facturas.socio_negocio_id', '=', 'socio_negocios.id')
-        ->select('factura_pagos.*');
+    protected function baseQuery(): Builder
+    {
+        $q = FacturaPago::query()
+           ->with([
+    'factura:id,numero,prefijo,serie_id,socio_negocio_id,fecha,saldo,estado',
+    'factura.serie:id,prefijo,longitud,tipo_documento_id',
+    'factura.socioNegocio:id,razon_social,nit',
+    'medioPago:id,nombre,codigo',
+])
+            ->leftJoin('facturas', 'factura_pagos.factura_id', '=', 'facturas.id')
+            ->leftJoin('series', 'facturas.serie_id', '=', 'series.id')
+            ->leftJoin('socio_negocios', 'facturas.socio_negocio_id', '=', 'socio_negocios.id')
+            ->select('factura_pagos.*');
 
-    // ✅ SOLO pagos de facturas que aún tienen saldo pendiente
-    $q->where('facturas.saldo', '>', 0);
+        if ($this->tipo_documento_id) {
+            $q->where('series.tipo_documento_id', $this->tipo_documento_id);
+        }
 
-    // (Opcional) excluir facturas anuladas/canceladas
-    // $q->whereNotIn('facturas.estado', ['ANULADA', 'CANCELADA']);
+        if ($this->fecha_inicio) {
+            $q->whereDate('factura_pagos.fecha', '>=', $this->fecha_inicio);
+        }
 
-    // Filtro de fechas
-    if ($this->fecha_inicio) {
-        $q->whereDate('factura_pagos.fecha', '>=', $this->fecha_inicio);
+        if ($this->fecha_fin) {
+            $q->whereDate('factura_pagos.fecha', '<=', $this->fecha_fin);
+        }
+
+        if ($this->medio_pago_id) {
+            $q->where('factura_pagos.medio_pago_id', $this->medio_pago_id);
+        }
+
+        if (!empty($this->metodo)) {
+            $q->where('factura_pagos.metodo', 'like', '%' . trim($this->metodo) . '%');
+        }
+
+        if ($this->monto_min !== null && $this->monto_min !== '') {
+            $q->where('factura_pagos.monto', '>=', (float) $this->monto_min);
+        }
+
+        if ($this->monto_max !== null && $this->monto_max !== '') {
+            $q->where('factura_pagos.monto', '<=', (float) $this->monto_max);
+        }
+
+        if (trim($this->buscar) !== '') {
+            $busca = '%' . trim($this->buscar) . '%';
+
+            $q->where(function ($w) use ($busca) {
+                $w->where('factura_pagos.referencia', 'like', $busca)
+                    ->orWhere('socio_negocios.razon_social', 'like', $busca)
+                    ->orWhere('socio_negocios.numero_documento', 'like', $busca)
+                    ->orWhere('facturas.numero', 'like', $busca)
+                    ->orWhere('factura_pagos.metodo', 'like', $busca);
+            });
+        }
+
+        $permitidos = ['fecha', 'monto', 'metodo', 'referencia'];
+        if (!in_array($this->ordenarPor, $permitidos, true)) {
+            $this->ordenarPor = 'fecha';
+        }
+
+        $dir = $this->direccion === 'asc' ? 'asc' : 'desc';
+
+        $q->orderBy('factura_pagos.' . $this->ordenarPor, $dir)
+          ->orderBy('factura_pagos.id', 'desc');
+
+        return $q;
     }
-    if ($this->fecha_fin) {
-        $q->whereDate('factura_pagos.fecha', '<=', $this->fecha_fin);
-    }
 
-    // Filtros adicionales
-    if ($this->medio_pago_id) {
-        $q->where('factura_pagos.medio_pago_id', $this->medio_pago_id);
-    }
-    if (!empty($this->metodo)) {
-        $q->where('factura_pagos.metodo', 'like', '%' . $this->metodo . '%');
-    }
-    if ($this->monto_min !== null && $this->monto_min !== '') {
-        $q->where('factura_pagos.monto', '>=', (float) $this->monto_min);
-    }
-    if ($this->monto_max !== null && $this->monto_max !== '') {
-        $q->where('factura_pagos.monto', '<=', (float) $this->monto_max);
-    }
-
-    // Búsqueda general
-    if ($this->buscar !== '') {
-        $busca = '%' . trim($this->buscar) . '%';
-        $q->where(function ($w) use ($busca) {
-            $w->where('factura_pagos.referencia', 'like', $busca)
-                ->orWhere('socio_negocios.razon_social', 'like', $busca)
-                ->orWhere('socio_negocios.numero_documento', 'like', $busca)
-                ->orWhere('facturas.numero', 'like', $busca)
-                ->orWhere('factura_pagos.metodo', 'like', $busca);
-        });
-    }
-
-    // Orden
-    $permitidos = ['fecha', 'monto', 'metodo', 'referencia'];
-    if (!in_array($this->ordenarPor, $permitidos, true)) {
-        $this->ordenarPor = 'fecha';
-    }
-    $dir = $this->direccion === 'asc' ? 'asc' : 'desc';
-    $q->orderBy('factura_pagos.' . $this->ordenarPor, $dir)
-      ->orderBy('factura_pagos.id', 'desc');
-
-    return $q;
-}
-
-
-    /** -----------------------------
-     *  RENDERIZADO
-     * ----------------------------- */
     public function render()
     {
         $query = $this->baseQuery();
 
-        // Total general (sin paginar)
         $this->totalGeneral = (float) (clone $query)->sum('factura_pagos.monto');
 
-        // Paginación
-     $pagos = $query->paginate($this->porPagina);
-$totalPagina = (float) collect($pagos->items())->sum('monto');
+        $pagos = $query->paginate($this->porPagina);
+        $totalPagina = (float) collect($pagos->items())->sum('monto');
+
         return view('livewire.facturas.listapagosrecibidos', [
             'pagos'        => $pagos,
             'totalPagina'  => $totalPagina,

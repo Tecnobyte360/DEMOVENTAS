@@ -140,7 +140,7 @@ class PagosFactura extends Component
                 ) {
                     $this->facturaId = $facturaId;
                     $this->serieId = (int) $factura->serie_id;
-                    $this->cargarFacturaSeleccionada($facturaId, true);
+                    $this->cargarFacturaSeleccionada($facturaId, true, forzarCarga: true);
                 } else {
                     $this->resetFacturaYItems();
                 }
@@ -435,7 +435,7 @@ public function cambiarFactura(): void
             ]);
     }
 
-    private function cargarFacturaSeleccionada(int $facturaId, bool $rewriteItems = true): void
+    private function cargarFacturaSeleccionada(int $facturaId, bool $rewriteItems = true, bool $forzarCarga = false): void
     {
         $factura = Factura::with(['pagos', 'serie.tipo'])->find($facturaId);
 
@@ -452,12 +452,13 @@ public function cambiarFactura(): void
                 || ($factura->prefijo ?? '') === 'FAC-C'
             );
 
+        // ✅ Si viene forzada (desde FacturaForm), no exigir tipo_pago crédito
         $esVentaValida = $this->modoDocumento === 'venta'
             && (
                 $tipoSerieId === self::TIPO_FACTURA_VENTA
                 || ($factura->prefijo ?? '') === 'FAC-V'
             )
-            && in_array(mb_strtolower((string) $factura->tipo_pago), ['credito', 'crédito'], true);
+            && ($forzarCarga || in_array(mb_strtolower((string) $factura->tipo_pago), ['credito', 'crédito'], true));
 
         if (!$esCompraValida && !$esVentaValida) {
             $this->facturaId = null;

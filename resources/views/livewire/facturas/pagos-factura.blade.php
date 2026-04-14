@@ -18,32 +18,32 @@
 <div x-data="{ open: @entangle('show') }" x-cloak>
     <div x-show="open" class="fixed inset-0 z-40 bg-black/40"></div>
 
-    <div x-show="open" class="fixed inset-0 z-50 grid place-items-center p-4">
-        <div class="w-full max-w-4xl rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden">
+    <div x-show="open" class="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+        <div class="w-full max-w-4xl rounded-none sm:rounded-2xl bg-white dark:bg-gray-900 shadow-2xl border dark:border-gray-700 overflow-hidden my-2 sm:my-6 max-h-[95vh] flex flex-col">
 
-            <div class="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between
+            <div class="px-3 sm:px-5 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700 flex items-start justify-between gap-2
                         bg-gradient-to-r from-gray-100 via-gray-200 to-gray-300
-                        dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-gray-800 dark:text-white rounded-t-2xl">
-                <div>
-                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        dark:from-gray-800 dark:via-gray-900 dark:to-gray-800 text-gray-800 dark:text-white rounded-t-none sm:rounded-t-2xl">
+                <div class="min-w-0 flex-1">
+                    <h3 class="text-base sm:text-lg font-semibold flex items-center gap-2">
                         <i class="fa-solid fa-cash-register"></i>
-                        Registrar pago de factura
+                        <span class="truncate">Registrar pago de factura</span>
                     </h3>
-                    <p class="text-xs mt-1 text-gray-600 dark:text-gray-300">
+                    <p class="text-[11px] sm:text-xs mt-1 text-gray-600 dark:text-gray-300">
                         {{ $modoDocumento === 'compra' ? 'Pago aplicado a factura de compra' : 'Pago aplicado a factura de venta' }}
                     </p>
                 </div>
 
-                <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition"
+                <button class="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition shrink-0 p-1"
                     @click="open=false" wire:click="cerrar" title="Cerrar">
-                    <i class="fa-solid fa-xmark"></i>
+                    <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
             </div>
 
-            <div class="p-5 space-y-5">
+            <div class="p-3 sm:p-5 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
 
                 @if (!$facturaId)
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                             <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
                                 Tipo de documento
@@ -147,37 +147,37 @@
                         </button>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-4">
-                            <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-300">
+                    <div class="grid grid-cols-3 gap-2 sm:gap-4">
+                        <div class="rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2 sm:p-4">
+                            <div class="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500 dark:text-slate-300">
                                 Total factura
                             </div>
-                            <div class="mt-1 text-2xl font-bold text-slate-800 dark:text-white">
+                            <div class="mt-1 text-sm sm:text-2xl font-bold text-slate-800 dark:text-white truncate">
                                 ${{ number_format($fac_total, 2, ',', '.') }}
                             </div>
                         </div>
 
-                        <div class="rounded-2xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-4">
-                            <div class="text-xs uppercase tracking-wide text-amber-600 dark:text-amber-300">
+                        <div class="rounded-xl sm:rounded-2xl border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-2 sm:p-4">
+                            <div class="text-[10px] sm:text-xs uppercase tracking-wide text-amber-600 dark:text-amber-300">
                                 Total pagado
                             </div>
-                            <div class="mt-1 text-2xl font-bold text-amber-700 dark:text-amber-200">
+                            <div class="mt-1 text-sm sm:text-2xl font-bold text-amber-700 dark:text-amber-200 truncate">
                                 ${{ number_format($fac_pagado, 2, ',', '.') }}
                             </div>
                         </div>
 
-                        <div class="rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-4">
-                            <div class="text-xs uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+                        <div class="rounded-xl sm:rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-900/20 p-2 sm:p-4">
+                            <div class="text-[10px] sm:text-xs uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
                                 Saldo pendiente
                             </div>
-                            <div class="mt-1 text-2xl font-bold text-emerald-700 dark:text-emerald-200">
+                            <div class="mt-1 text-sm sm:text-2xl font-bold text-emerald-700 dark:text-emerald-200 truncate">
                                 ${{ number_format($fac_saldo, 2, ',', '.') }}
                             </div>
                         </div>
                     </div>
                 @endif
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     <div>
                         <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
                             Fecha del pago
@@ -191,7 +191,7 @@
                         @enderror
                     </div>
 
-                    <div class="md:col-span-2">
+                    <div class="sm:col-span-2">
                         <label class="text-xs font-semibold uppercase text-gray-600 dark:text-gray-300 mb-1 block">
                             Notas
                         </label>
@@ -208,7 +208,8 @@
                         Pago de la factura
                     </div>
 
-                    <div class="overflow-x-auto">
+                    {{-- VISTA DESKTOP: tabla --}}
+                    <div class="hidden md:block overflow-x-auto">
                         <table class="min-w-full text-sm">
                             <thead>
                                 <tr class="text-left bg-gray-50 dark:bg-gray-800/50">
@@ -221,7 +222,7 @@
 
                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                                 @foreach ($items as $idx => $row)
-                                    <tr wire:key="pago-row-{{ $idx }}">
+                                    <tr wire:key="pago-row-desktop-{{ $idx }}">
                                         <td class="p-3">
                                             <select wire:model.live="items.{{ $idx }}.medio_pago_id"
                                                 class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
@@ -293,12 +294,99 @@
                         </table>
                     </div>
 
+                    {{-- VISTA MOBILE: tarjetas --}}
+                    <div class="md:hidden divide-y divide-gray-200 dark:divide-gray-700">
+                        @foreach ($items as $idx => $row)
+                            <div wire:key="pago-row-mobile-{{ $idx }}" class="p-3 space-y-3 bg-white dark:bg-gray-900">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[11px] uppercase font-semibold text-gray-500 dark:text-gray-400">
+                                        Medio de pago #{{ $idx + 1 }}
+                                    </span>
+                                    <button type="button"
+                                        wire:click="removeItem({{ $idx }})"
+                                        @if (count($items) <= 1) disabled @endif
+                                        class="inline-flex items-center justify-center w-8 h-8 rounded-lg
+                                               bg-rose-50 hover:bg-rose-100 text-rose-600
+                                               dark:bg-rose-900/20 dark:hover:bg-rose-900/40 dark:text-rose-300
+                                               border border-rose-200 dark:border-rose-700
+                                               disabled:opacity-40 disabled:cursor-not-allowed transition"
+                                        title="Quitar medio de pago">
+                                        <i class="fa-solid fa-trash text-xs"></i>
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label class="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                                        Medio de pago
+                                    </label>
+                                    <select wire:model.live="items.{{ $idx }}.medio_pago_id"
+                                        class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
+                                               dark:bg-gray-800 dark:text-white px-2 text-sm">
+                                        <option value="">— Selecciona —</option>
+                                        @foreach ($medios as $m)
+                                            <option value="{{ $m->id }}">
+                                                {{ $m->codigo ? $m->codigo . ' — ' : '' }}{{ $m->nombre }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error("items.$idx.medio_pago_id")
+                                        <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                                    @enderror
+                                </div>
+
+                                <div class="grid grid-cols-1 gap-3">
+                                    <div>
+                                        <label class="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                                            Monto a pagar
+                                        </label>
+                                        <input type="number" step="0.01" min="0.01" inputmode="decimal"
+                                            wire:model.live="items.{{ $idx }}.monto"
+                                            class="w-full h-10 text-right rounded-lg border-2 border-gray-200
+                                                   dark:border-gray-700 dark:bg-gray-800
+                                                   dark:text-white px-2 font-semibold text-sm">
+                                        @error("items.$idx.monto")
+                                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div>
+                                        <label class="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                                            Referencia
+                                        </label>
+                                        <input type="text" maxlength="120"
+                                            wire:model.defer="items.{{ $idx }}.referencia"
+                                            class="w-full h-10 rounded-lg border-2 border-gray-200 dark:border-gray-700
+                                                   dark:bg-gray-800 dark:text-white px-2 text-sm"
+                                            placeholder="Comprobante o # autorización">
+                                        @error("items.$idx.referencia")
+                                            <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+
+                        {{-- Totales en mobile --}}
+                        <div class="p-3 bg-gray-50 dark:bg-gray-800/30 space-y-1">
+                            <div class="flex justify-between text-sm">
+                                <span class="font-semibold text-gray-700 dark:text-gray-200">Total del pago:</span>
+                                <span class="font-semibold">${{ number_format($sumMonto, 2, ',', '.') }}</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="font-semibold text-gray-700 dark:text-gray-200">Diferencia:</span>
+                                <span class="font-semibold {{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
+                                    ${{ number_format($diff, 2, ',', '.') }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="px-3 py-2 bg-gray-50 dark:bg-gray-800/30 border-t border-gray-200 dark:border-gray-700 flex justify-end">
                         <button type="button"
                             wire:click="addItem"
                             class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
                                    bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium
-                                   shadow-sm transition">
+                                   shadow-sm transition w-full sm:w-auto justify-center">
                             <i class="fa-solid fa-plus"></i>
                             Agregar medio de pago
                         </button>
@@ -306,23 +394,23 @@
                 </div>
             </div>
 
-            <div class="px-5 py-4 border-t dark:border-gray-700 flex items-center justify-between gap-2
+            <div class="px-3 sm:px-5 py-3 sm:py-4 border-t dark:border-gray-700 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3
                         bg-gray-50/60 dark:bg-gray-800/40">
-                <div class="text-sm">
+                <div class="text-sm text-center sm:text-left">
                     <span class="font-medium">Diferencia:</span>
-                    <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
+                    <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }} font-semibold">
                         ${{ number_format($diff, 2, ',', '.') }}
                     </span>
                 </div>
 
-                <div class="flex gap-2">
-                    <button class="px-4 py-2 rounded-xl bg-white border dark:bg-gray-900 dark:border-gray-700"
+                <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-2">
+                    <button class="px-4 py-2 rounded-xl bg-white border dark:bg-gray-900 dark:border-gray-700 w-full sm:w-auto"
                         @click="open=false" wire:click="cerrar">
                         Cancelar
                     </button>
 
                     <button
-                        class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
                         wire:click="guardarPago"
                         wire:loading.attr="disabled"
                         title="Guardar el pago y actualizar factura">

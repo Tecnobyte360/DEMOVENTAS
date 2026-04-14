@@ -184,16 +184,56 @@
                 </div>
             </div>
 
-            <!-- ASESOR -->
-            <div class="flex flex-col">
-                <label class="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Asesor</label>
-                <select wire:model="asesorFiltro"
-                    class="rounded-xl text-sm px-3 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500">
-                    <option value="todos">Todos</option>
-                    @foreach ($asesores ?? collect() as $asesor)
-                        <option value="{{ $asesor->id }}">{{ $asesor->name }}</option>
-                    @endforeach
-                </select>
+            <!-- ASESOR (multi-select con checkboxes) -->
+            <div class="flex flex-col" x-data="{ open: false }" @click.outside="open = false">
+                <label class="text-xs md:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Asesores
+                </label>
+                <div class="relative">
+                    <button type="button" @click="open = !open"
+                        class="w-full flex items-center justify-between rounded-xl text-sm px-3 py-2 border border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-indigo-500 text-left">
+                        <span class="truncate">
+                            @if (empty($asesoresFiltro))
+                                Todos
+                            @else
+                                {{ count($asesoresFiltro) }}
+                                {{ count($asesoresFiltro) === 1 ? 'asesor seleccionado' : 'asesores seleccionados' }}
+                            @endif
+                        </span>
+                        <i class="fa-solid fa-chevron-down text-xs ml-2" :class="{ 'rotate-180': open }"></i>
+                    </button>
+
+                    <div x-show="open" x-cloak x-transition
+                        class="absolute z-30 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-lg">
+
+                        <div class="sticky top-0 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 px-3 py-2 flex items-center justify-between">
+                            <span class="text-[11px] uppercase font-semibold text-gray-500 dark:text-gray-400">
+                                Seleccionar asesores
+                            </span>
+                            @if (!empty($asesoresFiltro))
+                                <button type="button"
+                                    wire:click="$set('asesoresFiltro', [])"
+                                    class="text-[11px] text-rose-600 hover:underline">
+                                    Limpiar
+                                </button>
+                            @endif
+                        </div>
+
+                        @forelse ($asesores ?? collect() as $asesor)
+                            <label class="flex items-center gap-2 px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm text-gray-700 dark:text-gray-200">
+                                <input type="checkbox"
+                                    value="{{ $asesor->id }}"
+                                    wire:model.live="asesoresFiltro"
+                                    class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span class="truncate">{{ $asesor->name }}</span>
+                            </label>
+                        @empty
+                            <div class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                No hay asesores disponibles
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
             </div>
 
             <!-- TIPO PAGO -->

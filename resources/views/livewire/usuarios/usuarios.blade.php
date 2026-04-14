@@ -69,7 +69,7 @@ x-data="{
                         </td>
                         <td class="px-5 py-3 text-center hidden sm:table-cell">
                             <label class="relative inline-flex items-center cursor-pointer">
-                                <input disabled type="checkbox" wire:click="toggleEstado({{ $usuario->id }})" class="sr-only peer" {{ $usuario->activo ? 'checked' : '' }}>
+                                <input type="checkbox" wire:click="toggleEstado({{ $usuario->id }})" class="sr-only peer" {{ $usuario->activo ? 'checked' : '' }}>
                                 <div class="w-9 h-5 bg-gray-300 dark:bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white 
                                     after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border 
                                     after:rounded-full after:h-4 after:w-4 after:transition-all 

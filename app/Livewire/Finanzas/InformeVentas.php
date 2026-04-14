@@ -24,7 +24,7 @@ class InformeVentas extends Component
     public string $tipoDocumentoFiltro = 'todos'; // FACTURA | COTIZACION | NOTA_CREDITO | todos
     public string $filtroCliente       = '';
     public string $empresaFiltro       = 'todas';
-    public string $asesorFiltro        = 'todos';
+    public array $asesoresFiltro       = []; // IDs de asesores seleccionados; vacío = todos
 
     public ?string $fechaInicio = null;
     public ?string $fechaFin    = null;
@@ -81,7 +81,7 @@ class InformeVentas extends Component
         $this->tipoPagoFiltro      = 'todos';
         $this->tipoDocumentoFiltro = 'todos';
         $this->empresaFiltro       = 'todas';
-        $this->asesorFiltro        = 'todos';
+        $this->asesoresFiltro      = [];
         $this->filtroCliente       = '';
 
         $this->fechaInicio = now()->startOfMonth()->toDateString();
@@ -130,9 +130,10 @@ class InformeVentas extends Component
                 $q->where('estado', $this->estadoFiltro);
             }
 
-            // Asesor
-            if ($this->asesorFiltro !== 'todos' && $this->asesorFiltro !== '') {
-                $q->where('creado_por_id', $this->asesorFiltro);
+            // Asesor (multi-select)
+            $asesoresIds = array_filter(array_map('intval', $this->asesoresFiltro ?? []));
+            if (!empty($asesoresIds)) {
+                $q->whereIn('creado_por_id', $asesoresIds);
             }
 
             // Cliente
@@ -216,8 +217,9 @@ class InformeVentas extends Component
             $q->where('empresa_id', $this->empresaFiltro);
         }
 
-        if ($this->asesorFiltro !== 'todos' && $this->asesorFiltro !== '') {
-            $q->where('creado_por_id', $this->asesorFiltro);
+        $asesoresIds = array_filter(array_map('intval', $this->asesoresFiltro ?? []));
+        if (!empty($asesoresIds)) {
+            $q->whereIn('creado_por_id', $asesoresIds);
         }
 
         if (trim($this->filtroCliente) !== '') {

@@ -215,6 +215,7 @@
                                     <th class="p-3">Medio de pago</th>
                                     <th class="p-3 w-44 text-right">Monto a pagar</th>
                                     <th class="p-3 w-56">Referencia</th>
+                                    <th class="p-3 w-16 text-center">Acción</th>
                                 </tr>
                             </thead>
 
@@ -258,6 +259,20 @@
                                                 <div class="text-rose-600 text-xs mt-1">{{ $message }}</div>
                                             @enderror
                                         </td>
+
+                                        <td class="p-3 text-center">
+                                            <button type="button"
+                                                wire:click="removeItem({{ $idx }})"
+                                                @if (count($items) <= 1) disabled @endif
+                                                class="inline-flex items-center justify-center w-9 h-9 rounded-lg
+                                                       bg-rose-50 hover:bg-rose-100 text-rose-600
+                                                       dark:bg-rose-900/20 dark:hover:bg-rose-900/40 dark:text-rose-300
+                                                       border border-rose-200 dark:border-rose-700
+                                                       disabled:opacity-40 disabled:cursor-not-allowed transition"
+                                                title="Quitar medio de pago">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -268,7 +283,7 @@
                                     <td class="p-3 text-right font-semibold">
                                         ${{ number_format($sumMonto, 2, ',', '.') }}
                                     </td>
-                                    <td class="p-3 text-right font-semibold">
+                                    <td class="p-3 text-right font-semibold" colspan="2">
                                         <span class="{{ $diff == 0 ? 'text-emerald-600' : ($diff > 0 ? 'text-amber-600' : 'text-rose-600') }}">
                                             Diferencia: ${{ number_format($diff, 2, ',', '.') }}
                                         </span>
@@ -276,6 +291,17 @@
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+
+                    <div class="px-3 py-2 bg-gray-50 dark:bg-gray-800/30 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                        <button type="button"
+                            wire:click="addItem"
+                            class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
+                                   bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium
+                                   shadow-sm transition">
+                            <i class="fa-solid fa-plus"></i>
+                            Agregar medio de pago
+                        </button>
                     </div>
                 </div>
             </div>

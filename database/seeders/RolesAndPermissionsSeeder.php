@@ -19,6 +19,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'maestrorutas',
             'socionegocio',
             'inventario',
+            'facturas.modificar_precio',
         ];
 
         // Crear permisos si no existen

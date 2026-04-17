@@ -60,6 +60,9 @@ class FacturaForm extends Component
     /** NUEVO: controlas si quieres auto-emitir al pagar 100% contado */
     public bool $autoEmitirContado = false;
 
+    /** Permiso: indica si el usuario puede modificar el precio unitario en las líneas */
+    public bool $puedeModificarPrecio = true;
+
     protected $rules = [
         'serie_id'                     => 'required|integer|exists:series,id',
         'socio_negocio_id'             => 'required|integer|exists:socio_negocios,id',
@@ -117,6 +120,8 @@ class FacturaForm extends Component
     public function mount(?int $id = null): void
     {
         try {
+            $this->puedeModificarPrecio = (bool) (Auth::user()?->can('facturas.modificar_precio'));
+
             $this->fecha = now()->toDateString();
 
             // 👇 Detectar serie según modo
@@ -453,6 +458,22 @@ class FacturaForm extends Component
 
        if (preg_match('/^lineas\.(\d+)\.(cantidad|precio_unitario|descuento_pct|impuesto_pct)$/', $name, $m)) {
     $i = (int) $m[1];
+
+    if ($m[2] === 'precio_unitario' && !$this->puedeModificarPrecio) {
+        $productoId = (int) ($this->lineas[$i]['producto_id'] ?? 0);
+        $precioBase = 0.0;
+        if ($productoId) {
+            $producto = Producto::find($productoId);
+            $precioBase = (float) ($producto?->precio_venta ?? $producto?->precio ?? 0);
+        }
+        $this->lineas[$i]['precio_unitario'] = round($precioBase, 2);
+        PendingToast::create()
+            ->warning()
+            ->message('No tienes permiso para modificar el precio.')
+            ->duration(4000);
+        $this->normalizeLinea($this->lineas[$i]);
+        return;
+    }
 
     if (isset($this->lineas[$i])) {
         $this->normalizeLinea($this->lineas[$i]);

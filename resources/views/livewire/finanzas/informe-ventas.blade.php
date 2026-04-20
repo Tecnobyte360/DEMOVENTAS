@@ -90,6 +90,39 @@
         </div>
     </section>
 
+    @if (!$esCompra && !$esCotizacion)
+        <!-- KPIs RENTABILIDAD -->
+        <section class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Venta (base sin IVA)</div>
+                <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
+                    ${{ number_format($totalBaseVenta ?? 0, 0, ',', '.') }}
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Costo</div>
+                <div class="text-lg md:text-xl font-bold text-amber-600 dark:text-amber-400">
+                    ${{ number_format($totalCostoVenta ?? 0, 0, ',', '.') }}
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Utilidad</div>
+                <div class="text-lg md:text-xl font-bold {{ ($totalGanancia ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                    ${{ number_format($totalGanancia ?? 0, 0, ',', '.') }}
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
+                <div class="text-xs text-gray-500 dark:text-gray-400">Margen</div>
+                <div class="text-lg md:text-xl font-bold {{ ($margenPromedio ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                    {{ number_format($margenPromedio ?? 0, 2, ',', '.') }}%
+                </div>
+            </div>
+        </section>
+    @endif
+
     <!-- FILTROS -->
     <section
         class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 md:p-5 space-y-4"
@@ -321,6 +354,11 @@
                             <th class="px-4 py-3 text-right">Total</th>
                             <th class="px-4 py-3 text-right">Pagado</th>
                             <th class="px-4 py-3 text-right">Saldo pendiente</th>
+                            @if (!$esCompra && !$esCotizacion)
+                                <th class="px-4 py-3 text-right">Costo</th>
+                                <th class="px-4 py-3 text-right">Utilidad</th>
+                                <th class="px-4 py-3 text-right">Margen %</th>
+                            @endif
                         </tr>
                     </thead>
 
@@ -408,10 +446,25 @@
                                     class="px-4 py-3 text-right {{ $saldo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
                                     ${{ number_format($saldo, 0, ',', '.') }}
                                 </td>
+
+                                @if (!$esCompra && !$esCotizacion)
+                                    @php
+                                        $r = $rentabilidad[$factura->id] ?? ['costo' => 0, 'ganancia' => 0, 'margen' => 0];
+                                    @endphp
+                                    <td class="px-4 py-3 text-right text-amber-600 dark:text-amber-400">
+                                        ${{ number_format($r['costo'], 0, ',', '.') }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right {{ $r['ganancia'] >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                                        ${{ number_format($r['ganancia'], 0, ',', '.') }}
+                                    </td>
+                                    <td class="px-4 py-3 text-right font-semibold {{ $r['margen'] >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
+                                        {{ number_format($r['margen'], 2, ',', '.') }}%
+                                    </td>
+                                @endif
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="10" class="px-6 py-10 text-center text-gray-500">
+                                <td colspan="{{ (!$esCompra && !$esCotizacion) ? 13 : 10 }}" class="px-6 py-10 text-center text-gray-500">
                                     <i class="fas fa-inbox text-2xl mb-2"></i>
                                     <div>No hay resultados con los filtros actuales.</div>
                                 </td>

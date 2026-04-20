@@ -41,6 +41,12 @@ class InformeVentas extends Component
     public float $totalPagado      = 0;
     public float $totalSaldo       = 0;
 
+    // KPIs de rentabilidad (solo ventas: no compras, no cotizaciones)
+    public float $totalBaseVenta   = 0; // importe_base (sin impuestos)
+    public float $totalCostoVenta  = 0;
+    public float $totalGanancia    = 0;
+    public float $margenPromedio   = 0; // %
+
     protected array $codigosVentas = [
         'FACTURA',
         'NOTA_CREDITO',
@@ -276,6 +282,105 @@ class InformeVentas extends Component
             ->sum('total');
     }
 
+    /**
+     * Calcula costo y utilidad agregados para el total filtrado (solo ventas).
+     * Usa costo_promedio -> ultimo_costo -> producto.costo como fallback.
+     */
+    protected function calcularRentabilidadTotal(Builder $query): void
+    {
+        $this->totalBaseVenta  = 0;
+        $this->totalCostoVenta = 0;
+        $this->totalGanancia   = 0;
+        $this->margenPromedio  = 0;
+
+        if ($this->esCompra() || $this->esCotizacion()) {
+            return;
+        }
+
+        $ids = (clone $query)->pluck('id');
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        $row = DB::table('factura_detalles as fd')
+            ->leftJoin('producto_bodega as pb', function ($j) {
+                $j->on('pb.producto_id', '=', 'fd.producto_id')
+                  ->on('pb.bodega_id', '=', 'fd.bodega_id');
+            })
+            ->leftJoin('productos as p', 'p.id', '=', 'fd.producto_id')
+            ->whereIn('fd.factura_id', $ids)
+            ->selectRaw('
+                COALESCE(SUM(fd.importe_base), 0) AS venta,
+                COALESCE(SUM(
+                    fd.cantidad * COALESCE(
+                        NULLIF(pb.costo_promedio, 0),
+                        NULLIF(pb.ultimo_costo, 0),
+                        p.costo,
+                        0
+                    )
+                ), 0) AS costo
+            ')
+            ->first();
+
+        $venta = (float) ($row->venta ?? 0);
+        $costo = (float) ($row->costo ?? 0);
+
+        $this->totalBaseVenta  = round($venta, 2);
+        $this->totalCostoVenta = round($costo, 2);
+        $this->totalGanancia   = round($venta - $costo, 2);
+        $this->margenPromedio  = $venta > 0 ? round((($venta - $costo) / $venta) * 100, 2) : 0;
+    }
+
+    /**
+     * Calcula rentabilidad por factura para la página actual.
+     * Devuelve array keyed por factura_id con claves: costo, ganancia, margen.
+     */
+    protected function rentabilidadPorFactura(Collection $items): array
+    {
+        if ($this->esCompra() || $this->esCotizacion() || $items->isEmpty()) {
+            return [];
+        }
+
+        $ids = $items->pluck('id');
+
+        $rows = DB::table('factura_detalles as fd')
+            ->leftJoin('producto_bodega as pb', function ($j) {
+                $j->on('pb.producto_id', '=', 'fd.producto_id')
+                  ->on('pb.bodega_id', '=', 'fd.bodega_id');
+            })
+            ->leftJoin('productos as p', 'p.id', '=', 'fd.producto_id')
+            ->whereIn('fd.factura_id', $ids)
+            ->groupBy('fd.factura_id')
+            ->selectRaw('
+                fd.factura_id,
+                COALESCE(SUM(fd.importe_base), 0) AS venta,
+                COALESCE(SUM(
+                    fd.cantidad * COALESCE(
+                        NULLIF(pb.costo_promedio, 0),
+                        NULLIF(pb.ultimo_costo, 0),
+                        p.costo,
+                        0
+                    )
+                ), 0) AS costo
+            ')
+            ->get();
+
+        $map = [];
+        foreach ($rows as $r) {
+            $venta = (float) $r->venta;
+            $costo = (float) $r->costo;
+            $gan   = $venta - $costo;
+            $map[(int) $r->factura_id] = [
+                'venta'    => round($venta, 2),
+                'costo'    => round($costo, 2),
+                'ganancia' => round($gan, 2),
+                'margen'   => $venta > 0 ? round(($gan / $venta) * 100, 2) : 0,
+            ];
+        }
+
+        return $map;
+    }
+
     protected function obtenerTerceros(Collection $items, bool $esCompra, bool $esCotizacion): array
     {
         return $items->map(function ($f) use ($esCompra, $esCotizacion) {
@@ -321,11 +426,14 @@ class InformeVentas extends Component
             ->paginate(15);
 
         $this->calcularKpis(clone $query);
+        $this->calcularRentabilidadTotal(clone $query);
 
         $esCompra     = $this->esCompra();
         $esCotizacion = $this->esCotizacion();
 
         $terceros = $this->obtenerTerceros($items->getCollection(), $esCompra, $esCotizacion);
+
+        $rentabilidad = $this->rentabilidadPorFactura($items->getCollection());
 
         $asesores = User::query()
             ->orderBy('name')
@@ -340,6 +448,7 @@ class InformeVentas extends Component
             'esCotizacion'      => $esCotizacion,
             'terceros'          => $terceros,
             'asesores'          => $asesores,
+            'rentabilidad'      => $rentabilidad,
         ]);
     }
 }

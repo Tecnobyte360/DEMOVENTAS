@@ -148,7 +148,7 @@
                 </a>
 
                 <!-- Ventas -->
-                @if (auth()->user()->hasRole('administrador'))
+                @canany(['ventas.ver', 'facturas.ver', 'cotizaciones.ver', 'notas_credito.ver', 'caja.ver'])
                     <div x-data="{ open: {{ in_array(Request::segment(1), ['ventas']) ? 'true' : 'false' }} }">
                         <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -180,53 +180,64 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <a href="{{ route('Facturacion') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('Facturacion')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Factura de venta</span>
-                            </a>
-                              <a href="{{ route('Cotizaciones') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('Cotizaciones')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Cotizaciones</span>
-                            </a>
+                            @can('facturas.ver')
+                                <a href="{{ route('Facturacion') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Facturacion')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Factura de venta</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('notascreditoclientes') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('notascreditoclientes')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Nota crédito de
-                                    ventas</span>
-                            </a>
+                            @can('cotizaciones.ver')
+                                <a href="{{ route('Cotizaciones') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Cotizaciones')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Cotizaciones</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('abrircaja') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('abrircaja')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Apertura de caja</span>
-                            </a>
+                            @can('notas_credito.ver')
+                                <a href="{{ route('notascreditoclientes') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('notascreditoclientes')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Nota crédito de
+                                        ventas</span>
+                                </a>
+                            @endcan
+
+                            @can('caja.ver')
+                                <a href="{{ route('abrircaja') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('abrircaja')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Apertura de caja</span>
+                                </a>
+                            @endcan
                         </div>
                     </div>
+                @endcanany
 
-                    <!-- Compras -->
+                <!-- Compras -->
+                @canany(['compras.ver', 'notas_credito_compra.ver'])
                     <div x-data="{ open: false }">
                         <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -258,32 +269,38 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <a href="{{ route('Factura-compras') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('Factura-compras')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Factura de compra</span>
-                            </a>
+                            @can('compras.ver')
+                                <a href="{{ route('Factura-compras') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Factura-compras')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Factura de compra</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('Notascreditocompra') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('Notascreditocompra')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Nota crédito de
-                                    compras</span>
-                            </a>
+                            @can('notas_credito_compra.ver')
+                                <a href="{{ route('Notascreditocompra') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Notascreditocompra')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Nota crédito de
+                                        compras</span>
+                                </a>
+                            @endcan
                         </div>
                     </div>
+                @endcanany
 
-                    <!-- Inventario -->
+                <!-- Inventario -->
+                @canany(['inventario.ver', 'bodegas.ver', 'productos.ver', 'categorias.ver', 'kardex.ver', 'transferencias.ver'])
                     <div x-data="{ open: {{ in_array(Request::segment(1), ['ecommerce']) ? 'true' : 'false' }} }">
                         <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -315,6 +332,7 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            @can('inventario.entradas')
                             <!-- Nested: Operaciones de stock -->
                             <div x-data="{ openStock: false }">
                                 <button @click="openStock = !openStock"
@@ -368,81 +386,94 @@
 
                                 </div>
                             </div>
+                            @endcan
 
-                            <a href="{{ route('Bodegas') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('Bodegas')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Gestión Bodegas</span>
-                            </a>
+                            @can('bodegas.ver')
+                                <a href="{{ route('Bodegas') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Bodegas')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Gestión Bodegas</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('indexcategorias') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('indexcategorias')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Categorías
-                                    Artículos</span>
-                            </a>
+                            @can('categorias.ver')
+                                <a href="{{ route('indexcategorias') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('indexcategorias')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Categorías
+                                        Artículos</span>
+                                </a>
 
-                            <a href="{{ route('subcategorias.index') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('subcategorias.index')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">SubCategorías de
-                                    artículos</span>
-                            </a>
+                                <a href="{{ route('subcategorias.index') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('subcategorias.index')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">SubCategorías de
+                                        artículos</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('productos.index') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('productos.index')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Productos
-                                    inventariables</span>
-                            </a>
+                            @can('productos.ver')
+                                <a href="{{ route('productos.index') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('productos.index')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Productos
+                                        inventariables</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('cardexinventario') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('cardexinventario')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Kardex</span>
-                            </a>
-                             <a href="{{ route('transferencias.stock') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('cardexinventario')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Transferencia de
-                                    stock</span>
-                            </a>
-                           
+                            @can('kardex.ver')
+                                <a href="{{ route('cardexinventario') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('cardexinventario')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Kardex</span>
+                                </a>
+                            @endcan
+
+                            @can('transferencias.ver')
+                                <a href="{{ route('transferencias.stock') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('cardexinventario')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Transferencia de
+                                        stock</span>
+                                </a>
+                            @endcan
+
                         </div>
                     </div>
-                @endif
+                @endcanany
 
                 <!-- Terceros -->
+                @can('terceros.ver')
                 <a href="{{ route('SociosNegocio') }}"
                     class="group relative flex items-center gap-3 px-3 py-2.5 rounded-lg
                           transition-all duration-200 overflow-hidden
@@ -465,9 +496,10 @@
                         Terceros
                     </span>
                 </a>
+                @endcan
 
                 <!-- Finanzas -->
-                @if (auth()->user()->hasRole('administrador'))
+                @canany(['finanzas.ver', 'pagos.ver', 'gastos.ver'])
                     <div x-data="{ open: false }">
                         <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -500,32 +532,38 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <a href="{{ route('PagosRecibidos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('PagosRecibidos')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Recibos de caja</span>
-                            </a>
+                            @can('pagos.ver')
+                                <a href="{{ route('PagosRecibidos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('PagosRecibidos')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Recibos de caja</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('Gastos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('Gastos')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Gastos</span>
-                            </a>
+                            @can('gastos.ver')
+                                <a href="{{ route('Gastos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Gastos')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Gastos</span>
+                                </a>
+                            @endcan
                         </div>
                     </div>
+                @endcanany
 
-                    <!-- Informes -->
-                    <div x-data="{ open: false }">
+                <!-- Informes -->
+                @canany(['informes.ver', 'informes.ventas', 'informes.asientos'])
+                    <div x-data="{ open: {{ in_array(Request::segment(1), ['reportes']) ? 'true' : 'false' }} }">
                         <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
                                    transition-all duration-200 overflow-hidden
@@ -557,30 +595,34 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <a href="{{ route('asientos.index') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm
-                                  @if (Route::is('asientos.index')) bg-white/20 pl-5 @endif"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Informe diario
-                                    contable</span>
-                            </a>
+                            @can('informes.asientos')
+                                <a href="{{ route('asientos.index') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('asientos.index')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Informe diario
+                                        contable</span>
+                                </a>
+                            @endcan
 
-                            <a href="{{ route('reportes.ventas') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
-                                  hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Informe de venta</span>
-                            </a>
+                            @can('informes.ventas')
+                                <a href="{{ route('reportes.ventas') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Informe de venta</span>
+                                </a>
+                            @endcan
                         </div>
                     </div>
-                @endif
+                @endcanany
 
                 <!-- Divider -->
                 <div class="py-3">
@@ -596,7 +638,13 @@
                 </div>
 
                 <!-- Configuración -->
-                @if (auth()->user()->hasRole('administrador'))
+                @canany([
+                    'configuracion.ver',
+                    'usuarios.gestionar', 'roles.gestionar', 'empresas.gestionar',
+                    'series.gestionar', 'normas_reparto.gestionar', 'cuentas_contables.gestionar',
+                    'impuestos.gestionar', 'condiciones_pago.gestionar', 'medios_pago.gestionar',
+                    'tipo_documentos.gestionar', 'conceptos_documentos.gestionar',
+                ])
                     <div x-data="{ open: {{ in_array(Request::segment(1), ['settings']) ? 'true' : 'false' }} }">
                         <button @click="open = !open; sidebarExpanded = true"
                             class="group relative flex items-center justify-between w-full gap-3 px-3 py-2.5 rounded-lg
@@ -629,109 +677,103 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                            <a href="{{ route('Usuarios') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Usuarios</span>
-                            </a>
-                            <a href="{{ route('roles.index') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Roles</span>
-                            </a>
-                            <a href="{{ route('roles.index2') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Permisos</span>
-                            </a>
-                            <a href="{{ route('Empresas') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Empresas</span>
-                            </a>
-                            <a href="{{ route('SeriesDocumentos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Series
-                                    Documentos</span>
-                            </a>
-                            <a href="{{ route('normas-reparto.index') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Normas de
-                                    Reparto</span>
-                            </a>
-                            <a href="{{ route('Cuentas-contables') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Plan de cuentas</span>
-                            </a>
-                            <a href="{{ route('Impuestos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Tablas de
-                                    impuestos</span>
-                            </a>
-                            <a href="{{ route('condicionespago') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Condiciones Pago</span>
-                            </a>
-                            <a href="{{ route('Mediospagos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Medios de pago</span>
-                            </a>
-                            <a href="{{ route('TipoDocumentos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Tipo Documentos</span>
-                            </a>
-                            <a href="{{ route('ConceptoDocumentos') }}"
-                                class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
-                                :style="`color: ${fgMuted}`">
-                                <div
-                                    class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
-                                </div>
-                                <span class="transition-all duration-200 group-hover:font-bold">Conceptos
-                                    Documentos</span>
-                            </a>
+                            @can('usuarios.gestionar')
+                                <a href="{{ route('Usuarios') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Usuarios</span>
+                                </a>
+                            @endcan
+                            @can('roles.gestionar')
+                                <a href="{{ route('roles.index') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Roles</span>
+                                </a>
+                                <a href="{{ route('roles.index2') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Permisos</span>
+                                </a>
+                            @endcan
+                            @can('empresas.gestionar')
+                                <a href="{{ route('Empresas') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Empresas</span>
+                                </a>
+                            @endcan
+                            @can('series.gestionar')
+                                <a href="{{ route('SeriesDocumentos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Series Documentos</span>
+                                </a>
+                            @endcan
+                            @can('normas_reparto.gestionar')
+                                <a href="{{ route('normas-reparto.index') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Normas de Reparto</span>
+                                </a>
+                            @endcan
+                            @can('cuentas_contables.gestionar')
+                                <a href="{{ route('Cuentas-contables') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Plan de cuentas</span>
+                                </a>
+                            @endcan
+                            @can('impuestos.gestionar')
+                                <a href="{{ route('Impuestos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Tablas de impuestos</span>
+                                </a>
+                            @endcan
+                            @can('condiciones_pago.gestionar')
+                                <a href="{{ route('condicionespago') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Condiciones Pago</span>
+                                </a>
+                            @endcan
+                            @can('medios_pago.gestionar')
+                                <a href="{{ route('Mediospagos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Medios de pago</span>
+                                </a>
+                            @endcan
+                            @can('tipo_documentos.gestionar')
+                                <a href="{{ route('TipoDocumentos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Tipo Documentos</span>
+                                </a>
+                            @endcan
+                            @can('conceptos_documentos.gestionar')
+                                <a href="{{ route('ConceptoDocumentos') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden hover:bg-white/25 hover:pl-5 hover:shadow-sm"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Conceptos Documentos</span>
+                                </a>
+                            @endcan
                         </div>
                     </div>
-                @endif
+                @endcanany
 
             </div>
         </nav>

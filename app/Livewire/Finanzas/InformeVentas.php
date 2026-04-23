@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Models\cotizaciones\cotizacione as CotizacionModel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -286,6 +287,11 @@ class InformeVentas extends Component
      * Calcula costo y utilidad agregados para el total filtrado (solo ventas).
      * Usa costo_promedio -> ultimo_costo -> producto.costo como fallback.
      */
+    protected function puedeVerCostos(): bool
+    {
+        return (bool) (Auth::user()?->can('informes.ver_costos'));
+    }
+
     protected function calcularRentabilidadTotal(Builder $query): void
     {
         $this->totalBaseVenta  = 0;
@@ -293,7 +299,7 @@ class InformeVentas extends Component
         $this->totalGanancia   = 0;
         $this->margenPromedio  = 0;
 
-        if ($this->esCompra() || $this->esCotizacion()) {
+        if ($this->esCompra() || $this->esCotizacion() || !$this->puedeVerCostos()) {
             return;
         }
 
@@ -337,7 +343,7 @@ class InformeVentas extends Component
      */
     protected function rentabilidadPorFactura(Collection $items): array
     {
-        if ($this->esCompra() || $this->esCotizacion() || $items->isEmpty()) {
+        if ($this->esCompra() || $this->esCotizacion() || $items->isEmpty() || !$this->puedeVerCostos()) {
             return [];
         }
 
@@ -449,6 +455,7 @@ class InformeVentas extends Component
             'terceros'          => $terceros,
             'asesores'          => $asesores,
             'rentabilidad'      => $rentabilidad,
+            'puedeVerCostos'    => $this->puedeVerCostos(),
         ]);
     }
 }

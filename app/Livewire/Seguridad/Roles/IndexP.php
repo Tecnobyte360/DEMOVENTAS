@@ -241,6 +241,134 @@ public function OpenDeleteEditRolesModal($rol_id)
         // Toaster::info('Rol duplicado');
     }
 
+    /**
+     * Agrupa los permisos por módulo (prefijo antes del punto).
+     * Ej: facturas.ver, facturas.crear -> grupo "Facturas"
+     */
+    protected function agruparPermisos($permissions): array
+    {
+        $etiquetas = [
+            'dashboard'              => 'Dashboard',
+            'terceros'               => 'Terceros',
+            'ventas'                 => 'Ventas',
+            'facturas'               => 'Facturas de venta',
+            'cotizaciones'           => 'Cotizaciones',
+            'notas_credito'          => 'Notas crédito (ventas)',
+            'caja'                   => 'Caja',
+            'compras'                => 'Compras',
+            'notas_credito_compra'   => 'Notas crédito (compras)',
+            'inventario'             => 'Inventario',
+            'bodegas'                => 'Bodegas',
+            'productos'              => 'Productos',
+            'categorias'             => 'Categorías',
+            'kardex'                 => 'Kardex',
+            'transferencias'         => 'Transferencias',
+            'finanzas'               => 'Finanzas',
+            'pagos'                  => 'Pagos',
+            'gastos'                 => 'Gastos',
+            'informes'               => 'Informes',
+            'configuracion'          => 'Configuración',
+            'usuarios'               => 'Usuarios',
+            'roles'                  => 'Roles',
+            'empresas'               => 'Empresas',
+            'series'                 => 'Series documentos',
+            'normas_reparto'         => 'Normas reparto',
+            'cuentas_contables'      => 'Cuentas contables',
+            'impuestos'              => 'Impuestos',
+            'condiciones_pago'       => 'Condiciones pago',
+            'medios_pago'            => 'Medios de pago',
+            'tipo_documentos'        => 'Tipo documentos',
+            'conceptos_documentos'   => 'Conceptos documentos',
+        ];
+
+        $iconos = [
+            'dashboard' => 'fa-gauge-high',
+            'terceros' => 'fa-users',
+            'ventas' => 'fa-cart-shopping',
+            'facturas' => 'fa-file-invoice-dollar',
+            'cotizaciones' => 'fa-file-lines',
+            'notas_credito' => 'fa-rotate-left',
+            'caja' => 'fa-cash-register',
+            'compras' => 'fa-truck',
+            'notas_credito_compra' => 'fa-rotate-left',
+            'inventario' => 'fa-boxes-stacked',
+            'bodegas' => 'fa-warehouse',
+            'productos' => 'fa-box',
+            'categorias' => 'fa-tags',
+            'kardex' => 'fa-clipboard-list',
+            'transferencias' => 'fa-right-left',
+            'finanzas' => 'fa-sack-dollar',
+            'pagos' => 'fa-money-bill-wave',
+            'gastos' => 'fa-money-bill-transfer',
+            'informes' => 'fa-chart-line',
+            'configuracion' => 'fa-gears',
+            'usuarios' => 'fa-user-gear',
+            'roles' => 'fa-user-tag',
+            'empresas' => 'fa-building',
+            'series' => 'fa-list-ol',
+            'normas_reparto' => 'fa-scale-balanced',
+            'cuentas_contables' => 'fa-book',
+            'impuestos' => 'fa-percent',
+            'condiciones_pago' => 'fa-handshake',
+            'medios_pago' => 'fa-credit-card',
+            'tipo_documentos' => 'fa-file',
+            'conceptos_documentos' => 'fa-tag',
+        ];
+
+        $acciones = [
+            'ver'               => 'Ver',
+            'crear'             => 'Crear',
+            'editar'            => 'Editar',
+            'eliminar'          => 'Eliminar',
+            'anular'            => 'Anular',
+            'gestionar'         => 'Gestionar',
+            'modificar_precio'  => 'Modificar precio',
+            'abrir'             => 'Abrir',
+            'cerrar'            => 'Cerrar',
+            'entradas'          => 'Entradas',
+            'ventas'            => 'Ventas',
+            'asientos'          => 'Asientos',
+            'ver_costos'        => 'Ver costos/utilidad',
+        ];
+
+        $grupos = [];
+
+        foreach ($permissions as $permission) {
+            $parts = explode('.', $permission->name, 2);
+            $prefijo = $parts[0];
+            $accion  = $parts[1] ?? '—';
+
+            if (!isset($grupos[$prefijo])) {
+                $grupos[$prefijo] = [
+                    'key'      => $prefijo,
+                    'titulo'   => $etiquetas[$prefijo] ?? ucfirst(str_replace('_', ' ', $prefijo)),
+                    'icono'    => $iconos[$prefijo] ?? 'fa-shield-halved',
+                    'permisos' => [],
+                ];
+            }
+
+            $grupos[$prefijo]['permisos'][] = [
+                'id'     => $permission->id,
+                'name'   => $permission->name,
+                'label'  => $acciones[$accion] ?? ucfirst(str_replace('_', ' ', $accion)),
+            ];
+        }
+
+        // Ordenar los grupos según el orden de las etiquetas definidas
+        $ordenados = [];
+        foreach (array_keys($etiquetas) as $k) {
+            if (isset($grupos[$k])) {
+                $ordenados[] = $grupos[$k];
+                unset($grupos[$k]);
+            }
+        }
+        foreach ($grupos as $g) {
+            $ordenados[] = $g;
+        }
+
+        return $ordenados;
+    }
+
     public function render()
     {
         $roles = Role::with('permissions')
@@ -249,10 +377,12 @@ public function OpenDeleteEditRolesModal($rol_id)
             ->paginate(10);
 
         $permissions = Permission::orderBy('name')->get();
+        $grupos = $this->agruparPermisos($permissions);
 
         return view('livewire.seguridad.roles.index2', [
-            'roles' => $roles,
-            'permissions' => $permissions
+            'roles'            => $roles,
+            'todosLosPermisos' => $permissions,
+            'grupos'           => $grupos,
         ]);
     }
     

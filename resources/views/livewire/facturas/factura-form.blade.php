@@ -386,9 +386,11 @@
 
                                 $prodSel = $pid
                                     ? \App\Models\Productos\Producto::with(['cuentaIngreso', 'impuesto'])
-                                        ->select('id', 'nombre', 'cuenta_ingreso_id', 'impuesto_id')
+                                        ->select('id', 'nombre', 'cuenta_ingreso_id', 'impuesto_id', 'es_inventariable')
                                         ->find($pid)
                                     : null;
+
+                                $esServicio = $prodSel ? !($prodSel->es_inventariable ?? true) : false;
 
                                 $imgUrl = null;
                             @endphp
@@ -497,15 +499,23 @@
 
                                 {{-- Bodega --}}
                                 <td class="px-4 py-3 min-w-[160px]">
-                                    <select wire:model.live="lineas.{{ $i }}.bodega_id"
-                                        class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
-                                        <option value="">— Seleccione —</option>
-                                        @foreach ($bodegas as $b)
-                                            <option value="{{ $b->id }}">{{ $b->nombre }}</option>
-                                        @endforeach
-                                    </select>
+                                    @if ($esServicio)
+                                        <div
+                                            class="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-dashed border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-200">
+                                            <i class="fas fa-concierge-bell"></i>
+                                            <span class="text-xs font-semibold">Servicio · no requiere bodega</span>
+                                        </div>
+                                    @else
+                                        <select wire:model.live="lineas.{{ $i }}.bodega_id"
+                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                            <option value="">— Seleccione —</option>
+                                            @foreach ($bodegas as $b)
+                                                <option value="{{ $b->id }}">{{ $b->nombre }}</option>
+                                            @endforeach
+                                        </select>
+                                    @endif
 
-                                    <div class="mt-2" wire:key="stock-linea-{{ $i }}">
+                                    <div class="mt-2" wire:key="stock-linea-{{ $i }}" @if ($esServicio) hidden @endif>
                                         <div wire:loading.flex
                                             wire:target="lineas.{{ $i }}.producto_id,lineas.{{ $i }}.bodega_id"
                                             class="items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600">

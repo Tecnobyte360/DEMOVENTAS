@@ -90,7 +90,7 @@
         </div>
     </section>
 
-    @if (!$esCompra && !$esCotizacion)
+    @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
         <!-- KPIs RENTABILIDAD -->
         <section class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
@@ -354,7 +354,7 @@
                             <th class="px-4 py-3 text-right">Total</th>
                             <th class="px-4 py-3 text-right">Pagado</th>
                             <th class="px-4 py-3 text-right">Saldo pendiente</th>
-                            @if (!$esCompra && !$esCotizacion)
+                            @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
                                 <th class="px-4 py-3 text-right">Costo</th>
                                 <th class="px-4 py-3 text-right">Utilidad</th>
                                 <th class="px-4 py-3 text-right">Margen %</th>
@@ -447,7 +447,7 @@
                                     ${{ number_format($saldo, 0, ',', '.') }}
                                 </td>
 
-                                @if (!$esCompra && !$esCotizacion)
+                                @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
                                     @php
                                         $r = $rentabilidad[$factura->id] ?? ['costo' => 0, 'ganancia' => 0, 'margen' => 0];
                                     @endphp
@@ -464,7 +464,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="{{ (!$esCompra && !$esCotizacion) ? 13 : 10 }}" class="px-6 py-10 text-center text-gray-500">
+                                <td colspan="{{ (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false)) ? 13 : 10 }}" class="px-6 py-10 text-center text-gray-500">
                                     <i class="fas fa-inbox text-2xl mb-2"></i>
                                     <div>No hay resultados con los filtros actuales.</div>
                                 </td>

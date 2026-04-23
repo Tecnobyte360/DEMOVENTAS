@@ -78,7 +78,7 @@ class FacturaForm extends Component
         'lineas'                       => 'required|array|min:1',
         'lineas.*.producto_id'         => 'required|integer|exists:productos,id',
         'lineas.*.cuenta_ingreso_id'   => 'required|integer|exists:plan_cuentas,id',
-        'lineas.*.bodega_id'           => 'required|integer|exists:bodegas,id',
+        'lineas.*.bodega_id'           => 'nullable|integer|exists:bodegas,id',
         'lineas.*.descripcion'         => 'required|string|max:255',
         'lineas.*.cantidad'            => 'required|numeric|min:0.01',
         'lineas.*.precio_unitario'     => 'required|numeric|min:0',
@@ -1310,7 +1310,21 @@ class FacturaForm extends Component
     private function validarConToast(): bool
     {
         try {
-            $this->validate($this->rules, [], $this->validationAttributes);
+            $rules = $this->rules;
+
+            foreach ($this->lineas as $i => $l) {
+                $pid = (int) ($l['producto_id'] ?? 0);
+                $esServicio = false;
+                if ($pid) {
+                    $prod = Producto::find($pid);
+                    $esServicio = $prod && !($prod->es_inventariable ?? true);
+                }
+                $rules["lineas.$i.bodega_id"] = $esServicio
+                    ? 'nullable|integer|exists:bodegas,id'
+                    : 'required|integer|exists:bodegas,id';
+            }
+
+            $this->validate($rules, [], $this->validationAttributes);
             return true;
         } catch (ValidationException $e) {
             $first = collect($e->validator->errors()->all())->first() ?: 'Revisa los campos obligatorios.';
@@ -1515,8 +1529,15 @@ class FacturaForm extends Component
                     throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
                 }
 
-                if (!$d->producto_id || !$d->bodega_id) {
-                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
+                if (!$d->producto_id) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto.");
+                }
+
+                $prodLinea = Producto::find($d->producto_id);
+                $lineaEsInventariable = $prodLinea && ($prodLinea->es_inventariable ?? true);
+
+                if ($lineaEsInventariable && !$d->bodega_id) {
+                    throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener bodega.");
                 }
 
                 if ((float) ($d->cantidad ?? 0) <= 0) {

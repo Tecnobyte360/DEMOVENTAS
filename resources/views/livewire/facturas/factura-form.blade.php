@@ -358,7 +358,6 @@
                         <tr>
                             <th class="px-4 py-3 text-left">Imagen</th>
                             <th class="px-4 py-3 text-left">Producto</th>
-                            <th class="px-4 py-3 text-left">Cuenta ingreso</th>
                             <th class="px-4 py-3 text-left">Descripción</th>
                             <th class="px-4 py-3 text-left">Bodega</th>
                             <th class="px-4 py-3 text-right">Cant.</th>
@@ -447,47 +446,6 @@
                                     @error('lineas.' . $i . '.producto_id')
                                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                                     @enderror
-                                </td>
-
-                                {{-- Cuenta ingreso --}}
-                                <td class="px-4 py-3 min-w-[260px]">
-                                    <div class="space-y-1">
-                                        <select wire:model.live.number="lineas.{{ $i }}.cuenta_ingreso_id"
-                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 @error('lineas.' . $i . '.cuenta_ingreso_id') border-red-500 focus:ring-red-300 @enderror">
-                                            <option value="">— Seleccione —</option>
-
-                                            @if ($prodSel && $prodSel->cuentaIngreso)
-                                                <option value="{{ $prodSel->cuentaIngreso->id }}">
-                                                    {{ $prodSel->cuentaIngreso->codigo }} —
-                                                    {{ $prodSel->cuentaIngreso->nombre }} (del producto)
-                                                </option>
-                                            @endif
-
-                                            @if ($cuentasIngresos->count())
-                                                <optgroup label="PUC · Ingresos">
-                                                    @foreach ($cuentasIngresos as $cu)
-                                                        <option value="{{ $cu->id }}">
-                                                            {{ $cu->codigo }} — {{ $cu->nombre }}
-                                                        </option>
-                                                    @endforeach
-                                                </optgroup>
-                                            @endif
-                                        </select>
-
-                                        @error('lineas.' . $i . '.cuenta_ingreso_id')
-                                            <p class="text-xs text-red-600">{{ $message }}</p>
-                                        @enderror
-
-                                        @if (
-                                            $prodSel &&
-                                                $prodSel->cuentaIngreso &&
-                                                (int) ($lineas[$i]['cuenta_ingreso_id'] ?? 0) !== (int) $prodSel->cuentaIngreso->id)
-                                            <span
-                                                class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200 text-[11px]">
-                                                Sugerida: {{ $prodSel->cuentaIngreso->codigo }}
-                                            </span>
-                                        @endif
-                                    </div>
                                 </td>
 
                                 {{-- Descripción --}}

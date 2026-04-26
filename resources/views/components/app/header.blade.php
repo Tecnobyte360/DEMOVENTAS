@@ -1,22 +1,8 @@
 @php
-    $rawHeaderColor = $empresaActual?->color_secundario ?: 'FFFFFF';
-    $headerHex = ltrim(trim($rawHeaderColor), '#');
-
-    if (strlen($headerHex) === 3) {
-        $headerHex = $headerHex[0].$headerHex[0]
-            . $headerHex[1].$headerHex[1]
-            . $headerHex[2].$headerHex[2];
-    }
-
-    if (strlen($headerHex) !== 6) {
-        $headerHex = 'FFFFFF';
-    }
-
-    $headerBg = '#' . $headerHex;
-
-    $hr = hexdec(substr($headerHex, 0, 2));
-    $hg = hexdec(substr($headerHex, 2, 2));
-    $hb = hexdec(substr($headerHex, 4, 2));
+    // Header siempre blanco (independiente del color secundario de la empresa)
+    $headerHex = 'FFFFFF';
+    $headerBg  = '#FFFFFF';
+    $hr = 255; $hg = 255; $hb = 255;
 @endphp
 
 <header
@@ -50,12 +36,10 @@
         }
     }"
     x-init="init()"
-    class="sticky top-0 z-30 backdrop-blur-lg transition-all duration-300"
-    :style="`
-        background: rgba({{ $hr }}, {{ $hg }}, {{ $hb }}, 0.97);
-        color: ${textColor};
-        border-bottom: 1px solid ${isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)'};
-    `"
+    class="sticky top-0 z-30 backdrop-blur-lg transition-all duration-300
+           bg-white dark:bg-gray-900
+           border-b border-gray-200 dark:border-gray-800
+           text-gray-900 dark:text-gray-100 shadow-sm"
 >
     <div class="px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-14">

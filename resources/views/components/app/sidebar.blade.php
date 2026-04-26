@@ -112,10 +112,12 @@
             </div>
 
             <!-- Section label -->
-            <div class="mb-3">
-                <span class="text-xs font-semibold uppercase tracking-wider" :style="`color: ${fgMuted}`">
-                    PAGES
+            <div class="mb-3 flex items-center gap-2">
+                <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.18)'}`"></span>
+                <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">
+                    Principal
                 </span>
+                <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.18)'}`"></span>
             </div>
         </div>
 
@@ -146,6 +148,18 @@
                         Dashboard
                     </span>
                 </a>
+
+                <!-- Section: OPERACIONES -->
+                @canany(['ventas.ver', 'facturas.ver', 'cotizaciones.ver', 'notas_credito.ver', 'caja.ver',
+                         'compras.ver', 'notas_credito_compra.ver',
+                         'inventario.ver', 'bodegas.ver', 'productos.ver', 'categorias.ver', 'kardex.ver', 'transferencias.ver',
+                         'terceros.ver', 'finanzas.ver', 'pagos.ver', 'gastos.ver'])
+                    <div class="pt-3 pb-1 px-3 flex items-center gap-2">
+                        <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
+                        <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">Operaciones</span>
+                        <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
+                    </div>
+                @endcanany
 
                 <!-- Ventas -->
                 @canany(['ventas.ver', 'facturas.ver', 'cotizaciones.ver', 'notas_credito.ver', 'caja.ver'])
@@ -572,6 +586,15 @@
                     </div>
                 @endcanany
 
+                <!-- Section: REPORTES -->
+                @canany(['informes.ver', 'informes.ventas', 'informes.asientos'])
+                    <div class="pt-3 pb-1 px-3 flex items-center gap-2">
+                        <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
+                        <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">Reportes</span>
+                        <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
+                    </div>
+                @endcanany
+
                 <!-- Informes -->
                 @canany(['informes.ver', 'informes.ventas', 'informes.asientos'])
                     <div x-data="{ open: {{ in_array(Request::segment(1), ['reportes']) ? 'true' : 'false' }} }">
@@ -635,17 +658,11 @@
                     </div>
                 @endcanany
 
-                <!-- Divider -->
-                <div class="py-3">
-                    <div class="border-t" :style="`border-color: ${isLight ? '#cbd5e1' : 'rgba(255,255,255,.12)'}`">
-                    </div>
-                </div>
-
-                <!-- Section label: MORE -->
-                <div class="px-3 mb-2">
-                    <span class="text-xs font-semibold uppercase tracking-wider" :style="`color: ${fgMuted}`">
-                        MORE
-                    </span>
+                <!-- Section label: ADMINISTRACION -->
+                <div class="pt-3 pb-1 px-3 flex items-center gap-2">
+                    <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
+                    <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">Administración</span>
+                    <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
                 </div>
 
                 <!-- Configuración -->

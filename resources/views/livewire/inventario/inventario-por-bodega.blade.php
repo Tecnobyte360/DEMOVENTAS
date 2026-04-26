@@ -34,50 +34,57 @@
   </section>
 
   {{-- TARJETAS POR BODEGA --}}
-  <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-    @forelse ($resumenPorBodega as $r)
-      @php
-        $isSelected = $bodegaId == $r->id;
-      @endphp
-      <button
-        type="button"
-        wire:click="$set('bodegaId', {{ $isSelected ? 'null' : $r->id }})"
-        class="text-left rounded-2xl border-2 p-5 bg-white dark:bg-gray-900 shadow-sm hover:shadow-lg transition
-               {{ $isSelected ? 'border-emerald-500 ring-4 ring-emerald-200' : 'border-gray-200 dark:border-gray-800' }}"
-      >
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="text-[11px] uppercase tracking-wider text-gray-500">Bodega</div>
-            <div class="text-lg font-bold text-gray-900 dark:text-white">{{ $r->nombre }}</div>
-            <div class="text-xs text-gray-500"><i class="fa fa-location-dot mr-1"></i>{{ $r->ubicacion ?: '—' }}</div>
+  <section>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      @forelse ($resumenPorBodega as $r)
+        @php
+          $isSelected = $bodegaId == $r->id;
+        @endphp
+        <div
+          role="button"
+          tabindex="0"
+          wire:click="$set('bodegaId', {{ $isSelected ? 'null' : $r->id }})"
+          class="cursor-pointer rounded-2xl border-2 p-4 bg-white dark:bg-gray-900 shadow-sm hover:shadow-lg transition flex flex-col gap-3
+                 {{ $isSelected ? 'border-emerald-500 ring-4 ring-emerald-200' : 'border-gray-200 dark:border-gray-800' }}"
+        >
+          {{-- Encabezado --}}
+          <div class="flex items-start justify-between gap-2 min-w-0">
+            <div class="min-w-0">
+              <div class="text-[10px] uppercase tracking-wider text-gray-500">Bodega</div>
+              <div class="text-base font-bold text-gray-900 dark:text-white truncate">{{ $r->nombre }}</div>
+              <div class="text-[11px] text-gray-500 truncate">
+                <i class="fa fa-location-dot mr-1"></i>{{ $r->ubicacion ?: '—' }}
+              </div>
+            </div>
+            <span class="shrink-0 text-[10px] px-2 py-0.5 rounded-full {{ $r->activo ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700' }}">
+              {{ $r->activo ? 'Activa' : 'Inactiva' }}
+            </span>
           </div>
-          <span class="text-[10px] px-2 py-0.5 rounded-full {{ $r->activo ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-200 text-gray-700' }}">
-            {{ $r->activo ? 'Activa' : 'Inactiva' }}
-          </span>
-        </div>
 
-        <div class="mt-4 grid grid-cols-3 gap-3">
-          <div class="rounded-xl bg-gray-50 dark:bg-gray-800 p-3">
-            <div class="text-[10px] uppercase text-gray-500">Productos</div>
-            <div class="text-base font-bold">{{ number_format((int)$r->productos, 0, ',', '.') }}</div>
-          </div>
-          <div class="rounded-xl bg-gray-50 dark:bg-gray-800 p-3">
-            <div class="text-[10px] uppercase text-gray-500">Unidades</div>
-            <div class="text-base font-bold">{{ number_format((float)$r->unidades, 2, ',', '.') }}</div>
-          </div>
-          <div class="rounded-xl bg-emerald-50 dark:bg-emerald-900/30 p-3">
-            <div class="text-[10px] uppercase text-emerald-700 dark:text-emerald-300">Valor</div>
-            <div class="text-base font-bold text-emerald-700 dark:text-emerald-300">
-              $ {{ number_format((float)$r->valor, 0, ',', '.') }}
+          {{-- Estadisticas --}}
+          <div class="grid grid-cols-3 gap-2">
+            <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-2 text-center">
+              <div class="text-[9px] uppercase text-gray-500 leading-tight">Productos</div>
+              <div class="text-sm font-bold leading-tight mt-0.5">{{ number_format((int)$r->productos, 0, ',', '.') }}</div>
+            </div>
+            <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-2 text-center">
+              <div class="text-[9px] uppercase text-gray-500 leading-tight">Unidades</div>
+              <div class="text-sm font-bold leading-tight mt-0.5">{{ number_format((float)$r->unidades, 0, ',', '.') }}</div>
+            </div>
+            <div class="rounded-lg bg-emerald-50 dark:bg-emerald-900/30 p-2 text-center">
+              <div class="text-[9px] uppercase text-emerald-700 dark:text-emerald-300 leading-tight">Valor</div>
+              <div class="text-sm font-bold text-emerald-700 dark:text-emerald-300 leading-tight mt-0.5">
+                $ {{ number_format((float)$r->valor, 0, ',', '.') }}
+              </div>
             </div>
           </div>
         </div>
-      </button>
-    @empty
-      <div class="col-span-full rounded-xl border border-dashed p-6 text-center text-gray-500">
-        No hay bodegas con inventario.
-      </div>
-    @endforelse
+      @empty
+        <div class="col-span-full rounded-xl border border-dashed p-6 text-center text-gray-500">
+          No hay bodegas con inventario.
+        </div>
+      @endforelse
+    </div>
   </section>
 
   {{-- FILTROS + DETALLE --}}

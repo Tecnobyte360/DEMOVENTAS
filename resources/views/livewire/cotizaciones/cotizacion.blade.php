@@ -333,10 +333,18 @@
 
                                 {{-- Precio --}}
                                 <td class="px-4 py-3 text-right">
-                                    <input type="number" step="0.01" min="0"
-                                        wire:model.lazy="lineas.{{ $i }}.precio_unitario"
-                                        class="w-32 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white
-                                        focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                    <div x-data="moneyInput({
+                                            initial: @js((float)($l['precio_unitario'] ?? 0)),
+                                            onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
+                                         })">
+                                        <input type="text" inputmode="decimal"
+                                            :value="display"
+                                            @input="onInput($event)"
+                                            @blur="onBlur()"
+                                            @focus="$event.target.select()"
+                                            class="w-32 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white
+                                            focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                    </div>
                                     @error('lineas.' . $i . '.precio_unitario')
                                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                                     @enderror

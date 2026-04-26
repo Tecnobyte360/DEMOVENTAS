@@ -511,12 +511,20 @@
 
                                 {{-- Precio --}}
                                 <td class="px-4 py-3 text-right">
-                                    <input type="number" step="0.01" min="0"
-                                        wire:model.lazy.debounce.200ms="lineas.{{ $i }}.precio_unitario"
-                                        @disabled(!$puedeModificarPrecio)
-                                        @readonly(!$puedeModificarPrecio)
-                                        title="{{ $puedeModificarPrecio ? '' : 'No tienes permiso para modificar el precio' }}"
-                                        class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 {{ !$puedeModificarPrecio ? 'opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-700' : '' }}">
+                                    <div x-data="moneyInput({
+                                            initial: @js((float)($l['precio_unitario'] ?? 0)),
+                                            onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
+                                         })">
+                                        <input type="text" inputmode="decimal"
+                                            :value="display"
+                                            @input="onInput($event)"
+                                            @blur="onBlur()"
+                                            @focus="$event.target.select()"
+                                            @disabled(!$puedeModificarPrecio)
+                                            @readonly(!$puedeModificarPrecio)
+                                            title="{{ $puedeModificarPrecio ? '' : 'No tienes permiso para modificar el precio' }}"
+                                            class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60 {{ !$puedeModificarPrecio ? 'opacity-60 cursor-not-allowed bg-gray-100 dark:bg-gray-700' : '' }}">
+                                    </div>
                                 </td>
 
                                 {{-- Descuento --}}

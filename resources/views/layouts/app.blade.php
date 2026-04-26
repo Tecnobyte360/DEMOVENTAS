@@ -76,6 +76,44 @@
     {{-- Tom Select --}}
     <script src="https://cdn.jsdelivr.net/npm/tom-select/dist/js/tom-select.complete.min.js"></script>
 
+    {{-- Helper Alpine: input de dinero con separador de miles --}}
+    <script>
+        window.moneyInput = (cfg = {}) => ({
+            raw: Number(cfg.initial) || 0,
+            display: '',
+            init() {
+                this.display = this.fmt(this.raw);
+                if (cfg.watch) {
+                    this.$watch(cfg.watch, (val) => {
+                        const n = Number(val) || 0;
+                        if (n !== this.raw) {
+                            this.raw = n;
+                            this.display = this.fmt(n);
+                        }
+                    });
+                }
+            },
+            fmt(n) {
+                if (n === null || n === undefined || n === '' || isNaN(n)) return '';
+                return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n);
+            },
+            parse(s) {
+                if (s === null || s === undefined) return 0;
+                s = s.toString().replace(/\s/g, '').replace(/\./g, '').replace(',', '.').replace(/[^\d.\-]/g, '');
+                const n = parseFloat(s);
+                return isNaN(n) ? 0 : n;
+            },
+            onInput(ev) {
+                this.display = ev.target.value;
+            },
+            onBlur() {
+                this.raw = this.parse(this.display);
+                this.display = this.fmt(this.raw);
+                if (cfg.onChange) cfg.onChange(this.raw);
+            },
+        });
+    </script>
+
     {{-- =========================================
          CONTROL DE SESIÓN POR INACTIVIDAD
          ========================================= --}}

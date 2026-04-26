@@ -389,9 +389,17 @@
 
                             {{-- Precio --}}
                             <td class="px-4 py-3 text-right">
-                                <input type="number" step="0.01" min="0"
-                                    wire:model.debounce.200ms.number="lineas.{{ $i }}.precio_unitario"
-                                    class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                <div x-data="moneyInput({
+                                        initial: @js((float)($l['precio_unitario'] ?? 0)),
+                                        onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
+                                     })">
+                                    <input type="text" inputmode="decimal"
+                                        :value="display"
+                                        @input="onInput($event)"
+                                        @blur="onBlur()"
+                                        @focus="$event.target.select()"
+                                        class="w-28 h-11 text-right px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                </div>
                             </td>
 
                             {{-- Descuento --}}

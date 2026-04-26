@@ -491,11 +491,18 @@
 
                                 {{-- Costo --}}
                                 <td class="px-4 py-3 text-right">
-                                    <input type="number" step="any" min="0" inputmode="decimal"
-                                        wire:model.live.debounce.300ms="lineas.{{ $i }}.precio_unitario"
-                                        wire:blur="normalizarPrecio({{ $i }})"
-                                        class="w-44 h-11 text-right px-3 tabular-nums tracking-tight rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
-                                        placeholder="0.00">
+                                    <div x-data="moneyInput({
+                                            initial: @js((float)($l['precio_unitario'] ?? 0)),
+                                            onChange: (v) => { $wire.set('lineas.{{ $i }}.precio_unitario', v, false); $wire.call('normalizarPrecio', {{ $i }}); }
+                                         })">
+                                        <input type="text" inputmode="decimal"
+                                            :value="display"
+                                            @input="onInput($event)"
+                                            @blur="onBlur()"
+                                            @focus="$event.target.select()"
+                                            class="w-44 h-11 text-right px-3 tabular-nums tracking-tight rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60"
+                                            placeholder="0">
+                                    </div>
                                 </td>
 
                                 {{-- Impuesto (solo lectura en compras) --}}

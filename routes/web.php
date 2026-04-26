@@ -47,6 +47,7 @@ use App\Livewire\Impuesto\Impuesto;
 use App\Livewire\Inventario\DevolucionesMercancia;
 use App\Livewire\Inventario\EntradasMercancia;
 use App\Livewire\Inventario\Indexentradas;
+use App\Livewire\Inventario\InventarioPorBodega;
 use App\Livewire\Inventario\Salidas;
 use App\Livewire\MaestroRutas\MaestroRutas;
 use App\Livewire\MediosPagos\MediosPagos;
@@ -266,6 +267,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/RutasDisponibles', RutasDisponiblesConductor::class)->name('RutasDisponibles');
     Route::get('/DevolucionMercancia', DevolucionesMercancia::class)->name('DevolucionMercancia');
     Route::get('/SalidaMercancia', Salidas::class)->name('SalidaMercancia');
+    Route::get('/inventario/bodegas', InventarioPorBodega::class)->name('inventario.por-bodega');
     //finanzas
     Route::get('/Finanzas', Finanzas::class)->name('Finanzas');
     Route::get('/Gastos', GastosEmpresa::class)->name('Gastos');

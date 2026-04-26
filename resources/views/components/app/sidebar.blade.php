@@ -399,6 +399,17 @@
                                     </div>
                                     <span class="transition-all duration-200 group-hover:font-bold">Gestión Bodegas</span>
                                 </a>
+
+                                <a href="{{ route('inventario.por-bodega') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('inventario.por-bodega')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Inventario por Bodega</span>
+                                </a>
                             @endcan
 
                             @can('categorias.ver')

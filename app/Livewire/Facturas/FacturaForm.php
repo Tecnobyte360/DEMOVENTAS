@@ -204,6 +204,7 @@ class FacturaForm extends Component
             $this->syncProductosSeleccionados();
 
             $bodegas = Bodega::query()
+                ->accesibles(auth()->user())
                 ->orderBy('nombre')
                 ->get();
 

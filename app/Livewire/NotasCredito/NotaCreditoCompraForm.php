@@ -164,7 +164,7 @@ class NotaCreditoCompraForm extends Component
                 $productos = $productos->merge($extra)->unique('id')->values();
             }
 
-            $bodegas = Bodega::orderBy('nombre')->get();
+            $bodegas = Bodega::query()->accesibles(auth()->user())->orderBy('nombre')->get();
 
             $cuentasCXP = PlanCuentas::where('cuenta_activa', 1)->where('titulo', 0)
                 ->where('clase_cuenta', 'CXP_PROVEEDORES')

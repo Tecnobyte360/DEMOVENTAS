@@ -188,7 +188,7 @@ class NotaCreditoForm extends Component
                 $productos = $productos->merge($extra)->unique('id')->values();
             }
 
-            $bodegas = Bodega::orderBy('nombre')->get();
+            $bodegas = Bodega::query()->accesibles(auth()->user())->orderBy('nombre')->get();
 
             $cuentasIngresos = PlanCuentas::query()
                 ->where(fn($q) => $q->where('titulo', 0)->orWhereNull('titulo'))

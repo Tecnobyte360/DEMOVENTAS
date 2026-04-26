@@ -4,6 +4,7 @@ namespace App\Livewire\Usuarios;
 
 use App\Models\User;
 use App\Models\Role;
+use App\Models\Bodega;
 use Livewire\Component;
 use Livewire\Attributes\On;
 use Illuminate\Support\Facades\Hash;
@@ -43,8 +44,16 @@ class Usuarios extends Component
     public $availableRoles = [];
     public $selectedRole = '';
 
+    // Bodegas asignadas al usuario (gestion fina por usuario)
+    public array $availableBodegas = [];
+    public array $bodegasSeleccionadas = [];
+
     public function boot(){
         $this->availableRoles = Role::all();
+        $this->availableBodegas = Bodega::query()
+            ->orderBy('nombre')
+            ->get(['id', 'nombre'])
+            ->toArray();
     }
 
     public $name;
@@ -53,14 +62,14 @@ class Usuarios extends Component
 
     public function editarUsuario($id){
         $this->user_id = $id;
-        $user_rol = User::with('roles')->find($id);
+        $user_rol = User::with(['roles', 'bodegas'])->find($id);
         if ($user_rol && $user_rol->roles->isNotEmpty()) {
             $this->selectedRole = $user_rol->roles->first()->id;
         }
 
-        $user_data = User::where('id', $id)->first();
-        $this->name = $user_data->name;
-        $this->email = $user_data->email;
+        $this->name = $user_rol->name;
+        $this->email = $user_rol->email;
+        $this->bodegasSeleccionadas = $user_rol->bodegas->pluck('id')->map(fn($id) => (int) $id)->toArray();
 
         $this->isVisibleEditUserModal = true;
     }
@@ -81,6 +90,7 @@ class Usuarios extends Component
 
     public function openNewUser(){
         $this->reset(['name', 'email', 'password', 'selectedRole']);
+        $this->bodegasSeleccionadas = [];
         $this->isVisibleCreateUserModal = true;
     }
 
@@ -106,10 +116,14 @@ class Usuarios extends Component
             
             // Sincronizar rol (elimina todos los roles anteriores y asigna el nuevo)
             $user->syncRoles([$this->selectedRole]);
-            
+
+            // Sincronizar bodegas asignadas
+            $user->bodegas()->sync(array_map('intval', $this->bodegasSeleccionadas));
+
             // Cerrar modal y mostrar mensaje de éxito
             $this->isVisibleEditUserModal = false;
             $this->reset(['name', 'email', 'selectedRole', 'user_id']);
+            $this->bodegasSeleccionadas = [];
 
             $this->js('window.location.reload();');
             
@@ -178,6 +192,12 @@ class Usuarios extends Component
                 $user->assignRole(intval($this->selectedRole));
                 $this->dispatch('SetRefreshSidebarComponent');
             }
+
+            // Sincronizar bodegas asignadas al crear
+            if (!empty($this->bodegasSeleccionadas)) {
+                $user->bodegas()->sync(array_map('intval', $this->bodegasSeleccionadas));
+            }
+
             $this->isVisibleCreateUserModal = false;
             $this->dispatch('$refresh');
             // Emitir eventos para cerrar modal y actualizar tabla

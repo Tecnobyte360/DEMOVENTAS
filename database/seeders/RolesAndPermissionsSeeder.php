@@ -66,6 +66,7 @@ class RolesAndPermissionsSeeder extends Seeder
                 'inventario.ver',
                 'inventario.entradas',
                 'bodegas.ver',
+                'bodegas.ver_todas',
                 'bodegas.gestionar',
                 'productos.ver',
                 'productos.gestionar',

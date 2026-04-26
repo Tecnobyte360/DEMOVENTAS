@@ -223,7 +223,7 @@ class FacturaCompra extends Component
                 ->where('activo', 1)
                 ->orderBy('nombre')
                 ->get();
-            $bodegas = Bodega::orderBy('nombre')->get();
+            $bodegas = Bodega::query()->accesibles(auth()->user())->orderBy('nombre')->get();
 
             // Listado de cuentas imputables (si necesitas mostrar más de inventario)
             $cuentasIngresos = PlanCuentas::query()

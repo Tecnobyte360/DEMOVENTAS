@@ -122,6 +122,7 @@ class Cotizacion extends Component
                 Schema::hasColumn('bodegas', 'activo'),
                 fn($q) => $q->where('activo', 1)
             )
+            ->accesibles(auth()->user())
             ->orderBy('nombre')
             ->get(['id', 'nombre']);
 

@@ -56,4 +56,32 @@ class User extends Authenticatable
     protected $appends = [
         'profile_photo_url',
     ];
+
+    /* ===================== BODEGAS ASIGNADAS ===================== */
+
+    public function bodegas()
+    {
+        return $this->belongsToMany(\App\Models\Bodega::class, 'bodega_user')->withTimestamps();
+    }
+
+    /**
+     * Puede ver todas las bodegas si tiene el permiso `bodegas.ver_todas`.
+     * Si no, solo las que tenga asignadas via `bodega_user`.
+     */
+    public function puedeVerTodasLasBodegas(): bool
+    {
+        return $this->can('bodegas.ver_todas');
+    }
+
+    /**
+     * IDs de bodegas accesibles para el usuario.
+     * Retorna null cuando puede ver todas (sin restriccion).
+     */
+    public function bodegasPermitidasIds(): ?array
+    {
+        if ($this->puedeVerTodasLasBodegas()) {
+            return null;
+        }
+        return $this->bodegas()->pluck('bodegas.id')->all();
+    }
 }

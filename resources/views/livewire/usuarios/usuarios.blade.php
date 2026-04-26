@@ -165,6 +165,27 @@ x-data="{
                         </select>
                     </div>
 
+                    {{-- Bodegas asignadas --}}
+                    <div class="relative">
+                        <label class="block text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1">
+                            Bodegas asignadas
+                        </label>
+                        <p class="text-[11px] text-gray-500 mb-2">
+                            Si el rol del usuario tiene el permiso <b>bodegas.ver_todas</b> verá todas las bodegas en facturas, cotizaciones y notas crédito.
+                            En caso contrario, solo verá las que se marquen aquí.
+                        </p>
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+                            @forelse ($availableBodegas as $b)
+                                <label class="flex items-center gap-2 text-sm cursor-pointer p-1 rounded hover:bg-white dark:hover:bg-gray-700">
+                                    <input type="checkbox" wire:model.live="bodegasSeleccionadas" value="{{ $b['id'] }}" class="rounded text-violet-600 focus:ring-violet-500">
+                                    <span class="truncate">{{ $b['nombre'] }}</span>
+                                </label>
+                            @empty
+                                <span class="text-xs text-gray-500 col-span-full">No hay bodegas registradas.</span>
+                            @endforelse
+                        </div>
+                    </div>
+
                 {{-- Botones --}}
                     <div class="flex justify-end space-x-3 pt-2">
                         <button wire:click="$toggle('isVisibleEditUserModal')"
@@ -325,6 +346,26 @@ x-data="{
                 <option value="{{ $role->id }}">{{ $role->name }}</option>
             @endforeach
         </select>
+    </div>
+
+    {{-- Bodegas asignadas --}}
+    <div class="relative">
+        <label class="block text-sm font-semibold text-gray-600 dark:text-gray-300 mb-1">
+            Bodegas asignadas
+        </label>
+        <p class="text-[11px] text-gray-500 mb-2">
+            Si el rol del usuario tiene el permiso <b>bodegas.ver_todas</b> verá todas las bodegas. En caso contrario, solo las marcadas aquí.
+        </p>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-44 overflow-y-auto p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+            @forelse ($availableBodegas as $b)
+                <label class="flex items-center gap-2 text-sm cursor-pointer p-1 rounded hover:bg-white dark:hover:bg-gray-700">
+                    <input type="checkbox" wire:model.live="bodegasSeleccionadas" value="{{ $b['id'] }}" class="rounded text-violet-600 focus:ring-violet-500">
+                    <span class="truncate">{{ $b['nombre'] }}</span>
+                </label>
+            @empty
+                <span class="text-xs text-gray-500 col-span-full">No hay bodegas registradas.</span>
+            @endforelse
+        </div>
     </div>
 
     {{-- Botones --}}

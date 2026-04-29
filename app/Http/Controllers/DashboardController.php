@@ -14,16 +14,18 @@ class DashboardController extends Controller
      * El primer permiso que tenga el usuario define a dónde lo enviamos.
      */
     private array $aterrizajePorPermiso = [
+        // Vendedores van directo al POS, no a informes
+        'ventas.ver'          => 'pos.factura',
         'pos.ver'             => 'pos.factura',
-        'facturas.ver'        => 'Facturacion',
-        'ventas.ver'          => 'Facturacion',
+        'facturas.ver'        => 'pos.factura',
         'cotizaciones.ver'    => 'Cotizaciones',
-        'pagos.ver'           => 'PagosRecibidos',
         'caja.ver'            => 'abrircaja',
+        'pagos.ver'           => 'PagosRecibidos',
         'compras.ver'         => 'IndexFacturas',
         'inventario.ver'      => 'inventario.por.bodega',
         'productos.ver'       => 'productos',
         'terceros.ver'        => 'socios.negocio',
+        // Finanzas/informes solo si no tiene nada operativo
         'finanzas.ver'        => 'reportes.ventas',
     ];
 

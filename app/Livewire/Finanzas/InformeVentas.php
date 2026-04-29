@@ -30,6 +30,8 @@ class InformeVentas extends Component
     public ?string $fechaInicio = null;
     public ?string $fechaFin    = null;
 
+    public bool $verTopProductos = false;
+
     // Serie seleccionada
     public ?int $serieId = null;
     public ?Serie $serieSeleccionada = null;
@@ -492,7 +494,7 @@ class InformeVentas extends Component
             'asesores'          => $asesores,
             'rentabilidad'      => $rentabilidad,
             'puedeVerCostos'    => $this->puedeVerCostos(),
-            'topProductosPorMes' => $this->topProductosPorMes(10),
+            'topProductosPorMes' => $this->verTopProductos ? $this->topProductosPorMes(10) : [],
         ]);
     }
 }

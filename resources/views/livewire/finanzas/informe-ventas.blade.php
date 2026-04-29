@@ -327,6 +327,12 @@
                 class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm">
                 <i class="fas fa-sync-alt"></i> Limpiar
             </button>
+
+            <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-amber-50 cursor-pointer text-sm">
+                <input type="checkbox" wire:model.live="verTopProductos" class="rounded text-amber-500 focus:ring-amber-400">
+                <i class="fas fa-trophy text-amber-500"></i>
+                Productos más vendidos
+            </label>
         </div>
     </section>
 

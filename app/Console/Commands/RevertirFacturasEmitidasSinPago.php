@@ -43,7 +43,7 @@ class RevertirFacturasEmitidasSinPago extends Command
             $f->update([
                 'estado' => 'borrador',
                 'numero' => null,
-                'prefijo' => null,
+                'prefijo' => '',
             ]);
 
             $this->info("  ✔ Revertida a borrador");

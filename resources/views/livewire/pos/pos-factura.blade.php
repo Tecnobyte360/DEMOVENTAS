@@ -19,16 +19,16 @@
                 </button>
             </div>
 
-            {{-- Tabs de categorías --}}
+            {{-- Tabs de subcategorías --}}
             <div class="flex items-center gap-2 overflow-x-auto bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-2 no-scrollbar">
-                @foreach($categorias as $cat)
-                    @php $activa = $categoriaActiva === $cat->id && $busquedaProducto === ''; @endphp
-                    <button type="button" wire:click="setCategoria({{ $cat->id }})"
+                @foreach($subcategorias as $sub)
+                    @php $activa = $subcategoriaActiva === $sub->id && $busquedaProducto === ''; @endphp
+                    <button type="button" wire:click="setSubcategoria({{ $sub->id }})"
                         class="shrink-0 px-4 h-9 rounded-lg text-sm font-medium transition
                             {{ $activa
                                 ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-300'
                                 : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                        {{ $cat->nombre }}
+                        {{ $sub->nombre }}
                     </button>
                 @endforeach
             </div>

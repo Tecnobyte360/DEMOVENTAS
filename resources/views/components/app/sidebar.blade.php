@@ -125,11 +125,17 @@
                     });
                 })"
                 class="relative mb-4 lg:hidden lg:sidebar-expanded:block 2xl:block">
-                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs"
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-sm pointer-events-none"
                    :style="`color: ${fgMuted}`"></i>
                 <input type="text" x-model="q" placeholder="Buscar..."
-                    class="w-full h-9 pl-9 pr-3 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-white/30"
-                    :style="`background: ${isLight ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.10)'}; color: ${fg};`">
+                    class="sidebar-search w-full h-10 pl-10 pr-3 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-white/40"
+                    :style="`background: ${isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.15)'}; color: ${fg};`">
+                <button type="button" x-show="q !== ''" x-cloak
+                    @click="q = ''"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded-md hover:bg-white/20"
+                    :style="`color: ${fgMuted}`">
+                    <i class="fas fa-times text-xs"></i>
+                </button>
             </div>
 
             <!-- Section label -->
@@ -956,6 +962,15 @@
     /* Sub-items (más sutiles) */
     #sidebar nav .ml-8 a:hover {
         background-color: rgba(255, 255, 255, .10) !important;
+    }
+
+    /* Buscador del sidebar */
+    .sidebar-search::placeholder {
+        color: rgba(255, 255, 255, .65);
+        font-weight: 400;
+    }
+    .sidebar-search:focus {
+        background-color: rgba(255, 255, 255, .22) !important;
     }
 
     /* === Tipografía limpia tipo "Alimentos La Hacienda" === */

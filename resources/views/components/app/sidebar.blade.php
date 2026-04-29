@@ -955,4 +955,38 @@
     #sidebar nav .ml-8 a:hover {
         background-color: rgba(255, 255, 255, .10) !important;
     }
+
+    /* === Tipografía limpia tipo "Alimentos La Hacienda" === */
+
+    /* Esconde las líneas divisorias en los headers de sección */
+    #sidebar .h-px.flex-1 {
+        display: none !important;
+    }
+
+    /* Headers de sección: alineados a la izquierda, menos espaciado, sin bold pesado */
+    #sidebar [class*="text-[10px]"][class*="uppercase"] {
+        font-size: 11px !important;
+        font-weight: 600 !important;
+        letter-spacing: .04em !important;
+        text-transform: capitalize !important;
+        opacity: .7;
+    }
+
+    /* El contenedor de la sección: justify-start en vez de centrado */
+    #sidebar nav .pt-3.pb-1.px-3,
+    #sidebar .mb-3.flex.items-center.gap-2 {
+        justify-content: flex-start !important;
+        padding-left: 0.75rem !important;
+    }
+
+    /* Texto de los items: peso regular, no bold; el activo sí queda semibold */
+    #sidebar nav a span,
+    #sidebar nav button span {
+        font-weight: 500 !important;
+    }
+    #sidebar nav a.bg-white\/20 span,
+    #sidebar nav button.bg-white\/20 span,
+    #sidebar nav a[class*="bg-white/20"] span {
+        font-weight: 700 !important;
+    }
 </style>

@@ -539,10 +539,15 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" wire:click.self="cerrarDetalleFactura">
             <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
                 {{-- Header --}}
-                <div class="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-5 py-4 flex items-center justify-between">
-                    <div>
-                        <p class="text-xs uppercase tracking-wider opacity-90">Factura pendiente</p>
-                        <h2 class="text-lg font-bold">{{ $detalleFacturaModal['numero'] ?: '#' . $detalleFacturaModal['id'] }}</h2>
+                <div class="bg-gradient-to-r from-teal-600 to-emerald-600 text-white px-5 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-white/20 grid place-items-center">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs uppercase tracking-wider opacity-90">Factura pendiente</p>
+                            <h2 class="text-lg font-bold">{{ $detalleFacturaModal['numero'] ?: '#' . $detalleFacturaModal['id'] }}</h2>
+                        </div>
                     </div>
                     <button type="button" wire:click="cerrarDetalleFactura" class="text-white/80 hover:text-white text-xl">
                         <i class="fas fa-times"></i>
@@ -600,9 +605,9 @@
                     @if(!empty($detalleFacturaModal['pagos']))
                         <div>
                             <h4 class="text-xs uppercase font-bold text-gray-500 mb-2">Abonos registrados</h4>
-                            <div class="rounded-lg border border-emerald-200 bg-emerald-50/50 overflow-hidden">
+                            <div class="rounded-lg border border-teal-200 bg-teal-50/50 overflow-hidden">
                                 <table class="min-w-full text-sm">
-                                    <thead class="bg-emerald-100/60 text-emerald-700 text-xs uppercase">
+                                    <thead class="bg-teal-100/60 text-teal-700 text-xs uppercase">
                                         <tr>
                                             <th class="px-3 py-2 text-left">Fecha</th>
                                             <th class="px-3 py-2 text-left">Método</th>
@@ -610,13 +615,13 @@
                                             <th class="px-3 py-2 text-right">Monto</th>
                                         </tr>
                                     </thead>
-                                    <tbody class="divide-y divide-emerald-100">
+                                    <tbody class="divide-y divide-teal-100">
                                         @foreach($detalleFacturaModal['pagos'] as $p)
                                             <tr>
                                                 <td class="px-3 py-2">{{ $p['fecha'] }}</td>
                                                 <td class="px-3 py-2">{{ $p['metodo'] ?? '—' }}</td>
                                                 <td class="px-3 py-2">{{ $p['ref'] ?? '—' }}</td>
-                                                <td class="px-3 py-2 text-right text-emerald-600 font-semibold">$ {{ number_format($p['monto'], 0, ',', '.') }}</td>
+                                                <td class="px-3 py-2 text-right text-teal-700 font-semibold">$ {{ number_format($p['monto'], 0, ',', '.') }}</td>
                                             </tr>
                                         @endforeach
                                     </tbody>
@@ -639,11 +644,11 @@
                         </div>
                         <div class="flex justify-between text-sm">
                             <span class="text-gray-600">Pagado</span>
-                            <span class="font-semibold text-emerald-600">$ {{ number_format($detalleFacturaModal['pagado'], 0, ',', '.') }}</span>
+                            <span class="font-semibold text-teal-700">$ {{ number_format($detalleFacturaModal['pagado'], 0, ',', '.') }}</span>
                         </div>
                         <div class="flex justify-between text-base pt-2 border-t border-gray-200 dark:border-gray-700">
                             <span class="font-bold">Saldo pendiente</span>
-                            <span class="font-extrabold text-rose-600 text-lg">$ {{ number_format($detalleFacturaModal['saldo'], 0, ',', '.') }}</span>
+                            <span class="font-extrabold text-amber-600 text-lg">$ {{ number_format($detalleFacturaModal['saldo'], 0, ',', '.') }}</span>
                         </div>
                     </div>
                 </div>
@@ -656,7 +661,7 @@
                     </button>
                     <button type="button"
                         wire:click="$dispatchTo('facturas.pagos-factura', 'abrir-modal-pago', { facturaId: {{ $detalleFacturaModal['id'] }} })"
-                        class="px-4 h-10 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
+                        class="px-4 h-10 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-sm font-semibold shadow">
                         <i class="fas fa-money-check-alt mr-1"></i> Registrar pago
                     </button>
                 </div>

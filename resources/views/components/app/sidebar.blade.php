@@ -106,13 +106,40 @@
             </a>
 
             <!-- System title -->
-            <div class="text-center mb-6 lg:hidden lg:sidebar-expanded:block 2xl:block">
+            <div class="text-center mb-4 lg:hidden lg:sidebar-expanded:block 2xl:block">
                 <h1 class="font-bold text-base" :style="`color: ${fg}`">{{ $empresaActual?->nombre }}</h1>
-                <p class="text-xs mt-1" :style="`color: ${fgMuted}`"></p>
+                <p class="text-xs mt-1" :style="`color: ${fgMuted}`">Panel del cliente</p>
+            </div>
+
+            <!-- Buscador del sidebar -->
+            <div x-data="{ q: '' }" x-init="$watch('q', v => {
+                    const term = v.trim().toLowerCase();
+                    const nav = document.querySelector('#sidebar nav');
+                    if (!nav) return;
+                    // Filtra solo items de PRIMER NIVEL (no submenús, para no romper x-show de Alpine)
+                    const items = nav.querySelectorAll(':scope > .space-y-1 > a, :scope > .space-y-1 > div');
+                    items.forEach(el => {
+                        if (!term) { el.style.display = ''; return; }
+                        const txt = (el.textContent || '').trim().toLowerCase();
+                        el.style.display = txt.includes(term) ? '' : 'none';
+                    });
+                })"
+                class="relative mb-4 lg:hidden lg:sidebar-expanded:block 2xl:block">
+                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none select-none"
+                      :style="`color: ${fgMuted}`"></span>
+                <input type="text" x-model="q" placeholder="Buscar..."
+                    class="sidebar-search w-full h-10 pl-10 pr-9 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-white/40"
+                    :style="`background: ${isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.15)'}; color: ${fg};`">
+                <button type="button" x-show="q !== ''" x-cloak
+                    @click="q = ''"
+                    class="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded-md hover:bg-white/20 text-base"
+                    :style="`color: ${fgMuted}`">
+                    ✕
+                </button>
             </div>
 
             <!-- Section label -->
-            <div class="mb-3 flex items-center gap-2">
+            <div class="mb-3 flex items-center gap-2" data-menu-section>
                 <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.18)'}`"></span>
                 <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">
                     Principal
@@ -126,6 +153,11 @@
             <div class="space-y-1">
 
                 <!-- Dashboard -->
+                @php
+                    $dashboardPermisoExiste = \Spatie\Permission\Models\Permission::where('name', 'dashboard.ver')->exists();
+                    $puedeVerDashboard = !$dashboardPermisoExiste || (auth()->user()?->can('dashboard.ver') ?? false);
+                @endphp
+                @if($puedeVerDashboard)
                 <a href="{{ route('dashboard') }}"
                     class="group relative flex items-center gap-3 px-3 py-2.5 rounded-lg
                           transition-all duration-200 overflow-hidden
@@ -148,6 +180,7 @@
                         Dashboard
                     </span>
                 </a>
+                @endif
 
                 <!-- Section: OPERACIONES -->
                 @canany(['ventas.ver', 'facturas.ver', 'cotizaciones.ver', 'notas_credito.ver', 'caja.ver',
@@ -205,6 +238,7 @@
                                     </div>
                                     <span class="transition-all duration-200 group-hover:font-bold">Factura de venta</span>
                                 </a>
+
                             @endcan
 
                             @can('cotizaciones.ver')
@@ -890,5 +924,109 @@
     /* Previene flash */
     [x-cloak] {
         display: none !important;
+    }
+
+    /* Item activo: fondo blanco translúcido más fuerte + barra izquierda + ligera elevación */
+    #sidebar nav a.bg-white\/20,
+    #sidebar nav button.bg-white\/20 {
+        background-color: rgba(255, 255, 255, .22) !important;
+        position: relative;
+    }
+    #sidebar nav a.bg-white\/20::before,
+    #sidebar nav button.bg-white\/20::before {
+        content: "";
+        position: absolute;
+        left: 0; top: 8px; bottom: 8px;
+        width: 4px;
+        border-radius: 0 4px 4px 0;
+        background: #ffffff;
+        box-shadow: 0 0 8px rgba(255,255,255,.5);
+    }
+
+    /* Hover suave consistente */
+    #sidebar nav a:hover,
+    #sidebar nav button:hover {
+        background-color: rgba(255, 255, 255, .14) !important;
+    }
+
+    /* Sub-items (más sutiles) */
+    #sidebar nav .ml-8 a:hover {
+        background-color: rgba(255, 255, 255, .10) !important;
+    }
+
+    /* Buscador del sidebar */
+    .sidebar-search::placeholder {
+        color: rgba(255, 255, 255, .65);
+        font-weight: 400;
+    }
+    .sidebar-search:focus {
+        background-color: rgba(255, 255, 255, .22) !important;
+    }
+
+    /* === Tipografía limpia tipo "Alimentos La Hacienda" === */
+
+    /* Esconde las líneas divisorias en los headers de sección */
+    #sidebar .h-px.flex-1 {
+        display: none !important;
+    }
+
+    /* Headers de sección: pequeñas, capitalizadas, sin tracking exagerado */
+    #sidebar [class*="text-[10px]"][class*="uppercase"] {
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0 !important;
+        text-transform: capitalize !important;
+        opacity: .55 !important;
+    }
+
+    /* Quitar espacio extra de los headers de sección */
+    #sidebar nav .pt-3.pb-1.px-3,
+    #sidebar .mb-3.flex.items-center.gap-2 {
+        justify-content: flex-start !important;
+        padding-left: 0.75rem !important;
+        margin-top: 1rem !important;
+        margin-bottom: 0.25rem !important;
+    }
+
+    /* Items: texto blanco más limpio */
+    #sidebar nav > .space-y-1 > a span,
+    #sidebar nav > .space-y-1 > div > button span {
+        font-weight: 500 !important;
+        font-size: 14px !important;
+        opacity: .92;
+    }
+
+    /* Item activo: bold + opacidad 1 + flecha sutil al final */
+    #sidebar nav a.bg-white\/20 span,
+    #sidebar nav button.bg-white\/20 span,
+    #sidebar nav a[class*="bg-white/20"] span {
+        font-weight: 700 !important;
+        opacity: 1 !important;
+    }
+    #sidebar nav a.bg-white\/20::after,
+    #sidebar nav button.bg-white\/20::after {
+        content: "›";
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #fff;
+        font-weight: 700;
+        font-size: 18px;
+        opacity: .85;
+    }
+
+    /* Iconos: tamaño y opacidad uniformes */
+    #sidebar nav a svg,
+    #sidebar nav button svg,
+    #sidebar nav a i,
+    #sidebar nav button i {
+        opacity: .85;
+    }
+    #sidebar nav a.bg-white\/20 svg,
+    #sidebar nav a.bg-white\/20 i,
+    #sidebar nav button.bg-white\/20 svg,
+    #sidebar nav button.bg-white\/20 i {
+        opacity: 1 !important;
     }
 </style>

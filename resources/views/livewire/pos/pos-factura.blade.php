@@ -190,12 +190,14 @@
                 {{-- Acciones --}}
                 <div class="grid grid-cols-2 gap-2 p-3 border-t border-gray-100 dark:border-gray-700">
                     <button type="button" wire:click="holdOrder" wire:loading.attr="disabled"
+                        title="Guarda la orden como borrador y limpia la pantalla para atender otra venta"
                         class="h-11 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-sm shadow disabled:opacity-50">
-                        <i class="fas fa-pause mr-1"></i> Hold Order
+                        <i class="fas fa-pause mr-1"></i> Dejar pendiente
                     </button>
                     <button type="button" wire:click="proceder" wire:loading.attr="disabled"
+                        title="Guarda la orden y abre la factura para cobrarla y emitirla"
                         class="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow disabled:opacity-50">
-                        <i class="fas fa-check mr-1"></i> Proceder
+                        <i class="fas fa-check mr-1"></i> Cobrar / Emitir
                     </button>
                 </div>
             </div>

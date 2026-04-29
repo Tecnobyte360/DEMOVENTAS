@@ -358,6 +358,7 @@
                         <tr>
                             <th class="px-4 py-3 text-left">Imagen</th>
                             <th class="px-4 py-3 text-left">Producto</th>
+                            <th class="px-4 py-3 text-left">Bodega</th>
                             <th class="px-4 py-3 text-right">Cant.</th>
                             <th class="px-4 py-3 text-right">Precio</th>
                             <th class="px-4 py-3 text-left">Impuesto</th>
@@ -442,6 +443,47 @@
                                     @error('lineas.' . $i . '.producto_id')
                                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                                     @enderror
+                                </td>
+
+                                {{-- Bodega --}}
+                                <td class="px-4 py-3 min-w-[180px]">
+                                    @if ($esServicio)
+                                        <div class="flex items-center gap-2 px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 border border-dashed border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-200">
+                                            <i class="fas fa-concierge-bell"></i>
+                                            <span class="text-xs font-semibold">Servicio</span>
+                                        </div>
+                                    @else
+                                        <select wire:model.live="lineas.{{ $i }}.bodega_id"
+                                            class="w-full h-12 px-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
+                                            <option value="">— Seleccione —</option>
+                                            @foreach ($bodegas as $b)
+                                                <option value="{{ $b->id }}">{{ $b->nombre }}</option>
+                                            @endforeach
+                                        </select>
+
+                                        <div class="mt-2" wire:key="stock-linea-{{ $i }}">
+                                            <div wire:loading.flex
+                                                wire:target="lineas.{{ $i }}.producto_id,lineas.{{ $i }}.bodega_id"
+                                                class="items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-dashed border-gray-300 dark:border-gray-600">
+                                                <i class="fas fa-spinner fa-spin"></i>
+                                                <span class="text-[11px] italic">Consultando…</span>
+                                            </div>
+
+                                            @if ($pid && $bid)
+                                                @php $stock = $this->getStockDeLinea($i); @endphp
+                                                <div wire:loading.remove
+                                                    wire:target="lineas.{{ $i }}.producto_id,lineas.{{ $i }}.bodega_id"
+                                                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg {{ $stock > 0 ? 'bg-green-50 border border-green-300 text-green-700' : 'bg-red-50 border border-red-300 text-red-700' }}">
+                                                    <i class="fas {{ $stock > 0 ? 'fa-check-circle' : 'fa-exclamation-circle' }}"></i>
+                                                    <span class="text-[11px] font-semibold">Stock: {{ number_format($stock, 0) }}</span>
+                                                </div>
+                                            @endif
+                                        </div>
+
+                                        @error('lineas.' . $i . '.bodega_id')
+                                            <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
+                                        @enderror
+                                    @endif
                                 </td>
 
                                 {{-- Cantidad --}}
@@ -539,7 +581,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                                <td colspan="9" class="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                                     No hay líneas. Usa
                                     <button type="button" class="text-violet-600 hover:underline"
                                         wire:click="addLinea">
@@ -553,7 +595,7 @@
 
                     <tfoot class="bg-gray-50 dark:bg-gray-800/40">
                         <tr>
-                            <td colspan="5"></td>
+                            <td colspan="6"></td>
                             <td class="px-4 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Subtotal:
                             </td>
                             <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">
@@ -562,7 +604,7 @@
                             <td></td>
                         </tr>
                         <tr>
-                            <td colspan="5"></td>
+                            <td colspan="6"></td>
                             <td class="px-4 py-2 text-right font-medium text-gray-700 dark:text-gray-300">Impuestos:
                             </td>
                             <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">
@@ -571,7 +613,7 @@
                             <td></td>
                         </tr>
                         <tr class="bg-gray-100 dark:bg-gray-800/60">
-                            <td colspan="5"></td>
+                            <td colspan="6"></td>
                             <td class="px-4 py-2 text-right font-semibold text-gray-900 dark:text-gray-100">Total:</td>
                             <td class="px-4 py-2 text-right text-lg font-extrabold text-gray-900 dark:text-white">
                                 ${{ number_format($this->total, 2) }}

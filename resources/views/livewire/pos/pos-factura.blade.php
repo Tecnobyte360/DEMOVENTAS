@@ -47,9 +47,9 @@
                                 @endif
                             </div>
                         </div>
-                        <div class="px-3 pb-3 text-center">
-                            <p class="text-sm font-semibold leading-tight" style="color:#1f2937; min-height:2.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ $p->nombre ?: '(sin nombre)' }}</p>
-                            <p class="text-base font-bold mt-1" style="color:#ea580c;">
+                        <div class="px-3 pb-3 text-center text-gray-800 dark:text-gray-100">
+                            <p class="text-sm font-semibold leading-tight" style="min-height:2.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ $p->nombre ?: '(sin nombre)' }}</p>
+                            <p class="text-base font-bold mt-1 text-amber-500">
                                 $ {{ number_format((float) $p->precio, 0, ',', '.') }}
                             </p>
                         </div>

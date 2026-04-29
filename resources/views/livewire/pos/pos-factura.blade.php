@@ -69,6 +69,45 @@
         <aside class="lg:col-span-1">
             <div class="sticky top-4 bg-white dark:bg-gray-800 rounded-2xl shadow border border-gray-100 dark:border-gray-700 flex flex-col max-h-[calc(100vh-2rem)]">
 
+                {{-- Header de orden --}}
+                <div class="p-3 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+                    <div class="text-sm font-semibold text-gray-700 dark:text-gray-200">
+                        @if($facturaEditandoId)
+                            <span class="text-orange-600">Editando orden #{{ $facturaEditandoId }}</span>
+                        @else
+                            Nueva orden
+                        @endif
+                    </div>
+                    @if($facturaEditandoId || !empty($carrito))
+                        <button type="button" wire:click="nuevaOrden"
+                            class="text-xs px-2 py-1 rounded-md border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50">
+                            + Nueva
+                        </button>
+                    @endif
+                </div>
+
+                {{-- Órdenes pendientes --}}
+                @if($ordenesPendientes->isNotEmpty())
+                    <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700 max-h-40 overflow-y-auto">
+                        <p class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">Pendientes</p>
+                        <div class="space-y-1">
+                            @foreach($ordenesPendientes as $op)
+                                <button type="button" wire:click="cargarOrden({{ $op->id }})"
+                                    class="w-full flex items-center justify-between text-left px-2 py-1.5 rounded-md hover:bg-orange-50 dark:hover:bg-gray-700 text-xs
+                                        {{ $facturaEditandoId === $op->id ? 'bg-orange-50 dark:bg-orange-900/30 ring-1 ring-orange-300' : '' }}">
+                                    <span class="truncate">
+                                        <span class="font-semibold text-gray-700 dark:text-gray-200">#{{ $op->id }}</span>
+                                        <span class="text-gray-500"> · {{ $op->cliente?->razon_social ?? 'sin cliente' }}</span>
+                                    </span>
+                                    <span class="text-gray-700 dark:text-gray-200 font-medium ml-2 shrink-0">
+                                        $ {{ number_format((float)$op->total, 0, ',', '.') }}
+                                    </span>
+                                </button>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
                 {{-- Cliente --}}
                 <div class="p-3 border-b border-gray-100 dark:border-gray-700">
                     @if($clienteSeleccionadoNombre)
@@ -195,9 +234,9 @@
                         <i class="fas fa-pause mr-1"></i> Dejar pendiente
                     </button>
                     <button type="button" wire:click="proceder" wire:loading.attr="disabled"
-                        title="Guarda la orden y abre la factura para cobrarla y emitirla"
+                        title="Guarda la orden y abre el modal de pagos"
                         class="h-11 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow disabled:opacity-50">
-                        <i class="fas fa-check mr-1"></i> Cobrar / Emitir
+                        <i class="fas fa-cash-register mr-1"></i> Cobrar
                     </button>
                 </div>
             </div>
@@ -208,4 +247,7 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
+
+    {{-- Modal de pagos existente --}}
+    <livewire:facturas.pagos-factura />
 </div>

@@ -320,7 +320,6 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            </div>
 
             <div class="grid grid-cols-1 {{ $cantMeses > 1 ? 'lg:grid-cols-2 xl:grid-cols-3' : '' }} gap-4">
                 @foreach($topProductosPorMes as $mes => $items)

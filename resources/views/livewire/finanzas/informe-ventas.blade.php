@@ -482,9 +482,20 @@
                                     ${{ number_format($pagado, 0, ',', '.') }}
                                 </td>
 
-                                <td
-                                    class="px-4 py-3 text-right {{ $saldo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
-                                    ${{ number_format($saldo, 0, ',', '.') }}
+                                <td class="px-4 py-3 text-right">
+                                    @if($saldo > 0 && !$esCompra && !$esCotizacion)
+                                        <button type="button"
+                                            wire:click="$dispatchTo('facturas.pagos-factura', 'abrir-modal-pago', { facturaId: {{ $factura->id }} })"
+                                            title="Registrar pago de esta factura"
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-semibold transition">
+                                            <i class="fas fa-money-check-alt text-xs"></i>
+                                            ${{ number_format($saldo, 0, ',', '.') }}
+                                        </button>
+                                    @else
+                                        <span class="{{ $saldo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
+                                            ${{ number_format($saldo, 0, ',', '.') }}
+                                        </span>
+                                    @endif
                                 </td>
 
                                 @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
@@ -519,6 +530,9 @@
             </div>
         </div>
     </section>
+
+    {{-- Modal de pagos para registrar abonos desde el informe --}}
+    <livewire:facturas.pagos-factura />
 </div>
 
 @assets

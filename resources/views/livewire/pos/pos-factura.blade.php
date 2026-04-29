@@ -48,33 +48,57 @@
             </div>
 
             @if($vista === 'pendientes')
-                {{-- Grid de órdenes pendientes --}}
+                {{-- Grid de órdenes pendientes (estilo ticket POS) --}}
                 <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                     @forelse($ordenesPendientes as $op)
+                        @php $editando = $facturaEditandoId === $op->id; @endphp
                         <button type="button" wire:click="cargarOrden({{ $op->id }})"
-                            class="text-left rounded-2xl bg-white dark:bg-gray-800 shadow hover:shadow-lg border-2 transition p-4
-                                {{ $facturaEditandoId === $op->id
-                                    ? 'border-orange-400 ring-2 ring-orange-200'
-                                    : 'border-gray-100 dark:border-gray-700 hover:border-orange-300' }}">
-                            <div class="flex items-center justify-between mb-2">
-                                <span class="text-xs uppercase tracking-wide text-gray-400">Orden</span>
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-semibold">Pendiente</span>
+                            class="text-left rounded-2xl overflow-hidden hover:shadow-xl transition group"
+                            style="background:white; border:2px solid {{ $editando ? '#fb923c' : '#e5e7eb' }}; box-shadow:0 4px 12px rgba(0,0,0,.05); {{ $editando ? 'box-shadow:0 0 0 4px #fed7aa;' : '' }}">
+                            {{-- Header --}}
+                            <div style="background:linear-gradient(135deg,#fb923c,#f97316); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; color:white;">
+                                <div style="display:flex; align-items:center; gap:10px;">
+                                    <div style="height:40px; width:40px; border-radius:12px; background:rgba(255,255,255,.25); display:grid; place-items:center;">
+                                        <i class="fas fa-receipt" style="font-size:18px;"></i>
+                                    </div>
+                                    <div>
+                                        <p style="font-size:10px; text-transform:uppercase; letter-spacing:.05em; opacity:.85; margin:0;">Orden</p>
+                                        <p style="font-size:20px; font-weight:800; margin:0; line-height:1;">#{{ $op->id }}</p>
+                                    </div>
+                                </div>
+                                <span style="font-size:10px; font-weight:700; padding:4px 10px; border-radius:9999px; background:rgba(255,255,255,.95); color:#c2410c;">
+                                    <i class="fas fa-clock"></i> Pendiente
+                                </span>
                             </div>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-gray-50">#{{ $op->id }}</p>
-                            <p class="text-sm text-gray-700 dark:text-gray-200 mt-1 truncate">
-                                <i class="fas fa-user-circle text-gray-400 mr-1"></i>
-                                {{ $op->cliente?->razon_social ?? 'Sin cliente' }}
-                            </p>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                <i class="fas fa-calendar text-gray-400 mr-1"></i>
-                                {{ \Illuminate\Support\Carbon::parse($op->fecha)->format('d/m/Y') }}
-                            </p>
-                            <p class="text-xl font-bold text-emerald-600 mt-3">
-                                $ {{ number_format((float)$op->total, 0, ',', '.') }}
-                            </p>
-                            @if($op->notas)
-                                <p class="text-[11px] text-gray-500 mt-2 italic line-clamp-2">"{{ $op->notas }}"</p>
-                            @endif
+
+                            {{-- Body --}}
+                            <div style="padding:14px 16px;">
+                                <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                                    <i class="fas fa-user-circle" style="color:#9ca3af; font-size:14px;"></i>
+                                    <span style="font-size:13px; font-weight:600; color:#1f2937; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                                        {{ $op->cliente?->razon_social ?? 'Sin cliente' }}
+                                    </span>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px; color:#6b7280; font-size:11px;">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    {{ \Illuminate\Support\Carbon::parse($op->fecha)->format('d M Y') }}
+                                </div>
+                                @if($op->notas)
+                                    <p style="margin-top:10px; padding:8px 10px; background:#fff7ed; border-left:3px solid #fb923c; border-radius:6px; font-size:11px; color:#7c2d12; font-style:italic;">"{{ $op->notas }}"</p>
+                                @endif
+                            </div>
+
+                            {{-- Footer --}}
+                            <div style="background:#f9fafb; padding:12px 16px; display:flex; align-items:center; justify-content:space-between; border-top:1px dashed #e5e7eb;">
+                                <span style="font-size:11px; color:#6b7280; text-transform:uppercase; letter-spacing:.05em;">Total</span>
+                                <span style="font-size:20px; font-weight:800; color:#059669;">
+                                    $ {{ number_format((float)$op->total, 0, ',', '.') }}
+                                </span>
+                            </div>
+
+                            <div style="background:#f97316; color:white; padding:8px; text-align:center; font-size:12px; font-weight:600;">
+                                <i class="fas fa-edit"></i> Toca para editar / cobrar
+                            </div>
                         </button>
                     @empty
                         <div class="col-span-full text-center py-16 text-gray-400">

@@ -456,7 +456,15 @@
                                     <div x-data="moneyInput({
                                             initial: @js((float)($l['precio_unitario'] ?? 0)),
                                             onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
-                                         })">
+                                         })"
+                                         x-effect="
+                                            const v = $wire.lineas?.[{{ $i }}]?.precio_unitario;
+                                            const n = Number(v) || 0;
+                                            if (v !== undefined && n !== raw) {
+                                                raw = n;
+                                                display = fmt(n);
+                                            }
+                                         ">
                                         <input type="text" inputmode="decimal"
                                             :value="display"
                                             @input="onInput($event)"

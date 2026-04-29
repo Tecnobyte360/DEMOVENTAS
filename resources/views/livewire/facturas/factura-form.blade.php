@@ -457,12 +457,10 @@
                                             initial: @js((float)($l['precio_unitario'] ?? 0)),
                                             onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
                                          })"
-                                         x-effect="
-                                            const v = $wire.lineas?.[{{ $i }}]?.precio_unitario;
-                                            const n = Number(v) || 0;
-                                            if (v !== undefined && n !== raw) {
-                                                raw = n;
-                                                display = fmt(n);
+                                         x-on:linea-precio-actualizado.window="
+                                            if ($event.detail.index === {{ $i }}) {
+                                                raw = Number($event.detail.precio) || 0;
+                                                display = fmt(raw);
                                             }
                                          ">
                                         <input type="text" inputmode="decimal"

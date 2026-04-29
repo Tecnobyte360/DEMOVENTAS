@@ -734,8 +734,13 @@ public function cambiarFactura(): void
                         if (empty($d->cuenta_ingreso_id)) {
                             throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
                         }
-                        if (!$d->producto_id || !$d->bodega_id) {
-                            throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto y bodega.");
+                        if (!$d->producto_id) {
+                            throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener producto.");
+                        }
+                        $prodLn = \App\Models\Productos\Producto::find($d->producto_id);
+                        $esInv  = $prodLn && ($prodLn->es_inventariable ?? true);
+                        if ($esInv && !$d->bodega_id) {
+                            throw new \RuntimeException("La fila #" . ($idx + 1) . " (" . ($d->descripcion ?: 'producto') . ") requiere bodega.");
                         }
                         if ((float) ($d->cantidad ?? 0) <= 0) {
                             throw new \RuntimeException("La fila #" . ($idx + 1) . " debe tener una cantidad mayor a cero.");

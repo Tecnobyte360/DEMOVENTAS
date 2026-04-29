@@ -126,7 +126,7 @@
                 })"
                 class="relative mb-4 lg:hidden lg:sidebar-expanded:block 2xl:block">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none select-none"
-                      :style="`color: ${fgMuted}`">🔍</span>
+                      :style="`color: ${fgMuted}`"></span>
                 <input type="text" x-model="q" placeholder="Buscar..."
                     class="sidebar-search w-full h-10 pl-10 pr-9 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-white/40"
                     :style="`background: ${isLight ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.15)'}; color: ${fg};`">

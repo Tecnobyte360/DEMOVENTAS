@@ -16,17 +16,15 @@ use Masmerise\Toaster\PendingToast;
 class PosFactura extends Component
 {
     public string $busquedaProducto = '';
-    public ?int $categoriaAbierta = null;
+    public ?int $categoriaActiva = null;
+    public ?int $itemExpandido = null;
 
-    /** @var array<int, array{producto_id:int,nombre:string,precio:float,cantidad:float,imagen:?string,impuesto_pct:float,cuenta_ingreso_id:?int}> */
+    /** @var array<int, array{producto_id:int,nombre:string,precio:float,cantidad:float,imagen:?string,impuesto_pct:float,cuenta_ingreso_id:?int,descuento_pct:float}> */
     public array $carrito = [];
 
     public ?int $socioNegocioId = null;
     public string $busquedaCliente = '';
     public ?string $clienteSeleccionadoNombre = null;
-
-    public float $descuentoPct = 0;
-    public float $descuentoValor = 0;
 
     public ?string $observaciones = null;
 
@@ -40,7 +38,7 @@ class PosFactura extends Component
         $this->bodegaDefaultId = $empresa?->bodega_predeterminada_id;
         $this->serieDefaultId = Serie::defaultParaCodigo('factura')?->id;
 
-        $this->categoriaAbierta = Categoria::query()->orderBy('nombre')->value('id');
+        $this->categoriaActiva = Categoria::query()->orderBy('nombre')->value('id');
 
         $this->cuentaCobroDefaultId = PlanCuentas::query()
             ->where('cuenta_activa', 1)
@@ -58,16 +56,24 @@ class PosFactura extends Component
 
     public function render()
     {
-        $categorias = Categoria::query()
-            ->when(property_exists(Categoria::class, 'activo') || true, fn ($q) => $q)
-            ->with(['subcategorias.productos' => function ($q) {
-                $q->where('activo', 1);
-                if ($this->busquedaProducto !== '') {
-                    $q->where('nombre', 'like', '%' . $this->busquedaProducto . '%');
-                }
-            }])
-            ->orderBy('nombre')
-            ->get();
+        $categorias = Categoria::query()->orderBy('nombre')->get();
+
+        $productos = collect();
+        if ($this->categoriaActiva || $this->busquedaProducto !== '') {
+            $q = Producto::query()
+                ->where('activo', 1)
+                ->select('id', 'nombre', 'precio', 'imagen_path', 'subcategoria_id');
+
+            if ($this->categoriaActiva && $this->busquedaProducto === '') {
+                $q->whereHas('subcategoria', fn ($s) => $s->where('categoria_id', $this->categoriaActiva));
+            }
+
+            if ($this->busquedaProducto !== '') {
+                $q->where('nombre', 'like', '%' . $this->busquedaProducto . '%');
+            }
+
+            $productos = $q->orderBy('nombre')->limit(60)->get();
+        }
 
         $clientesSugeridos = collect();
         if (strlen(trim($this->busquedaCliente)) >= 2) {
@@ -84,13 +90,20 @@ class PosFactura extends Component
 
         return view('livewire.pos.pos-factura', [
             'categorias' => $categorias,
+            'productos' => $productos,
             'clientesSugeridos' => $clientesSugeridos,
         ]);
     }
 
-    public function toggleCategoria(int $id): void
+    public function setCategoria(int $id): void
     {
-        $this->categoriaAbierta = $this->categoriaAbierta === $id ? null : $id;
+        $this->categoriaActiva = $id;
+        $this->busquedaProducto = '';
+    }
+
+    public function toggleItem(int $productoId): void
+    {
+        $this->itemExpandido = $this->itemExpandido === $productoId ? null : $productoId;
     }
 
     public function agregar(int $productoId): void
@@ -118,52 +131,42 @@ class PosFactura extends Component
             'imagen' => $p->imagen_path,
             'impuesto_pct' => $impPct,
             'cuenta_ingreso_id' => $p->cuenta_ingreso_id,
+            'descuento_pct' => 0,
         ];
-
-        PendingToast::create()->success()->message('Agregado')->duration(1500);
     }
 
-    public function incrementar(int $productoId): void
-    {
-        if (isset($this->carrito[$productoId])) {
-            $this->carrito[$productoId]['cantidad'] += 1;
-        }
-    }
-
-    public function decrementar(int $productoId): void
-    {
-        if (!isset($this->carrito[$productoId])) return;
-        $this->carrito[$productoId]['cantidad'] -= 1;
-        if ($this->carrito[$productoId]['cantidad'] <= 0) {
-            unset($this->carrito[$productoId]);
-        }
-    }
-
-    public function quitar(int $productoId): void
-    {
-        unset($this->carrito[$productoId]);
-    }
-
-    public function setCantidad(int $productoId, $cantidad): void
+    public function setCantidadItem(int $productoId, $cantidad): void
     {
         if (!isset($this->carrito[$productoId])) return;
         $cantidad = max(0, (float) $cantidad);
         if ($cantidad === 0.0) {
             unset($this->carrito[$productoId]);
+            if ($this->itemExpandido === $productoId) $this->itemExpandido = null;
         } else {
             $this->carrito[$productoId]['cantidad'] = $cantidad;
         }
     }
 
+    public function setDescuentoItem(int $productoId, $pct): void
+    {
+        if (!isset($this->carrito[$productoId])) return;
+        $this->carrito[$productoId]['descuento_pct'] = max(0, min(100, (float) $pct));
+    }
+
+    public function quitar(int $productoId): void
+    {
+        unset($this->carrito[$productoId]);
+        if ($this->itemExpandido === $productoId) $this->itemExpandido = null;
+    }
+
     public function limpiar(): void
     {
         $this->carrito = [];
-        $this->descuentoPct = 0;
-        $this->descuentoValor = 0;
         $this->observaciones = null;
         $this->socioNegocioId = null;
         $this->clienteSeleccionadoNombre = null;
         $this->busquedaCliente = '';
+        $this->itemExpandido = null;
     }
 
     public function seleccionarCliente(int $id): void
@@ -185,26 +188,17 @@ class PosFactura extends Component
     {
         $s = 0.0;
         foreach ($this->carrito as $i) {
-            $s += (float) $i['precio'] * (float) $i['cantidad'];
+            $base = (float) $i['precio'] * (float) $i['cantidad'];
+            $s += $base * (1 - ((float) ($i['descuento_pct'] ?? 0) / 100));
         }
-        return $s;
-    }
-
-    public function getDescuentoTotalProperty(): float
-    {
-        $sub = $this->subtotal;
-        $porPct = $sub * ((float) $this->descuentoPct / 100);
-        return round($porPct + (float) $this->descuentoValor, 2);
+        return round($s, 2);
     }
 
     public function getImpuestosTotalProperty(): float
     {
-        $sub = $this->subtotal;
-        if ($sub <= 0) return 0.0;
-        $factor = max(0, 1 - ($this->descuentoTotal / $sub));
         $imp = 0.0;
         foreach ($this->carrito as $i) {
-            $base = (float) $i['precio'] * (float) $i['cantidad'] * $factor;
+            $base = (float) $i['precio'] * (float) $i['cantidad'] * (1 - ((float) ($i['descuento_pct'] ?? 0) / 100));
             $imp += $base * ((float) $i['impuesto_pct'] / 100);
         }
         return round($imp, 2);
@@ -212,7 +206,7 @@ class PosFactura extends Component
 
     public function getTotalProperty(): float
     {
-        return round(max(0, $this->subtotal - $this->descuentoTotal) + $this->impuestosTotal, 2);
+        return round($this->subtotal + $this->impuestosTotal, 2);
     }
 
     public function getCantidadTotalProperty(): float
@@ -222,7 +216,22 @@ class PosFactura extends Component
         return $c;
     }
 
+    public function holdOrder()
+    {
+        return $this->guardarFactura(false);
+    }
+
+    public function proceder()
+    {
+        return $this->guardarFactura(true);
+    }
+
     public function guardar()
+    {
+        return $this->proceder();
+    }
+
+    private function guardarFactura(bool $redirect)
     {
         if (empty($this->carrito)) {
             PendingToast::create()->warning()->message('El carrito está vacío.')->duration(4000);
@@ -239,10 +248,6 @@ class PosFactura extends Component
 
         try {
             $facturaId = DB::transaction(function () {
-                $sub = $this->subtotal;
-                $descTotal = $this->descuentoTotal;
-                $descPctEfectivo = $sub > 0 ? round(($descTotal / $sub) * 100, 3) : 0;
-
                 $factura = Factura::create([
                     'serie_id' => $this->serieDefaultId,
                     'socio_negocio_id' => $this->socioNegocioId,
@@ -264,7 +269,7 @@ class PosFactura extends Component
                         'descripcion' => $i['nombre'],
                         'cantidad' => $i['cantidad'],
                         'precio_unitario' => $i['precio'],
-                        'descuento_pct' => $descPctEfectivo,
+                        'descuento_pct' => $i['descuento_pct'] ?? 0,
                         'impuesto_pct' => $i['impuesto_pct'],
                     ]);
                 }
@@ -273,8 +278,14 @@ class PosFactura extends Component
                 return $factura->id;
             });
 
-            PendingToast::create()->success()->message('Factura creada como borrador.')->duration(4000);
-            return redirect()->route('facturas.edit', ['id' => $facturaId]);
+            if ($redirect) {
+                PendingToast::create()->success()->message('Factura creada. Redirigiendo…')->duration(3000);
+                return redirect()->route('facturas.edit', ['id' => $facturaId]);
+            }
+
+            PendingToast::create()->success()->message('Orden retenida (factura borrador #' . $facturaId . ').')->duration(4000);
+            $this->limpiar();
+            return null;
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()

@@ -9,8 +9,13 @@ use App\Models\CuentasContables\PlanCuentas;
 use App\Models\Factura\Factura;
 use App\Models\Productos\Producto;
 use App\Models\Serie\Serie;
+use App\Models\MediosPago\MedioPagos;
 use App\Models\SocioNegocio\SocioNegocio;
+use App\Services\ContabilidadService;
+use App\Services\InventarioService;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 use Masmerise\Toaster\PendingToast;
 
@@ -219,12 +224,12 @@ class PosFactura extends Component
 
     public function holdOrder()
     {
-        return $this->guardarFactura(false);
+        return $this->guardarFactura('borrador');
     }
 
     public function proceder()
     {
-        return $this->guardarFactura(true);
+        return $this->guardarFactura('emitir');
     }
 
     public function guardar()
@@ -232,7 +237,7 @@ class PosFactura extends Component
         return $this->proceder();
     }
 
-    private function guardarFactura(bool $redirect)
+    private function guardarFactura(string $modo)
     {
         if (empty($this->carrito)) {
             PendingToast::create()->warning()->message('El carrito está vacío.')->duration(4000);
@@ -248,7 +253,7 @@ class PosFactura extends Component
         }
 
         try {
-            $facturaId = DB::transaction(function () {
+            $info = DB::transaction(function () use ($modo) {
                 $factura = Factura::create([
                     'serie_id' => $this->serieDefaultId,
                     'socio_negocio_id' => $this->socioNegocioId,
@@ -260,6 +265,7 @@ class PosFactura extends Component
                     'notas' => $this->observaciones,
                     'moneda' => 'COP',
                     'estado' => 'borrador',
+                    'cuenta_cobro_id' => $this->cuentaCobroDefaultId,
                 ]);
 
                 foreach ($this->carrito as $i) {
@@ -277,23 +283,108 @@ class PosFactura extends Component
                 }
 
                 $factura->refresh()->recalcularTotales()->save();
-                return $factura->id;
+
+                if ($modo === 'borrador') {
+                    return ['id' => $factura->id, 'numero' => null];
+                }
+
+                return $this->emitirFactura($factura);
             });
 
-            if ($redirect) {
-                PendingToast::create()->success()->message('Factura creada. Redirigiendo…')->duration(3000);
-                return redirect()->route('facturas.edit', ['id' => $facturaId]);
+            if ($modo === 'borrador') {
+                PendingToast::create()->success()->message('Orden retenida (borrador #' . $info['id'] . ').')->duration(4000);
+            } else {
+                $msg = 'Factura emitida' . ($info['numero'] ? ' #' . $info['numero'] : '') . '.';
+                PendingToast::create()->success()->message($msg)->duration(5000);
             }
 
-            PendingToast::create()->success()->message('Orden retenida (factura borrador #' . $facturaId . ').')->duration(4000);
             $this->limpiar();
             return null;
         } catch (\Throwable $e) {
             report($e);
             PendingToast::create()->error()
-                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo crear la factura.')
+                ->message(config('app.debug') ? $e->getMessage() : 'No se pudo emitir la factura.')
                 ->duration(8000);
             return null;
         }
+    }
+
+    private function emitirFactura(Factura $factura): array
+    {
+        $factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($factura->id);
+
+        foreach ($factura->detalles as $idx => $d) {
+            if (empty($d->cuenta_ingreso_id)) {
+                throw new \RuntimeException('La fila #' . ($idx + 1) . ' no tiene cuenta de ingreso. Configura la cuenta de ingreso del producto.');
+            }
+            if (!$d->producto_id) {
+                throw new \RuntimeException('La fila #' . ($idx + 1) . ' debe tener producto.');
+            }
+            $prod = Producto::find($d->producto_id);
+            $esInv = $prod && ($prod->es_inventariable ?? true);
+            if ($esInv && !$d->bodega_id) {
+                throw new \RuntimeException('La fila #' . ($idx + 1) . ' (' . ($d->descripcion ?: 'producto') . ') requiere bodega.');
+            }
+            if ((float) ($d->cantidad ?? 0) <= 0) {
+                throw new \RuntimeException('La fila #' . ($idx + 1) . ' debe tener cantidad mayor a cero.');
+            }
+        }
+
+        InventarioService::verificarDisponibilidadParaFactura($factura);
+
+        $medio = MedioPagos::where('activo', 1)->orderBy('orden')->first();
+        if (!$medio) {
+            throw new \RuntimeException('No hay medios de pago activos configurados.');
+        }
+
+        $factura->recalcularTotales()->save();
+        $factura->refresh();
+
+        $total = round((float) ($factura->total ?? 0), 2);
+        if ($total > 0) {
+            $factura->registrarPago([
+                'fecha' => now()->toDateString(),
+                'medio_pago_id' => $medio->id,
+                'metodo' => $medio->codigo,
+                'monto' => $total,
+                'referencia' => 'POS',
+                'notas' => 'Cobro automático desde POS',
+            ]);
+        }
+
+        $serie = $factura->serie;
+        if (!$serie) {
+            throw new \RuntimeException('La factura no tiene serie asignada.');
+        }
+        $numero = $serie->tomarConsecutivo();
+        $uid = Auth::id();
+
+        $factura->refresh();
+        $pagado = round((float) $factura->pagos()->sum('monto'), 2);
+        $faltante = round($total - $pagado, 2);
+        $estadoFinal = $faltante <= 0.01 ? 'pagada' : 'emitida';
+
+        $dataUpdate = [
+            'serie_id' => $serie->id,
+            'prefijo' => (string) ($serie->prefijo ?? ''),
+            'numero' => $numero,
+            'estado' => $estadoFinal,
+        ];
+        if (Schema::hasColumn('facturas', 'emitido_por_id')) $dataUpdate['emitido_por_id'] = $uid;
+        if (Schema::hasColumn('facturas', 'emitido_en')) $dataUpdate['emitido_en'] = now();
+        if (Schema::hasColumn('facturas', 'actualizado_por_id')) $dataUpdate['actualizado_por_id'] = $uid;
+        if (Schema::hasColumn('facturas', 'pagado')) $dataUpdate['pagado'] = $pagado;
+        if (Schema::hasColumn('facturas', 'saldo')) $dataUpdate['saldo'] = max($faltante, 0);
+
+        Factura::whereKey($factura->id)->update($dataUpdate);
+        $factura = Factura::with(['detalles', 'pagos', 'serie'])->findOrFail($factura->id);
+
+        ContabilidadService::asientoDesdeFactura($factura);
+        InventarioService::descontarPorFactura($factura);
+
+        $factura->recalcularTotales()->save();
+
+        $numeroVisible = trim(($factura->prefijo ? $factura->prefijo . '-' : '') . $factura->numero);
+        return ['id' => $factura->id, 'numero' => $numeroVisible];
     }
 }

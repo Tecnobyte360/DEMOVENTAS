@@ -71,15 +71,26 @@
     @endphp
     <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         @foreach($kpis as $k)
-            @php $c = $colorMap[$k['color']] ?? $colorMap['gray']; @endphp
-            <div class="relative rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-3 overflow-hidden">
+            @php
+                $c = $colorMap[$k['color']] ?? $colorMap['gray'];
+                $clickable = ($k['label'] ?? '') === 'Saldo pendiente';
+                $activo = $clickable && $estadoFiltro === 'con_saldo';
+            @endphp
+            <div
+                @if($clickable) wire:click="verSaldoPendiente" role="button" tabindex="0" title="Ver facturas con saldo pendiente" @endif
+                class="relative rounded-xl bg-white dark:bg-gray-800 shadow-sm border {{ $activo ? 'border-rose-400 ring-2 ring-rose-200' : 'border-gray-100 dark:border-gray-700' }} p-3 overflow-hidden {{ $clickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition' : '' }}">
                 <div class="absolute left-0 top-0 bottom-0 w-1 {{ $c['bar'] }}"></div>
                 <div class="flex items-center gap-3">
                     <div class="h-9 w-9 rounded-lg {{ $c['bg'] }} {{ $c['text'] }} grid place-items-center shrink-0">
                         <i class="fas {{ $k['icon'] }} text-sm"></i>
                     </div>
                     <div class="min-w-0">
-                        <p class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 truncate">{{ $k['label'] }}</p>
+                        <p class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 truncate">
+                            {{ $k['label'] }}
+                            @if($clickable)
+                                <i class="fas fa-filter text-[9px] ml-1 {{ $activo ? 'text-rose-500' : 'text-gray-300' }}"></i>
+                            @endif
+                        </p>
                         <p class="text-base font-bold {{ $c['value'] }} truncate">{{ $k['value'] }}</p>
                     </div>
                 </div>
@@ -153,6 +164,7 @@
                     <option value="pagada">Pagada</option>
                     <option value="anulada">Anulada</option>
                     <option value="vencida">Vencida</option>
+                    <option value="con_saldo">Con saldo pendiente</option>
                 </select>
             </div>
 

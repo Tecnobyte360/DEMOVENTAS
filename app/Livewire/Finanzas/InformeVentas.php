@@ -213,6 +213,9 @@ class InformeVentas extends Component
                 $q->where('saldo', '>', 0)
                     ->whereNotNull('vencimiento')
                     ->whereDate('vencimiento', '<', now()->toDateString());
+            } elseif ($this->estadoFiltro === 'con_saldo') {
+                $q->where('saldo', '>', 0)
+                    ->whereNotIn('estado', ['anulada', 'borrador']);
             } else {
                 $q->where('estado', $this->estadoFiltro);
             }
@@ -411,6 +414,12 @@ class InformeVentas extends Component
      * Top productos vendidos agrupados por mes dentro del rango de fechas.
      * Devuelve: ['2026-04' => [['producto'=>'..', 'cantidad'=>10, 'total'=>50000], ...], ...]
      */
+    public function verSaldoPendiente(): void
+    {
+        $this->estadoFiltro = 'con_saldo';
+        $this->resetPage();
+    }
+
     public function topProductosPorMes(int $topN = 10): array
     {
         $rows = DB::table('factura_detalles as d')

@@ -37,19 +37,21 @@
             <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
                 @forelse($productos as $p)
                     <button type="button" wire:click="agregar({{ $p->id }})"
-                        class="group rounded-2xl bg-white dark:bg-gray-800 shadow hover:shadow-lg border border-gray-100 dark:border-gray-700 hover:border-orange-300 transition overflow-hidden">
-                        <div class="p-3">
-                            <div class="mx-auto h-24 w-24 rounded-full bg-gray-50 dark:bg-gray-900 grid place-items-center overflow-hidden ring-1 ring-gray-100 dark:ring-gray-700">
+                        class="group rounded-2xl bg-white dark:bg-gray-800 shadow hover:shadow-lg border border-gray-100 dark:border-gray-700 hover:border-orange-300 transition"
+                        style="display:flex; flex-direction:column; align-items:stretch; min-height:220px; padding:12px;">
+                        <div style="display:flex; justify-content:center;">
+                            <div class="rounded-full bg-gray-50 dark:bg-gray-900 ring-1 ring-gray-100 dark:ring-gray-700"
+                                style="height:96px; width:96px; display:grid; place-items:center; overflow:hidden;">
                                 @if($p->imagen_path)
-                                    <img src="{{ $p->imagen_path }}" alt="{{ $p->nombre }}" class="h-full w-full object-cover group-hover:scale-105 transition">
+                                    <img src="{{ $p->imagen_path }}" alt="{{ $p->nombre }}" style="height:100%; width:100%; object-fit:cover;">
                                 @else
                                     <i class="fas fa-image text-2xl text-gray-300"></i>
                                 @endif
                             </div>
                         </div>
-                        <div class="px-3 pb-3 text-center text-gray-800 dark:text-gray-100">
-                            <p class="text-sm font-semibold leading-tight" style="min-height:2.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ $p->nombre ?: '(sin nombre)' }}</p>
-                            <p class="text-base font-bold mt-1 text-amber-500">
+                        <div class="text-gray-800 dark:text-gray-100" style="margin-top:10px; text-align:center; flex:1;">
+                            <p style="font-size:0.875rem; font-weight:600; line-height:1.2; min-height:2.4rem;">{{ $p->nombre ?: '(sin nombre)' }}</p>
+                            <p class="text-amber-500" style="font-size:1rem; font-weight:700; margin-top:6px;">
                                 $ {{ number_format((float) $p->precio, 0, ',', '.') }}
                             </p>
                         </div>

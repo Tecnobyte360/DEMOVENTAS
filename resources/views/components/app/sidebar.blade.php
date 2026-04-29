@@ -963,30 +963,68 @@
         display: none !important;
     }
 
-    /* Headers de sección: alineados a la izquierda, menos espaciado, sin bold pesado */
+    /* Headers de sección: pequeñas, capitalizadas, sin tracking exagerado */
     #sidebar [class*="text-[10px]"][class*="uppercase"] {
-        font-size: 11px !important;
-        font-weight: 600 !important;
-        letter-spacing: .04em !important;
+        font-size: 12px !important;
+        font-weight: 500 !important;
+        letter-spacing: 0 !important;
         text-transform: capitalize !important;
-        opacity: .7;
+        opacity: .55 !important;
     }
 
-    /* El contenedor de la sección: justify-start en vez de centrado */
+    /* Quitar espacio extra de los headers de sección */
     #sidebar nav .pt-3.pb-1.px-3,
     #sidebar .mb-3.flex.items-center.gap-2 {
         justify-content: flex-start !important;
         padding-left: 0.75rem !important;
+        margin-top: 1rem !important;
+        margin-bottom: 0.25rem !important;
     }
 
-    /* Texto de los items: peso regular, no bold; el activo sí queda semibold */
+    /* Items: texto blanco más limpio, con padding cómodo */
+    #sidebar nav a,
+    #sidebar nav button {
+        padding-top: 0.625rem !important;
+        padding-bottom: 0.625rem !important;
+    }
     #sidebar nav a span,
     #sidebar nav button span {
         font-weight: 500 !important;
+        font-size: 14px !important;
+        opacity: .92;
     }
+
+    /* Item activo: bold + opacidad 1 + flecha sutil al final */
     #sidebar nav a.bg-white\/20 span,
     #sidebar nav button.bg-white\/20 span,
     #sidebar nav a[class*="bg-white/20"] span {
         font-weight: 700 !important;
+        opacity: 1 !important;
+    }
+    #sidebar nav a.bg-white\/20::after,
+    #sidebar nav button.bg-white\/20::after {
+        content: "›";
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #fff;
+        font-weight: 700;
+        font-size: 18px;
+        opacity: .85;
+    }
+
+    /* Iconos: tamaño y opacidad uniformes */
+    #sidebar nav a svg,
+    #sidebar nav button svg,
+    #sidebar nav a i,
+    #sidebar nav button i {
+        opacity: .85;
+    }
+    #sidebar nav a.bg-white\/20 svg,
+    #sidebar nav a.bg-white\/20 i,
+    #sidebar nav button.bg-white\/20 svg,
+    #sidebar nav button.bg-white\/20 i {
+        opacity: 1 !important;
     }
 </style>

@@ -20,6 +20,7 @@ class PosFactura extends Component
     public string $busquedaProducto = '';
     public ?int $subcategoriaActiva = null;
     public ?int $itemExpandido = null;
+    public string $vista = 'productos'; // 'productos' | 'pendientes'
 
     /** @var array<int, array{producto_id:int,nombre:string,precio:float,cantidad:float,imagen:?string,impuesto_pct:float,cuenta_ingreso_id:?int,descuento_pct:float}> */
     public array $carrito = [];
@@ -110,6 +111,17 @@ class PosFactura extends Component
     {
         $this->subcategoriaActiva = $id;
         $this->busquedaProducto = '';
+        $this->vista = 'productos';
+    }
+
+    public function verPendientes(): void
+    {
+        $this->vista = 'pendientes';
+    }
+
+    public function verProductos(): void
+    {
+        $this->vista = 'productos';
     }
 
     public function toggleItem(int $productoId): void

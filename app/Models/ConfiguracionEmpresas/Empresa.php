@@ -21,6 +21,8 @@ class Empresa extends Model
         'nit',
         'email',
         'telefono',
+        'whatsapp',
+        'celular',
         'sitio_web',
         'direccion',
         'bodega_predeterminada_id', // ✅ NUEVO
@@ -32,6 +34,10 @@ class Empresa extends Model
         'is_activa',
         'extra',
         'pdf_theme',
+        'banco_nombre',
+        'banco_tipo_cuenta',
+        'banco_numero_cuenta',
+        'banco_titular',
     ];
 
     protected $casts = [

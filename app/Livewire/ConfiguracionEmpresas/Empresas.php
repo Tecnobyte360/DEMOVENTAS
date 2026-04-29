@@ -22,8 +22,16 @@ class Empresas extends Component
     public ?string $nit = null;
     public ?string $email = null;
     public ?string $telefono = null;
+    public ?string $whatsapp = null;
+    public ?string $celular = null;
     public ?string $sitio_web = null;
     public ?string $direccion = null;
+
+    // Datos bancarios para mostrar en el PDF
+    public ?string $banco_nombre = null;
+    public ?string $banco_tipo_cuenta = null;
+    public ?string $banco_numero_cuenta = null;
+    public ?string $banco_titular = null;
     public ?int $bodega_predeterminada_id = null; // ✅ NUEVO
     public bool $is_activa = true;
     public ?string $color_primario = null;
@@ -96,8 +104,14 @@ class Empresas extends Component
             'nit'                      => ['nullable', 'string', 'max:50'],
             'email'                    => ['nullable', 'email', 'max:255'],
             'telefono'                 => ['nullable', 'string', 'max:50'],
+            'whatsapp'                 => ['nullable', 'string', 'max:50'],
+            'celular'                  => ['nullable', 'string', 'max:50'],
             'sitio_web'                => ['nullable', 'url', 'max:255'],
             'direccion'                => ['nullable', 'string', 'max:255'],
+            'banco_nombre'             => ['nullable', 'string', 'max:100'],
+            'banco_tipo_cuenta'        => ['nullable', 'string', 'max:50'],
+            'banco_numero_cuenta'      => ['nullable', 'string', 'max:50'],
+            'banco_titular'            => ['nullable', 'string', 'max:150'],
             'bodega_predeterminada_id' => ['nullable', 'integer', 'exists:bodegas,id'], // ✅ NUEVO
             'is_activa'                => ['boolean'],
             'color_primario'           => ['nullable', 'string', 'max:32'],
@@ -163,6 +177,8 @@ class Empresas extends Component
                 'nit'                      => $this->nit,
                 'email'                    => $this->email,
                 'telefono'                 => $this->telefono,
+                'whatsapp'                 => $this->whatsapp,
+                'celular'                  => $this->celular,
                 'sitio_web'                => $this->sitio_web,
                 'direccion'                => $this->direccion,
                 'bodega_predeterminada_id' => $this->bodega_predeterminada_id, // ✅ NUEVO
@@ -170,6 +186,10 @@ class Empresas extends Component
                 'color_primario'           => $this->color_primario,
                 'color_secundario'         => $this->color_secundario,
                 'pdf_theme'                => $this->theme,
+                'banco_nombre'             => $this->banco_nombre,
+                'banco_tipo_cuenta'        => $this->banco_tipo_cuenta,
+                'banco_numero_cuenta'      => $this->banco_numero_cuenta,
+                'banco_titular'            => $this->banco_titular,
             ]);
 
             $empresa->save();
@@ -293,12 +313,18 @@ class Empresas extends Component
             'nit'                      => $m->nit,
             'email'                    => $m->email,
             'telefono'                 => $m->telefono,
+            'whatsapp'                 => $m->whatsapp,
+            'celular'                  => $m->celular,
             'sitio_web'                => $m->sitio_web,
             'direccion'                => $m->direccion,
             'bodega_predeterminada_id' => $m->bodega_predeterminada_id, // ✅ NUEVO
             'is_activa'                => (bool) $m->is_activa,
             'color_primario'           => $m->color_primario,
             'color_secundario'         => $m->color_secundario,
+            'banco_nombre'             => $m->banco_nombre,
+            'banco_tipo_cuenta'        => $m->banco_tipo_cuenta,
+            'banco_numero_cuenta'      => $m->banco_numero_cuenta,
+            'banco_titular'            => $m->banco_titular,
         ]);
 
         $this->theme = array_replace($this->defaultTheme(), (array) $m->pdf_theme);
@@ -317,6 +343,8 @@ class Empresas extends Component
             'nit',
             'email',
             'telefono',
+            'whatsapp',
+            'celular',
             'sitio_web',
             'direccion',
             'bodega_predeterminada_id', // ✅ NUEVO
@@ -326,6 +354,10 @@ class Empresas extends Component
             'logo_actual',
             'logo_dark_actual',
             'favicon_actual',
+            'banco_nombre',
+            'banco_tipo_cuenta',
+            'banco_numero_cuenta',
+            'banco_titular',
         ]);
 
         $this->is_activa = true;

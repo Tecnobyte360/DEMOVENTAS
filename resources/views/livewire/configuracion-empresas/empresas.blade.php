@@ -122,11 +122,37 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Teléfono</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Teléfono fijo</label>
                         <input type="text" wire:model.defer="telefono"
                             class="mt-1 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                             placeholder="+57 300 000 0000">
                         @error('telefono')
+                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                            <i class="fab fa-whatsapp text-emerald-500"></i> WhatsApp
+                        </label>
+                        <input type="text" wire:model.defer="whatsapp"
+                            class="mt-1 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                            placeholder="3104530264">
+                        <p class="text-xs text-gray-400 mt-1">Aparecerá en el PDF de la factura.</p>
+                        @error('whatsapp')
+                            <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">
+                            <i class="fas fa-mobile-alt text-blue-500"></i> Celular
+                        </label>
+                        <input type="text" wire:model.defer="celular"
+                            class="mt-1 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                            placeholder="3004385756">
+                        <p class="text-xs text-gray-400 mt-1">Aparecerá en el PDF de la factura.</p>
+                        @error('celular')
                             <p class="text-xs text-red-600 mt-1">{{ $message }}</p>
                         @enderror
                     </div>
@@ -182,6 +208,50 @@
                         <i class="fa-solid fa-palette"></i>
                     </span>
                     <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">Marca & Estado</h3>
+                </div>
+
+                {{-- INFORMACIÓN BANCARIA (aparece en el PDF de la factura) --}}
+                <div class="md:col-span-2 mt-6 p-5 rounded-2xl border border-emerald-200 bg-emerald-50/40 dark:bg-emerald-900/10">
+                    <div class="flex items-center gap-2 mb-4">
+                        <i class="fas fa-university text-emerald-600"></i>
+                        <h4 class="text-base font-semibold text-emerald-800 dark:text-emerald-200">Información bancaria</h4>
+                        <span class="text-xs text-gray-500 ml-2">(se imprime en el PDF de la factura)</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Banco</label>
+                            <input type="text" wire:model.defer="banco_nombre"
+                                class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                                placeholder="Bancolombia">
+                            @error('banco_nombre')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Tipo de cuenta</label>
+                            <select wire:model.defer="banco_tipo_cuenta"
+                                class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                                <option value="">— Seleccione —</option>
+                                <option value="Cuenta de ahorros">Cuenta de ahorros</option>
+                                <option value="Cuenta corriente">Cuenta corriente</option>
+                                <option value="Nequi">Nequi</option>
+                                <option value="Daviplata">Daviplata</option>
+                            </select>
+                            @error('banco_tipo_cuenta')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Número de cuenta</label>
+                            <input type="text" wire:model.defer="banco_numero_cuenta"
+                                class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                                placeholder="00168305311">
+                            @error('banco_numero_cuenta')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">Titular</label>
+                            <input type="text" wire:model.defer="banco_titular"
+                                class="mt-1 w-full rounded-xl border-gray-300 focus:border-emerald-500 focus:ring-emerald-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
+                                placeholder="Nombre del titular">
+                            @error('banco_titular')<p class="text-xs text-red-600 mt-1">{{ $message }}</p>@enderror
+                        </div>
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">

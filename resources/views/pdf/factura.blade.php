@@ -63,11 +63,16 @@
         'nombre'    => $empresa->nombre ?? 'Empresa',
         'nit'       => !empty($empresa->nit) ? 'NIT ' . $empresa->nit : null,
         'direccion' => $empresa->direccion ?? null,
-        'telefono'  => $empresa->telefono ?? '3004385756',
-        'whatsapp'  => $empresa->whatsapp ?? '3104530264',
+        'telefono'  => $empresa->telefono ?? null,
+        'celular'   => $empresa->celular ?? null,
+        'whatsapp'  => $empresa->whatsapp ?? null,
         'email'     => $empresa->email ?? null,
         'website'   => $empresa->sitio_web ?? null,
         'logo_src'  => $logoPdfSrc,
+        'banco_nombre'        => $empresa->banco_nombre ?? null,
+        'banco_tipo_cuenta'   => $empresa->banco_tipo_cuenta ?? null,
+        'banco_numero_cuenta' => $empresa->banco_numero_cuenta ?? null,
+        'banco_titular'       => $empresa->banco_titular ?? null,
     ];
 
     $money = fn($v) => '$' . number_format((float) $v, 2, '.', ',');
@@ -491,14 +496,18 @@
                     </div>
 
                     <div class="header-contact">
+                        @if(!empty($E['whatsapp']))
                         <div class="contact-row">
                             <div class="contact-label">WhatsApp:</div>
                             <div class="contact-value">{{ $E['whatsapp'] }}</div>
                         </div>
+                        @endif
+                        @if(!empty($E['celular']) || !empty($E['telefono']))
                         <div class="contact-row">
                             <div class="contact-label">Celular:</div>
-                            <div class="contact-value">{{ $E['telefono'] }}</div>
+                            <div class="contact-value">{{ $E['celular'] ?? $E['telefono'] }}</div>
                         </div>
+                        @endif
                     </div>
 
                     <div class="header-status">
@@ -650,18 +659,26 @@
             </tr>
         </table>
 
+        @if(!empty($E['banco_nombre']) || !empty($E['banco_numero_cuenta']))
         <div class="payment-box">
             <div class="payment-title">Información de pago</div>
 
             <div class="payment-row">
-                <span class="payment-bank">Bancolombia · Cuenta de ahorros</span>
-                <span class="payment-account">00168305311</span>
+                <span class="payment-bank">
+                    {{ $E['banco_nombre'] ?? '' }}{{ $E['banco_tipo_cuenta'] ? ' · ' . $E['banco_tipo_cuenta'] : '' }}
+                </span>
+                @if(!empty($E['banco_numero_cuenta']))
+                    <span class="payment-account">{{ $E['banco_numero_cuenta'] }}</span>
+                @endif
             </div>
 
-            <div class="payment-owner">
-                Titular: Jhon Arles Palacio Arias
-            </div>
+            @if(!empty($E['banco_titular']))
+                <div class="payment-owner">
+                    Titular: {{ $E['banco_titular'] }}
+                </div>
+            @endif
         </div>
+        @endif
 
         <div class="drawing-space"></div>
 

@@ -30,6 +30,8 @@ class InformeVentas extends Component
     public ?string $fechaInicio = null;
     public ?string $fechaFin    = null;
 
+    public bool $verTopProductos = false;
+
     // Serie seleccionada
     public ?int $serieId = null;
     public ?Serie $serieSeleccionada = null;
@@ -211,6 +213,9 @@ class InformeVentas extends Component
                 $q->where('saldo', '>', 0)
                     ->whereNotNull('vencimiento')
                     ->whereDate('vencimiento', '<', now()->toDateString());
+            } elseif ($this->estadoFiltro === 'con_saldo') {
+                $q->where('saldo', '>', 0)
+                    ->whereNotIn('estado', ['anulada', 'borrador']);
             } else {
                 $q->where('estado', $this->estadoFiltro);
             }
@@ -405,6 +410,91 @@ class InformeVentas extends Component
         ->toArray();
     }
 
+    /**
+     * Top productos vendidos agrupados por mes dentro del rango de fechas.
+     * Devuelve: ['2026-04' => [['producto'=>'..', 'cantidad'=>10, 'total'=>50000], ...], ...]
+     */
+    public function verSaldoPendiente(): void
+    {
+        $this->estadoFiltro = 'con_saldo';
+        $this->resetPage();
+    }
+
+    public ?array $detalleFacturaModal = null;
+
+    public function verDetalleFactura(int $facturaId): void
+    {
+        $f = Factura::with(['detalles.producto:id,nombre', 'cliente:id,razon_social,nit', 'pagos'])
+            ->find($facturaId);
+
+        if (!$f) return;
+
+        $this->detalleFacturaModal = [
+            'id'          => $f->id,
+            'numero'      => trim((string)($f->prefijo ?? '') . ($f->numero ? '-' . $f->numero : '')),
+            'estado'      => $f->estado,
+            'fecha'       => optional($f->fecha)->format('d/m/Y') ?? (string) $f->fecha,
+            'vencimiento' => $f->vencimiento ? \Illuminate\Support\Carbon::parse($f->vencimiento)->format('d/m/Y') : null,
+            'cliente'     => $f->cliente?->razon_social ?? 'Sin cliente',
+            'nit'         => $f->cliente?->nit,
+            'total'       => (float) $f->total,
+            'pagado'      => (float) $f->pagado,
+            'saldo'       => (float) $f->saldo,
+            'notas'       => $f->notas,
+            'detalles'    => $f->detalles->map(fn ($d) => [
+                'producto'  => $d->producto?->nombre ?? $d->descripcion ?? 'Producto',
+                'cantidad'  => (float) $d->cantidad,
+                'precio'    => (float) $d->precio_unitario,
+                'descuento' => (float) $d->descuento_pct,
+                'impuesto'  => (float) $d->impuesto_pct,
+                'total'     => (float) $d->importe_total,
+            ])->all(),
+            'pagos'       => $f->pagos->map(fn ($p) => [
+                'fecha'  => optional($p->fecha)->format('d/m/Y') ?? (string) $p->fecha,
+                'metodo' => $p->metodo,
+                'monto'  => (float) $p->monto,
+                'ref'    => $p->referencia,
+            ])->all(),
+        ];
+    }
+
+    public function cerrarDetalleFactura(): void
+    {
+        $this->detalleFacturaModal = null;
+    }
+
+    public function topProductosPorMes(int $topN = 10): array
+    {
+        $rows = DB::table('factura_detalles as d')
+            ->join('facturas as f', 'f.id', '=', 'd.factura_id')
+            ->leftJoin('productos as p', 'p.id', '=', 'd.producto_id')
+            ->whereIn('f.estado', ['emitida', 'pagada', 'parcialmente_pagada'])
+            ->when($this->fechaInicio, fn ($q) => $q->whereDate('f.fecha', '>=', $this->fechaInicio))
+            ->when($this->fechaFin, fn ($q) => $q->whereDate('f.fecha', '<=', $this->fechaFin))
+            ->selectRaw("DATE_FORMAT(f.fecha, '%Y-%m') as mes")
+            ->selectRaw('d.producto_id')
+            ->selectRaw('COALESCE(p.nombre, d.descripcion) as producto')
+            ->selectRaw('SUM(d.cantidad) as cantidad_total')
+            ->selectRaw('SUM(d.importe_total) as total_vendido')
+            ->groupBy('mes', 'd.producto_id', 'producto')
+            ->orderBy('mes', 'desc')
+            ->orderByDesc('cantidad_total')
+            ->get();
+
+        $agrupado = [];
+        foreach ($rows as $r) {
+            $agrupado[$r->mes] ??= [];
+            if (count($agrupado[$r->mes]) < $topN) {
+                $agrupado[$r->mes][] = [
+                    'producto'    => $r->producto,
+                    'cantidad'    => (float) $r->cantidad_total,
+                    'total'       => (float) $r->total_vendido,
+                ];
+            }
+        }
+        return $agrupado;
+    }
+
     public function render()
     {
         $series = Serie::query()
@@ -456,6 +546,7 @@ class InformeVentas extends Component
             'asesores'          => $asesores,
             'rentabilidad'      => $rentabilidad,
             'puedeVerCostos'    => $this->puedeVerCostos(),
+            'topProductosPorMes' => $this->verTopProductos ? $this->topProductosPorMes(10) : [],
         ]);
     }
 }

@@ -44,91 +44,66 @@
         </div>
     </header>
 
-    <!-- KPIs -->
-    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Documentos</div>
-            <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                {{ number_format($totalFacturas ?? 0) }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Contado</div>
-            <div class="text-lg md:text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                ${{ number_format($totalContado ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Crédito</div>
-            <div class="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                ${{ number_format($totalCredito ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Facturado</div>
-            <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                ${{ number_format($totalFacturado ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Pagado</div>
-            <div class="text-lg md:text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                ${{ number_format($totalPagado ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Saldo pendiente por pagar</div>
+    <!-- KPIs unificados -->
+    @php
+        $verRentab = !$esCompra && !$esCotizacion && ($puedeVerCostos ?? false);
+        $kpis = [
+            ['label' => 'Documentos', 'value' => number_format($totalFacturas ?? 0), 'icon' => 'fa-file-invoice', 'color' => 'gray', 'money' => false],
+            ['label' => 'Facturado', 'value' => '$' . number_format($totalFacturado ?? 0, 0, ',', '.'), 'icon' => 'fa-coins', 'color' => 'gray'],
+            ['label' => 'Contado', 'value' => '$' . number_format($totalContado ?? 0, 0, ',', '.'), 'icon' => 'fa-money-bill-wave', 'color' => 'emerald'],
+            ['label' => 'Crédito', 'value' => '$' . number_format($totalCredito ?? 0, 0, ',', '.'), 'icon' => 'fa-credit-card', 'color' => 'indigo'],
+            ['label' => 'Pagado', 'value' => '$' . number_format($totalPagado ?? 0, 0, ',', '.'), 'icon' => 'fa-check-circle', 'color' => 'emerald'],
+            ['label' => 'Saldo pendiente', 'value' => '$' . number_format($totalSaldo ?? 0, 0, ',', '.'), 'icon' => 'fa-hourglass-half', 'color' => ($totalSaldo ?? 0) > 0 ? 'rose' : 'emerald'],
+        ];
+        if ($verRentab) {
+            $kpis[] = ['label' => 'Venta base', 'value' => '$' . number_format($totalBaseVenta ?? 0, 0, ',', '.'), 'icon' => 'fa-tag', 'color' => 'gray'];
+            $kpis[] = ['label' => 'Costo', 'value' => '$' . number_format($totalCostoVenta ?? 0, 0, ',', '.'), 'icon' => 'fa-warehouse', 'color' => 'amber'];
+            $kpis[] = ['label' => 'Utilidad', 'value' => '$' . number_format($totalGanancia ?? 0, 0, ',', '.'), 'icon' => 'fa-chart-line', 'color' => ($totalGanancia ?? 0) >= 0 ? 'emerald' : 'rose'];
+            $kpis[] = ['label' => 'Margen', 'value' => number_format($margenPromedio ?? 0, 1, ',', '.') . '%', 'icon' => 'fa-percentage', 'color' => ($margenPromedio ?? 0) >= 0 ? 'emerald' : 'rose'];
+        }
+        $colorMap = [
+            'gray' => ['bg' => 'bg-gray-100 dark:bg-gray-700/40', 'text' => 'text-gray-600 dark:text-gray-300', 'value' => 'text-gray-900 dark:text-white', 'bar' => 'bg-gray-400'],
+            'emerald' => ['bg' => 'bg-emerald-100 dark:bg-emerald-900/30', 'text' => 'text-emerald-600', 'value' => 'text-emerald-600 dark:text-emerald-400', 'bar' => 'bg-emerald-500'],
+            'indigo' => ['bg' => 'bg-indigo-100 dark:bg-indigo-900/30', 'text' => 'text-indigo-600', 'value' => 'text-indigo-600 dark:text-indigo-400', 'bar' => 'bg-indigo-500'],
+            'rose' => ['bg' => 'bg-rose-100 dark:bg-rose-900/30', 'text' => 'text-rose-600', 'value' => 'text-rose-600 dark:text-rose-400', 'bar' => 'bg-rose-500'],
+            'amber' => ['bg' => 'bg-amber-100 dark:bg-amber-900/30', 'text' => 'text-amber-600', 'value' => 'text-amber-600 dark:text-amber-400', 'bar' => 'bg-amber-500'],
+        ];
+    @endphp
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        @foreach($kpis as $k)
+            @php
+                $c = $colorMap[$k['color']] ?? $colorMap['gray'];
+                $clickable = ($k['label'] ?? '') === 'Saldo pendiente';
+                $activo = $clickable && $estadoFiltro === 'con_saldo';
+            @endphp
             <div
-                class="text-lg md:text-xl font-bold {{ ($totalSaldo ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
-                ${{ number_format($totalSaldo ?? 0, 0, ',', '.') }}
+                @if($clickable) wire:click="verSaldoPendiente" role="button" tabindex="0" title="Ver facturas con saldo pendiente" @endif
+                class="relative rounded-xl bg-white dark:bg-gray-800 shadow-sm border {{ $activo ? 'border-rose-400 ring-2 ring-rose-200' : 'border-gray-100 dark:border-gray-700' }} p-3 overflow-hidden {{ $clickable ? 'cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition' : '' }}">
+                <div class="absolute left-0 top-0 bottom-0 w-1 {{ $c['bar'] }}"></div>
+                <div class="flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-lg {{ $c['bg'] }} {{ $c['text'] }} grid place-items-center shrink-0">
+                        <i class="fas {{ $k['icon'] }} text-sm"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 truncate">
+                            {{ $k['label'] }}
+                            @if($clickable)
+                                <i class="fas fa-filter text-[9px] ml-1 {{ $activo ? 'text-rose-500' : 'text-gray-300' }}"></i>
+                            @endif
+                        </p>
+                        <p class="text-base font-bold {{ $c['value'] }} truncate">{{ $k['value'] }}</p>
+                    </div>
+                </div>
             </div>
-        </div>
+        @endforeach
     </section>
-
-    @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
-        <!-- KPIs RENTABILIDAD -->
-        <section class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Venta (base sin IVA)</div>
-                <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                    ${{ number_format($totalBaseVenta ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Costo</div>
-                <div class="text-lg md:text-xl font-bold text-amber-600 dark:text-amber-400">
-                    ${{ number_format($totalCostoVenta ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Utilidad</div>
-                <div class="text-lg md:text-xl font-bold {{ ($totalGanancia ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                    ${{ number_format($totalGanancia ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Margen</div>
-                <div class="text-lg md:text-xl font-bold {{ ($margenPromedio ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                    {{ number_format($margenPromedio ?? 0, 2, ',', '.') }}%
-                </div>
-            </div>
-        </section>
-    @endif
 
     <!-- FILTROS -->
     <section
         class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 md:p-5 space-y-4"
         :class="{ 'block': openFilters, 'hidden md:block': !openFilters }">
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-3 md:gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
 
             <!-- SERIE -->
             <div class="flex flex-col">
@@ -189,6 +164,7 @@
                     <option value="pagada">Pagada</option>
                     <option value="anulada">Anulada</option>
                     <option value="vencida">Vencida</option>
+                    <option value="con_saldo">Con saldo pendiente</option>
                 </select>
             </div>
 
@@ -282,7 +258,7 @@
             </div>
 
             <!-- FECHAS -->
-            <div class="grid grid-cols-2 gap-3" x-data="{ fpDesde: null, fpHasta: null }" x-init="fpDesde = flatpickr($refs.desde, {
+            <div class="grid grid-cols-2 gap-3 xl:col-span-2" x-data="{ fpDesde: null, fpHasta: null }" x-init="fpDesde = flatpickr($refs.desde, {
                 dateFormat: 'Y-m-d',
                 altInput: true,
                 altFormat: 'd/m/Y',
@@ -317,18 +293,82 @@
         </div>
 
         <!-- BOTONES -->
-        <div class="flex flex-col sm:flex-row justify-end gap-2 pt-1">
-            <button type="button" wire:click="cargarVentas"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow">
-                <i class="fas fa-search"></i> Buscar
-            </button>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 cursor-pointer text-sm hover:bg-amber-100 dark:hover:bg-amber-900/30 transition">
+                <input type="checkbox" wire:model.live="verTopProductos" class="rounded text-amber-500 focus:ring-amber-400">
+                <i class="fas fa-trophy text-amber-500"></i>
+                <span class="font-medium text-amber-800 dark:text-amber-200">Ver productos más vendidos por mes</span>
+            </label>
 
-            <button type="button" wire:click="limpiarFiltros"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm">
-                <i class="fas fa-sync-alt"></i> Limpiar
-            </button>
+            <div class="flex items-center gap-2">
+                <button type="button" wire:click="limpiarFiltros"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm">
+                    <i class="fas fa-sync-alt"></i> Limpiar
+                </button>
+                <button type="button" wire:click="cargarVentas"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
         </div>
     </section>
+
+    <!-- TOP PRODUCTOS POR MES -->
+    @if(!empty($topProductosPorMes))
+        @php $cantMeses = count($topProductosPorMes); @endphp
+        <section class="rounded-2xl border border-teal-200 dark:border-teal-800/40 bg-gradient-to-br from-teal-50/40 via-white to-white dark:from-teal-900/10 dark:via-gray-900 dark:to-gray-900 p-4 md:p-6">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-teal-100 dark:border-teal-800/30">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white grid place-items-center shadow">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base md:text-lg font-bold text-gray-800 dark:text-gray-100">Productos más vendidos por mes</h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Top 10 por mes · {{ $cantMeses }} {{ $cantMeses === 1 ? 'mes' : 'meses' }}</p>
+                    </div>
+                </div>
+                <button type="button" wire:click="$set('verTopProductos', false)"
+                    class="text-gray-400 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 {{ $cantMeses > 1 ? 'lg:grid-cols-2 xl:grid-cols-3' : '' }} gap-4">
+                @foreach($topProductosPorMes as $mes => $items)
+                    @php
+                        $mesNombre = \Illuminate\Support\Carbon::createFromFormat('Y-m', $mes)->locale('es')->isoFormat('MMMM YYYY');
+                        $totalMes = collect($items)->sum('total');
+                    @endphp
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div class="bg-gradient-to-r from-teal-500 to-emerald-600 text-white px-4 py-2 flex items-center justify-between">
+                            <span class="font-semibold capitalize">{{ $mesNombre }}</span>
+                            <span class="text-sm font-bold">$ {{ number_format($totalMes, 0, ',', '.') }}</span>
+                        </div>
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs uppercase">
+                                <tr>
+                                    <th class="px-3 py-2 text-left w-8">#</th>
+                                    <th class="px-3 py-2 text-left">Producto</th>
+                                    <th class="px-3 py-2 text-right">Cant.</th>
+                                    <th class="px-3 py-2 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @foreach($items as $idx => $it)
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                                        <td class="px-3 py-2 font-bold text-teal-600">{{ $idx + 1 }}</td>
+                                        <td class="px-3 py-2 text-gray-800 dark:text-gray-100">{{ $it['producto'] }}</td>
+                                        <td class="px-3 py-2 text-right text-gray-700 dark:text-gray-200">{{ rtrim(rtrim(number_format($it['cantidad'], 2, '.', ''), '0'), '.') }}</td>
+                                        <td class="px-3 py-2 text-right font-semibold text-emerald-600">$ {{ number_format($it['total'], 0, ',', '.') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
 
     <!-- TABLA -->
     <section
@@ -442,9 +482,20 @@
                                     ${{ number_format($pagado, 0, ',', '.') }}
                                 </td>
 
-                                <td
-                                    class="px-4 py-3 text-right {{ $saldo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
-                                    ${{ number_format($saldo, 0, ',', '.') }}
+                                <td class="px-4 py-3 text-right">
+                                    @if($saldo > 0 && !$esCompra && !$esCotizacion)
+                                        <button type="button"
+                                            wire:click="verDetalleFactura({{ $factura->id }})"
+                                            title="Ver detalle de la factura pendiente"
+                                            class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-semibold transition">
+                                            <i class="fas fa-eye text-xs"></i>
+                                            ${{ number_format($saldo, 0, ',', '.') }}
+                                        </button>
+                                    @else
+                                        <span class="{{ $saldo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
+                                            ${{ number_format($saldo, 0, ',', '.') }}
+                                        </span>
+                                    @endif
                                 </td>
 
                                 @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
@@ -479,6 +530,144 @@
             </div>
         </div>
     </section>
+
+    {{-- Modal de pagos para registrar abonos desde el informe --}}
+    <livewire:facturas.pagos-factura />
+
+    {{-- Modal: Detalle de factura pendiente --}}
+    @if($detalleFacturaModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" wire:click.self="cerrarDetalleFactura">
+            <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                {{-- Header --}}
+                <div class="bg-gradient-to-r from-teal-600 to-emerald-600 text-white px-5 py-4 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-white/20 grid place-items-center">
+                            <i class="fas fa-file-invoice-dollar"></i>
+                        </div>
+                        <div>
+                            <p class="text-xs uppercase tracking-wider opacity-90">Factura pendiente</p>
+                            <h2 class="text-lg font-bold">{{ $detalleFacturaModal['numero'] ?: '#' . $detalleFacturaModal['id'] }}</h2>
+                        </div>
+                    </div>
+                    <button type="button" wire:click="cerrarDetalleFactura" class="text-white/80 hover:text-white text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                {{-- Body --}}
+                <div class="flex-1 overflow-y-auto p-5 space-y-4">
+                    {{-- Cliente / fechas --}}
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">Cliente</p>
+                            <p class="font-semibold text-gray-800 dark:text-gray-100">{{ $detalleFacturaModal['cliente'] }}</p>
+                            @if($detalleFacturaModal['nit'])
+                                <p class="text-xs text-gray-500">NIT: {{ $detalleFacturaModal['nit'] }}</p>
+                            @endif
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-gray-500 uppercase">Fecha</p>
+                            <p class="font-semibold text-gray-800 dark:text-gray-100">{{ $detalleFacturaModal['fecha'] }}</p>
+                            @if($detalleFacturaModal['vencimiento'])
+                                <p class="text-xs text-gray-500">Vence: {{ $detalleFacturaModal['vencimiento'] }}</p>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Detalles --}}
+                    <div>
+                        <h4 class="text-xs uppercase font-bold text-gray-500 mb-2">Productos</h4>
+                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-gray-50 dark:bg-gray-800 text-gray-600 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">Producto</th>
+                                        <th class="px-3 py-2 text-right">Cant.</th>
+                                        <th class="px-3 py-2 text-right">Precio</th>
+                                        <th class="px-3 py-2 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    @foreach($detalleFacturaModal['detalles'] as $d)
+                                        <tr>
+                                            <td class="px-3 py-2 text-gray-800 dark:text-gray-100">{{ $d['producto'] }}</td>
+                                            <td class="px-3 py-2 text-right">{{ rtrim(rtrim(number_format($d['cantidad'], 2, '.', ''), '0'), '.') }}</td>
+                                            <td class="px-3 py-2 text-right">$ {{ number_format($d['precio'], 0, ',', '.') }}</td>
+                                            <td class="px-3 py-2 text-right font-semibold">$ {{ number_format($d['total'], 0, ',', '.') }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {{-- Pagos previos --}}
+                    @if(!empty($detalleFacturaModal['pagos']))
+                        <div>
+                            <h4 class="text-xs uppercase font-bold text-gray-500 mb-2">Abonos registrados</h4>
+                            <div class="rounded-lg border border-teal-200 bg-teal-50/50 overflow-hidden">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-teal-100/60 text-teal-700 text-xs uppercase">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Fecha</th>
+                                            <th class="px-3 py-2 text-left">Método</th>
+                                            <th class="px-3 py-2 text-left">Ref.</th>
+                                            <th class="px-3 py-2 text-right">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-teal-100">
+                                        @foreach($detalleFacturaModal['pagos'] as $p)
+                                            <tr>
+                                                <td class="px-3 py-2">{{ $p['fecha'] }}</td>
+                                                <td class="px-3 py-2">{{ $p['metodo'] ?? '—' }}</td>
+                                                <td class="px-3 py-2">{{ $p['ref'] ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-right text-teal-700 font-semibold">$ {{ number_format($p['monto'], 0, ',', '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($detalleFacturaModal['notas'])
+                        <div class="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r-lg text-sm text-amber-800">
+                            <span class="font-semibold">Notas:</span> {{ $detalleFacturaModal['notas'] }}
+                        </div>
+                    @endif
+
+                    {{-- Resumen --}}
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-1.5">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Total factura</span>
+                            <span class="font-semibold">$ {{ number_format($detalleFacturaModal['total'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Pagado</span>
+                            <span class="font-semibold text-teal-700">$ {{ number_format($detalleFacturaModal['pagado'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-base pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="font-bold">Saldo pendiente</span>
+                            <span class="font-extrabold text-amber-600 text-lg">$ {{ number_format($detalleFacturaModal['saldo'], 0, ',', '.') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Footer --}}
+                <div class="border-t border-gray-200 dark:border-gray-700 px-5 py-3 flex items-center justify-end gap-2 bg-gray-50 dark:bg-gray-800">
+                    <button type="button" wire:click="cerrarDetalleFactura"
+                        class="px-4 h-10 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 text-sm">
+                        Cerrar
+                    </button>
+                    <button type="button"
+                        wire:click="$dispatchTo('facturas.pagos-factura', 'abrir-modal-pago', { facturaId: {{ $detalleFacturaModal['id'] }} })"
+                        class="px-4 h-10 rounded-lg bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-sm font-semibold shadow">
+                        <i class="fas fa-money-check-alt mr-1"></i> Registrar pago
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 
 @assets

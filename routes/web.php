@@ -317,6 +317,9 @@ Route::get('/cotizaciones/{id}/print', [CotizacionesController::class, 'printVie
     Route::get('/facturas/{id}/editar', \App\Livewire\Facturas\FacturaForm::class)
         ->name('facturas.edit');
 
+    Route::get('/pos', \App\Livewire\Pos\PosFactura::class)
+        ->name('pos.factura');
+
     Route::get('/medios-pagos', MediosPagos::class)
         ->name('Mediospagos');
     Route::get('/Pagos-recibidos', Listapagosrecibidos::class)

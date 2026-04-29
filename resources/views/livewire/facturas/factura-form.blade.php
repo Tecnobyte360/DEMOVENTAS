@@ -513,6 +513,7 @@
                                 <td class="px-4 py-3 text-right">
                                     <div x-data="moneyInput({
                                             initial: @js((float)($l['precio_unitario'] ?? 0)),
+                                            watch: '$wire.lineas.{{ $i }}.precio_unitario',
                                             onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
                                          })">
                                         <input type="text" inputmode="decimal"

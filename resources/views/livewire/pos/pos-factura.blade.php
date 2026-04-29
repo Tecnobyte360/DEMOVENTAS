@@ -22,6 +22,7 @@
                     @php
                         $productosCat = $cat->subcategorias->flatMap->productos->unique('id')->values();
                         $abierta = $categoriaAbierta === $cat->id || $busquedaProducto !== '';
+                        $portada = $productosCat->firstWhere(fn($x) => !empty($x->imagen_path));
                     @endphp
                     @if($busquedaProducto !== '' && $productosCat->isEmpty()) @continue @endif
 
@@ -29,11 +30,14 @@
                         <button type="button" wire:click="toggleCategoria({{ $cat->id }})"
                             class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/40">
                             <div class="flex items-center gap-3">
-                                <div class="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/40 grid place-items-center text-amber-700 dark:text-amber-300">
-                                    <i class="fas fa-tag"></i>
+                                <div class="h-10 w-10 rounded-full bg-gray-100 dark:bg-gray-700 overflow-hidden grid place-items-center ring-1 ring-gray-200 dark:ring-gray-600">
+                                    @if($portada)
+                                        <img src="{{ $portada->imagen_path }}" alt="{{ $cat->nombre }}" class="h-full w-full object-cover">
+                                    @else
+                                        <i class="fas fa-tag text-gray-400 text-sm"></i>
+                                    @endif
                                 </div>
                                 <span class="font-semibold text-gray-800 dark:text-gray-100">{{ $cat->nombre }}</span>
-                                <span class="text-xs text-gray-500">({{ $productosCat->count() }})</span>
                             </div>
                             <i class="fas {{ $abierta ? 'fa-chevron-up' : 'fa-chevron-down' }} text-gray-500"></i>
                         </button>
@@ -43,20 +47,23 @@
                                 @if($productosCat->isEmpty())
                                     <p class="text-sm text-gray-400 italic py-4 text-center">Sin productos</p>
                                 @else
-                                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                         @foreach($productosCat as $p)
                                             <button type="button" wire:click="agregar({{ $p->id }})"
-                                                class="group rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:shadow-md transition overflow-hidden bg-white dark:bg-gray-800 text-left">
-                                                <div class="aspect-square bg-gray-100 dark:bg-gray-900 grid place-items-center overflow-hidden">
-                                                    @if($p->imagen_path)
-                                                        <img src="{{ $p->imagen_path }}" alt="{{ $p->nombre }}" class="h-full w-full object-cover group-hover:scale-105 transition">
-                                                    @else
-                                                        <i class="fas fa-image text-3xl text-gray-300"></i>
-                                                    @endif
+                                                class="group rounded-2xl border-2 border-gray-200 dark:border-gray-700 hover:border-blue-500 hover:shadow-lg focus:border-blue-500 focus:shadow-lg focus:outline-none transition overflow-hidden bg-white dark:bg-gray-800 text-center">
+                                                <div class="p-3">
+                                                    <div class="mx-auto h-24 w-24 rounded-full bg-gray-50 dark:bg-gray-900 grid place-items-center overflow-hidden ring-1 ring-gray-100 dark:ring-gray-700">
+                                                        @if($p->imagen_path)
+                                                            <img src="{{ $p->imagen_path }}" alt="{{ $p->nombre }}" class="h-full w-full object-cover group-hover:scale-105 transition">
+                                                        @else
+                                                            <i class="fas fa-image text-2xl text-gray-300"></i>
+                                                        @endif
+                                                    </div>
                                                 </div>
-                                                <div class="p-2">
-                                                    <p class="text-sm font-medium text-gray-800 dark:text-gray-100 line-clamp-2">{{ $p->nombre }}</p>
-                                                    <p class="text-sm font-bold text-blue-600 dark:text-blue-400 mt-1">
+                                                <div class="px-2 pb-3">
+                                                    <p class="text-[10px] uppercase tracking-wide text-gray-400 leading-tight">{{ $cat->nombre }}</p>
+                                                    <p class="text-sm font-semibold text-gray-800 dark:text-gray-100 leading-tight mt-0.5 line-clamp-2">{{ $p->nombre }}</p>
+                                                    <p class="text-sm font-bold text-gray-900 dark:text-gray-50 mt-2">
                                                         $ {{ number_format((float) $p->precio, 0, ',', '.') }}
                                                     </p>
                                                 </div>

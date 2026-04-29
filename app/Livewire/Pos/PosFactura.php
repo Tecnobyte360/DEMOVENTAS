@@ -40,6 +40,8 @@ class PosFactura extends Component
         $this->bodegaDefaultId = $empresa?->bodega_predeterminada_id;
         $this->serieDefaultId = Serie::defaultParaCodigo('factura')?->id;
 
+        $this->categoriaAbierta = Categoria::query()->orderBy('nombre')->value('id');
+
         $this->cuentaCobroDefaultId = PlanCuentas::query()
             ->where('cuenta_activa', 1)
             ->where('titulo', 0)

@@ -61,18 +61,20 @@ class PosFactura extends Component
         $productos = collect();
         if ($this->categoriaActiva || $this->busquedaProducto !== '') {
             $q = Producto::query()
-                ->where('activo', 1)
-                ->select('id', 'nombre', 'precio', 'imagen_path', 'subcategoria_id');
+                ->from('productos as p')
+                ->leftJoin('subcategorias as s', 's.id', '=', 'p.subcategoria_id')
+                ->where('p.activo', 1)
+                ->select('p.id', 'p.nombre', 'p.precio', 'p.imagen_path', 'p.subcategoria_id');
 
             if ($this->categoriaActiva && $this->busquedaProducto === '') {
-                $q->whereHas('subcategoria', fn ($s) => $s->where('categoria_id', $this->categoriaActiva));
+                $q->where('s.categoria_id', $this->categoriaActiva);
             }
 
             if ($this->busquedaProducto !== '') {
-                $q->where('nombre', 'like', '%' . $this->busquedaProducto . '%');
+                $q->where('p.nombre', 'like', '%' . $this->busquedaProducto . '%');
             }
 
-            $productos = $q->orderBy('nombre')->limit(60)->get();
+            $productos = $q->orderBy('p.nombre')->limit(60)->get();
         }
 
         $clientesSugeridos = collect();

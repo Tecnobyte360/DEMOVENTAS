@@ -388,8 +388,9 @@
 
         .payment-box {
             margin-top: 10px;
-            border: 1px solid #dbe3f1;
-            background: #f8fbff;
+            border: 1px solid {{ $primary }};
+            background: rgba(0,0,0,0.02);
+            border-left: 4px solid {{ $primary }};
             border-radius: 8px;
             padding: 8px 10px;
         }
@@ -398,20 +399,20 @@
             font-size: 10px;
             font-weight: 800;
             text-transform: uppercase;
-            color: #223361;
+            color: {{ $primary }};
             margin-bottom: 4px;
             letter-spacing: .4px;
         }
 
         .payment-row {
             font-size: 10px;
-            color: #374151;
+            color: {{ $ink }};
             line-height: 1.35;
         }
 
         .payment-bank {
             font-weight: 700;
-            color: #223361;
+            color: {{ $primary }};
         }
 
         .payment-account {
@@ -419,12 +420,12 @@
             margin-left: 6px;
             padding: 3px 10px;
             border-radius: 20px;
-            background: #e8f0ff;
-            border: 1px solid #c9d8ff;
+            background: {{ $primary }};
+            color: #fff;
+            border: 1px solid {{ $primary }};
             font-weight: 800;
             letter-spacing: 1px;
             font-size: 11px;
-            color: #1e3a8a;
         }
 
         .payment-owner {
@@ -443,6 +444,11 @@
 
         .terms {
             margin-top: 10px;
+            border-left: 4px solid {{ $primary }} !important;
+        }
+        .terms h4 {
+            color: {{ $primary }} !important;
+            font-weight: 800;
         }
 
         .page-number:after {
@@ -604,20 +610,18 @@
         <table class="items">
             <thead>
                 <tr>
-                    <th style="width:34%;">Producto</th>
-                    <th style="width:12%;" class="text-center">Bodega</th>
+                    <th style="width:42%;" class="text-left">Producto</th>
                     <th style="width:8%;" class="text-right">Cant.</th>
-                    <th style="width:12%;" class="text-right">Precio</th>
+                    <th style="width:14%;" class="text-right">Precio</th>
                     <th style="width:8%;" class="text-right">Desc</th>
                     <th style="width:8%;" class="text-right">IVA</th>
-                    <th style="width:18%;" class="text-right">Total línea</th>
+                    <th style="width:20%;" class="text-right">Total línea</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($factura->detalles ?? [] as $d)
                     @php
                         $nombre  = $d->producto->nombre ?? ($d->descripcion ?? '#' . $d->producto_id);
-                        $bodega  = $d->bodega->nombre ?? '—';
                         $cant    = (float) $d->cantidad;
                         $precio  = (float) $d->precio_unitario;
                         $descPct = (float) ($d->descuento_pct ?? 0);
@@ -629,8 +633,7 @@
                     @endphp
 
                     <tr>
-                        <td>{{ $nombre }}</td>
-                        <td class="text-center">{{ $bodega }}</td>
+                        <td class="text-left">{{ $nombre }}</td>
                         <td class="text-right">{{ rtrim(rtrim(number_format($cant, 3, '.', ''), '0'), '.') }}</td>
                         <td class="text-right">{{ $money($precio) }}</td>
                         <td class="text-right">{{ $fmtPct($descPct) }}</td>

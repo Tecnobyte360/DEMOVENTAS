@@ -27,19 +27,26 @@ class Indicadores extends Component
         $hoy = Carbon::today()->toDateString();
         $codigos = array_map('strtoupper', $this->codigosVentas);
 
-        $q = Factura::query()
+        // Base: solo facturas reales (no borradores, no anuladas)
+        $base = Factura::query()
             ->whereDate('fecha', $hoy)
+            ->whereNotIn('estado', ['borrador', 'anulada'])
             ->whereHas('serie.tipo', function ($t) use ($codigos) {
                 $t->whereIn(DB::raw('UPPER(codigo)'), $codigos);
             });
 
-        $this->totalPedidos   = (int) $q->count();
-        $this->totalFacturado = (float) $q->sum('total');
-        $this->totalPagado    = (float) $q->sum('pagado');
-        $this->totalPendiente = (float) $q->sum('saldo');
+        // Ventas = solo lo PAGADO (no contar facturas pendientes como ventas)
+        $qPagadas = (clone $base)->where('estado', 'pagada');
+        $this->totalPedidos   = (int) $qPagadas->count();
+        $this->totalFacturado = (float) $qPagadas->sum('total');
+        $this->totalPagado    = (float) $qPagadas->sum('pagado');
+
+        // Saldo pendiente = solo facturas emitidas o parcialmente pagadas (no borradores)
+        $qPendientes = (clone $base)->whereIn('estado', ['emitida', 'parcialmente_pagada']);
+        $this->totalPendiente = (float) $qPendientes->sum('saldo');
 
         // ✅ Chart: una sola etiqueta (HOY)
-        $this->chartLabels    = [Carbon::today()->translatedFormat('d M')]; 
+        $this->chartLabels    = [Carbon::today()->translatedFormat('d M')];
         $this->chartFacturado = [$this->totalFacturado];
         $this->chartPagado    = [$this->totalPagado];
         $this->chartPendiente = [$this->totalPendiente];

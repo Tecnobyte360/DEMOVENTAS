@@ -63,7 +63,6 @@ class PosFactura extends Component
             $q = Producto::query()
                 ->from('productos as p')
                 ->leftJoin('subcategorias as s', 's.id', '=', 'p.subcategoria_id')
-                ->where('p.activo', 1)
                 ->select('p.id', 'p.nombre', 'p.precio', 'p.imagen_path', 'p.subcategoria_id');
 
             if ($this->categoriaActiva && $this->busquedaProducto === '') {

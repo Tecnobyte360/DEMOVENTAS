@@ -453,7 +453,9 @@
 
                                 {{-- Precio --}}
                                 <td class="px-4 py-3 text-right">
-                                    <div x-data="moneyInput({
+                                    {{-- wire:key incluye el precio_unitario para que Alpine se reinicie cuando el server cambie el valor --}}
+                                    <div wire:key="precio-{{ $i }}-{{ (int)(($l['producto_id'] ?? 0)) }}-{{ (int)round((float)($l['precio_unitario'] ?? 0)) }}"
+                                         x-data="moneyInput({
                                             initial: @js((float)($l['precio_unitario'] ?? 0)),
                                             onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
                                          })"

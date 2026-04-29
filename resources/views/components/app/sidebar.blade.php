@@ -116,9 +116,11 @@
                     const term = v.trim().toLowerCase();
                     const nav = document.querySelector('#sidebar nav');
                     if (!nav) return;
-                    nav.querySelectorAll('a, button').forEach(el => {
-                        const txt = (el.textContent || '').trim().toLowerCase();
+                    // Filtra solo items de PRIMER NIVEL (no submenús, para no romper x-show de Alpine)
+                    const items = nav.querySelectorAll(':scope > .space-y-1 > a, :scope > .space-y-1 > div');
+                    items.forEach(el => {
                         if (!term) { el.style.display = ''; return; }
+                        const txt = (el.textContent || '').trim().toLowerCase();
                         el.style.display = txt.includes(term) ? '' : 'none';
                     });
                 })"
@@ -981,14 +983,9 @@
         margin-bottom: 0.25rem !important;
     }
 
-    /* Items: texto blanco más limpio, con padding cómodo */
-    #sidebar nav a,
-    #sidebar nav button {
-        padding-top: 0.625rem !important;
-        padding-bottom: 0.625rem !important;
-    }
-    #sidebar nav a span,
-    #sidebar nav button span {
+    /* Items: texto blanco más limpio */
+    #sidebar nav > .space-y-1 > a span,
+    #sidebar nav > .space-y-1 > div > button span {
         font-weight: 500 !important;
         font-size: 14px !important;
         opacity: .92;

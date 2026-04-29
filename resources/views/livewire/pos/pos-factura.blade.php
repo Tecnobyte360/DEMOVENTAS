@@ -112,48 +112,33 @@
                     @endforelse
                 </div>
             @else
-            {{-- Grupos por subcategoría --}}
-            <div class="space-y-5">
-                @forelse($productosAgrupados as $subNombre => $items)
-                    <div>
-                        <div class="flex items-center gap-2 mb-3">
-                            <span class="h-1.5 w-1.5 rounded-full bg-orange-500"></span>
-                            <h3 class="text-sm font-bold uppercase tracking-wider text-gray-700 dark:text-gray-200">{{ $subNombre }}</h3>
-                            <span class="text-xs text-gray-400">({{ $items->count() }})</span>
-                            <div class="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+            {{-- Grid simple de productos --}}
+            <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4">
+                @forelse($productos as $p)
+                    <button type="button" wire:click="agregar({{ $p->id }})"
+                        class="group rounded-2xl bg-white dark:bg-gray-800 shadow hover:shadow-lg border border-gray-100 dark:border-gray-700 hover:border-orange-300 transition"
+                        style="display:flex; flex-direction:column; align-items:stretch; min-height:220px; padding:12px;">
+                        <div style="display:flex; justify-content:center;">
+                            <div class="rounded-full bg-gray-50 dark:bg-gray-900 ring-1 ring-gray-100 dark:ring-gray-700"
+                                style="height:96px; width:96px; display:grid; place-items:center; overflow:hidden;">
+                                @if($p->imagen_path)
+                                    <img src="{{ $p->imagen_path }}" alt="{{ $p->nombre }}" style="height:100%; width:100%; object-fit:cover;">
+                                @else
+                                    <i class="fas fa-image text-2xl text-gray-300"></i>
+                                @endif
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                            @foreach($items as $p)
-                                <button type="button" wire:click="agregar({{ $p->id }})"
-                                    class="group rounded-2xl bg-white dark:bg-gray-800 hover:shadow-lg transition overflow-hidden text-left"
-                                    style="border:1px solid #e5e7eb; min-height:200px; display:flex; flex-direction:column;">
-                                    <div style="position:relative; height:120px; background:linear-gradient(135deg,#fff7ed,#ffedd5); display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                                        @if($p->imagen_path)
-                                            <img src="{{ $p->imagen_path }}" alt="{{ $p->nombre }}"
-                                                style="height:100%; width:100%; object-fit:cover; transition:transform .2s;"
-                                                onmouseover="this.style.transform='scale(1.06)'" onmouseout="this.style.transform='scale(1)'">
-                                        @else
-                                            <i class="fas fa-utensils" style="font-size:32px; color:#fb923c; opacity:.5;"></i>
-                                        @endif
-                                        <span style="position:absolute; top:6px; right:6px; background:#fff; color:#ea580c; font-size:10px; font-weight:700; padding:2px 8px; border-radius:9999px; box-shadow:0 1px 2px rgba(0,0,0,.08);">
-                                            $ {{ number_format((float) $p->precio, 0, ',', '.') }}
-                                        </span>
-                                    </div>
-                                    <div style="padding:10px 12px; flex:1; display:flex; align-items:center;">
-                                        <p style="font-size:0.85rem; font-weight:600; line-height:1.25; color:#1f2937;" class="dark:text-gray-100">{{ $p->nombre ?: '(sin nombre)' }}</p>
-                                    </div>
-                                    <div style="padding:0 12px 10px; display:flex; justify-content:space-between; align-items:center;">
-                                        <span style="font-size:11px; color:#9ca3af;">Toca para agregar</span>
-                                        <span style="background:#f97316; color:white; height:26px; width:26px; border-radius:9999px; display:grid; place-items:center; font-weight:700;">+</span>
-                                    </div>
-                                </button>
-                            @endforeach
+                        <div class="text-gray-800 dark:text-gray-100" style="margin-top:10px; text-align:center; flex:1;">
+                            <p style="font-size:0.875rem; font-weight:600; line-height:1.2; min-height:2.4rem;">{{ $p->nombre ?: '(sin nombre)' }}</p>
+                            <p class="text-amber-500" style="font-size:1rem; font-weight:700; margin-top:6px;">
+                                $ {{ number_format((float) $p->precio, 0, ',', '.') }}
+                            </p>
                         </div>
-                    </div>
+                    </button>
                 @empty
-                    <div class="text-center py-16 text-gray-400">
-                        <i class="fas fa-utensils text-5xl mb-3"></i>
-                        <p class="text-base font-medium">No hay productos para mostrar.</p>
+                    <div class="col-span-full text-center py-12 text-gray-400">
+                        <i class="fas fa-utensils text-4xl mb-3"></i>
+                        <p>No hay productos para mostrar.</p>
                     </div>
                 @endforelse
             </div>

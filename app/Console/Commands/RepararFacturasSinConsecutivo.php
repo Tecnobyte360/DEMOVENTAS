@@ -21,8 +21,9 @@ class RepararFacturasSinConsecutivo extends Command
     {
         $dry = (bool) $this->option('dry');
 
+        // Solo facturas pagadas merecen consecutivo
         $facturas = Factura::query()
-            ->whereIn('estado', ['pagada', 'emitida', 'parcialmente_pagada'])
+            ->where('estado', 'pagada')
             ->where(function ($q) {
                 $q->whereNull('numero')->orWhere('numero', '');
             })

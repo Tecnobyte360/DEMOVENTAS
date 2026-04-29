@@ -420,6 +420,49 @@ class InformeVentas extends Component
         $this->resetPage();
     }
 
+    public ?array $detalleFacturaModal = null;
+
+    public function verDetalleFactura(int $facturaId): void
+    {
+        $f = Factura::with(['detalles.producto:id,nombre', 'cliente:id,razon_social,nit', 'pagos'])
+            ->find($facturaId);
+
+        if (!$f) return;
+
+        $this->detalleFacturaModal = [
+            'id'          => $f->id,
+            'numero'      => trim((string)($f->prefijo ?? '') . ($f->numero ? '-' . $f->numero : '')),
+            'estado'      => $f->estado,
+            'fecha'       => optional($f->fecha)->format('d/m/Y') ?? (string) $f->fecha,
+            'vencimiento' => $f->vencimiento ? \Illuminate\Support\Carbon::parse($f->vencimiento)->format('d/m/Y') : null,
+            'cliente'     => $f->cliente?->razon_social ?? 'Sin cliente',
+            'nit'         => $f->cliente?->nit,
+            'total'       => (float) $f->total,
+            'pagado'      => (float) $f->pagado,
+            'saldo'       => (float) $f->saldo,
+            'notas'       => $f->notas,
+            'detalles'    => $f->detalles->map(fn ($d) => [
+                'producto'  => $d->producto?->nombre ?? $d->descripcion ?? 'Producto',
+                'cantidad'  => (float) $d->cantidad,
+                'precio'    => (float) $d->precio_unitario,
+                'descuento' => (float) $d->descuento_pct,
+                'impuesto'  => (float) $d->impuesto_pct,
+                'total'     => (float) $d->importe_total,
+            ])->all(),
+            'pagos'       => $f->pagos->map(fn ($p) => [
+                'fecha'  => optional($p->fecha)->format('d/m/Y') ?? (string) $p->fecha,
+                'metodo' => $p->metodo,
+                'monto'  => (float) $p->monto,
+                'ref'    => $p->referencia,
+            ])->all(),
+        ];
+    }
+
+    public function cerrarDetalleFactura(): void
+    {
+        $this->detalleFacturaModal = null;
+    }
+
     public function topProductosPorMes(int $topN = 10): array
     {
         $rows = DB::table('factura_detalles as d')

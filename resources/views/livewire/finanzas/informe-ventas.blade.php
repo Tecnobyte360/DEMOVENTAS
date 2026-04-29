@@ -485,10 +485,10 @@
                                 <td class="px-4 py-3 text-right">
                                     @if($saldo > 0 && !$esCompra && !$esCotizacion)
                                         <button type="button"
-                                            wire:click="$dispatchTo('facturas.pagos-factura', 'abrir-modal-pago', { facturaId: {{ $factura->id }} })"
-                                            title="Registrar pago de esta factura"
+                                            wire:click="verDetalleFactura({{ $factura->id }})"
+                                            title="Ver detalle de la factura pendiente"
                                             class="inline-flex items-center gap-1 px-2 py-1 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 font-semibold transition">
-                                            <i class="fas fa-money-check-alt text-xs"></i>
+                                            <i class="fas fa-eye text-xs"></i>
                                             ${{ number_format($saldo, 0, ',', '.') }}
                                         </button>
                                     @else
@@ -533,6 +533,136 @@
 
     {{-- Modal de pagos para registrar abonos desde el informe --}}
     <livewire:facturas.pagos-factura />
+
+    {{-- Modal: Detalle de factura pendiente --}}
+    @if($detalleFacturaModal)
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" wire:click.self="cerrarDetalleFactura">
+            <div class="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+                {{-- Header --}}
+                <div class="bg-gradient-to-r from-rose-500 to-rose-600 text-white px-5 py-4 flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase tracking-wider opacity-90">Factura pendiente</p>
+                        <h2 class="text-lg font-bold">{{ $detalleFacturaModal['numero'] ?: '#' . $detalleFacturaModal['id'] }}</h2>
+                    </div>
+                    <button type="button" wire:click="cerrarDetalleFactura" class="text-white/80 hover:text-white text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                {{-- Body --}}
+                <div class="flex-1 overflow-y-auto p-5 space-y-4">
+                    {{-- Cliente / fechas --}}
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase">Cliente</p>
+                            <p class="font-semibold text-gray-800 dark:text-gray-100">{{ $detalleFacturaModal['cliente'] }}</p>
+                            @if($detalleFacturaModal['nit'])
+                                <p class="text-xs text-gray-500">NIT: {{ $detalleFacturaModal['nit'] }}</p>
+                            @endif
+                        </div>
+                        <div class="text-right">
+                            <p class="text-xs text-gray-500 uppercase">Fecha</p>
+                            <p class="font-semibold text-gray-800 dark:text-gray-100">{{ $detalleFacturaModal['fecha'] }}</p>
+                            @if($detalleFacturaModal['vencimiento'])
+                                <p class="text-xs text-gray-500">Vence: {{ $detalleFacturaModal['vencimiento'] }}</p>
+                            @endif
+                        </div>
+                    </div>
+
+                    {{-- Detalles --}}
+                    <div>
+                        <h4 class="text-xs uppercase font-bold text-gray-500 mb-2">Productos</h4>
+                        <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-gray-50 dark:bg-gray-800 text-gray-600 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">Producto</th>
+                                        <th class="px-3 py-2 text-right">Cant.</th>
+                                        <th class="px-3 py-2 text-right">Precio</th>
+                                        <th class="px-3 py-2 text-right">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                    @foreach($detalleFacturaModal['detalles'] as $d)
+                                        <tr>
+                                            <td class="px-3 py-2 text-gray-800 dark:text-gray-100">{{ $d['producto'] }}</td>
+                                            <td class="px-3 py-2 text-right">{{ rtrim(rtrim(number_format($d['cantidad'], 2, '.', ''), '0'), '.') }}</td>
+                                            <td class="px-3 py-2 text-right">$ {{ number_format($d['precio'], 0, ',', '.') }}</td>
+                                            <td class="px-3 py-2 text-right font-semibold">$ {{ number_format($d['total'], 0, ',', '.') }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {{-- Pagos previos --}}
+                    @if(!empty($detalleFacturaModal['pagos']))
+                        <div>
+                            <h4 class="text-xs uppercase font-bold text-gray-500 mb-2">Abonos registrados</h4>
+                            <div class="rounded-lg border border-emerald-200 bg-emerald-50/50 overflow-hidden">
+                                <table class="min-w-full text-sm">
+                                    <thead class="bg-emerald-100/60 text-emerald-700 text-xs uppercase">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left">Fecha</th>
+                                            <th class="px-3 py-2 text-left">Método</th>
+                                            <th class="px-3 py-2 text-left">Ref.</th>
+                                            <th class="px-3 py-2 text-right">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-emerald-100">
+                                        @foreach($detalleFacturaModal['pagos'] as $p)
+                                            <tr>
+                                                <td class="px-3 py-2">{{ $p['fecha'] }}</td>
+                                                <td class="px-3 py-2">{{ $p['metodo'] ?? '—' }}</td>
+                                                <td class="px-3 py-2">{{ $p['ref'] ?? '—' }}</td>
+                                                <td class="px-3 py-2 text-right text-emerald-600 font-semibold">$ {{ number_format($p['monto'], 0, ',', '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    @endif
+
+                    @if($detalleFacturaModal['notas'])
+                        <div class="bg-amber-50 border-l-4 border-amber-400 p-3 rounded-r-lg text-sm text-amber-800">
+                            <span class="font-semibold">Notas:</span> {{ $detalleFacturaModal['notas'] }}
+                        </div>
+                    @endif
+
+                    {{-- Resumen --}}
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4 space-y-1.5">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Total factura</span>
+                            <span class="font-semibold">$ {{ number_format($detalleFacturaModal['total'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Pagado</span>
+                            <span class="font-semibold text-emerald-600">$ {{ number_format($detalleFacturaModal['pagado'], 0, ',', '.') }}</span>
+                        </div>
+                        <div class="flex justify-between text-base pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span class="font-bold">Saldo pendiente</span>
+                            <span class="font-extrabold text-rose-600 text-lg">$ {{ number_format($detalleFacturaModal['saldo'], 0, ',', '.') }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Footer --}}
+                <div class="border-t border-gray-200 dark:border-gray-700 px-5 py-3 flex items-center justify-end gap-2 bg-gray-50 dark:bg-gray-800">
+                    <button type="button" wire:click="cerrarDetalleFactura"
+                        class="px-4 h-10 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-100 text-sm">
+                        Cerrar
+                    </button>
+                    <button type="button"
+                        wire:click="$dispatchTo('facturas.pagos-factura', 'abrir-modal-pago', { facturaId: {{ $detalleFacturaModal['id'] }} })"
+                        class="px-4 h-10 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold">
+                        <i class="fas fa-money-check-alt mr-1"></i> Registrar pago
+                    </button>
+                </div>
+            </div>
+        </div>
+    @endif
 </div>
 
 @assets

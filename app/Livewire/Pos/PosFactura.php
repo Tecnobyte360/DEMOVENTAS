@@ -115,7 +115,7 @@ class PosFactura extends Component
         }
 
         $p = Producto::with(['impuesto:id,porcentaje,activo'])
-            ->select('id', 'nombre', 'precio', 'imagen_path', 'cuenta_ingreso_id', 'impuesto_id')
+            ->select('id', 'nombre', 'precio', 'imagen_path', 'cuenta_ingreso_id', 'impuesto_id', 'es_inventariable')
             ->find($productoId);
 
         if (!$p) return;
@@ -133,6 +133,7 @@ class PosFactura extends Component
             'impuesto_pct' => $impPct,
             'cuenta_ingreso_id' => $p->cuenta_ingreso_id,
             'descuento_pct' => 0,
+            'es_inventariable' => (bool) ($p->es_inventariable ?? true),
         ];
     }
 
@@ -263,9 +264,10 @@ class PosFactura extends Component
                 ]);
 
                 foreach ($this->carrito as $i) {
+                    $esInv = (bool) ($i['es_inventariable'] ?? true);
                     $factura->detalles()->create([
                         'producto_id' => $i['producto_id'],
-                        'bodega_id' => $this->bodegaDefaultId,
+                        'bodega_id' => $esInv ? $this->bodegaDefaultId : null,
                         'cuenta_ingreso_id' => $i['cuenta_ingreso_id'],
                         'descripcion' => $i['nombre'],
                         'cantidad' => $i['cantidad'],

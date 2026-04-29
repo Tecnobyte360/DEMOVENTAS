@@ -89,7 +89,9 @@
                 {{-- Órdenes pendientes --}}
                 @if($ordenesPendientes->isNotEmpty())
                     <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700 max-h-40 overflow-y-auto">
-                        <p class="text-[11px] uppercase tracking-wide text-gray-400 mb-1">Pendientes</p>
+                        <p class="text-[11px] uppercase tracking-wide text-gray-400 mb-1" title="Facturas en borrador, sin cobrar todavía. Haz clic para abrirlas y agregar productos o cobrarlas.">
+                            Órdenes pendientes de cobro ({{ $ordenesPendientes->count() }})
+                        </p>
                         <div class="space-y-1">
                             @foreach($ordenesPendientes as $op)
                                 <button type="button" wire:click="cargarOrden({{ $op->id }})"

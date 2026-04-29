@@ -11,10 +11,18 @@
     }
     if (strlen($hex) !== 6) { $hex = '1F2937'; }
 
-    $primary = '#'.$hex;
     $r = hexdec(substr($hex, 0, 2));
     $g = hexdec(substr($hex, 2, 2));
     $b = hexdec(substr($hex, 4, 2));
+
+    // Si el color es muy claro (ej. blanco), forzar fallback oscuro para que el header sea visible
+    $brillo = ($r * 299 + $g * 587 + $b * 114) / 1000; // 0..255
+    if ($brillo > 200) {
+        $hex = '1F2937';
+        $r = 0x1F; $g = 0x29; $b = 0x37;
+    }
+
+    $primary = '#'.$hex;
 
     // Variante más oscura para el gradiente (mezcla con negro ~15%)
     $darkR = max(0, (int) round($r * 0.75));

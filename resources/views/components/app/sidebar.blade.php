@@ -145,6 +145,11 @@
             <div class="space-y-1">
 
                 <!-- Dashboard -->
+                @php
+                    $dashboardPermisoExiste = \Spatie\Permission\Models\Permission::where('name', 'dashboard.ver')->exists();
+                    $puedeVerDashboard = !$dashboardPermisoExiste || (auth()->user()?->can('dashboard.ver') ?? false);
+                @endphp
+                @if($puedeVerDashboard)
                 <a href="{{ route('dashboard') }}"
                     class="group relative flex items-center gap-3 px-3 py-2.5 rounded-lg
                           transition-all duration-200 overflow-hidden
@@ -167,6 +172,7 @@
                         Dashboard
                     </span>
                 </a>
+                @endif
 
                 <!-- Section: OPERACIONES -->
                 @canany(['ventas.ver', 'facturas.ver', 'cotizaciones.ver', 'notas_credito.ver', 'caja.ver',

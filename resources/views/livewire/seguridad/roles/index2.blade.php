@@ -389,7 +389,8 @@
         MODAL: ASIGNAR PERMISOS (agrupados por módulo)
     ============================================================= --}}
     <template x-teleport="body">
-        <div x-show="isVisibleAssignPermissionModal" x-cloak class="fixed inset-0 z-[90] flex items-center justify-center p-4">
+        <div x-show="isVisibleAssignPermissionModal" x-cloak class="fixed inset-0 z-[90] flex items-center justify-center p-4"
+            style="--brand:{{ $primary }}; --brand-dark:{{ $primaryDark }}; --brand-rgb:{{ $r }},{{ $g }},{{ $b }};">
             <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" @click="isVisibleAssignPermissionModal=false"></div>
 
             <div x-show="isVisibleAssignPermissionModal"

@@ -5,6 +5,43 @@
         {{-- ===================== CATÁLOGO ===================== --}}
         <section class="lg:col-span-2 xl:col-span-3 space-y-4">
 
+            {{-- Órdenes pendientes (barra superior tipo "mesas abiertas") --}}
+            @if($ordenesPendientes->isNotEmpty())
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                            <i class="fas fa-clipboard-list text-orange-500 mr-1"></i>
+                            Órdenes pendientes de cobro
+                            <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">{{ $ordenesPendientes->count() }}</span>
+                        </p>
+                        @if($facturaEditandoId)
+                            <button type="button" wire:click="nuevaOrden"
+                                class="text-xs px-3 h-7 rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">
+                                <i class="fas fa-plus mr-1"></i> Nueva orden
+                            </button>
+                        @endif
+                    </div>
+                    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                        @foreach($ordenesPendientes as $op)
+                            <button type="button" wire:click="cargarOrden({{ $op->id }})"
+                                class="shrink-0 flex flex-col items-start min-w-[160px] px-3 py-2 rounded-xl border transition
+                                    {{ $facturaEditandoId === $op->id
+                                        ? 'bg-orange-50 dark:bg-orange-900/30 border-orange-400 ring-2 ring-orange-200'
+                                        : 'bg-gray-50 dark:bg-gray-700/40 border-gray-200 dark:border-gray-700 hover:border-orange-300' }}">
+                                <span class="text-[10px] uppercase tracking-wide text-gray-400">Orden</span>
+                                <span class="text-sm font-bold text-gray-800 dark:text-gray-100">#{{ $op->id }}</span>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-300 truncate w-full">
+                                    {{ $op->cliente?->razon_social ?? 'sin cliente' }}
+                                </span>
+                                <span class="text-xs font-semibold text-emerald-600 mt-0.5">
+                                    $ {{ number_format((float)$op->total, 0, ',', '.') }}
+                                </span>
+                            </button>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
+
             {{-- Top bar: search + acciones --}}
             <div class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-3">
                 <div class="relative flex-1">
@@ -85,30 +122,6 @@
                         </button>
                     @endif
                 </div>
-
-                {{-- Órdenes pendientes --}}
-                @if($ordenesPendientes->isNotEmpty())
-                    <div class="px-3 py-2 border-b border-gray-100 dark:border-gray-700 max-h-40 overflow-y-auto">
-                        <p class="text-[11px] uppercase tracking-wide text-gray-400 mb-1" title="Facturas en borrador, sin cobrar todavía. Haz clic para abrirlas y agregar productos o cobrarlas.">
-                            Órdenes pendientes de cobro ({{ $ordenesPendientes->count() }})
-                        </p>
-                        <div class="space-y-1">
-                            @foreach($ordenesPendientes as $op)
-                                <button type="button" wire:click="cargarOrden({{ $op->id }})"
-                                    class="w-full flex items-center justify-between text-left px-2 py-1.5 rounded-md hover:bg-orange-50 dark:hover:bg-gray-700 text-xs
-                                        {{ $facturaEditandoId === $op->id ? 'bg-orange-50 dark:bg-orange-900/30 ring-1 ring-orange-300' : '' }}">
-                                    <span class="truncate">
-                                        <span class="font-semibold text-gray-700 dark:text-gray-200">#{{ $op->id }}</span>
-                                        <span class="text-gray-500"> · {{ $op->cliente?->razon_social ?? 'sin cliente' }}</span>
-                                    </span>
-                                    <span class="text-gray-700 dark:text-gray-200 font-medium ml-2 shrink-0">
-                                        $ {{ number_format((float)$op->total, 0, ',', '.') }}
-                                    </span>
-                                </button>
-                            @endforeach
-                        </div>
-                    </div>
-                @endif
 
                 {{-- Cliente --}}
                 <div class="p-3 border-b border-gray-100 dark:border-gray-700">

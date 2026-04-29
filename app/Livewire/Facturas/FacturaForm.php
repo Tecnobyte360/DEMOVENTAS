@@ -900,6 +900,9 @@ class FacturaForm extends Component
             $this->normalizeLinea($this->lineas[$i]);
             $this->syncProductosSeleccionados();
 
+            // Notifica al frontend para que el moneyInput de Alpine resincronice el precio mostrado
+            $this->dispatch('linea-precio-actualizado', index: $i, precio: round($precioBase, 2));
+
             $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
             $this->dispatch('$refresh');
         } catch (\Throwable $e) {

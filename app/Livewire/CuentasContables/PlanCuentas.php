@@ -33,7 +33,7 @@ class PlanCuentas extends Component
      |  MEJORAS UI
      ========================================================= */
     public bool $soloTitulos = false;
-    public bool $verSaldos   = false;
+    public bool $verSaldos   = true;
     public array $visibleIds = [];
 
     /* =========================================================
@@ -787,7 +787,20 @@ class PlanCuentas extends Component
 
         $naturDeudoras = ['D','DEUDORA','ACTIVO','ACTIVOS','GASTO','GASTOS','COSTO','COSTOS','INVENTARIO'];
 
-        $items = $items->map(function ($row) use ($naturDeudoras) {
+        // Calcular saldo REAL desde movimientos (sum debe - sum haber por cuenta)
+        $idsVisibles = $items->pluck('id')->all();
+        $movPorCuenta = [];
+        if (!empty($idsVisibles) && \Illuminate\Support\Facades\Schema::hasTable('movimientos')) {
+            $movPorCuenta = DB::table('movimientos')
+                ->whereIn('cuenta_id', $idsVisibles)
+                ->groupBy('cuenta_id')
+                ->selectRaw('cuenta_id, COALESCE(SUM(debe),0) AS debe, COALESCE(SUM(haber),0) AS haber')
+                ->get()
+                ->keyBy('cuenta_id')
+                ->toArray();
+        }
+
+        $items = $items->map(function ($row) use ($naturDeudoras, $movPorCuenta) {
             $sum = $this->sumasFacturaPorCuenta[$row->id] ?? ['debe'=>0.0,'haber'=>0.0];
             $bruto = $sum['debe'] - $sum['haber'];
 
@@ -796,8 +809,26 @@ class PlanCuentas extends Component
 
             $delta = $esDeudora ? $bruto : -$bruto;
 
-            $row->saldo_despues = round((float)$row->saldo, 2);
-            $row->saldo_antes   = round($row->saldo_despues - $delta, 2);
+            // Saldo real: si hay movimientos los uso, sino caigo al saldo almacenado
+            $mov = $movPorCuenta[$row->id] ?? ($movPorCuenta[(string)$row->id] ?? null);
+            if ($mov) {
+                $debeT  = (float) $mov->debe;
+                $haberT = (float) $mov->haber;
+                $saldoReal = $esDeudora ? ($debeT - $haberT) : ($haberT - $debeT);
+                $row->saldo_real     = round($saldoReal, 2);
+                $row->saldo_debe     = round($debeT, 2);
+                $row->saldo_haber    = round($haberT, 2);
+                $row->tiene_mov      = ($debeT + $haberT) > 0.001;
+            } else {
+                $row->saldo_real  = round((float) $row->saldo, 2);
+                $row->saldo_debe  = 0.0;
+                $row->saldo_haber = 0.0;
+                $row->tiene_mov   = false;
+            }
+
+            $row->es_deudora    = $esDeudora;
+            $row->saldo_despues = $row->saldo_real;
+            $row->saldo_antes   = round($row->saldo_real - $delta, 2);
             $row->saldo_delta   = round($delta, 2);
 
             return $row;

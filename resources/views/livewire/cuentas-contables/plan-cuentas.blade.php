@@ -334,14 +334,32 @@
                 @endif
               </div>
 
-              {{-- Saldos --}}
+              {{-- Saldo (claro y fácil de leer) --}}
               @if($verSaldos)
-                <div class="text-right pr-2 font-mono">
-                  <div class="text-[11px] text-gray-500">ant: ${{ number_format($row->saldo_antes ?? $row->saldo, 2) }}</div>
-                  <div class="text-[11px] {{ ($row->saldo_delta ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600' }}">
-                    {{ ($row->saldo_delta ?? 0) >= 0 ? '+' : '' }}${{ number_format($row->saldo_delta ?? 0, 2) }}
+                @php
+                  $saldoVal = (float) ($row->saldo_real ?? $row->saldo ?? 0);
+                  $tieneMov = (bool) ($row->tiene_mov ?? false);
+                  $colorSaldo = $saldoVal > 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : ($saldoVal < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-400');
+                @endphp
+                <div class="text-right pr-2"
+                     title="Debe: ${{ number_format($row->saldo_debe ?? 0, 2, ',', '.') }} · Haber: ${{ number_format($row->saldo_haber ?? 0, 2, ',', '.') }}">
+                  <div class="text-[10px] uppercase tracking-wide text-gray-400">Saldo</div>
+                  <div class="font-bold text-sm {{ $colorSaldo }}">
+                    @if($saldoVal == 0 && !$tieneMov)
+                      <span class="text-gray-400">$ 0</span>
+                    @else
+                      $ {{ number_format($saldoVal, 0, ',', '.') }}
+                    @endif
                   </div>
-                  <div class="font-semibold">${{ number_format($row->saldo_despues ?? $row->saldo, 2) }}</div>
+                  @if($tieneMov)
+                    <div class="text-[10px] text-gray-500">
+                      <span class="text-emerald-600">+{{ number_format($row->saldo_debe ?? 0, 0, ',', '.') }}</span>
+                      <span class="text-gray-400 mx-0.5">/</span>
+                      <span class="text-rose-600">−{{ number_format($row->saldo_haber ?? 0, 0, ',', '.') }}</span>
+                    </div>
+                  @endif
                 </div>
               @endif
             </div>

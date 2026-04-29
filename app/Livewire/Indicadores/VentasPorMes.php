@@ -40,7 +40,7 @@ protected function cargar(): void
                      AND f.tipo_pago = 'contado'
                      AND f.numero IS NOT NULL
                      AND f.numero <> ''
-                     AND f.estado <> 'anulada'
+                     AND f.estado = 'pagada'
                     THEN f.total
                     ELSE 0
                 END
@@ -55,7 +55,7 @@ protected function cargar(): void
                      AND f.tipo_pago = 'credito'
                      AND f.numero IS NOT NULL
                      AND f.numero <> ''
-                     AND f.estado <> 'anulada'
+                     AND f.estado = 'pagada'
                     THEN f.total
                     ELSE 0
                 END
@@ -68,7 +68,7 @@ protected function cargar(): void
                     WHEN s.prefijo = 'NCV'
                      AND f.numero IS NOT NULL
                      AND f.numero <> ''
-                     AND f.estado <> 'anulada'
+                     AND f.estado = 'pagada'
                     THEN ABS(f.total)
                     ELSE 0
                 END
@@ -81,12 +81,12 @@ protected function cargar(): void
                     WHEN s.prefijo = 'FRM'
                      AND f.numero IS NOT NULL
                      AND f.numero <> ''
-                     AND f.estado <> 'anulada'
+                     AND f.estado = 'pagada'
                     THEN f.total
                     WHEN s.prefijo = 'NCV'
                      AND f.numero IS NOT NULL
                      AND f.numero <> ''
-                     AND f.estado <> 'anulada'
+                     AND f.estado = 'pagada'
                     THEN -ABS(f.total)
                     ELSE 0
                 END

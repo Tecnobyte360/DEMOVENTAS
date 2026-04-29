@@ -106,13 +106,32 @@
             </a>
 
             <!-- System title -->
-            <div class="text-center mb-6 lg:hidden lg:sidebar-expanded:block 2xl:block">
+            <div class="text-center mb-4 lg:hidden lg:sidebar-expanded:block 2xl:block">
                 <h1 class="font-bold text-base" :style="`color: ${fg}`">{{ $empresaActual?->nombre }}</h1>
-                <p class="text-xs mt-1" :style="`color: ${fgMuted}`"></p>
+                <p class="text-xs mt-1" :style="`color: ${fgMuted}`">Panel del cliente</p>
+            </div>
+
+            <!-- Buscador del sidebar -->
+            <div x-data="{ q: '' }" x-init="$watch('q', v => {
+                    const term = v.trim().toLowerCase();
+                    const nav = document.querySelector('#sidebar nav');
+                    if (!nav) return;
+                    nav.querySelectorAll('a, button').forEach(el => {
+                        const txt = (el.textContent || '').trim().toLowerCase();
+                        if (!term) { el.style.display = ''; return; }
+                        el.style.display = txt.includes(term) ? '' : 'none';
+                    });
+                })"
+                class="relative mb-4 lg:hidden lg:sidebar-expanded:block 2xl:block">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs"
+                   :style="`color: ${fgMuted}`"></i>
+                <input type="text" x-model="q" placeholder="Buscar..."
+                    class="w-full h-9 pl-9 pr-3 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-white/30"
+                    :style="`background: ${isLight ? 'rgba(0,0,0,.06)' : 'rgba(255,255,255,.10)'}; color: ${fg};`">
             </div>
 
             <!-- Section label -->
-            <div class="mb-3 flex items-center gap-2">
+            <div class="mb-3 flex items-center gap-2" data-menu-section>
                 <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.18)'}`"></span>
                 <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">
                     Principal
@@ -901,5 +920,33 @@
     /* Previene flash */
     [x-cloak] {
         display: none !important;
+    }
+
+    /* Item activo: fondo blanco translúcido más fuerte + barra izquierda + ligera elevación */
+    #sidebar nav a.bg-white\/20,
+    #sidebar nav button.bg-white\/20 {
+        background-color: rgba(255, 255, 255, .22) !important;
+        position: relative;
+    }
+    #sidebar nav a.bg-white\/20::before,
+    #sidebar nav button.bg-white\/20::before {
+        content: "";
+        position: absolute;
+        left: 0; top: 8px; bottom: 8px;
+        width: 4px;
+        border-radius: 0 4px 4px 0;
+        background: #ffffff;
+        box-shadow: 0 0 8px rgba(255,255,255,.5);
+    }
+
+    /* Hover suave consistente */
+    #sidebar nav a:hover,
+    #sidebar nav button:hover {
+        background-color: rgba(255, 255, 255, .14) !important;
+    }
+
+    /* Sub-items (más sutiles) */
+    #sidebar nav .ml-8 a:hover {
+        background-color: rgba(255, 255, 255, .10) !important;
     }
 </style>

@@ -48,8 +48,8 @@
                             </div>
                         </div>
                         <div class="px-3 pb-3 text-center">
-                            <p class="text-sm font-semibold text-gray-800 dark:text-white leading-tight line-clamp-2 min-h-[2.5rem]">{{ $p->nombre ?: '(sin nombre)' }}</p>
-                            <p class="text-base font-bold text-orange-600 dark:text-orange-400 mt-1.5">
+                            <p class="text-sm font-semibold leading-tight" style="color:#1f2937; min-height:2.5rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">{{ $p->nombre ?: '(sin nombre)' }}</p>
+                            <p class="text-base font-bold mt-1" style="color:#ea580c;">
                                 $ {{ number_format((float) $p->precio, 0, ',', '.') }}
                             </p>
                         </div>

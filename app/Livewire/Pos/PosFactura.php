@@ -63,12 +63,12 @@ class PosFactura extends Component
     {
         $categorias = Categoria::query()->orderBy('nombre')->get(['id', 'nombre']);
 
-        $productos = collect();
+        $productosAgrupados = collect();
         if ($this->categoriaActiva || $this->busquedaProducto !== '') {
             $q = Producto::query()
                 ->from('productos as p')
                 ->leftJoin('subcategorias as s', 's.id', '=', 'p.subcategoria_id')
-                ->select('p.id', 'p.nombre', 'p.precio', 'p.imagen_path', 'p.subcategoria_id');
+                ->select('p.id', 'p.nombre', 'p.precio', 'p.imagen_path', 'p.subcategoria_id', 's.nombre as subcategoria_nombre');
 
             if ($this->categoriaActiva && $this->busquedaProducto === '') {
                 $q->where('s.categoria_id', $this->categoriaActiva);
@@ -78,7 +78,8 @@ class PosFactura extends Component
                 $q->where('p.nombre', 'like', '%' . $this->busquedaProducto . '%');
             }
 
-            $productos = $q->orderBy('p.nombre')->limit(120)->get();
+            $productosAgrupados = $q->orderBy('s.nombre')->orderBy('p.nombre')->limit(200)->get()
+                ->groupBy(fn ($p) => $p->subcategoria_nombre ?: 'Sin subcategoría');
         }
 
         $clientesSugeridos = collect();
@@ -103,7 +104,7 @@ class PosFactura extends Component
 
         return view('livewire.pos.pos-factura', [
             'categorias' => $categorias,
-            'productos' => $productos,
+            'productosAgrupados' => $productosAgrupados,
             'clientesSugeridos' => $clientesSugeridos,
             'ordenesPendientes' => $ordenesPendientes,
         ]);

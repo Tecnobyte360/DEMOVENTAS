@@ -729,7 +729,12 @@ public function cambiarFactura(): void
                 $yaEmitida      = !empty($factura->numero)
                     || in_array(($factura->estado ?? ''), ['emitida', 'pagada', 'anulada'], true);
 
-                if ($esContado && $faltanteActual <= 0.01 && !$yaEmitida) {
+                // Emite y consume consecutivo si:
+                // - Es contado pagado al 100% (caso original)
+                // - O recibió cualquier pago (parcial o total) — caso crédito o pagos progresivos
+                $debeEmitir = !$yaEmitida && $pagadoActual > 0.01;
+
+                if ($debeEmitir) {
                     foreach ($factura->detalles as $idx => $d) {
                         if (empty($d->cuenta_ingreso_id)) {
                             throw new \RuntimeException("La fila #" . ($idx + 1) . " no tiene cuenta de ingreso.");
@@ -757,11 +762,16 @@ public function cambiarFactura(): void
                     $numero = $serie->tomarConsecutivo();
                     $uid    = Auth::id();
 
+                    // Estado correcto según pago: 'pagada' si está al 100%, 'parcialmente_pagada' si parcial, 'emitida' si nada
+                    $estadoEmision = $faltanteActual <= 0.01
+                        ? 'pagada'
+                        : ($pagadoActual > 0.01 ? 'parcialmente_pagada' : 'emitida');
+
                     $dataUpdate = [
                         'serie_id' => $serie->id,
                         'prefijo'  => (string) ($serie->prefijo ?? ''),
                         'numero'   => $numero,
-                        'estado'   => 'emitida',
+                        'estado'   => $estadoEmision,
                     ];
 
                     if (Schema::hasColumn('facturas', 'emitido_por_id')) {

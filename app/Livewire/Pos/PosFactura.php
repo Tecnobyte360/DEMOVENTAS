@@ -18,7 +18,7 @@ use Masmerise\Toaster\PendingToast;
 class PosFactura extends Component
 {
     public string $busquedaProducto = '';
-    public ?int $subcategoriaActiva = null;
+    public ?int $categoriaActiva = null;
     public ?int $itemExpandido = null;
     public string $vista = 'productos'; // 'productos' | 'pendientes'
 
@@ -43,7 +43,7 @@ class PosFactura extends Component
         $this->bodegaDefaultId = $empresa?->bodega_predeterminada_id;
         $this->serieDefaultId = Serie::defaultParaCodigo('factura')?->id;
 
-        $this->subcategoriaActiva = Subcategoria::query()->orderBy('nombre')->value('id');
+        $this->categoriaActiva = Categoria::query()->orderBy('nombre')->value('id');
 
         $this->cuentaCobroDefaultId = PlanCuentas::query()
             ->where('cuenta_activa', 1)
@@ -61,22 +61,24 @@ class PosFactura extends Component
 
     public function render()
     {
-        $subcategorias = Subcategoria::query()->orderBy('nombre')->get(['id', 'nombre']);
+        $categorias = Categoria::query()->orderBy('nombre')->get(['id', 'nombre']);
 
         $productos = collect();
-        if ($this->subcategoriaActiva || $this->busquedaProducto !== '') {
+        if ($this->categoriaActiva || $this->busquedaProducto !== '') {
             $q = Producto::query()
-                ->select('id', 'nombre', 'precio', 'imagen_path', 'subcategoria_id');
+                ->from('productos as p')
+                ->leftJoin('subcategorias as s', 's.id', '=', 'p.subcategoria_id')
+                ->select('p.id', 'p.nombre', 'p.precio', 'p.imagen_path', 'p.subcategoria_id');
 
-            if ($this->subcategoriaActiva && $this->busquedaProducto === '') {
-                $q->where('subcategoria_id', $this->subcategoriaActiva);
+            if ($this->categoriaActiva && $this->busquedaProducto === '') {
+                $q->where('s.categoria_id', $this->categoriaActiva);
             }
 
             if ($this->busquedaProducto !== '') {
-                $q->where('nombre', 'like', '%' . $this->busquedaProducto . '%');
+                $q->where('p.nombre', 'like', '%' . $this->busquedaProducto . '%');
             }
 
-            $productos = $q->orderBy('nombre')->limit(60)->get();
+            $productos = $q->orderBy('p.nombre')->limit(120)->get();
         }
 
         $clientesSugeridos = collect();
@@ -100,16 +102,16 @@ class PosFactura extends Component
             ->get(['id', 'socio_negocio_id', 'total', 'fecha', 'notas']);
 
         return view('livewire.pos.pos-factura', [
-            'subcategorias' => $subcategorias,
+            'categorias' => $categorias,
             'productos' => $productos,
             'clientesSugeridos' => $clientesSugeridos,
             'ordenesPendientes' => $ordenesPendientes,
         ]);
     }
 
-    public function setSubcategoria(int $id): void
+    public function setCategoria(int $id): void
     {
-        $this->subcategoriaActiva = $id;
+        $this->categoriaActiva = $id;
         $this->busquedaProducto = '';
         $this->vista = 'productos';
     }

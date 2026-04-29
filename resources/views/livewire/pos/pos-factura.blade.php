@@ -35,14 +35,14 @@
 
                 <span class="h-6 w-px bg-gray-200 dark:bg-gray-700 mx-1"></span>
 
-                @foreach($subcategorias as $sub)
-                    @php $activa = $vista === 'productos' && $subcategoriaActiva === $sub->id && $busquedaProducto === ''; @endphp
-                    <button type="button" wire:click="setSubcategoria({{ $sub->id }})"
+                @foreach($categorias as $cat)
+                    @php $activa = $vista === 'productos' && $categoriaActiva === $cat->id && $busquedaProducto === ''; @endphp
+                    <button type="button" wire:click="setCategoria({{ $cat->id }})"
                         class="shrink-0 px-4 h-9 rounded-lg text-sm font-medium transition
                             {{ $activa
                                 ? 'bg-orange-50 text-orange-600 ring-1 ring-orange-300'
                                 : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700' }}">
-                        {{ $sub->nombre }}
+                        {{ $cat->nombre }}
                     </button>
                 @endforeach
             </div>

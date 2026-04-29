@@ -460,43 +460,58 @@
                             class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 overflow-hidden">
 
                             {{-- Header del módulo --}}
-                            <div class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border-b border-gray-100 dark:border-gray-800">
+                            @php
+                                $totalGrupo = count($grupo['permisos']);
+                            @endphp
+                            <div
+                                x-data="{
+                                    get sel() {
+                                        const sel = ($wire.selectedPermissions || []).map(v => String(v));
+                                        const ids = {{ $idsJson }}.map(v => String(v));
+                                        return ids.filter(id => sel.includes(id)).length;
+                                    }
+                                }"
+                                class="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border-b border-gray-100 dark:border-gray-800">
                                 <button type="button" @click="show = !show"
                                     class="flex items-center gap-3 flex-1 text-left">
-                                    <div class="w-9 h-9 rounded-lg flex items-center justify-center"
+                                    <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
                                         style="background: rgba(var(--brand-rgb), 0.12); color: var(--brand);">
                                         <i class="fas {{ $grupo['icono'] }}"></i>
                                     </div>
-                                    <div>
+                                    <div class="min-w-0">
                                         <div class="font-semibold text-gray-800 dark:text-gray-100 text-sm">
                                             {{ $grupo['titulo'] }}
                                         </div>
                                         <div class="text-[11px] text-gray-500 dark:text-gray-400">
-                                            {{ count($grupo['permisos']) }} permiso(s)
+                                            <span x-text="sel"></span> de {{ $totalGrupo }} {{ $totalGrupo === 1 ? 'permiso' : 'permisos' }}
                                         </div>
                                     </div>
-                                    <i class="fas fa-chevron-down ml-auto text-xs text-gray-400 transition" :class="show ? 'rotate-180' : ''"></i>
                                 </button>
 
-                                <div class="flex items-center gap-1 ml-3">
+                                <div class="flex items-center gap-2 ml-3 shrink-0">
                                     <button type="button"
+                                        title="Seleccionar todos"
                                         @click="
-                                            let sel = $wire.selectedPermissions.map(v => String(v));
+                                            let sel = ($wire.selectedPermissions || []).map(v => String(v));
                                             let ids = {{ $idsJson }}.map(v => String(v));
-                                            $wire.set('selectedPermissions', [...new Set([...sel, ...ids])]);
+                                            const all = ids.every(id => sel.includes(id));
+                                            if (all) {
+                                                $wire.set('selectedPermissions', sel.filter(v => !ids.includes(v)));
+                                            } else {
+                                                $wire.set('selectedPermissions', [...new Set([...sel, ...ids])]);
+                                            }
                                         "
-                                        class="text-[11px] px-2 py-1 rounded-md text-white font-semibold hover:opacity-90"
-                                        style="background: var(--brand);">
-                                        <i class="fas fa-check"></i>
+                                        class="text-[11px] px-3 h-8 rounded-lg font-semibold transition flex items-center gap-1.5"
+                                        :class="sel === {{ $totalGrupo }}
+                                            ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
+                                            : 'text-white hover:opacity-90 border border-transparent'"
+                                        :style="sel === {{ $totalGrupo }} ? '' : 'background: var(--brand);'">
+                                        <i class="fas" :class="sel === {{ $totalGrupo }} ? 'fa-times' : 'fa-check-double'"></i>
+                                        <span x-text="sel === {{ $totalGrupo }} ? 'Quitar' : 'Marcar todos'"></span>
                                     </button>
-                                    <button type="button"
-                                        @click="
-                                            let ids = {{ $idsJson }}.map(v => String(v));
-                                            let sel = $wire.selectedPermissions.map(v => String(v)).filter(v => !ids.includes(v));
-                                            $wire.set('selectedPermissions', sel);
-                                        "
-                                        class="text-[11px] px-2 py-1 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold">
-                                        <i class="fas fa-xmark"></i>
+                                    <button type="button" @click="show = !show"
+                                        class="h-8 w-8 grid place-items-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                        <i class="fas fa-chevron-down text-xs transition" :class="show ? 'rotate-180' : ''"></i>
                                     </button>
                                 </div>
                             </div>
@@ -504,17 +519,17 @@
                             {{-- Permisos del módulo --}}
                             <div x-show="show" x-collapse class="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                 @foreach ($grupo['permisos'] as $perm)
-                                    <label class="perm-item flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-800 cursor-pointer transition">
+                                    <label class="perm-item flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 border-gray-200 dark:border-gray-800 cursor-pointer">
                                         <input type="checkbox"
                                             wire:model.live="selectedPermissions"
                                             value="{{ $perm['id'] }}"
-                                            class="h-4 w-4 rounded border-gray-300 focus:ring-2"
+                                            class="border-gray-300 focus:ring-2"
                                             style="accent-color: var(--brand); --tw-ring-color: var(--brand);">
                                         <div class="flex-1 min-w-0">
-                                            <div class="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
+                                            <div class="perm-name text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
                                                 {{ $perm['label'] }}
                                             </div>
-                                            <div class="text-[10px] text-gray-400 font-mono truncate">
+                                            <div class="perm-code text-[10px] text-gray-500 font-mono truncate">
                                                 {{ $perm['name'] }}
                                             </div>
                                         </div>
@@ -546,13 +561,33 @@
     </template>
 
     <style>
+        .perm-item {
+            position: relative;
+            transition: all .15s ease;
+            background: white;
+        }
         .perm-item:hover {
             border-color: var(--brand) !important;
             background: rgba(var(--brand-rgb), 0.06);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,.04);
         }
         .perm-item:has(:checked) {
-            background: rgba(var(--brand-rgb), 0.12);
+            background: linear-gradient(135deg, rgba(var(--brand-rgb), 0.10), rgba(var(--brand-rgb), 0.18));
             border-color: var(--brand) !important;
+            box-shadow: inset 0 0 0 1px rgba(var(--brand-rgb), 0.30);
+        }
+        .perm-item:has(:checked) .perm-name {
+            color: var(--brand);
+            font-weight: 600;
+        }
+        .perm-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            border-radius: 6px;
+        }
+        .perm-item .perm-code {
+            opacity: .55;
         }
     </style>
 </div>

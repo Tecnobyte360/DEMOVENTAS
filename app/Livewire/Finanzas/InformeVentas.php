@@ -405,6 +405,42 @@ class InformeVentas extends Component
         ->toArray();
     }
 
+    /**
+     * Top productos vendidos agrupados por mes dentro del rango de fechas.
+     * Devuelve: ['2026-04' => [['producto'=>'..', 'cantidad'=>10, 'total'=>50000], ...], ...]
+     */
+    public function topProductosPorMes(int $topN = 10): array
+    {
+        $rows = DB::table('factura_detalles as d')
+            ->join('facturas as f', 'f.id', '=', 'd.factura_id')
+            ->leftJoin('productos as p', 'p.id', '=', 'd.producto_id')
+            ->whereIn('f.estado', ['emitida', 'pagada', 'parcialmente_pagada'])
+            ->when($this->fechaInicio, fn ($q) => $q->whereDate('f.fecha', '>=', $this->fechaInicio))
+            ->when($this->fechaFin, fn ($q) => $q->whereDate('f.fecha', '<=', $this->fechaFin))
+            ->selectRaw("DATE_FORMAT(f.fecha, '%Y-%m') as mes")
+            ->selectRaw('d.producto_id')
+            ->selectRaw('COALESCE(p.nombre, d.descripcion) as producto')
+            ->selectRaw('SUM(d.cantidad) as cantidad_total')
+            ->selectRaw('SUM(d.importe_total) as total_vendido')
+            ->groupBy('mes', 'd.producto_id', 'producto')
+            ->orderBy('mes', 'desc')
+            ->orderByDesc('cantidad_total')
+            ->get();
+
+        $agrupado = [];
+        foreach ($rows as $r) {
+            $agrupado[$r->mes] ??= [];
+            if (count($agrupado[$r->mes]) < $topN) {
+                $agrupado[$r->mes][] = [
+                    'producto'    => $r->producto,
+                    'cantidad'    => (float) $r->cantidad_total,
+                    'total'       => (float) $r->total_vendido,
+                ];
+            }
+        }
+        return $agrupado;
+    }
+
     public function render()
     {
         $series = Serie::query()
@@ -456,6 +492,7 @@ class InformeVentas extends Component
             'asesores'          => $asesores,
             'rentabilidad'      => $rentabilidad,
             'puedeVerCostos'    => $this->puedeVerCostos(),
+            'topProductosPorMes' => $this->topProductosPorMes(10),
         ]);
     }
 }

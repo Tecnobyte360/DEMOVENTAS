@@ -330,6 +330,56 @@
         </div>
     </section>
 
+    <!-- TOP PRODUCTOS POR MES -->
+    @if(!empty($topProductosPorMes))
+        <section class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 md:p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-600 grid place-items-center">
+                    <i class="fas fa-trophy"></i>
+                </div>
+                <div>
+                    <h3 class="text-base md:text-lg font-bold text-gray-800 dark:text-gray-100">Productos más vendidos por mes</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">Top 10 por mes según el rango de fechas seleccionado.</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                @foreach($topProductosPorMes as $mes => $items)
+                    @php
+                        $mesNombre = \Illuminate\Support\Carbon::createFromFormat('Y-m', $mes)->locale('es')->isoFormat('MMMM YYYY');
+                        $totalMes = collect($items)->sum('total');
+                    @endphp
+                    <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 flex items-center justify-between">
+                            <span class="font-semibold capitalize">{{ $mesNombre }}</span>
+                            <span class="text-sm font-bold">$ {{ number_format($totalMes, 0, ',', '.') }}</span>
+                        </div>
+                        <table class="min-w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-xs uppercase">
+                                <tr>
+                                    <th class="px-3 py-2 text-left w-8">#</th>
+                                    <th class="px-3 py-2 text-left">Producto</th>
+                                    <th class="px-3 py-2 text-right">Cant.</th>
+                                    <th class="px-3 py-2 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                                @foreach($items as $idx => $it)
+                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                                        <td class="px-3 py-2 font-bold text-amber-600">{{ $idx + 1 }}</td>
+                                        <td class="px-3 py-2 text-gray-800 dark:text-gray-100">{{ $it['producto'] }}</td>
+                                        <td class="px-3 py-2 text-right text-gray-700 dark:text-gray-200">{{ rtrim(rtrim(number_format($it['cantidad'], 2, '.', ''), '0'), '.') }}</td>
+                                        <td class="px-3 py-2 text-right font-semibold text-emerald-600">$ {{ number_format($it['total'], 0, ',', '.') }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     <!-- TABLA -->
     <section
         class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 overflow-hidden">

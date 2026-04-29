@@ -92,7 +92,7 @@
         class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 md:p-5 space-y-4"
         :class="{ 'block': openFilters, 'hidden md:block': !openFilters }">
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-3 md:gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
 
             <!-- SERIE -->
             <div class="flex flex-col">
@@ -246,7 +246,7 @@
             </div>
 
             <!-- FECHAS -->
-            <div class="grid grid-cols-2 gap-3" x-data="{ fpDesde: null, fpHasta: null }" x-init="fpDesde = flatpickr($refs.desde, {
+            <div class="grid grid-cols-2 gap-3 xl:col-span-2" x-data="{ fpDesde: null, fpHasta: null }" x-init="fpDesde = flatpickr($refs.desde, {
                 dateFormat: 'Y-m-d',
                 altInput: true,
                 altFormat: 'd/m/Y',
@@ -304,10 +304,10 @@
     <!-- TOP PRODUCTOS POR MES -->
     @if(!empty($topProductosPorMes))
         @php $cantMeses = count($topProductosPorMes); @endphp
-        <section class="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-gradient-to-br from-amber-50/40 via-white to-white dark:from-amber-900/10 dark:via-gray-900 dark:to-gray-900 p-4 md:p-6">
-            <div class="flex items-center justify-between mb-4 pb-3 border-b border-amber-100 dark:border-amber-800/30">
+        <section class="rounded-2xl border border-teal-200 dark:border-teal-800/40 bg-gradient-to-br from-teal-50/40 via-white to-white dark:from-teal-900/10 dark:via-gray-900 dark:to-gray-900 p-4 md:p-6">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-teal-100 dark:border-teal-800/30">
                 <div class="flex items-center gap-3">
-                    <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white grid place-items-center shadow">
+                    <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-teal-500 to-emerald-600 text-white grid place-items-center shadow">
                         <i class="fas fa-trophy"></i>
                     </div>
                     <div>
@@ -328,7 +328,7 @@
                         $totalMes = collect($items)->sum('total');
                     @endphp
                     <div class="rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
-                        <div class="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2 flex items-center justify-between">
+                        <div class="bg-gradient-to-r from-teal-500 to-emerald-600 text-white px-4 py-2 flex items-center justify-between">
                             <span class="font-semibold capitalize">{{ $mesNombre }}</span>
                             <span class="text-sm font-bold">$ {{ number_format($totalMes, 0, ',', '.') }}</span>
                         </div>
@@ -344,7 +344,7 @@
                             <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
                                 @foreach($items as $idx => $it)
                                     <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/40">
-                                        <td class="px-3 py-2 font-bold text-amber-600">{{ $idx + 1 }}</td>
+                                        <td class="px-3 py-2 font-bold text-teal-600">{{ $idx + 1 }}</td>
                                         <td class="px-3 py-2 text-gray-800 dark:text-gray-100">{{ $it['producto'] }}</td>
                                         <td class="px-3 py-2 text-right text-gray-700 dark:text-gray-200">{{ rtrim(rtrim(number_format($it['cantidad'], 2, '.', ''), '0'), '.') }}</td>
                                         <td class="px-3 py-2 text-right font-semibold text-emerald-600">$ {{ number_format($it['total'], 0, ',', '.') }}</td>

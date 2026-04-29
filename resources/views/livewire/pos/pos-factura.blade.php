@@ -54,7 +54,7 @@
                         @php $editando = $facturaEditandoId === $op->id; @endphp
                         <button type="button" wire:click="cargarOrden({{ $op->id }})"
                             class="text-left rounded-2xl overflow-hidden hover:shadow-xl transition group"
-                            style="background:white; border:2px solid {{ $editando ? '#fb923c' : '#e5e7eb' }}; box-shadow:0 4px 12px rgba(0,0,0,.05); {{ $editando ? 'box-shadow:0 0 0 4px #fed7aa;' : '' }}">
+                            style="display:flex; flex-direction:column; width:100%; background:white; border:2px solid {{ $editando ? '#fb923c' : '#e5e7eb' }}; box-shadow:0 4px 12px rgba(0,0,0,.05); {{ $editando ? 'box-shadow:0 0 0 4px #fed7aa;' : '' }}">
                             {{-- Header --}}
                             <div style="background:linear-gradient(135deg,#fb923c,#f97316); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; color:white;">
                                 <div style="display:flex; align-items:center; gap:10px;">

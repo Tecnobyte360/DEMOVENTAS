@@ -44,84 +44,48 @@
         </div>
     </header>
 
-    <!-- KPIs -->
-    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Documentos</div>
-            <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                {{ number_format($totalFacturas ?? 0) }}
+    <!-- KPIs unificados -->
+    @php
+        $verRentab = !$esCompra && !$esCotizacion && ($puedeVerCostos ?? false);
+        $kpis = [
+            ['label' => 'Documentos', 'value' => number_format($totalFacturas ?? 0), 'icon' => 'fa-file-invoice', 'color' => 'gray', 'money' => false],
+            ['label' => 'Facturado', 'value' => '$' . number_format($totalFacturado ?? 0, 0, ',', '.'), 'icon' => 'fa-coins', 'color' => 'gray'],
+            ['label' => 'Contado', 'value' => '$' . number_format($totalContado ?? 0, 0, ',', '.'), 'icon' => 'fa-money-bill-wave', 'color' => 'emerald'],
+            ['label' => 'Crédito', 'value' => '$' . number_format($totalCredito ?? 0, 0, ',', '.'), 'icon' => 'fa-credit-card', 'color' => 'indigo'],
+            ['label' => 'Pagado', 'value' => '$' . number_format($totalPagado ?? 0, 0, ',', '.'), 'icon' => 'fa-check-circle', 'color' => 'emerald'],
+            ['label' => 'Saldo pendiente', 'value' => '$' . number_format($totalSaldo ?? 0, 0, ',', '.'), 'icon' => 'fa-hourglass-half', 'color' => ($totalSaldo ?? 0) > 0 ? 'rose' : 'emerald'],
+        ];
+        if ($verRentab) {
+            $kpis[] = ['label' => 'Venta base', 'value' => '$' . number_format($totalBaseVenta ?? 0, 0, ',', '.'), 'icon' => 'fa-tag', 'color' => 'gray'];
+            $kpis[] = ['label' => 'Costo', 'value' => '$' . number_format($totalCostoVenta ?? 0, 0, ',', '.'), 'icon' => 'fa-warehouse', 'color' => 'amber'];
+            $kpis[] = ['label' => 'Utilidad', 'value' => '$' . number_format($totalGanancia ?? 0, 0, ',', '.'), 'icon' => 'fa-chart-line', 'color' => ($totalGanancia ?? 0) >= 0 ? 'emerald' : 'rose'];
+            $kpis[] = ['label' => 'Margen', 'value' => number_format($margenPromedio ?? 0, 1, ',', '.') . '%', 'icon' => 'fa-percentage', 'color' => ($margenPromedio ?? 0) >= 0 ? 'emerald' : 'rose'];
+        }
+        $colorMap = [
+            'gray' => ['bg' => 'bg-gray-100 dark:bg-gray-700/40', 'text' => 'text-gray-600 dark:text-gray-300', 'value' => 'text-gray-900 dark:text-white', 'bar' => 'bg-gray-400'],
+            'emerald' => ['bg' => 'bg-emerald-100 dark:bg-emerald-900/30', 'text' => 'text-emerald-600', 'value' => 'text-emerald-600 dark:text-emerald-400', 'bar' => 'bg-emerald-500'],
+            'indigo' => ['bg' => 'bg-indigo-100 dark:bg-indigo-900/30', 'text' => 'text-indigo-600', 'value' => 'text-indigo-600 dark:text-indigo-400', 'bar' => 'bg-indigo-500'],
+            'rose' => ['bg' => 'bg-rose-100 dark:bg-rose-900/30', 'text' => 'text-rose-600', 'value' => 'text-rose-600 dark:text-rose-400', 'bar' => 'bg-rose-500'],
+            'amber' => ['bg' => 'bg-amber-100 dark:bg-amber-900/30', 'text' => 'text-amber-600', 'value' => 'text-amber-600 dark:text-amber-400', 'bar' => 'bg-amber-500'],
+        ];
+    @endphp
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        @foreach($kpis as $k)
+            @php $c = $colorMap[$k['color']] ?? $colorMap['gray']; @endphp
+            <div class="relative rounded-xl bg-white dark:bg-gray-800 shadow-sm border border-gray-100 dark:border-gray-700 p-3 overflow-hidden">
+                <div class="absolute left-0 top-0 bottom-0 w-1 {{ $c['bar'] }}"></div>
+                <div class="flex items-center gap-3">
+                    <div class="h-9 w-9 rounded-lg {{ $c['bg'] }} {{ $c['text'] }} grid place-items-center shrink-0">
+                        <i class="fas {{ $k['icon'] }} text-sm"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 truncate">{{ $k['label'] }}</p>
+                        <p class="text-base font-bold {{ $c['value'] }} truncate">{{ $k['value'] }}</p>
+                    </div>
+                </div>
             </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Contado</div>
-            <div class="text-lg md:text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                ${{ number_format($totalContado ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Crédito</div>
-            <div class="text-lg md:text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                ${{ number_format($totalCredito ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Facturado</div>
-            <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                ${{ number_format($totalFacturado ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Pagado</div>
-            <div class="text-lg md:text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                ${{ number_format($totalPagado ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
-
-        <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-            <div class="text-xs text-gray-500 dark:text-gray-400">Saldo pendiente por pagar</div>
-            <div
-                class="text-lg md:text-xl font-bold {{ ($totalSaldo ?? 0) > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400' }}">
-                ${{ number_format($totalSaldo ?? 0, 0, ',', '.') }}
-            </div>
-        </div>
+        @endforeach
     </section>
-
-    @if (!$esCompra && !$esCotizacion && ($puedeVerCostos ?? false))
-        <!-- KPIs RENTABILIDAD -->
-        <section class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Venta (base sin IVA)</div>
-                <div class="text-lg md:text-xl font-bold text-gray-900 dark:text-white">
-                    ${{ number_format($totalBaseVenta ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Costo</div>
-                <div class="text-lg md:text-xl font-bold text-amber-600 dark:text-amber-400">
-                    ${{ number_format($totalCostoVenta ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Utilidad</div>
-                <div class="text-lg md:text-xl font-bold {{ ($totalGanancia ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                    ${{ number_format($totalGanancia ?? 0, 0, ',', '.') }}
-                </div>
-            </div>
-
-            <div class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-3 md:p-4">
-                <div class="text-xs text-gray-500 dark:text-gray-400">Margen</div>
-                <div class="text-lg md:text-xl font-bold {{ ($margenPromedio ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">
-                    {{ number_format($margenPromedio ?? 0, 2, ',', '.') }}%
-                </div>
-            </div>
-        </section>
-    @endif
 
     <!-- FILTROS -->
     <section
@@ -317,39 +281,48 @@
         </div>
 
         <!-- BOTONES -->
-        <div class="flex flex-col sm:flex-row justify-end gap-2 pt-1">
-            <button type="button" wire:click="cargarVentas"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow">
-                <i class="fas fa-search"></i> Buscar
-            </button>
-
-            <button type="button" wire:click="limpiarFiltros"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm">
-                <i class="fas fa-sync-alt"></i> Limpiar
-            </button>
-
-            <label class="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-amber-50 cursor-pointer text-sm">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-gray-100 dark:border-gray-800">
+            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 cursor-pointer text-sm hover:bg-amber-100 dark:hover:bg-amber-900/30 transition">
                 <input type="checkbox" wire:model.live="verTopProductos" class="rounded text-amber-500 focus:ring-amber-400">
                 <i class="fas fa-trophy text-amber-500"></i>
-                Productos más vendidos
+                <span class="font-medium text-amber-800 dark:text-amber-200">Ver productos más vendidos por mes</span>
             </label>
+
+            <div class="flex items-center gap-2">
+                <button type="button" wire:click="limpiarFiltros"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-sm">
+                    <i class="fas fa-sync-alt"></i> Limpiar
+                </button>
+                <button type="button" wire:click="cargarVentas"
+                    class="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow">
+                    <i class="fas fa-search"></i> Buscar
+                </button>
+            </div>
         </div>
     </section>
 
     <!-- TOP PRODUCTOS POR MES -->
     @if(!empty($topProductosPorMes))
-        <section class="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 p-4 md:p-6">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="h-10 w-10 rounded-xl bg-amber-100 text-amber-600 grid place-items-center">
-                    <i class="fas fa-trophy"></i>
+        @php $cantMeses = count($topProductosPorMes); @endphp
+        <section class="rounded-2xl border border-amber-200 dark:border-amber-800/40 bg-gradient-to-br from-amber-50/40 via-white to-white dark:from-amber-900/10 dark:via-gray-900 dark:to-gray-900 p-4 md:p-6">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-amber-100 dark:border-amber-800/30">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white grid place-items-center shadow">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base md:text-lg font-bold text-gray-800 dark:text-gray-100">Productos más vendidos por mes</h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Top 10 por mes · {{ $cantMeses }} {{ $cantMeses === 1 ? 'mes' : 'meses' }}</p>
+                    </div>
                 </div>
-                <div>
-                    <h3 class="text-base md:text-lg font-bold text-gray-800 dark:text-gray-100">Productos más vendidos por mes</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Top 10 por mes según el rango de fechas seleccionado.</p>
-                </div>
+                <button type="button" wire:click="$set('verTopProductos', false)"
+                    class="text-gray-400 hover:text-gray-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 {{ $cantMeses > 1 ? 'lg:grid-cols-2 xl:grid-cols-3' : '' }} gap-4">
                 @foreach($topProductosPorMes as $mes => $items)
                     @php
                         $mesNombre = \Illuminate\Support\Carbon::createFromFormat('Y-m', $mes)->locale('es')->isoFormat('MMMM YYYY');

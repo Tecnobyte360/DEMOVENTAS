@@ -36,6 +36,18 @@ class Bodega extends Model
             return $query;
         }
 
+        // Back-compat: si el permiso 'bodegas.ver_todas' aún no se ha creado en la BD,
+        // no aplicamos el filtro (todos ven todo). En cuanto se cree el permiso,
+        // empieza a respetar la asignación por usuario.
+        try {
+            $permisoExiste = \Spatie\Permission\Models\Permission::where('name', 'bodegas.ver_todas')->exists();
+        } catch (\Throwable $e) {
+            $permisoExiste = false;
+        }
+        if (!$permisoExiste) {
+            return $query;
+        }
+
         $ids = method_exists($user, 'bodegasPermitidasIds')
             ? ($user->bodegasPermitidasIds() ?? [])
             : [];

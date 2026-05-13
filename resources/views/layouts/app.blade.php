@@ -105,8 +105,16 @@
             },
             onInput(ev) {
                 this.display = ev.target.value;
+
+                // Debounce: actualiza el wire mientras escribes (400ms despues de la ultima tecla)
+                if (this._t) clearTimeout(this._t);
+                this._t = setTimeout(() => {
+                    this.raw = this.parse(this.display);
+                    if (cfg.onChange) cfg.onChange(this.raw);
+                }, 400);
             },
             onBlur() {
+                if (this._t) clearTimeout(this._t);
                 this.raw = this.parse(this.display);
                 this.display = this.fmt(this.raw);
                 if (cfg.onChange) cfg.onChange(this.raw);

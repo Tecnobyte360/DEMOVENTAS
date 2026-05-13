@@ -321,10 +321,15 @@ class Cotizacion extends Component
             return;
         }
 
-        $this->lineas[$i]['precio_unitario'] = (float) ($p->precio ?? 0);
+        $precio = (float) ($p->precio ?? 0);
+        $this->lineas[$i]['precio_unitario'] = $precio;
 
         $this->normalizeLinea($this->lineas[$i]);
         $this->markDirtyIfNeeded();
+
+        // Notifica al frontend para que el moneyInput de Alpine resincronice el precio mostrado
+        $this->dispatch('linea-precio-actualizado', index: $i, precio: round($precio, 2));
+
         $this->dispatch('$refresh');
     }
 

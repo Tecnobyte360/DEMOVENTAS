@@ -333,10 +333,19 @@
 
                                 {{-- Precio --}}
                                 <td class="px-4 py-3 text-right">
-                                    <div x-data="moneyInput({
+                                    {{-- wire:key SOLO incluye producto_id para no perder foco al escribir --}}
+                                    <div wire:key="precio-cot-{{ $i }}-{{ (int)(($l['producto_id'] ?? 0)) }}"
+                                         x-data="moneyInput({
                                             initial: @js((float)($l['precio_unitario'] ?? 0)),
-                                            onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v, false)
-                                         })">
+                                            onChange: (v) => $wire.set('lineas.{{ $i }}.precio_unitario', v)
+                                         })"
+                                         x-on:linea-precio-actualizado.window="
+                                            if ($event.detail.index === {{ $i }}) {
+                                                if (this._t) { clearTimeout(this._t); this._t = null; }
+                                                raw = Number($event.detail.precio) || 0;
+                                                display = fmt(raw);
+                                            }
+                                         ">
                                         <input type="text" inputmode="decimal"
                                             :value="display"
                                             @input="onInput($event)"

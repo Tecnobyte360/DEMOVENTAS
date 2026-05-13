@@ -503,6 +503,7 @@
                                          })"
                                          x-on:linea-precio-actualizado.window="
                                             if ($event.detail.index === {{ $i }}) {
+                                                if (this._t) { clearTimeout(this._t); this._t = null; }
                                                 raw = Number($event.detail.precio) || 0;
                                                 display = fmt(raw);
                                             }

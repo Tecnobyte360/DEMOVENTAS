@@ -32,8 +32,6 @@ use App\Livewire\Cotizaciones\Cotizacion;
 use App\Livewire\Cotizaciones\IndexCotizaciones;
 use App\Livewire\Cotizaciones\ListaCotizaciones;
 use App\Livewire\CuentasContables\PlanCuentas;
-use App\Livewire\Facturas\FacturaCompra\FacturaCompra;
-use App\Livewire\Facturas\FacturaCompra\IndexFacturas;
 use App\Livewire\Facturas\FacturaForm;
 use App\Livewire\Facturas\Index;
 use App\Livewire\Facturas\Listapagosrecibidos;
@@ -293,7 +291,6 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
 
     Route::get('/Cuentas-contables', PlanCuentas::class)->name('Cuentas-contables');
     Route::get('/Impuestos', Impuesto::class)->name('Impuestos');
-    Route::get('Factura-compras', IndexFacturas::class)->name('Factura-compras');
     Route::get('ConceptoDocumentos', ConceptosDocumentos::class)->name('ConceptoDocumentos');
     Route::get('/cotizaciones/{id}/pdf', CotizacionPdfController::class)
         ->name('cotizaciones.pdf');

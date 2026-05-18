@@ -25,7 +25,7 @@ class InformeVentas extends Component
     public string $tipoDocumentoFiltro = 'todos'; // FACTURA | COTIZACION | NOTA_CREDITO | todos
     public string $filtroCliente       = '';
     public string $empresaFiltro       = 'todas';
-    public array $asesoresFiltro       = []; // IDs de asesores seleccionados; vacío = todos
+    public array $asesoresFiltro       = []; // IDs de asesores seleccionados; vacÃ­o = todos
 
     public ?string $fechaInicio = null;
     public ?string $fechaFin    = null;
@@ -308,15 +308,24 @@ class InformeVentas extends Component
             return;
         }
 
-        $ids = (clone $query)->pluck('id');
+        // Bug 1: excluir anuladas y borradores del cálculo de rentabilidad
+        // Bug 2: excluir notas de crédito (reducen venta, no deben sumarse)
+        $ids = (clone $query)
+            ->whereNotIn('estado', ['anulada', 'borrador'])
+            ->whereHas('serie.tipo', function ($t) {
+                $t->whereRaw('UPPER(codigo) = ?', ['FACTURA']);
+            })
+            ->pluck('id');
+
         if ($ids->isEmpty()) {
             return;
         }
 
         $row = DB::table('factura_detalles as fd')
             ->leftJoin('producto_bodega as pb', function ($j) {
+                // Bug 3: si bodega_id es NULL en el detalle, buscar costo por producto en cualquier bodega
                 $j->on('pb.producto_id', '=', 'fd.producto_id')
-                  ->on('pb.bodega_id', '=', 'fd.bodega_id');
+                  ->whereRaw('pb.bodega_id = COALESCE(fd.bodega_id, pb.bodega_id)');
             })
             ->leftJoin('productos as p', 'p.id', '=', 'fd.producto_id')
             ->whereIn('fd.factura_id', $ids)
@@ -326,7 +335,7 @@ class InformeVentas extends Component
                     fd.cantidad * COALESCE(
                         NULLIF(pb.costo_promedio, 0),
                         NULLIF(pb.ultimo_costo, 0),
-                        p.costo,
+                        NULLIF(p.costo, 0),
                         0
                     )
                 ), 0) AS costo
@@ -343,7 +352,7 @@ class InformeVentas extends Component
     }
 
     /**
-     * Calcula rentabilidad por factura para la página actual.
+     * Calcula rentabilidad por factura para la pÃ¡gina actual.
      * Devuelve array keyed por factura_id con claves: costo, ganancia, margen.
      */
     protected function rentabilidadPorFactura(Collection $items): array
@@ -352,12 +361,22 @@ class InformeVentas extends Component
             return [];
         }
 
-        $ids = $items->pluck('id');
+        // Bug 1: excluir anuladas y borradores por factura
+        // Bug 2: excluir notas de crédito
+        $ids = $items
+            ->filter(fn ($f) => !in_array($f->estado, ['anulada', 'borrador'], true))
+            ->filter(fn ($f) => strtoupper($f->serie?->tipo?->codigo ?? '') === 'FACTURA')
+            ->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
 
         $rows = DB::table('factura_detalles as fd')
             ->leftJoin('producto_bodega as pb', function ($j) {
+                // Bug 3: fallback cuando bodega_id es NULL en el detalle
                 $j->on('pb.producto_id', '=', 'fd.producto_id')
-                  ->on('pb.bodega_id', '=', 'fd.bodega_id');
+                  ->whereRaw('pb.bodega_id = COALESCE(fd.bodega_id, pb.bodega_id)');
             })
             ->leftJoin('productos as p', 'p.id', '=', 'fd.producto_id')
             ->whereIn('fd.factura_id', $ids)
@@ -369,7 +388,7 @@ class InformeVentas extends Component
                     fd.cantidad * COALESCE(
                         NULLIF(pb.costo_promedio, 0),
                         NULLIF(pb.ultimo_costo, 0),
-                        p.costo,
+                        NULLIF(p.costo, 0),
                         0
                     )
                 ), 0) AS costo

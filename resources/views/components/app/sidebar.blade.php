@@ -116,7 +116,7 @@
                     const term = v.trim().toLowerCase();
                     const nav = document.querySelector('#sidebar nav');
                     if (!nav) return;
-                    // Filtra solo items de PRIMER NIVEL (no submenÃºs, para no romper x-show de Alpine)
+                    // Filtra solo items de PRIMER NIVEL (no submenús, para no romper x-show de Alpine)
                     const items = nav.querySelectorAll(':scope > .space-y-1 > a, :scope > .space-y-1 > div');
                     items.forEach(el => {
                         if (!term) { el.style.display = ''; return; }
@@ -134,7 +134,7 @@
                     @click="q = ''"
                     class="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 grid place-items-center rounded-md hover:bg-white/20 text-base"
                     :style="`color: ${fgMuted}`">
-                    âœ•
+                    ✕
                 </button>
             </div>
 
@@ -263,7 +263,7 @@
                                     <div
                                         class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                     </div>
-                                    <span class="transition-all duration-200 group-hover:font-bold">Nota crÃ©dito de
+                                    <span class="transition-all duration-200 group-hover:font-bold">Nota crédito de
                                         ventas</span>
                                 </a>
                             @endcan
@@ -317,6 +317,18 @@
 
                         <div x-show="open" x-collapse
                             class="mt-1 ml-8 space-y-1 lg:hidden lg:sidebar-expanded:block 2xl:block">
+                            @can('compras.ver')
+                                <a href="{{ route('Factura-compras') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('Factura-compras')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div
+                                        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
+                                    </div>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Factura de compra</span>
+                                </a>
+                            @endcan
 
                             @can('notas_credito_compra.ver')
                                 <a href="{{ route('Notascreditocompra') }}"
@@ -327,7 +339,7 @@
                                     <div
                                         class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                     </div>
-                                    <span class="transition-all duration-200 group-hover:font-bold">Nota crÃ©dito de
+                                    <span class="transition-all duration-200 group-hover:font-bold">Nota crédito de
                                         compras</span>
                                 </a>
                             @endcan
@@ -404,7 +416,7 @@
                                             class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                         </div>
                                         <span class="transition-all duration-200 group-hover:font-bold">Salida
-                                            mercancÃ­a</span>
+                                            mercancía</span>
                                     </a> --}}
 
                                     {{-- <a href="{{ route('DevolucionMercancia') }}"
@@ -414,8 +426,8 @@
                                         <div
                                             class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                         </div>
-                                        <span class="transition-all duration-200 group-hover:font-bold">DevoluciÃ³n de
-                                            mercancÃ­a</span>
+                                        <span class="transition-all duration-200 group-hover:font-bold">Devolución de
+                                            mercancía</span>
                                     </a> --}}
 
 
@@ -433,7 +445,7 @@
                                     <div
                                         class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                     </div>
-                                    <span class="transition-all duration-200 group-hover:font-bold">GestiÃ³n Bodegas</span>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Gestión Bodegas</span>
                                 </a>
 
                                 <a href="{{ route('inventario.por-bodega') }}"
@@ -457,8 +469,8 @@
                                     <div
                                         class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                     </div>
-                                    <span class="transition-all duration-200 group-hover:font-bold">CategorÃ­as
-                                        ArtÃ­culos</span>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Categorías
+                                        Artículos</span>
                                 </a>
 
                                 <a href="{{ route('subcategorias.index') }}"
@@ -469,8 +481,8 @@
                                     <div
                                         class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300">
                                     </div>
-                                    <span class="transition-all duration-200 group-hover:font-bold">SubCategorÃ­as de
-                                        artÃ­culos</span>
+                                    <span class="transition-all duration-200 group-hover:font-bold">SubCategorías de
+                                        artículos</span>
                                 </a>
                             @endcan
 
@@ -683,11 +695,11 @@
                 <!-- Section label: ADMINISTRACION -->
                 <div class="pt-3 pb-1 px-3 flex items-center gap-2">
                     <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
-                    <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">AdministraciÃ³n</span>
+                    <span class="text-[10px] font-bold uppercase tracking-[0.18em]" :style="`color: ${fgMuted}`">Administración</span>
                     <span class="h-px flex-1" :style="`background: ${isLight ? 'rgba(0,0,0,.10)' : 'rgba(255,255,255,.14)'}`"></span>
                 </div>
 
-                <!-- ConfiguraciÃ³n -->
+                <!-- Configuración -->
                 @canany([
                     'configuracion.ver',
                     'usuarios.gestionar', 'roles.gestionar', 'empresas.gestionar',
@@ -715,7 +727,7 @@
                                 <span
                                     class="text-sm font-bold lg:hidden lg:sidebar-expanded:block 2xl:block transition-all duration-200"
                                     :style="`color: ${fgMuted}`">
-                                    ConfiguraciÃ³n
+                                    Configuración
                                 </span>
                             </div>
 
@@ -857,7 +869,7 @@
                 </svg>
             </button>
 
-            <!-- Cerrar sesiÃ³n -->
+            <!-- Cerrar sesión -->
             <form method="POST" action="{{ route('logout') }}" class="mt-2">
                 @csrf
                 <button type="submit"
@@ -876,7 +888,7 @@
                     <span
                         class="text-sm font-bold lg:hidden lg:sidebar-expanded:block 2xl:block transition-all duration-200 group-hover:text-red-400"
                         :style="`color: ${fgMuted}`">
-                        Cerrar SesiÃ³n
+                        Cerrar Sesión
                     </span>
                 </button>
             </form>
@@ -914,7 +926,7 @@
         display: none !important;
     }
 
-    /* Item activo: fondo blanco translÃºcido mÃ¡s fuerte + barra izquierda + ligera elevaciÃ³n */
+    /* Item activo: fondo blanco translúcido más fuerte + barra izquierda + ligera elevación */
     #sidebar nav a.bg-white\/20,
     #sidebar nav button.bg-white\/20 {
         background-color: rgba(255, 255, 255, .22) !important;
@@ -937,7 +949,7 @@
         background-color: rgba(255, 255, 255, .14) !important;
     }
 
-    /* Sub-items (mÃ¡s sutiles) */
+    /* Sub-items (más sutiles) */
     #sidebar nav .ml-8 a:hover {
         background-color: rgba(255, 255, 255, .10) !important;
     }
@@ -951,14 +963,14 @@
         background-color: rgba(255, 255, 255, .22) !important;
     }
 
-    /* === TipografÃ­a limpia tipo "Alimentos La Hacienda" === */
+    /* === Tipografía limpia tipo "Alimentos La Hacienda" === */
 
-    /* Esconde las lÃ­neas divisorias en los headers de secciÃ³n */
+    /* Esconde las líneas divisorias en los headers de sección */
     #sidebar .h-px.flex-1 {
         display: none !important;
     }
 
-    /* Headers de secciÃ³n: pequeÃ±as, capitalizadas, sin tracking exagerado */
+    /* Headers de sección: pequeñas, capitalizadas, sin tracking exagerado */
     #sidebar [class*="text-[10px]"][class*="uppercase"] {
         font-size: 12px !important;
         font-weight: 500 !important;
@@ -967,7 +979,7 @@
         opacity: .55 !important;
     }
 
-    /* Quitar espacio extra de los headers de secciÃ³n */
+    /* Quitar espacio extra de los headers de sección */
     #sidebar nav .pt-3.pb-1.px-3,
     #sidebar .mb-3.flex.items-center.gap-2 {
         justify-content: flex-start !important;
@@ -976,7 +988,7 @@
         margin-bottom: 0.25rem !important;
     }
 
-    /* Items: texto blanco mÃ¡s limpio */
+    /* Items: texto blanco más limpio */
     #sidebar nav > .space-y-1 > a span,
     #sidebar nav > .space-y-1 > div > button span {
         font-weight: 500 !important;
@@ -993,7 +1005,7 @@
     }
     #sidebar nav a.bg-white\/20::after,
     #sidebar nav button.bg-white\/20::after {
-        content: "â€º";
+        content: "›";
         position: absolute;
         right: 12px;
         top: 50%;
@@ -1004,7 +1016,7 @@
         opacity: .85;
     }
 
-    /* Iconos: tamaÃ±o y opacidad uniformes */
+    /* Iconos: tamaño y opacidad uniformes */
     #sidebar nav a svg,
     #sidebar nav button svg,
     #sidebar nav a i,

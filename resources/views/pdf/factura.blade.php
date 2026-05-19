@@ -1,6 +1,6 @@
 {{-- resources/views/pdf/factura.blade.php --}}
 @php
-    // ============ Normalización ============
+    // ============ NormalizaciÃ³n ============
     if (isset($empresa) && is_array($empresa)) {
         $empresa = (object) $empresa;
     }
@@ -32,7 +32,7 @@
     $grandTx   = $theme['grandTx']   ?? '#ffffff';
     $wmColor   = $theme['wmColor']   ?? 'rgba(34, 51, 97, .06)';
 
-    // ✅ Logo: para PDF lo ideal es PATH absoluto.
+    // âœ… Logo: para PDF lo ideal es PATH absoluto.
     $logoSrc = null;
 
     if (!empty($empresa->logo_path)) {
@@ -45,7 +45,7 @@
         $logoSrc = $empresa->logo_src;
     }
 
-    // ✅ Convertir a PATH absoluto si no es URL/data
+    // âœ… Convertir a PATH absoluto si no es URL/data
     $logoPdfSrc = null;
     if ($logoSrc) {
         if (
@@ -74,12 +74,12 @@
     $fmtPct = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.') . '%';
 
     $len = $factura->serie->longitud ?? 6;
-    $num = $factura->numero !== null ? str_pad((string) $factura->numero, $len, '0', STR_PAD_LEFT) : '—';
+    $num = $factura->numero !== null ? str_pad((string) $factura->numero, $len, '0', STR_PAD_LEFT) : 'â€”';
     $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
     $folio = "{$pref}{$num}";
 
     // =========================================================
-    // ✅ Detectar si es FACTURA DE COMPRA (si no, es REMISIÓN)
+    // âœ… Detectar si es FACTURA DE COMPRA (si no, es REMISIÃ“N)
     // =========================================================
     $docCodigo = strtoupper((string) ($documento ?? ($factura->serie->tipo->codigo ?? '')));
 
@@ -94,11 +94,11 @@
         $esCompra = true;
     }
 
-    $docTitulo = $esCompra ? 'FACTURA DE COMPRA' : 'REMISIÓN';
-    $wmTexto   = $esCompra ? 'FACTURA' : 'REMISIÓN';
+    $docTitulo = $esCompra ? 'FACTURA DE COMPRA' : 'REMISIÃ“N';
+    $wmTexto   = $esCompra ? 'FACTURA' : 'REMISIÃ“N';
 
     // =========================================================
-    // ✅ Tercero: Proveedor en compra / Cliente en venta
+    // âœ… Tercero: Proveedor en compra / Cliente en venta
     // =========================================================
     $tercero = $esCompra
         ? $factura->proveedor ?? ($factura->socioNegocio ?? ($factura->cliente ?? null))
@@ -479,14 +479,14 @@
 
                 <div class="header-meta">
                     <div class="header-meta-row">
-                        <span class="small muted">Número:</span>
+                        <span class="small muted">NÃºmero:</span>
                         <strong style="font-size:13px; color: {{ $ink }};">{{ $folio }}</strong>
                     </div>
 
                     <div class="header-meta-row">
                         Fecha: {{ $fechaDocumento }}
                         @if ($fechaVencimiento)
-                            · Vence: {{ $fechaVencimiento }}
+                            Â· Vence: {{ $fechaVencimiento }}
                         @endif
                     </div>
 
@@ -517,11 +517,11 @@
                 <td class="small muted">
                     {{ $E['nombre'] }}
                     @if (!empty($E['website']))
-                        · {{ $E['website'] }}
+                        Â· {{ $E['website'] }}
                     @endif
                 </td>
                 <td class="small muted text-right">
-                    Página <span class="page-number"></span>
+                    PÃ¡gina <span class="page-number"></span>
                 </td>
             </tr>
         </table>
@@ -546,9 +546,9 @@
                         </div>
 
                         <div class="small muted" style="line-height:1.35;">
-                            NIT: {{ $tercero->nit ?? '—' }}<br>
-                            Email: {{ $tercero->correo ?? ($tercero->email ?? '—') }}<br>
-                            Tel: {{ $tercero->telefono ?? '—' }}
+                            NIT: {{ $tercero->nit ?? 'â€”' }}<br>
+                            Email: {{ $tercero->correo ?? ($tercero->email ?? 'â€”') }}<br>
+                            Tel: {{ $tercero->telefono ?? 'â€”' }}
                         </div>
                     </div>
                 </td>
@@ -571,20 +571,20 @@
                             @if (($factura->tipo_pago ?? '') === 'credito')
                                 <tr>
                                     <td class="cond-label">Plazo</td>
-                                    <td class="cond-value">{{ $factura->plazo_dias ?? 0 }} días</td>
+                                    <td class="cond-value">{{ $factura->plazo_dias ?? 0 }} dÃ­as</td>
                                 </tr>
                             @endif
 
                             @if (!empty($factura->terminos_pago))
                                 <tr>
-                                    <td class="cond-label">Términos</td>
+                                    <td class="cond-label">TÃ©rminos</td>
                                     <td class="cond-value">{{ $factura->terminos_pago }}</td>
                                 </tr>
                             @endif
 
                             <tr>
                                 <td class="cond-label">Validez</td>
-                                <td class="cond-value">Documento vigente según emisión</td>
+                                <td class="cond-value">Documento vigente segÃºn emisiÃ³n</td>
                             </tr>
                         </table>
                     </div>
@@ -601,14 +601,14 @@
                     <th style="width:12%;" class="text-right">Precio</th>
                     <th style="width:8%;" class="text-right">Desc</th>
                     <th style="width:8%;" class="text-right">IVA</th>
-                    <th style="width:18%;" class="text-right">Total línea</th>
+                    <th style="width:18%;" class="text-right">Total lÃ­nea</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($factura->detalles ?? [] as $d)
                     @php
                         $nombre  = $d->producto->nombre ?? ($d->descripcion ?? '#' . $d->producto_id);
-                        $bodega  = $d->bodega->nombre ?? '—';
+                        $bodega  = $d->bodega->nombre ?? 'â€”';
                         $cant    = (float) $d->cantidad;
                         $precio  = (float) $d->precio_unitario;
                         $descPct = (float) ($d->descuento_pct ?? 0);
@@ -650,18 +650,26 @@
             </tr>
         </table>
 
+        @php
+            $infoPago = (array)(($empresa->extra ?? [])['info_pago'] ?? []);
+            $ipBanco  = trim(($infoPago['banco'] ?? '') . ($infoPago['tipo_cuenta'] ? ' · ' . $infoPago['tipo_cuenta'] : ''));
+            $ipNumero = $infoPago['numero'] ?? '';
+            $ipTitular = $infoPago['titular'] ?? '';
+        @endphp
+        @if($ipBanco || $ipNumero || $ipTitular)
         <div class="payment-box">
             <div class="payment-title">Información de pago</div>
-
+            @if($ipBanco || $ipNumero)
             <div class="payment-row">
-                <span class="payment-bank">Bancolombia · Cuenta de ahorros</span>
-                <span class="payment-account">00168305311</span>
+                @if($ipBanco)<span class="payment-bank">{{ $ipBanco }}</span>@endif
+                @if($ipNumero)<span class="payment-account">{{ $ipNumero }}</span>@endif
             </div>
-
-            <div class="payment-owner">
-                Titular: Jhon Arles Palacio Arias
-            </div>
+            @endif
+            @if($ipTitular)
+            <div class="payment-owner">Titular: {{ $ipTitular }}</div>
+            @endif
         </div>
+        @endif
 
         <div class="drawing-space"></div>
 
@@ -672,10 +680,10 @@
                 <div style="white-space: pre-line;">{{ $factura->notas }}</div>
             @else
                 <div class="muted small" style="line-height:1.45;">
-                    • Precios en moneda local.<br>
-                    • Documento sujeto a validación según emisión.<br>
-                    • Entrega sujeta a disponibilidad.<br>
-                    • Garantía según fabricante.
+                    â€¢ Precios en moneda local.<br>
+                    â€¢ Documento sujeto a validaciÃ³n segÃºn emisiÃ³n.<br>
+                    â€¢ Entrega sujeta a disponibilidad.<br>
+                    â€¢ GarantÃ­a segÃºn fabricante.
                 </div>
             @endif
         </div>

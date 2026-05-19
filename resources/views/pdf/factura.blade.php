@@ -1,6 +1,6 @@
 {{-- resources/views/pdf/factura.blade.php --}}
 @php
-    // ============ NormalizaciÃ³n ============
+    // ============ NormalizaciÃƒ³n ============
     if (isset($empresa) && is_array($empresa)) {
         $empresa = (object) $empresa;
     }
@@ -32,7 +32,7 @@
     $grandTx   = $theme['grandTx']   ?? '#ffffff';
     $wmColor   = $theme['wmColor']   ?? 'rgba(34, 51, 97, .06)';
 
-    // âœ… Logo: para PDF lo ideal es PATH absoluto.
+    // Ã¢Å“â€¦ Logo: para PDF lo ideal es PATH absoluto.
     $logoSrc = null;
 
     if (!empty($empresa->logo_path)) {
@@ -45,7 +45,7 @@
         $logoSrc = $empresa->logo_src;
     }
 
-    // âœ… Convertir a PATH absoluto si no es URL/data
+    // Ã¢Å“â€¦ Convertir a PATH absoluto si no es URL/data
     $logoPdfSrc = null;
     if ($logoSrc) {
         if (
@@ -74,12 +74,12 @@
     $fmtPct = fn($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.') . '%';
 
     $len = $factura->serie->longitud ?? 6;
-    $num = $factura->numero !== null ? str_pad((string) $factura->numero, $len, '0', STR_PAD_LEFT) : 'â€”';
+    $num = $factura->numero !== null ? str_pad((string) $factura->numero, $len, '0', STR_PAD_LEFT) : 'Ã¢â‚¬â€�';
     $pref = $factura->prefijo ? "{$factura->prefijo}-" : '';
     $folio = "{$pref}{$num}";
 
     // =========================================================
-    // âœ… Detectar si es FACTURA DE COMPRA (si no, es REMISIÃ“N)
+    // Ã¢Å“â€¦ Detectar si es FACTURA DE COMPRA (si no, es REMISIÃƒâ€œN)
     // =========================================================
     $docCodigo = strtoupper((string) ($documento ?? ($factura->serie->tipo->codigo ?? '')));
 
@@ -94,11 +94,11 @@
         $esCompra = true;
     }
 
-    $docTitulo = $esCompra ? 'FACTURA DE COMPRA' : 'REMISIÃ“N';
-    $wmTexto   = $esCompra ? 'FACTURA' : 'REMISIÃ“N';
+    $docTitulo = $esCompra ? 'FACTURA DE COMPRA' : 'REMISIÃƒâ€œN';
+    $wmTexto   = $esCompra ? 'FACTURA' : 'REMISIÃƒâ€œN';
 
     // =========================================================
-    // âœ… Tercero: Proveedor en compra / Cliente en venta
+    // Ã¢Å“â€¦ Tercero: Proveedor en compra / Cliente en venta
     // =========================================================
     $tercero = $esCompra
         ? $factura->proveedor ?? ($factura->socioNegocio ?? ($factura->cliente ?? null))
@@ -479,14 +479,14 @@
 
                 <div class="header-meta">
                     <div class="header-meta-row">
-                        <span class="small muted">NÃºmero:</span>
+                        <span class="small muted">NÃƒºmero:</span>
                         <strong style="font-size:13px; color: {{ $ink }};">{{ $folio }}</strong>
                     </div>
 
                     <div class="header-meta-row">
                         Fecha: {{ $fechaDocumento }}
                         @if ($fechaVencimiento)
-                            Â· Vence: {{ $fechaVencimiento }}
+                            Ã‚· Vence: {{ $fechaVencimiento }}
                         @endif
                     </div>
 
@@ -517,11 +517,11 @@
                 <td class="small muted">
                     {{ $E['nombre'] }}
                     @if (!empty($E['website']))
-                        Â· {{ $E['website'] }}
+                        Ã‚· {{ $E['website'] }}
                     @endif
                 </td>
                 <td class="small muted text-right">
-                    PÃ¡gina <span class="page-number"></span>
+                    PÃƒ¡gina <span class="page-number"></span>
                 </td>
             </tr>
         </table>
@@ -546,9 +546,9 @@
                         </div>
 
                         <div class="small muted" style="line-height:1.35;">
-                            NIT: {{ $tercero->nit ?? 'â€”' }}<br>
-                            Email: {{ $tercero->correo ?? ($tercero->email ?? 'â€”') }}<br>
-                            Tel: {{ $tercero->telefono ?? 'â€”' }}
+                            NIT: {{ $tercero->nit ?? 'Ã¢â‚¬â€�' }}<br>
+                            Email: {{ $tercero->correo ?? ($tercero->email ?? 'Ã¢â‚¬â€�') }}<br>
+                            Tel: {{ $tercero->telefono ?? 'Ã¢â‚¬â€�' }}
                         </div>
                     </div>
                 </td>
@@ -571,20 +571,20 @@
                             @if (($factura->tipo_pago ?? '') === 'credito')
                                 <tr>
                                     <td class="cond-label">Plazo</td>
-                                    <td class="cond-value">{{ $factura->plazo_dias ?? 0 }} dÃ­as</td>
+                                    <td class="cond-value">{{ $factura->plazo_dias ?? 0 }} dÃƒ­as</td>
                                 </tr>
                             @endif
 
                             @if (!empty($factura->terminos_pago))
                                 <tr>
-                                    <td class="cond-label">TÃ©rminos</td>
+                                    <td class="cond-label">TÃƒ©rminos</td>
                                     <td class="cond-value">{{ $factura->terminos_pago }}</td>
                                 </tr>
                             @endif
 
                             <tr>
                                 <td class="cond-label">Validez</td>
-                                <td class="cond-value">Documento vigente segÃºn emisiÃ³n</td>
+                                <td class="cond-value">Documento vigente segÃƒºn emisiÃƒ³n</td>
                             </tr>
                         </table>
                     </div>
@@ -601,14 +601,14 @@
                     <th style="width:12%;" class="text-right">Precio</th>
                     <th style="width:8%;" class="text-right">Desc</th>
                     <th style="width:8%;" class="text-right">IVA</th>
-                    <th style="width:18%;" class="text-right">Total lÃ­nea</th>
+                    <th style="width:18%;" class="text-right">Total lÃƒ­nea</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($factura->detalles ?? [] as $d)
                     @php
                         $nombre  = $d->producto->nombre ?? ($d->descripcion ?? '#' . $d->producto_id);
-                        $bodega  = $d->bodega->nombre ?? 'â€”';
+                        $bodega  = $d->bodega->nombre ?? 'Ã¢â‚¬â€�';
                         $cant    = (float) $d->cantidad;
                         $precio  = (float) $d->precio_unitario;
                         $descPct = (float) ($d->descuento_pct ?? 0);
@@ -680,10 +680,10 @@
                 <div style="white-space: pre-line;">{{ $factura->notas }}</div>
             @else
                 <div class="muted small" style="line-height:1.45;">
-                    â€¢ Precios en moneda local.<br>
-                    â€¢ Documento sujeto a validaciÃ³n segÃºn emisiÃ³n.<br>
-                    â€¢ Entrega sujeta a disponibilidad.<br>
-                    â€¢ GarantÃ­a segÃºn fabricante.
+                    Ã¢â‚¬¢ Precios en moneda local.<br>
+                    Ã¢â‚¬¢ Documento sujeto a validaciÃƒ³n segÃƒºn emisiÃƒ³n.<br>
+                    Ã¢â‚¬¢ Entrega sujeta a disponibilidad.<br>
+                    Ã¢â‚¬¢ GarantÃƒ­a segÃƒºn fabricante.
                 </div>
             @endif
         </div>

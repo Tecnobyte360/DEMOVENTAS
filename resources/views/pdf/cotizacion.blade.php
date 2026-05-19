@@ -88,7 +88,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>CotizaciÃ³n {{ $folio }}</title>
+    <title>CotizaciÃƒ³n {{ $folio }}</title>
 
     <style>
         @page {
@@ -435,18 +435,18 @@
             </div>
 
             <div class="col right">
-                <div class="doc-title">COTIZACIÃ“N</div>
+                <div class="doc-title">COTIZACIÃƒâ€œN</div>
 
                 <div class="header-meta">
                     <div class="header-meta-row">
-                        <span class="small muted">NÃºmero:</span>
+                        <span class="small muted">NÃƒºmero:</span>
                         <strong style="font-size:13px; color: {{ $ink }};">{{ $folio }}</strong>
                     </div>
 
                     <div class="header-meta-row">
                         Fecha: {{ $fechaDocumento }}
                         @if ($fechaVencimiento)
-                            Â· Vence: {{ $fechaVencimiento }}
+                            Ã‚· Vence: {{ $fechaVencimiento }}
                         @endif
                     </div>
 
@@ -477,11 +477,11 @@
                 <td class="small muted">
                     {{ $E['nombre'] }}
                     @if (!empty($E['website']))
-                        Â· {{ $E['website'] }}
+                        Ã‚· {{ $E['website'] }}
                     @endif
                 </td>
                 <td class="small muted text-right">
-                    PÃ¡gina <span class="page-number"></span>
+                    PÃƒ¡gina <span class="page-number"></span>
                 </td>
             </tr>
         </table>
@@ -490,7 +490,7 @@
     @if (($cotizacion->estado ?? '') === 'cancelada')
         <div class="watermark">CANCELADA</div>
     @else
-        <div class="watermark">COTIZACIÃ“N</div>
+        <div class="watermark">COTIZACIÃƒâ€œN</div>
     @endif
 
     <main style="position: relative; z-index:1;">
@@ -506,9 +506,9 @@
                         </div>
 
                         <div class="small muted" style="line-height:1.35;">
-                            NIT: {{ $cotizacion->cliente->nit ?? 'â€”' }}<br>
-                            Email: {{ $cotizacion->cliente->correo ?? 'â€”' }}<br>
-                            Tel: {{ $cotizacion->cliente->telefono ?? 'â€”' }}
+                            NIT: {{ $cotizacion->cliente->nit ?? 'Ã¢â‚¬â€�' }}<br>
+                            Email: {{ $cotizacion->cliente->correo ?? 'Ã¢â‚¬â€�' }}<br>
+                            Tel: {{ $cotizacion->cliente->telefono ?? 'Ã¢â‚¬â€�' }}
                         </div>
                     </div>
                 </td>
@@ -532,14 +532,14 @@
 
                             @if (!empty($cotizacion->terminos_pago))
                                 <tr>
-                                    <td class="cond-label">TÃ©rminos</td>
+                                    <td class="cond-label">TÃƒ©rminos</td>
                                     <td class="cond-value">{{ $cotizacion->terminos_pago }}</td>
                                 </tr>
                             @endif
 
                             <tr>
                                 <td class="cond-label">Validez</td>
-                                <td class="cond-value">15 dÃ­as (salvo acuerdo)</td>
+                                <td class="cond-value">15 dÃƒ­as (salvo acuerdo)</td>
                             </tr>
                         </table>
                     </div>
@@ -556,14 +556,14 @@
                     <th style="width:12%;" class="text-right">Precio</th>
                     <th style="width:8%;" class="text-right">Desc</th>
                     <th style="width:8%;" class="text-right">IVA</th>
-                    <th style="width:18%;" class="text-right">Total lÃ­nea</th>
+                    <th style="width:18%;" class="text-right">Total lÃƒ­nea</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach ($cotizacion->detalles ?? [] as $d)
                     @php
                         $nombre  = $d->producto->nombre ?? ($d->descripcion ?? '#' . $d->producto_id);
-                        $bodega  = $d->bodega->nombre ?? 'â€”';
+                        $bodega  = $d->bodega->nombre ?? 'Ã¢â‚¬â€�';
                         $cant    = (float) $d->cantidad;
                         $precio  = (float) $d->precio_unitario;
                         $descPct = (float) ($d->descuento_pct ?? 0);
@@ -635,10 +635,10 @@
                 <div style="white-space: pre-line;">{{ $cotizacion->notas }}</div>
             @else
                 <div class="muted small" style="line-height:1.45;">
-                    â€¢ Precios en moneda local.<br>
-                    â€¢ Validez: 15 dÃ­as.<br>
-                    â€¢ Entrega sujeta a disponibilidad.<br>
-                    â€¢ GarantÃ­a segÃºn fabricante.
+                    Ã¢â‚¬¢ Precios en moneda local.<br>
+                    Ã¢â‚¬¢ Validez: 15 dÃƒ­as.<br>
+                    Ã¢â‚¬¢ Entrega sujeta a disponibilidad.<br>
+                    Ã¢â‚¬¢ GarantÃƒ­a segÃƒºn fabricante.
                 </div>
             @endif
         </div>

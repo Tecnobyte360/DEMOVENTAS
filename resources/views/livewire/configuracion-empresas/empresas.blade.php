@@ -27,16 +27,16 @@
                     <span class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
                         <i class="fas fa-building"></i>
                     </span>
-                    ConfiguraciÃƒÂ³n de Empresas
+                    ConfiguraciÃƒÆ’Ã‚³n de Empresas
                 </h2>
                 <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                    Gestiona nombre, logos y datos bÃƒÂ¡sicos. Personaliza colores, tema PDF, estado y bodega predeterminada.
+                    Gestiona nombre, logos y datos bÃƒÆ’Ã‚¡sicos. Personaliza colores, tema PDF, estado y bodega predeterminada.
                 </p>
             </div>
         </div>
     </div>
 
-    {{-- Alertas de ÃƒÂ©xito en propiedad --}}
+    {{-- Alertas de ÃƒÆ’Ã‚©xito en propiedad --}}
     @if ($ok)
         <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
                 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
@@ -49,7 +49,7 @@
         </div>
     @endif
 
-    {{-- Alertas de ÃƒÂ©xito flash --}}
+    {{-- Alertas de ÃƒÆ’Ã‚©xito flash --}}
     @if (session('ok'))
         <div class="relative z-10 mb-6 rounded-2xl border border-emerald-300/60 bg-emerald-50 text-emerald-800 px-4 py-3 text-sm
                 dark:bg-emerald-900/30 dark:text-emerald-200 dark:border-emerald-700/60">
@@ -122,7 +122,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">TelÃƒÂ©fono</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">TelÃƒÆ’Ã‚©fono</label>
                         <input type="text" wire:model.defer="telefono"
                             class="mt-1 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                             placeholder="+57 300 000 0000">
@@ -154,7 +154,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">DirecciÃƒÂ³n</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200">DirecciÃƒÆ’Ã‚³n</label>
                         <input type="text" wire:model.defer="direccion"
                             class="mt-1 w-full rounded-xl border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100"
                             placeholder="Calle 123 #45-67">
@@ -181,7 +181,7 @@
                         @enderror
 
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                            Esta bodega se usarÃƒÂ¡ por defecto al crear documentos o movimientos para esta empresa.
+                            Esta bodega se usarÃƒÆ’Ã‚¡ por defecto al crear documentos o movimientos para esta empresa.
                         </p>
                     </div>
                 </div>
@@ -237,14 +237,14 @@
                 </div>
             </div>
 
-            {{-- ðŸ’³ InformaciÃ³n de pago en documentos --}}
+            {{-- Ã°Å¸â€™³ InformaciÃƒ³n de pago en documentos --}}
             <div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700 p-8">
                 <div class="mb-6 flex items-center gap-3">
                     <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-green-600/10 text-green-600 dark:text-green-400">
                         <i class="fa-solid fa-building-columns"></i>
                     </span>
                     <div>
-                        <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">InformaciÃ³n de pago</h3>
+                        <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">InformaciÃƒ³n de pago</h3>
                         <p class="text-sm text-gray-500 dark:text-gray-400">Se muestra en cotizaciones y facturas PDF.</p>
                     </div>
                 </div>
@@ -264,7 +264,7 @@
                         @error('info_pago_tipo_cuenta') <p class="text-red-500 text-xs mt-1">{{ $message }}</p> @enderror
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NÃºmero de cuenta</label>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NÃƒºmero de cuenta</label>
                         <input type="text" wire:model.defer="info_pago_numero"
                             placeholder="Ej: 00168305311"
                             class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
@@ -280,7 +280,7 @@
                 </div>
             </div>
 
-            {{-- ðŸŽ¨ Tema PDF (Factura) --}}
+            {{-- Ã°Å¸Å½¨ Tema PDF (Factura) --}}
             <div class="bg-white/80 dark:bg-white/10 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-gray-700 p-8">
                 <div class="mb-6 flex items-center gap-3">
                     <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
@@ -380,7 +380,7 @@
                                 <input type="range" min="0" max="360" step="1" class="w-full"
                                     x-model.number="gradAngle">
                                 <span class="text-xs text-gray-600 dark:text-gray-300 w-12 text-right"
-                                    x-text="gradAngle + 'Ã‚Â°'"></span>
+                                    x-text="gradAngle + 'Ãƒâ€šÃ‚°'"></span>
                             </div>
                         </div>
                     </div>
@@ -388,14 +388,14 @@
 
                 {{-- Vista previa mini --}}
                 <div class="mt-8">
-                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">PrevisualizaciÃƒÂ³n</h4>
+                    <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3">PrevisualizaciÃƒÆ’Ã‚³n</h4>
                     <div class="rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow">
                         <div class="p-4"
                             :style="usarGrad
                                 ? `background: linear-gradient(${gradAngle}deg, ${theme.primary}, ${theme.theadBg});`
                                 : `background: ${theme.primary};`">
                             <div class="text-white font-bold">FACTURA</div>
-                            <div class="text-white/80 text-xs">N.Ã‚Âº DEMO-000001</div>
+                            <div class="text-white/80 text-xs">N.Ãƒâ€šÃ‚º DEMO-000001</div>
                         </div>
 
                         <div class="bg-white dark:bg-gray-900">
@@ -410,13 +410,13 @@
                                 </thead>
                                 <tbody>
                                     <tr :style="`border-bottom:1px solid ${theme.border}`">
-                                        <td class="px-4 py-2">ArtÃƒÂ­culo A</td>
+                                        <td class="px-4 py-2">ArtÃƒÆ’Ã‚­culo A</td>
                                         <td class="px-4 py-2 text-right">2</td>
                                         <td class="px-4 py-2 text-right">$10.00</td>
                                         <td class="px-4 py-2 text-right">$20.00</td>
                                     </tr>
                                     <tr :style="`background:${theme.stripe}; border-bottom:1px solid ${theme.border}`">
-                                        <td class="px-4 py-2">ArtÃƒÂ­culo B</td>
+                                        <td class="px-4 py-2">ArtÃƒÆ’Ã‚­culo B</td>
                                         <td class="px-4 py-2 text-right">1</td>
                                         <td class="px-4 py-2 text-right">$5.00</td>
                                         <td class="px-4 py-2 text-right">$5.00</td>
@@ -531,7 +531,7 @@
                     class="px-5 py-3 rounded-2xl bg-indigo-600 text-white font-semibold shadow hover:shadow-lg hover:bg-indigo-700 transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-900">
                     <span wire:loading.remove wire:target="save" class="inline-flex items-center gap-2">
                         <i class="fa-solid fa-floppy-disk"></i>
-                        Guardar configuraciÃƒÂ³n
+                        Guardar configuraciÃƒÆ’Ã‚³n
                     </span>
                     <span wire:loading wire:target="save" class="inline-flex items-center gap-2">
                         <i class="fa-solid fa-spinner animate-spin"></i>
@@ -564,7 +564,7 @@
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">Nombre</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">NIT</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">Email</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">TelÃƒÂ©fono</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">TelÃƒÆ’Ã‚©fono</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">Bodega predeterminada</th>
                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">Estado</th>
                         <th class="px-4 py-3 text-right text-xs font-medium text-gray-600 dark:text-gray-300 uppercase">Acciones</th>
@@ -577,7 +577,7 @@
                                 @if ($row->logo_url)
                                     <img src="{{ $row->logo_url }}" class="h-8 w-auto rounded-md border border-gray-200 dark:border-gray-700" alt="logo">
                                 @else
-                                    <div class="h-8 w-8 rounded-md bg-gray-200 dark:bg-gray-700 grid place-content-center text-xs text-gray-500">Ã¢â‚¬â€�</div>
+                                    <div class="h-8 w-8 rounded-md bg-gray-200 dark:bg-gray-700 grid place-content-center text-xs text-gray-500">Ãƒ¢Ã¢â€š¬Ã¢â‚¬ï¿½</div>
                                 @endif
                             </td>
                             <td class="px-4 py-3">
@@ -588,7 +588,7 @@
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-200">{{ $row->email }}</td>
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-200">{{ $row->telefono }}</td>
                             <td class="px-4 py-3 text-gray-700 dark:text-gray-200">
-                                {{ $row->bodegaPredeterminada->nombre ?? 'Ã¢â‚¬â€�' }}
+                                {{ $row->bodegaPredeterminada->nombre ?? 'Ãƒ¢Ã¢â€š¬Ã¢â‚¬ï¿½' }}
                             </td>
                             <td class="px-4 py-3">
                                 @if ($row->is_activa)
@@ -643,7 +643,7 @@
     </div>
 </div>
 
-{{-- Alpine helper: lee archivo y envÃƒÂ­a Base64 al componente Livewire --}}
+{{-- Alpine helper: lee archivo y envÃƒÆ’Ã‚­a Base64 al componente Livewire --}}
 <script>
     function logoUploader() {
         return {

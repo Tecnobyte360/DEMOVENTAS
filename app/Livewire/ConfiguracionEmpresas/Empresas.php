@@ -24,20 +24,20 @@ class Empresas extends Component
     public ?string $telefono = null;
     public ?string $sitio_web = null;
     public ?string $direccion = null;
-    public ?int $bodega_predeterminada_id = null; // Ã¢Å“â€¦ NUEVO
+    public ?int $bodega_predeterminada_id = null; // Ãƒ¢Ã…â€œÃ¢â‚¬¦ NUEVO
     public bool $is_activa = true;
     public ?string $color_primario = null;
     public ?string $color_secundario = null;
 
-    // CatÃƒÂ¡logo de bodegas
-    public array $bodegas = []; // Ã¢Å“â€¦ NUEVO
+    // CatÃƒÆ’Ã‚¡logo de bodegas
+    public array $bodegas = []; // Ãƒ¢Ã…â€œÃ¢â‚¬¦ NUEVO
 
-    // ImÃƒÂ¡genes Base64 (nuevas subidas)
+    // ImÃƒÆ’Ã‚¡genes Base64 (nuevas subidas)
     public ?string $logo_b64 = null;
     public ?string $logo_dark_b64 = null;
     public ?string $favicon_b64 = null;
 
-    // Rutas actuales (para previsualizar en ediciÃƒÂ³n)
+    // Rutas actuales (para previsualizar en ediciÃƒÆ’Ã‚³n)
     public ?string $logo_actual = null;
     public ?string $logo_dark_actual = null;
     public ?string $favicon_actual = null;
@@ -45,7 +45,7 @@ class Empresas extends Component
     // Contacto extra
     public string $whatsapp = '';
 
-    // InformaciÃ³n de pago (documentos)
+    // InformaciÃƒ³n de pago (documentos)
     public string $info_pago_banco        = '';
     public string $info_pago_tipo_cuenta  = '';
     public string $info_pago_numero       = '';
@@ -64,7 +64,7 @@ class Empresas extends Component
     public function mount(): void
     {
         $this->theme = $this->defaultTheme();
-        $this->cargarBodegas(); // Ã¢Å“â€¦ NUEVO
+        $this->cargarBodegas(); // Ãƒ¢Ã…â€œÃ¢â‚¬¦ NUEVO
 
         if ($empresa = Empresa::query()->first()) {
             $this->empresa_id = $empresa->id;
@@ -107,7 +107,7 @@ class Empresas extends Component
             'telefono'                 => ['nullable', 'string', 'max:50'],
             'sitio_web'                => ['nullable', 'url', 'max:255'],
             'direccion'                => ['nullable', 'string', 'max:255'],
-            'bodega_predeterminada_id' => ['nullable', 'integer', 'exists:bodegas,id'], // Ã¢Å“â€¦ NUEVO
+            'bodega_predeterminada_id' => ['nullable', 'integer', 'exists:bodegas,id'], // Ãƒ¢Ã…â€œÃ¢â‚¬¦ NUEVO
             'is_activa'                => ['boolean'],
             'color_primario'           => ['nullable', 'string', 'max:32'],
             'color_secundario'         => ['nullable', 'string', 'max:32'],
@@ -219,10 +219,10 @@ class Empresas extends Component
             $this->logo_dark_actual = $this->toPublicUrl($empresa->logo_dark_path);
             $this->favicon_actual   = $this->toPublicUrl($empresa->favicon_path);
 
-            $this->ok = 'ConfiguraciÃƒÂ³n guardada correctamente.';
+            $this->ok = 'ConfiguraciÃƒÆ’Ã‚³n guardada correctamente.';
             $this->resetUploads();
         } catch (Throwable $e) {
-            $this->handleException($e, 'No se pudo guardar la configuraciÃƒÂ³n.');
+            $this->handleException($e, 'No se pudo guardar la configuraciÃƒÆ’Ã‚³n.');
         }
     }
 
@@ -271,7 +271,7 @@ class Empresas extends Component
     private function storeBase64ImagePublic(string $dataUrl, int $empresaId, string $folder, string $prefix): string
     {
         if (!str_contains($dataUrl, ';base64,')) {
-            throw new \RuntimeException('Imagen invÃƒÂ¡lida.');
+            throw new \RuntimeException('Imagen invÃƒÆ’Ã‚¡lida.');
         }
 
         [$meta, $encoded] = explode(';base64,', $dataUrl, 2);
@@ -321,7 +321,7 @@ class Empresas extends Component
             'telefono'                 => $m->telefono,
             'sitio_web'                => $m->sitio_web,
             'direccion'                => $m->direccion,
-            'bodega_predeterminada_id' => $m->bodega_predeterminada_id, // Ã¢Å“â€¦ NUEVO
+            'bodega_predeterminada_id' => $m->bodega_predeterminada_id, // Ãƒ¢Ã…â€œÃ¢â‚¬¦ NUEVO
             'is_activa'                => (bool) $m->is_activa,
             'color_primario'           => $m->color_primario,
             'color_secundario'         => $m->color_secundario,
@@ -394,7 +394,7 @@ class Empresas extends Component
     public function render()
     {
         $rows = Empresa::query()
-            ->with('bodegaPredeterminada') // Ã¢Å“â€¦ NUEVO
+            ->with('bodegaPredeterminada') // Ãƒ¢Ã…â€œÃ¢â‚¬¦ NUEVO
             ->when($this->q !== '', function ($q) {
                 $q->where(function ($sub) {
                     $sub->where('nombre', 'like', "%{$this->q}%")

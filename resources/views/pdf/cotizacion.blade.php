@@ -606,20 +606,25 @@
         </table>
 
         @php
-              = (array)((->extra ?? [])['info_pago'] ?? []);
-               = trim((['banco'] ?? '') . (['tipo_cuenta'] ? ' · ' . ['tipo_cuenta'] : ''));
-              = ['numero'] ?? '';
-             = ['titular'] ?? '';
+            $infoPago  = (array)(($empresa->extra ?? [])['info_pago'] ?? []);
+            $ipBanco   = trim(($infoPago['banco'] ?? '') . ($infoPago['tipo_cuenta'] ? ' · ' . $infoPago['tipo_cuenta'] : ''));
+            $ipNumero  = $infoPago['numero'] ?? '';
+            $ipTitular = $infoPago['titular'] ?? '';
         @endphp
-        @if( ||  || )
+        @if($ipBanco || $ipNumero || $ipTitular)
         <div class="payment-box">
             <div class="payment-title">Información de pago</div>
-            @if( || )
+            @if($ipBanco || $ipNumero)
             <div class="payment-row">
-                @if()<span class="payment-bank">{{  }}</span>@endif
-                @if()<span class="payment-account">{{  }}</span>@endif
+                @if($ipBanco)<span class="payment-bank">{{ $ipBanco }}</span>@endif
+                @if($ipNumero)<span class="payment-account">{{ $ipNumero }}</span>@endif
             </div>
             @endif
+            @if($ipTitular)
+            <div class="payment-owner">Titular: {{ $ipTitular }}</div>
+            @endif
+        </div>
+        @endif
             @if()
             <div class="payment-owner">Titular: {{  }}</div>
             @endif

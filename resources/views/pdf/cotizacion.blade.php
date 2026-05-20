@@ -625,11 +625,6 @@
             @endif
         </div>
         @endif
-            @if()
-            <div class="payment-owner">Titular: {{  }}</div>
-            @endif
-        </div>
-        @endif
 
         <div class="drawing-space"></div>
 

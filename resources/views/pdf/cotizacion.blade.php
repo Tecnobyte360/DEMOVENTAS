@@ -643,19 +643,6 @@
             @endif
         </div>
 
-        <table style="width:100%; margin-top:14px;">
-            <tr>
-                <td class="w-50">
-                    <div class="small muted">Aprobado por (cliente):</div>
-                    <div style="margin-top:42px; border-top:1px solid {{ $border }}; width:80%;"></div>
-                </td>
-                <td class="w-50">
-                    <div class="small muted">Firma y sello:</div>
-                    <div style="margin-top:42px; border-top:1px solid {{ $border }}; width:80%;"></div>
-                </td>
-            </tr>
-        </table>
-
     </main>
 
 </body>

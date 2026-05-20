@@ -64,7 +64,7 @@
         'nit'       => !empty($empresa->nit) ? 'NIT ' . $empresa->nit : null,
         'direccion' => $empresa->direccion ?? null,
         'telefono'  => $empresa->telefono ?? '3004385756',
-        'whatsapp'  => $empresa->whatsapp ?? '3104530264',
+        'whatsapp'  => ($empresa->extra['whatsapp'] ?? $empresa->telefono ?? ''),
         'email'     => $empresa->email ?? null,
         'website'   => $empresa->sitio_web ?? null,
         'logo_src'  => $logoPdfSrc,

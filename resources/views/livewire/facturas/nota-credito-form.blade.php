@@ -229,6 +229,44 @@
                     class="w-full h-12 md:h-14 px-4 rounded-2xl border-2 border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white focus:outline-none focus:ring-4 focus:ring-violet-300/60">
             </section>
         </div>
+
+        {{-- ===== REPONER INVENTARIO ===== --}}
+        @if (!$bloqueada)
+        <div class="mt-6">
+            <label class="flex items-start gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all
+                {{ $reponer_inventario
+                    ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-500'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800' }}">
+                <input type="checkbox" wire:model.live="reponer_inventario"
+                    class="mt-1 h-5 w-5 rounded accent-amber-500 cursor-pointer flex-shrink-0">
+                <div>
+                    <p class="font-semibold text-sm
+                        {{ $reponer_inventario ? 'text-amber-800 dark:text-amber-300' : 'text-gray-700 dark:text-gray-300' }}">
+                        <i class="fas fa-boxes mr-1"></i>
+                        Reponer inventario al emitir
+                    </p>
+                    <p class="text-xs mt-0.5
+                        {{ $reponer_inventario ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400' }}">
+                        @if ($reponer_inventario)
+                            <i class="fas fa-check-circle mr-1"></i>
+                            <strong>Activo</strong> — Al emitir, se sumarán las cantidades de cada línea de vuelta al stock en su bodega correspondiente.
+                        @else
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Desactivado — La NC solo generará el asiento contable sin afectar el inventario (usar para descuentos o ajustes de precio).
+                        @endif
+                    </p>
+                </div>
+            </label>
+        </div>
+        @else
+        <div class="mt-4 flex items-center gap-3 px-4 py-3 rounded-xl
+            {{ $reponer_inventario ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-500' }}">
+            <i class="fas {{ $reponer_inventario ? 'fa-boxes text-amber-500' : 'fa-box-open text-gray-400' }} text-lg"></i>
+            <span class="text-sm font-medium">
+                Reposición de inventario: <strong>{{ $reponer_inventario ? 'SÍ aplicada' : 'NO aplicada' }}</strong>
+            </span>
+        </div>
+        @endif
     </section>
 
     {{-- ===== PASO 2: Líneas ===== --}}

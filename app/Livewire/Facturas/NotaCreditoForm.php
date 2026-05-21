@@ -51,7 +51,7 @@ class NotaCreditoForm extends Component
     public ?string $motivo = null;
 
     /** Si es devolución con ingreso a inventario (por falla/defecto). */
-    public bool $reponer_inventario = false;
+    public bool $reponer_inventario = true;
 
     public ?string $numeroFacturaSeleccionada = null;
     public ?int $cuenta_cobro_id = null;

@@ -114,7 +114,7 @@ class SalidasManuales extends Component
 
         $this->reset(['producto_id','bodega_id','cantidad','obs_item']);
         $this->stockDisponible = null;
-        PendingToast::create()->success()->message('Producto agregado.')->duration(2500);
+        PendingToast::create()->success()->message('Producto agregado.')->duration(3000);
     }
 
     public function quitarItem(int $idx): void

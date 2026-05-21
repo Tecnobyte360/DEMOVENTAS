@@ -49,6 +49,7 @@ use App\Livewire\Inventario\EntradasMercancia;
 use App\Livewire\Inventario\Indexentradas;
 use App\Livewire\Inventario\InventarioPorBodega;
 use App\Livewire\Inventario\Salidas;
+use App\Livewire\Inventario\SalidasManuales;
 use App\Livewire\MaestroRutas\MaestroRutas;
 use App\Livewire\MediosPagos\MediosPagos;
 use App\Livewire\NormasReparto\NormasReparto;
@@ -267,6 +268,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     Route::get('/RutasDisponibles', RutasDisponiblesConductor::class)->name('RutasDisponibles');
     Route::get('/DevolucionMercancia', DevolucionesMercancia::class)->name('DevolucionMercancia');
     Route::get('/SalidaMercancia', Salidas::class)->name('SalidaMercancia');
+    Route::get('/inventario/salidas-manuales', SalidasManuales::class)->name('inventario.salidas-manuales');
     Route::get('/inventario/bodegas', InventarioPorBodega::class)->name('inventario.por-bodega');
     //finanzas
     Route::get('/Finanzas', Finanzas::class)->name('Finanzas');

@@ -448,7 +448,16 @@
                                     <span class="transition-all duration-200 group-hover:font-bold">Gestión Bodegas</span>
                                 </a>
 
-                                <a href="{{ route('inventario.por-bodega') }}"
+                                                                <a href="{{ route('inventario.salidas-manuales') }}"
+                                    class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
+                                      hover:bg-white/25 hover:pl-5 hover:shadow-sm
+                                      @if (Route::is('inventario.salidas-manuales')) bg-white/20 pl-5 @endif"
+                                    :style="`color: ${fgMuted}`">
+                                    <div class="absolute left-0 top-0 bottom-0 w-0.5 bg-white/0 group-hover:bg-white transition-all duration-300"></div>
+                                    <i class="fas fa-minus-circle mr-2 text-xs"></i>
+                                    <span class="transition-all duration-200 group-hover:font-bold">Salidas Manuales</span>
+                                </a>
+<a href="{{ route('inventario.por-bodega') }}"
                                     class="group relative block px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 overflow-hidden
                                       hover:bg-white/25 hover:pl-5 hover:shadow-sm
                                       @if (Route::is('inventario.por-bodega')) bg-white/20 pl-5 @endif"

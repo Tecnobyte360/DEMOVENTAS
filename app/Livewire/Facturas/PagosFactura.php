@@ -397,9 +397,13 @@ public function cambiarFactura(): void
                     });
             });
 
+            // credito siempre + contado con pago parcial ya registrado
             $q->where(function ($qq) {
                 $qq->where('tipo_pago', 'credito')
-                    ->orWhere('tipo_pago', 'crédito');
+                    ->orWhere(function ($qr) {
+                        $qr->whereIn('tipo_pago', ['contado'])
+                            ->where('pagado', '>', 0);
+                    });
             });
         }
 

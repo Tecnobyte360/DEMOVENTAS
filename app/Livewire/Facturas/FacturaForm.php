@@ -573,7 +573,7 @@ class FacturaForm extends Component
    private function cargarFactura(int $id): void
 {
     try {
-        $f = Factura::with(['detalles', 'pagos'])->findOrFail($id);
+        $f = Factura::with(['detalles.producto', 'pagos'])->findOrFail($id);
         $f->recalcularTotales()->save();
         $f = $f->fresh(['detalles', 'pagos']);
 
@@ -672,6 +672,7 @@ class FacturaForm extends Component
             $l = [
                 'id'                => $d->id,
                 'producto_id'       => $d->producto_id ? (int) $d->producto_id : null,
+                'producto_nombre'   => $d->producto?->nombre ?? $d->descripcion ?? '',
                 'cuenta_ingreso_id' => $cuentaId,
                 'bodega_id'         => $d->bodega_id ? (int) $d->bodega_id : null,
                 'descripcion'       => $d->descripcion,

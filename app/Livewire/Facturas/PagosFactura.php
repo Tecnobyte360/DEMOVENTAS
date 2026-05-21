@@ -246,7 +246,7 @@ class PagosFactura extends Component
             $tipoSerieId === self::TIPO_FACTURA_VENTA
             || $prefijo === 'FAC-V'
         )
-        && in_array($tipoPago, ['credito', 'crédito'], true);
+        && ($tipoPago === 'contado' ? $factura->pagado > 0 : in_array($tipoPago, ['credito', 'crédito'], true));
 
     logger()->info('PagosFactura@setFacturaId - validación factura', [
         'facturaId'       => $this->facturaId,
@@ -462,7 +462,7 @@ public function cambiarFactura(): void
                 $tipoSerieId === self::TIPO_FACTURA_VENTA
                 || ($factura->prefijo ?? '') === 'FAC-V'
             )
-            && ($forzarCarga || in_array(mb_strtolower((string) $factura->tipo_pago), ['credito', 'crédito'], true));
+            && ($forzarCarga || (mb_strtolower((string) $factura->tipo_pago) === 'contado' ? $factura->pagado > 0 : in_array(mb_strtolower((string) $factura->tipo_pago), ['credito', 'crédito'], true)));
 
         if (!$esCompraValida && !$esVentaValida) {
             $this->facturaId = null;

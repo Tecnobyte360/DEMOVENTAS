@@ -1119,9 +1119,9 @@ class NotaCreditoForm extends Component
                 'actualizado_por_id' => $uid,
             ]);
 
-            if ($this->nota->reponer_inventario) {
-                \App\Services\InventarioService::reponerPorNotaCredito($this->nota);
-            }
+            // Siempre reponer inventario al emitir NC
+            \App\Services\InventarioService::reponerPorNotaCredito($this->nota);
+            $this->nota->update(['reponer_inventario' => true]);
 
             \App\Services\ContabilidadNotaCreditoService::asientoDesdeNotaCredito($this->nota);
 
@@ -1155,11 +1155,8 @@ public function anular(): void
         DB::transaction(function () {
             $this->nota->refresh()->loadMissing('detalles');
 
-            $aplicaReposicion = (bool) $this->nota->reponer_inventario
-                || (is_string($this->nota->motivo) && mb_stripos($this->nota->motivo, 'falla') !== false);
-
+            // Siempre revertir inventario al anular NC
             if (
-                $aplicaReposicion &&
                 class_exists(InventarioService::class) &&
                 method_exists(InventarioService::class, 'revertirReposicionPorNotaCredito')
             ) {

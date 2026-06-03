@@ -374,7 +374,7 @@
                                 $cuentaSelId = (int) ($l['cuenta_inventario_id'] ?? 0);
                             @endphp
 
-                            <tr wire:key="linea-{{ $i }}"
+                            <tr wire:key="linea-{{ $i }}-{{ $cargaNonce ?? 0 }}"
                                 class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
 
                                 {{-- Imagen --}}
@@ -408,6 +408,12 @@
 
                                 {{-- Producto --}}
                                 <td class="px-4 py-3 min-w-[260px]">
+                                    {{-- Tracker fuera de wire:ignore: Livewire actualiza este atributo --}}
+                                    <input type="hidden"
+                                        data-tomselect-tracker
+                                        data-linea="{{ $i }}"
+                                        value="{{ (int) ($lineas[$i]['producto_id'] ?? 0) }}">
+
                                     <div wire:ignore>
                                         <select id="producto-select-{{ $i }}" data-producto-select
                                             data-linea="{{ $i }}"
@@ -494,7 +500,9 @@
                                     <div x-data="moneyInput({
                                             initial: @js((float)($l['precio_unitario'] ?? 0)),
                                             onChange: (v) => { $wire.set('lineas.{{ $i }}.precio_unitario', v, false); $wire.call('normalizarPrecio', {{ $i }}); }
-                                         })">
+                                         })"
+                                         data-money-input
+                                         data-linea="{{ $i }}">
                                         <input type="text" inputmode="decimal"
                                             :value="display"
                                             @input="onInput($event)"
@@ -738,44 +746,7 @@
     </section>
 
 </div>
-<script>
-    document.addEventListener('livewire:init', () => {
-
-        const initProductoSelects = () => {
-            document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-                const index = parseInt(el.dataset.linea || '0', 10);
-
-                // 🔥 evitar instancias duplicadas
-                if (el.tomselect) {
-                    el.tomselect.destroy();
-                }
-
-                new TomSelect(el, {
-                    placeholder: '— Seleccione —',
-                    allowEmptyOption: true,
-                    closeAfterSelect: true,
-                    maxOptions: 1000,
-                    plugins: ['dropdown_input'],
-                    onChange: (value) => {
-                        const pid = value ? parseInt(value, 10) : null;
-                        Livewire.dispatch('set-producto-linea', {
-                            index,
-                            productoId: pid
-                        });
-                    }
-                });
-            });
-        };
-
-        initProductoSelects();
-
-        // cada vez que Livewire re-renderiza, reenganchar tomselect
-        Livewire.hook('message.processed', () => {
-            initProductoSelects();
-        });
-
-    });
-</script>
+{{-- Bloque TomSelect duplicado eliminado --}}
 
 <script>
     document.addEventListener('livewire:init', () => {
@@ -811,38 +782,138 @@
             return ts;
         };
 
+        const syncProductoSelectValues = () => {
+            document.querySelectorAll('select[data-producto-select]').forEach((el) => {
+                const linea = el.dataset.linea;
+                const ts = ensureProductoTomSelect(el);
+                if (!ts) return;
+
+                // FUENTE DE VERDAD: el input tracker (está FUERA de wire:ignore, así que
+                // Livewire lo actualiza en TODAS las líneas, incluida la primera).
+                // Leemos propiedad y atributo (según cómo Livewire haga el morph).
+                const tracker = document.querySelector(
+                    `input[data-tomselect-tracker][data-linea="${linea}"]`
+                );
+                let expected = '';
+                if (tracker) {
+                    expected = String(tracker.value || tracker.getAttribute('value') || '');
+                }
+                if (expected === '0') expected = '';
+
+                if (ts.getValue() !== expected) {
+                    ts.setValue(expected, true);
+                }
+            });
+        };
+
         const initProductoSelects = () => {
             requestAnimationFrame(() => {
-                document.querySelectorAll('select[data-producto-select]').forEach((el) => {
-                    ensureProductoTomSelect(el);
-                });
+                syncProductoSelectValues();
             });
         };
 
         initProductoSelects();
 
-        Livewire.hook('message.processed', () => {
-            initProductoSelects();
+        // MutationObserver: detecta cuando Livewire actualiza el input tracker (fuera de wire:ignore)
+        // y sincroniza TomSelect con el nuevo producto_id
+        const observerTrackers = new MutationObserver((mutations) => {
+            mutations.forEach((mut) => {
+                if (mut.type === 'attributes' && mut.attributeName === 'value') {
+                    const input = mut.target;
+                    const linea = input.dataset.linea;
+                    const newVal = input.getAttribute('value') ?? input.value;
+                    const el = document.querySelector(
+                        `select[data-producto-select][data-linea="${linea}"]`
+                    );
+                    if (!el) return;
+                    const ts = ensureProductoTomSelect(el);
+                    if (ts) {
+                        const current = ts.getValue();
+                        if (String(newVal) !== String(current)) {
+                            ts.setValue(newVal ? String(newVal) : '', true);
+                        }
+                    }
+                }
+            });
         });
 
-        Livewire.on('sync-productos-tomselect', (payload) => {
-            requestAnimationFrame(() => {
-                const lineas = payload?.lineas || [];
+        const attachTrackerObservers = () => {
+            document.querySelectorAll('input[data-tomselect-tracker]').forEach((inp) => {
+                const linea = inp.dataset.linea;
+                const currentVal = inp.getAttribute('value') ?? inp.value;
 
-                lineas.forEach((l, i) => {
-                    const el = document.querySelector(
-                        `select[data-producto-select][data-linea="${i}"]`);
-                    if (!el) return;
+                // Sincronizar TomSelect inmediatamente con el valor actual del tracker
+                const elSel = document.querySelector(
+                    `select[data-producto-select][data-linea="${linea}"]`
+                );
+                if (elSel) {
+                    const ts = ensureProductoTomSelect(elSel);
+                    if (ts && currentVal && currentVal !== '0') {
+                        if (ts.getValue() !== String(currentVal)) {
+                            ts.setValue(String(currentVal), true);
+                        }
+                    }
+                }
 
-                    const ts = ensureProductoTomSelect(el);
-                    if (!ts) return;
-
-                    const pid = l?.producto_id ? String(l.producto_id) : '';
-                    ts.setValue(pid, true);
-                });
-
-                initProductoSelects();
+                // Observar cambios futuros
+                observerTrackers.observe(inp, { attributes: true, attributeFilter: ['value'] });
             });
+        };
+        attachTrackerObservers();
+
+        Livewire.hook('message.processed', () => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    syncProductoSelectValues();
+                    attachTrackerObservers(); // Re-attachar observers si hay nuevas líneas
+                });
+            });
+        });
+
+        const forzarSincronizacionLineas = (lineas) => {
+            lineas.forEach((l, i) => {
+                // 1) PRODUCTO (TomSelect)
+                const sel = document.querySelector(
+                    `select[data-producto-select][data-linea="${i}"]`);
+                if (sel) {
+                    const ts = ensureProductoTomSelect(sel);
+                    if (ts) {
+                        const pid = l?.producto_id ? String(l.producto_id) : '';
+                        if (ts.getValue() !== pid) ts.setValue(pid, true);
+                    }
+                }
+
+                // 2) COSTO (Alpine moneyInput) - acceso directo a la instancia Alpine
+                const moneyDiv = document.querySelector(
+                    `div[data-money-input][data-linea="${i}"]`);
+                if (moneyDiv && window.Alpine) {
+                    try {
+                        const data = Alpine.$data(moneyDiv);
+                        const precio = Number(l?.precio_unitario ?? 0) || 0;
+                        if (data && typeof data.fmt === 'function') {
+                            data.raw = precio;
+                            data.display = data.fmt(precio);
+                        }
+                    } catch (e) { /* noop */ }
+                }
+            });
+        };
+
+        Livewire.on('sync-productos-tomselect', (...args) => {
+            const raw = args[0] ?? {};
+            const lineas = raw?.lineas ?? (Array.isArray(raw) ? raw : []);
+
+            // Varios intentos con retraso creciente: cubre el morphing de Livewire
+            // y la inicialización tardía de Alpine/TomSelect (especialmente la 1ra línea).
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    forzarSincronizacionLineas(lineas);
+                    syncProductoSelectValues();
+                    attachTrackerObservers();
+                });
+            });
+            setTimeout(() => forzarSincronizacionLineas(lineas), 150);
+            setTimeout(() => forzarSincronizacionLineas(lineas), 400);
         });
 
     });

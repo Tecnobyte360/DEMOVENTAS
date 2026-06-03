@@ -75,6 +75,19 @@ class Factura extends Model
                 $f->prefijo = Serie::whereKey($f->serie_id)->value('prefijo');
             }
         });
+
+        // 🔒 CANDADO DE INTEGRIDAD:
+        // Una factura "emitida/pagada/parcialmente_pagada" SIEMPRE debe tener número de consecutivo.
+        // Si algún flujo intenta marcarla como emitida sin número (bug), se fuerza a "borrador"
+        // para que NUNCA quede en estado corrupto (emitida sin número, sin asiento, sin inventario).
+        // Nota: la emisión real usa un UPDATE directo (query builder) que NO dispara este evento,
+        // por lo que este candado no interfiere con la emisión legítima.
+        static::saving(function (self $f) {
+            $estadosEmitidos = ['emitida', 'pagada', 'parcialmente_pagada'];
+            if (in_array($f->estado, $estadosEmitidos, true) && empty($f->numero)) {
+                $f->estado = 'borrador';
+            }
+        });
     }
 
     /* ----------------- Relaciones ----------------- */
@@ -160,9 +173,11 @@ class Factura extends Model
         $this->pagado    = $pag;
         $this->saldo     = $sal;
 
-        if ($this->estado !== 'anulada') {
-            if ($tot <= 0)       $this->estado = 'borrador';
-            elseif ($sal <= 0)  $this->estado = 'pagada';
+        // El estado de documento (borrador/emitida) lo controla el flujo de emisión,
+        // NO el recálculo de totales. Aquí solo ajustamos estados de PAGO para
+        // facturas que YA fueron emitidas. Un borrador permanece como borrador.
+        if (!in_array($this->estado, ['anulada', 'borrador'], true)) {
+            if ($sal <= 0)      $this->estado = 'pagada';
             elseif ($pag > 0)   $this->estado = 'parcialmente_pagada';
             else                $this->estado = 'emitida';
         }

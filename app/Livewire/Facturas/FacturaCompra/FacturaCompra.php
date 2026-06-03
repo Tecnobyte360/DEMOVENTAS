@@ -49,6 +49,10 @@ class FacturaCompra extends Component
     public array $lineas = [];
     public array $stockVista = [];
 
+    // Cambia en cada carga de factura existente para forzar recreación de filas (fix TomSelect 1ra línea)
+    public int $cargaNonce = 0;
+    public ?int $pendingLoadId = null;
+
     // Catálogo PUC para compras (inventario/gasto) + índice
     public $cuentasInventario;
     public array $pucIndex = [];
@@ -98,7 +102,23 @@ class FacturaCompra extends Component
     #[On('abrir-factura')]
     public function abrir(int $id): void
     {
-        $this->cargarFactura($id);
+        // PASO 1: vaciar líneas para que Livewire DESTRUYA del DOM la fila pre-existente
+        // (la línea 0 reutilizada que no reinicializa TomSelect/moneyInput).
+        $this->lineas = [];
+        $this->stockVista = [];
+        $this->pendingLoadId = $id;
+        // Dispara un segundo round-trip; al volver, las líneas se crean TODAS nuevas.
+        $this->dispatch('continuar-carga-factura');
+    }
+
+    #[On('continuar-carga-factura')]
+    public function continuarCargaFactura(): void
+    {
+        if ($this->pendingLoadId) {
+            $id = $this->pendingLoadId;
+            $this->pendingLoadId = null;
+            $this->cargarFactura($id);
+        }
     }
 
     /* ======================
@@ -589,6 +609,7 @@ class FacturaCompra extends Component
         try {
             $f = Factura::with(['detalles', 'serie.tipo'])->findOrFail($id);
             $this->factura = $f;
+            $this->cargaNonce++; // fuerza recreación de filas para que TomSelect muestre todos los productos
 
             $this->fill($f->only([
                 'serie_id',
@@ -639,6 +660,9 @@ class FacturaCompra extends Component
 
             $this->resetErrorBag();
             $this->resetValidation();
+
+            // Sincronizar TomSelect con los productos cargados
+            $this->dispatch('sync-productos-tomselect', lineas: $this->lineas);
         } catch (Throwable $e) {
             report($e);
             PendingToast::create()->error()->message('No se pudo cargar la factura.')->duration(7000);
@@ -1179,15 +1203,31 @@ class FacturaCompra extends Component
 
         try {
             $this->ensureCuentasEnLineas();
-            if (!$this->validarConToast()) return;
+
+            // Borrador: validación mínima (solo proveedor y al menos 1 línea)
+            if (!$this->socio_negocio_id) {
+                PendingToast::create()->error()->message('Selecciona un proveedor para guardar el borrador.')->duration(6000);
+                return;
+            }
+            if (empty($this->lineas)) {
+                PendingToast::create()->error()->message('Agrega al menos una línea para guardar el borrador.')->duration(6000);
+                return;
+            }
+            // Si no tiene fecha, usar hoy
+            if (empty($this->fecha)) {
+                $this->fecha = now()->toDateString();
+            }
+            if (empty($this->vencimiento)) {
+                $this->vencimiento = $this->fecha;
+            }
 
             $this->persistirBorrador();
 
-            PendingToast::create()->success()->message('Factura guardada (ID: ' . $this->factura->id . ').')->duration(5000);
+            PendingToast::create()->success()->message('Borrador guardado (ID: ' . $this->factura->id . ').')->duration(5000);
             $this->dispatch('refrescar-lista-facturas');
         } catch (\Throwable $e) {
             Log::error('GUARDAR ERROR', ['msg' => $e->getMessage()]);
-            PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar.')->duration(9000);
+            PendingToast::create()->error()->message(config('app.debug') ? $e->getMessage() : 'No se pudo guardar el borrador.')->duration(9000);
         }
     }
 
